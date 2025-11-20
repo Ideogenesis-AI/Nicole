@@ -1,0 +1,188 @@
+# Copyright (C) 2025 Changkai Zhang.
+#
+# This file is part of Nicole (TN) library.
+#
+# Nicole (TN) is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published
+# by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# Nicole (TN) is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+
+
+from __future__ import annotations
+
+"""Tensor contraction helpers for symmetry-aware tensors.
+
+This module provides functions for contracting pairs of tensors along specified
+index pairs while preserving charge conservation rules enforced by the symmetry
+groups associated with the indices. The `contract` function implements the
+general tensor contraction operation, while `trace` and `partial_trace`
+provide specialised variants for reducing tensors along entire axes or subsets
+of axes, respectively.
+"""
+
+from typing import Dict, Optional, Sequence, Tuple
+
+import numpy as np
+
+from .blocks import BlockKey
+from .index import Index
+from .symmetry.base import AbelianGroup
+from .tensor import Tensor
+from .typing import Charge, Direction
+
+
+def _dir_weight(idx: Index, charge: Charge) -> Tuple[AbelianGroup, Charge]:
+    """Return the symmetry group and orientation-adjusted charge contribution."""
+    group = idx.group
+    if not isinstance(group, AbelianGroup):
+        raise NotImplementedError("Only Abelian contraction supported initially")
+    return group, (charge if idx.direction == Direction.OUT else group.inverse(charge))
+
+
+def contract(
+    A: Tensor,
+    B: Tensor,
+    pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]],
+    out_order: Optional[Sequence[int]] = None,
+) -> Tensor:
+    """Contract two tensors along provided index pairs while respecting symmetry.
+
+    Parameters
+    ----------
+    A, B:
+        Input tensors to be contracted.
+    pairs:
+        Sequence describing which indices to contract. Entries may be positional
+        tuples (axis in `A`, axis in `B`) or `itag` name tuples.
+    out_order:
+        Optional axis order for the resulting tensor; unused presently.
+
+    Returns
+    -------
+    Tensor
+        Tensor whose indices are the non-contracted axes of `A` followed by those
+        of `B`, populated with blocks that satisfy charge conservation.
+    """
+    # Parse the contraction pairs into axis indices.
+    if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
+        name_to_axis_A = {idx.itag: i for i, idx in enumerate(A.indices)}
+        name_to_axis_B = {idx.itag: i for i, idx in enumerate(B.indices)}
+        axes = [(name_to_axis_A[a], name_to_axis_B[b]) for a, b in pairs]  # type: ignore[arg-type]
+    else:
+        axes = pairs  # type: ignore[assignment]
+    if not axes:
+        raise ValueError("No contraction pairs provided")
+
+    # Validate that the contraction pairs have matching symmetry groups.
+    for ia, ib in axes:
+        if A.indices[ia].group != B.indices[ib].group:
+            raise ValueError("Contraction requires matching groups on paired indices")
+
+    # Identify the contracted axes.
+    contracted_A = {ia for ia, _ in axes}
+    contracted_B = {ib for _, ib in axes}
+    out_indices = tuple(idx for i, idx in enumerate(A.indices) if i not in contracted_A) + tuple(
+        idx for i, idx in enumerate(B.indices) if i not in contracted_B
+    )
+
+    # Allocate the output blocks.
+    out_blocks: Dict[BlockKey, np.ndarray] = {}
+    # Iterate over all admissible blocks in the input tensors.
+    for keyA, arrA in A.data.items():
+        for keyB, arrB in B.data.items():
+            # Check if the blocks are compatible for contraction.
+            ok = True
+            for ia, ib in axes:
+                # Validate charge conservation for the pair.
+                group, qa = _dir_weight(A.indices[ia], keyA[ia])
+                _, qb = _dir_weight(B.indices[ib], keyB[ib])
+                if not group.equal(group.fuse(qa, qb), group.neutral):
+                    ok = False
+                    break
+                # Ensure matching dimensions.
+                if arrA.shape[ia] != arrB.shape[ib]:
+                    ok = False
+                    break
+            if not ok:
+                continue
+            # Perform the tensor contraction.
+            axesA = [ia for ia, _ in axes]
+            axesB = [ib for _, ib in axes]
+            res = np.tensordot(arrA, arrB, axes=(axesA, axesB))
+            # Build the output charge key from the surviving axes.
+            out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
+                keyB[i] for i in range(len(keyB)) if i not in contracted_B
+            )
+            # Add the result to the output blocks.
+            if out_key in out_blocks:
+                out_blocks[out_key] = out_blocks[out_key] + res
+            else:
+                out_blocks[out_key] = res
+
+    return Tensor(indices=out_indices, data=out_blocks, dtype=np.result_type(A.dtype, B.dtype))
+
+
+def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]]) -> Tensor:
+    """Trace over pairs of indices on a tensor, preserving symmetry constraints."""
+    if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
+        name_to_axis = {idx.itag: i for i, idx in enumerate(T.indices)}
+        axes = [(name_to_axis[a], name_to_axis[b]) for a, b in pairs]  # type: ignore[arg-type]
+    else:
+        axes = pairs  # type: ignore[assignment]
+    contracted = set(i for p in axes for i in p)
+    keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
+    out_indices = tuple(T.indices[i] for i in keep_axes)
+    out_blocks: Dict[BlockKey, np.ndarray] = {}
+    for key, arr in T.data.items():
+        ok = True
+        for a, b in axes:
+            group = T.indices[a].group
+            if not isinstance(group, AbelianGroup):
+                raise NotImplementedError("Only Abelian trace supported")
+            qa = key[a]
+            qb = key[b]
+            if T.indices[a].direction == T.indices[b].direction:
+                ok = False
+                break
+            if not group.equal(qa, qb):
+                ok = False
+                break
+            if arr.shape[a] != arr.shape[b]:
+                ok = False
+                break
+        if not ok:
+            continue
+        # Move traced axes to the end for convenient reshaping.
+        axes_order = keep_axes + [a for p in axes for a in p]
+        permuted = np.transpose(arr, axes=axes_order)
+        keep_shape = [arr.shape[i] for i in keep_axes]
+        traced_shapes = [arr.shape[a] for a, _ in axes]
+        reshaped = permuted.reshape((*keep_shape, *traced_shapes, *traced_shapes))
+        for k in range(len(axes)):
+            reshaped = np.trace(reshaped, axis1=len(keep_shape) + k, axis2=len(keep_shape) + k + len(axes))
+        out_key = tuple(key[i] for i in keep_axes)
+        out_blocks[out_key] = out_blocks.get(out_key, 0) + reshaped
+    return Tensor(indices=out_indices, data=out_blocks, dtype=T.dtype)
+
+
+def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
+    """Trace over a subset of axes specified as a flat list of pairs."""
+    if axes and isinstance(axes[0], str):  # type: ignore[index]
+        name_to_axis = {idx.itag: i for i, idx in enumerate(T.indices)}
+        iaxes = [name_to_axis[a] for a in axes]  # type: ignore[arg-type]
+    else:
+        iaxes = list(axes)  # type: ignore[assignment]
+    if len(iaxes) % 2 != 0:
+        raise ValueError("Partial trace requires an even number of axes (paired)")
+    pairs = [(iaxes[i], iaxes[i + 1]) for i in range(0, len(iaxes), 2)]
+    return trace(T, pairs)
+
+

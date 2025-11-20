@@ -1,0 +1,251 @@
+# Copyright (C) 2025 Changkai Zhang.
+#
+# This file is part of Nicole (TN) library.
+#
+# Nicole (TN) is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published
+# by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# Nicole (TN) is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+
+
+from __future__ import annotations
+
+"""Pretty-print helpers for block-symmetric tensors.
+
+This module encapsulates the logic required to present Nicole tensors in a compact,
+human-friendly textual representation.
+
+Key responsibilities
+--------------------
+- Capture an index synopsis that lists itags, symmetry groups, directions, and sectors.
+- Compute a symmetry signature and aggregate statistics (order, block count, byte size, norm).
+- Iterate over the tensor's block dictionary and produce aligned, padded tables of charges.
+
+Implementation approach
+-----------------------
+1. Lightweight formatting helpers (_format_bytes, _format_single_value, _format_count_list)
+   handle recurring presentation tasks so the main summariser stays readable.
+2. `_charge_components` and `_group_signature` normalise charge data regardless of whether
+   the tensor uses simple integers or tuple-based non-Abelian multiplet identifiers.
+3. `tensor_summary` orchestrates the process: it first builds the heading lines, then
+   computes global padding for charges so every printed sector column aligns. Finally it
+   assembles per-block information, truncating after a configurable number of lines for brevity.
+
+The output follow symmetry-aware tensor conventions (e.g. listing multiplet counts before
+state counts, showing charge conservation per block) to ease adoption for users migrating
+from traditional workflows.
+"""
+
+from typing import Iterable, List, Mapping, Sequence, Tuple
+
+import numpy as np
+
+from .index import Index
+from .symmetry.base import AbelianGroup
+from .typing import Charge
+
+
+def summarize_indices(indices: Iterable[Index]) -> str:
+    """Return a compact textual description of the provided indices."""
+    parts = []
+    for idx in indices:
+        sector_str = ",".join(f"{s.charge}:{s.dim}" for s in idx.sectors)
+        parts.append(
+            f"{idx.itag}[{idx.group.name},{'out' if idx.direction > 0 else 'in'}]{{{sector_str}}}"
+        )
+    return " x ".join(parts)
+
+
+def _charge_components(charge: Charge) -> Tuple:
+    """Normalise a charge to a tuple of components."""
+    if isinstance(charge, tuple):
+        return charge
+    if isinstance(charge, list):
+        return tuple(charge)
+    return (charge,)
+
+
+def _group_signature(indices: Sequence[Index], components_per_charge: int) -> str:
+    """Return a symmetry signature string such as 'A' for Abelian groups."""
+    if not indices:
+        return ""
+    group = indices[0].group
+    if isinstance(group, AbelianGroup):
+        label = "A"
+    else:
+        gname = getattr(group, "name", "")
+        label = gname.upper() if gname else "?"
+    count = max(components_per_charge, 1)
+    return ",".join([label] * count)
+
+
+def _format_bytes(size: int) -> str:
+    """Format a number of bytes with an appropriate unit suffix."""
+    units = ["B", "kB", "MB", "GB", "TB"]
+    value = float(size)
+    for idx, unit in enumerate(units):
+        if value < 1024.0 or idx == len(units) - 1:
+            if unit == "B":
+                return f"{int(value)} B"
+            return f"{value:.3g} {unit}"
+        value /= 1024.0
+    return f"{value:.3g} TB"
+
+
+def _format_single_value(arr: np.ndarray) -> str:
+    """Return a formatted scalar read-out for a 1x1 block."""
+    val = arr.reshape(-1)[0]
+    if np.iscomplexobj(val):
+        real_part = f"{val.real:.6g}"
+        imag_part = f"{abs(val.imag):.6g}"
+        sign = "+" if val.imag >= 0 else "-"
+        return f"{real_part}{sign}{imag_part}i."
+    return f"{val:.6g}."
+
+
+def _format_count_list(counts: Sequence[int]) -> str:
+    """Right-align elements of a count list joined by 'x' symbols."""
+    if not counts:
+        return "0"
+    width = max(len(str(count)) for count in counts)
+    return " x ".join(f"{count:>{width}}" for count in counts)
+
+
+def tensor_summary(
+    indices: Sequence[Index],
+    data: Mapping[Tuple[Charge, ...], np.ndarray],
+    dtype: np.dtype,
+    label: str,
+    norm: float,
+) -> str:
+    """Create a multi-line summary for a tensor.
+
+    Parameters
+    ----------
+    indices:
+        Ordered tensor indices (each carrying symmetry information and direction).
+    data:
+        Mapping from block keys (one charge per leg) to dense NumPy arrays.
+    dtype:
+        Data type of the tensor entries.
+    label:
+        Human-readable tag printed in the header (e.g. "Tensor").
+    norm:
+        Frobenius norm of the tensor; pre-computed by the caller for efficiency.
+
+    Returns
+    -------
+    str
+        A formatted multi-line string describing tensor order, block statistics, and
+        up to nine individual blocks with aligned charges and sizes.
+    """
+    # Basic tensor statistics
+    num_blocks = len(data)
+    total_bytes = sum(int(arr.nbytes) for arr in data.values())
+    order = len(indices)
+
+    # Determine how many charge components to display (e.g. tuples vs scalars)
+    sample_components = 0
+    if indices:
+        first_idx = indices[0]
+        if first_idx.sectors:
+            sample_components = len(_charge_components(first_idx.sectors[0].charge))
+        else:
+            sample_components = 1
+
+    # -------------------------------------------------------------------
+    # Heading: order, block count, symmetry signature, and index overview
+    # -------------------------------------------------------------------
+    sym_signature = _group_signature(indices, sample_components)
+    itag_list = ", ".join(
+        f"{idx.itag}{'*' if idx.direction > 0 else ''}" for idx in indices
+    )
+    info_line = (
+        f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "
+        f"having '{sym_signature}'  {label:>8},  {{ {itag_list} }}"
+    )
+
+    # -------------------------------------------------------------------
+    # Data line: dtype, total bytes, multiplet counts, state counts, norm
+    # -------------------------------------------------------------------
+    dtype_name = np.dtype(dtype).name
+    multiplet_counts_list = [len(idx.sectors) for idx in indices]
+    multiplet_counts = _format_count_list(multiplet_counts_list)
+    state_counts_list = []
+    for idx, multiplet_count in zip(indices, multiplet_counts_list):
+        if isinstance(idx.group, AbelianGroup):
+            state_counts_list.append(multiplet_count)
+        else:
+            state_counts_list.append(sum(sector.dim for sector in idx.sectors))
+    state_counts = _format_count_list(state_counts_list)
+    data_line = (
+        f"  data:  {order}-D {dtype_name} ({_format_bytes(total_bytes)})    "
+        f"{multiplet_counts} => {state_counts} @ norm = {norm:.6g}\n"
+    )
+
+    # -------------------------------------------------------------------
+    # Block listings: charge tables, dense shapes, optional single values
+    # -------------------------------------------------------------------
+    block_lines = []
+    if data:
+        # Determine padding for charges across all keys and positions.
+        components_per_position: List[List[str]] = []
+        for key in data:
+            # `key` = tuple of charges, one per leg. Collect each component string.
+            for pos, comps in enumerate(_charge_components(charge) for charge in key):
+                while len(components_per_position) <= pos:
+                    components_per_position.append([])
+                components_per_position[pos].extend(str(comp) for comp in comps)
+        position_widths = [
+            max((len(value) for value in values), default=1) for values in components_per_position
+        ]
+
+        # Iterate deterministically over blocks; limit display to at most nine entries.
+        sorted_blocks = sorted(data.items(), key=lambda kv: str(kv[0]))
+        max_lines = 9
+        for idx_num, (key, arr) in enumerate(sorted_blocks[:max_lines], start=1):
+            # Dense dims (state space) and trivial CGC placeholder (Abelian => all ones).
+            state_dims = "x".join(str(dim) for dim in arr.shape) or "1"
+            cgc_dims = "x".join("1" for _ in arr.shape) or "1"
+
+            # Format charges, reusing global padding so columns line up across blocks.
+            charge_components = [_charge_components(charge) for charge in key]
+            padded_rows = []
+            for position, comps in enumerate(charge_components):
+                width = position_widths[position] if position < len(position_widths) else 1
+                padded_rows.append(" ".join(f"{comp:>{width}}" for comp in comps))
+            charges_repr = "[ " + " ; ".join(padded_rows) + " ]"
+
+            # Display block information for each charge sector.
+            block_bytes = arr.nbytes
+            if arr.size == 1:
+                # Scalar block — print the entry itself.
+                value_repr = _format_single_value(arr)
+                block_lines.append(
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr}"
+                )
+            else:
+                # High-dimensional array — display dims and byte footprint.
+                byte_repr = _format_bytes(block_bytes)
+                block_lines.append(
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {byte_repr:>7}"
+                )
+
+        # If more than max_lines blocks, note how many are omitted.
+        if len(sorted_blocks) > max_lines:
+            remaining = len(sorted_blocks) - max_lines
+            block_lines.append(f"    ... ({remaining} more)")
+    else:
+        block_lines.append("  (no sectors)")
+
+    return "\n".join([info_line, data_line, *block_lines])
+
+
