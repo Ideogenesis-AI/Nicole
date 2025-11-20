@@ -57,7 +57,7 @@ def identity(index: Index, *, dtype=np.float64, new_itag: Optional[str] = None) 
 
     # Prepare the left leg and its flipped partner.
     left = index
-    right = index.hard_flip()
+    right = index.flip()
     if new_itag is not None:
         right = right.retag(new_itag)
 

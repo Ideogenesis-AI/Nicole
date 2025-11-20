@@ -71,7 +71,7 @@ class Index:
     -------
     retag()
         Relabel the index without altering direction, group, or sectors.
-    flip() / hard_flip():
+    dual() / flip():
         Reverse orientation with or without charge conjugation to suit diagram
         manipulations.
     """
@@ -101,12 +101,12 @@ class Index:
         """Return a copy of the index with a different identifier."""
         return Index(new_itag, self.direction, self.group, self.sectors)
 
-    def hard_flip(self) -> Index:
+    def flip(self) -> Index:
         """Return a copy with direction flipped but raw charge sectors untouched."""
 
         return Index(self.itag, self.direction.reverse(), self.group, self.sectors)
 
-    def flip(self) -> Index:
+    def dual(self) -> Index:
         """Return the dual index with direction reversed and conjugated charges."""
 
         new_direction = self.direction.reverse()
