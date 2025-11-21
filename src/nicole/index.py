@@ -30,7 +30,7 @@ charge rules enforced by the symmetry group.
 Key responsibilities
 --------------------
 - Validate sectors when constructing indices so charge metadata stays sane.
-- Provide convenience helpers for retagging and flipping indices during tensor
+- Provide convenience helpers for flipping indices during tensor
   manipulations.
 - Combine multiple indices into a single fused index, accumulating sector
   dimensions, and perform the inverse consistency check when splitting.
@@ -49,13 +49,10 @@ from .symmetry.base import AbelianGroup, SymmetryGroup
 class Index:
     """Symmetry-aware tensor index capturing direction, group, and charge sectors.
     Keeps tensor legs self-consistent so fusion and splitting utilities can rely
-    on validated charges. Convenience helpers such as `retag` and the flipping
-    pair streamline common tensor network rewrites.
+    on validated charges. The flipping pair streamline common tensor network rewrites.
 
     Attributes
     ----------
-    itag:
-        Human-readable label used when printing or logging tensors.
     direction:
         Orientation of the index (e.g. bra vs ket leg). Flips determine how
         charge conjugation is applied.
@@ -69,14 +66,11 @@ class Index:
 
     Methods
     -------
-    retag()
-        Relabel the index without altering direction, group, or sectors.
     dual() / flip():
         Reverse orientation with or without charge conjugation to suit diagram
         manipulations.
     """
 
-    itag: str
     direction: Direction
     group: SymmetryGroup
     sectors: Tuple[Sector, ...] = field(default_factory=tuple)
@@ -89,7 +83,7 @@ class Index:
             if s.dim <= 0:
                 raise ValueError("Sector dim must be positive")
             if s.charge in seen:
-                raise ValueError(f"Duplicate sector charge {s.charge} in index {self.itag}")
+                raise ValueError(f"Duplicate sector charge {s.charge} in index")
             seen[s.charge] = s.dim
 
     @property
@@ -97,14 +91,10 @@ class Index:
         """Total dimension of the index after summing over all sectors."""
         return sum(s.dim for s in self.sectors)
 
-    def retag(self, new_itag: str) -> Index:
-        """Return a copy of the index with a different identifier."""
-        return Index(new_itag, self.direction, self.group, self.sectors)
-
     def flip(self) -> Index:
         """Return a copy with direction flipped but raw charge sectors untouched."""
 
-        return Index(self.itag, self.direction.reverse(), self.group, self.sectors)
+        return Index(self.direction.reverse(), self.group, self.sectors)
 
     def dual(self) -> Index:
         """Return the dual index with direction reversed and conjugated charges."""
@@ -113,7 +103,7 @@ class Index:
         new_sectors = tuple(
             Sector(self.group.dual(sector.charge), sector.dim) for sector in self.sectors
         )
-        return Index(self.itag, new_direction, self.group, new_sectors)
+        return Index(new_direction, self.group, new_sectors)
 
     def sector_dim_map(self) -> Dict[Charge, int]:
         """Map each sector's charge to its dimension for quick lookups."""
@@ -125,13 +115,11 @@ class Index:
 
 
 
-def combine_indices(itag: str, direction: Direction, *inds: Index) -> Index:
+def combine_indices(direction: Direction, *inds: Index) -> Index:
     """Fuse multiple indices into one, accumulating sector dimensions.
 
     Parameters
     ----------
-    itag:
-        Identifier assigned to the fused index.
     direction:
         Direction applied to the resulting index. This does not need to match
         any individual input index directions because the caller typically
@@ -169,7 +157,7 @@ def combine_indices(itag: str, direction: Direction, *inds: Index) -> Index:
     # Build the fused index by sorting charges for deterministic ordering.
     sectors = tuple(Sector(q, d) for q, d in sorted(charge_to_dim.items(), key=lambda x: str(x[0])))
     # Return the fused index with the accumulated sectors and direction.
-    return Index(itag=itag, direction=direction, group=group, sectors=sectors)
+    return Index(direction=direction, group=group, sectors=sectors)
 
 
 def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
@@ -198,7 +186,7 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
         raise NotImplementedError("Only Abelian split supported initially")
 
     # Reuse `combine_indices` to ensure the proposed parts reproduce the parent.
-    fused = combine_indices("__tmp__", parent.direction, *parts)
+    fused = combine_indices(parent.direction, *parts)
     if fused.sector_dim_map() != parent.sector_dim_map():
         # Any mismatch implies the supplied indices do not faithfully represent
         # the original parent's charge structure.

@@ -36,10 +36,10 @@ from .index import Index
 from .tensor import Tensor
 
 
-def _axes_from_names(indices: Sequence[Index], names: Sequence[str]) -> List[int]:
+def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
     """Translate index tags into positional axis indices."""
     # Build a lookup once to avoid repeated linear searches.
-    name_to_axis = {idx.itag: i for i, idx in enumerate(indices)}
+    name_to_axis = {tag: i for i, tag in enumerate(itags)}
     return [name_to_axis[n] for n in names]
 
 
@@ -63,11 +63,11 @@ def svd(T: Tensor, split: Tuple[Sequence[int] | Sequence[str], Sequence[int] | S
     # Normalise axis descriptors into lists of integer positions.
     left_axes, right_axes = split
     if left_axes and isinstance(left_axes[0], str):  # type: ignore[index]
-        left = _axes_from_names(T.indices, left_axes)  # type: ignore[arg-type]
+        left = _axes_from_names(T.itags, left_axes)  # type: ignore[arg-type]
     else:
         left = list(left_axes)  # type: ignore[assignment]
     if right_axes and isinstance(right_axes[0], str):  # type: ignore[index]
-        right = _axes_from_names(T.indices, right_axes)  # type: ignore[arg-type]
+        right = _axes_from_names(T.itags, right_axes)  # type: ignore[arg-type]
     else:
         right = list(right_axes)  # type: ignore[assignment]
     if set(left) & set(right):
@@ -94,9 +94,9 @@ def svd(T: Tensor, split: Tuple[Sequence[int] | Sequence[str], Sequence[int] | S
         Vh_blocks[out_key] = Vh
 
     # Construct placeholder indices for the left/right singular vector legs.
-    left_index = Index(left_name, T.indices[left[0]].direction, T.indices[left[0]].group, sectors=())
-    right_index = Index(right_name, T.indices[right[0]].direction, T.indices[right[0]].group, sectors=())
-    U_tensor = Tensor(indices=(left_index,), data=U_blocks, dtype=T.dtype)
-    S_tensor = Tensor(indices=(), data=S_blocks, dtype=np.result_type(T.dtype, float))
-    Vh_tensor = Tensor(indices=(right_index,), data=Vh_blocks, dtype=T.dtype)
+    left_index = Index(T.indices[left[0]].direction, T.indices[left[0]].group, sectors=())
+    right_index = Index(T.indices[right[0]].direction, T.indices[right[0]].group, sectors=())
+    U_tensor = Tensor(indices=(left_index,), itags=(left_name,), data=U_blocks, dtype=T.dtype)
+    S_tensor = Tensor(indices=(), itags=(), data=S_blocks, dtype=np.result_type(T.dtype, float))
+    Vh_tensor = Tensor(indices=(right_index,), itags=(right_name,), data=Vh_blocks, dtype=T.dtype)
     return U_tensor, S_tensor, Vh_tensor

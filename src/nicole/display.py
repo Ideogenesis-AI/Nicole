@@ -25,7 +25,6 @@ human-friendly textual representation.
 
 Key responsibilities
 --------------------
-- Capture an index synopsis that lists itags, symmetry groups, directions, and sectors.
 - Compute a symmetry signature and aggregate statistics (order, block count, byte size, norm).
 - Iterate over the tensor's block dictionary and produce aligned, padded tables of charges.
 
@@ -53,15 +52,6 @@ from .symmetry.base import AbelianGroup
 from .typing import Charge
 
 
-def summarize_indices(indices: Iterable[Index]) -> str:
-    """Return a compact textual description of the provided indices."""
-    parts = []
-    for idx in indices:
-        sector_str = ",".join(f"{s.charge}:{s.dim}" for s in idx.sectors)
-        parts.append(
-            f"{idx.itag}[{idx.group.name},{'out' if idx.direction > 0 else 'in'}]{{{sector_str}}}"
-        )
-    return " x ".join(parts)
 
 
 def _charge_components(charge: Charge) -> Tuple:
@@ -121,6 +111,7 @@ def _format_count_list(counts: Sequence[int]) -> str:
 
 def tensor_summary(
     indices: Sequence[Index],
+    itags: Sequence[str],
     data: Mapping[Tuple[Charge, ...], np.ndarray],
     dtype: np.dtype,
     label: str,
@@ -132,6 +123,8 @@ def tensor_summary(
     ----------
     indices:
         Ordered tensor indices (each carrying symmetry information and direction).
+    itags:
+        Ordered tuple of human-readable labels for each index.
     data:
         Mapping from block keys (one charge per leg) to dense NumPy arrays.
     dtype:
@@ -166,7 +159,7 @@ def tensor_summary(
     # -------------------------------------------------------------------
     sym_signature = _group_signature(indices, sample_components)
     itag_list = ", ".join(
-        f"{idx.itag}{'*' if idx.direction > 0 else ''}" for idx in indices
+        f"{tag}{'*' if idx.direction > 0 else ''}" for tag, idx in zip(itags, indices)
     )
     info_line = (
         f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "

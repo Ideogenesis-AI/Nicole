@@ -26,7 +26,7 @@ Both routines respect the block structure defined by Nicole indices and ensure
 charge conservation across all generated blocks.
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -36,7 +36,7 @@ from .tensor import Tensor
 from .typing import Charge, Direction
 
 
-def identity(index: Index, *, dtype=np.float64, new_itag: Optional[str] = None) -> Tensor:
+def identity(index: Index, *, dtype=np.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
     """Return a 2-leg identity tensor between `index` and its conjugate leg.
 
     Parameters
@@ -45,8 +45,8 @@ def identity(index: Index, *, dtype=np.float64, new_itag: Optional[str] = None) 
         The index to be paired with its flipped counterpart.
     dtype:
         Data type for the identity matrices stored in each block.
-    new_itag:
-        Optional replacement tag applied to the flipped leg before tensor creation.
+    itags:
+        Optional tuple of tags for the two tensor indices. Defaults to `("_init_", "_init_")`.
 
     Returns
     -------
@@ -58,8 +58,8 @@ def identity(index: Index, *, dtype=np.float64, new_itag: Optional[str] = None) 
     # Prepare the left leg and its flipped partner.
     left = index
     right = index.flip()
-    if new_itag is not None:
-        right = right.retag(new_itag)
+    if itags is None:
+        itags = ("_init_", "_init_")
 
     blocks: Dict[tuple[Charge, Charge], np.ndarray] = {}
     # Populate diagonal blocks keyed by identical charges.
@@ -68,7 +68,7 @@ def identity(index: Index, *, dtype=np.float64, new_itag: Optional[str] = None) 
         dim = sector.dim
         blocks[(q, q)] = np.eye(dim, dtype=dtype)
 
-    return Tensor(indices=(left, right), data=blocks, dtype=dtype)
+    return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
 
 
 def isometry(
@@ -76,7 +76,7 @@ def isometry(
     second: Index,
     *,
     dtype=np.float64,
-    new_itag: Optional[str] = None,
+    itags: Optional[Tuple[str, str, str]] = None,
     fused_direction: Optional[Direction] = None,
 ) -> Tensor:
     """Return a 3-leg tensor that fuses ``first ⊗ second`` into a fused leg.
@@ -87,8 +87,8 @@ def isometry(
         Input indices to be fused. They must share a symmetry group.
     dtype:
         Data type for the emitted fusion blocks.
-    new_itag:
-        Optional tag applied to the fused leg.
+    itags:
+        Optional tuple of tags for the three tensor indices. Defaults to `("_init_", "_init_", "_init_")`.
     fused_direction:
         Optional direction for the fused leg. Defaults to the dual of `first`.
 
@@ -115,7 +115,9 @@ def isometry(
     # Determine orientation of the fused leg; default to the dual of `first`.
     default_dir = first.direction.reverse()
     direction = fused_direction if fused_direction is not None else default_dir
-    fused = combine_indices(new_itag or f"{first.itag}{second.itag}", direction, first, second)
+    fused = combine_indices(direction, first, second)
+    if itags is None:
+        itags = ("_init_", "_init_", "_init_")
 
     # Track how many columns have been written per fused charge.
     offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
@@ -145,5 +147,5 @@ def isometry(
         if offset != dim_fused_map[q]:
             raise RuntimeError("Fusion tensor construction mismatch")
 
-    return Tensor(indices=(first, second, fused), data=blocks, dtype=dtype)
+    return Tensor(indices=(first, second, fused), itags=itags, data=blocks, dtype=dtype)
 

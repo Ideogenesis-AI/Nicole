@@ -75,10 +75,10 @@ class BlockSchema:
             raise ValueError("Key length does not match number of indices")
         shape: List[int] = []
         # Pair each charge with its index and look up the dimensionality.
-        for idx, charge in zip(indices, key):
+        for i, (idx, charge) in enumerate(zip(indices, key)):
             dim_map = idx.sector_dim_map()
             if charge not in dim_map:
-                raise KeyError(f"Charge {charge} not present in index {idx.itag}")
+                raise KeyError(f"Charge {charge} not present in index at position {i}")
             shape.append(dim_map[charge])
         return tuple(shape)
 

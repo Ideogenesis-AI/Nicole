@@ -73,8 +73,8 @@ def contract(
     """
     # Parse the contraction pairs into axis indices.
     if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
-        name_to_axis_A = {idx.itag: i for i, idx in enumerate(A.indices)}
-        name_to_axis_B = {idx.itag: i for i, idx in enumerate(B.indices)}
+        name_to_axis_A = {tag: i for i, tag in enumerate(A.itags)}
+        name_to_axis_B = {tag: i for i, tag in enumerate(B.itags)}
         axes = [(name_to_axis_A[a], name_to_axis_B[b]) for a, b in pairs]  # type: ignore[arg-type]
     else:
         axes = pairs  # type: ignore[assignment]
@@ -91,6 +91,9 @@ def contract(
     contracted_B = {ib for _, ib in axes}
     out_indices = tuple(idx for i, idx in enumerate(A.indices) if i not in contracted_A) + tuple(
         idx for i, idx in enumerate(B.indices) if i not in contracted_B
+    )
+    out_itags = tuple(tag for i, tag in enumerate(A.itags) if i not in contracted_A) + tuple(
+        tag for i, tag in enumerate(B.itags) if i not in contracted_B
     )
 
     # Allocate the output blocks.
@@ -127,19 +130,20 @@ def contract(
             else:
                 out_blocks[out_key] = res
 
-    return Tensor(indices=out_indices, data=out_blocks, dtype=np.result_type(A.dtype, B.dtype))
+    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=np.result_type(A.dtype, B.dtype))
 
 
 def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]]) -> Tensor:
     """Trace over pairs of indices on a tensor, preserving symmetry constraints."""
     if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
-        name_to_axis = {idx.itag: i for i, idx in enumerate(T.indices)}
+        name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
         axes = [(name_to_axis[a], name_to_axis[b]) for a, b in pairs]  # type: ignore[arg-type]
     else:
         axes = pairs  # type: ignore[assignment]
     contracted = set(i for p in axes for i in p)
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
+    out_itags = tuple(T.itags[i] for i in keep_axes)
     out_blocks: Dict[BlockKey, np.ndarray] = {}
     for key, arr in T.data.items():
         ok = True
@@ -170,13 +174,13 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
             reshaped = np.trace(reshaped, axis1=len(keep_shape) + k, axis2=len(keep_shape) + k + len(axes))
         out_key = tuple(key[i] for i in keep_axes)
         out_blocks[out_key] = out_blocks.get(out_key, 0) + reshaped
-    return Tensor(indices=out_indices, data=out_blocks, dtype=T.dtype)
+    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
 
 
 def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
     """Trace over a subset of axes specified as a flat list of pairs."""
     if axes and isinstance(axes[0], str):  # type: ignore[index]
-        name_to_axis = {idx.itag: i for i, idx in enumerate(T.indices)}
+        name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
         iaxes = [name_to_axis[a] for a in axes]  # type: ignore[arg-type]
     else:
         iaxes = list(axes)  # type: ignore[assignment]
