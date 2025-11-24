@@ -67,13 +67,18 @@ class Tensor:
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
     conj()
-        Complex conjugate every dense block, and revert all index directions.
+        In-place: Complex conjugate every dense block, and revert all index directions.
     permute()
-        Permute tensor axes according to the provided reordering.
+        In-place: Permute tensor axes according to the provided reordering.
     transpose()
-        Transpose tensor axes; defaults to reversing the index order.
+        In-place: Transpose tensor axes; defaults to reversing the index order.
     retag()
         Return a new tensor whose indices are retagged using the provided map.
+    
+    Notes
+    -----
+    For functional (non-mutating) versions of conj, permute, and transpose that return
+    new tensor instances, use the standalone functions from `nicole.operations`.
     """
 
     indices: Tuple[Index, ...]
@@ -232,23 +237,27 @@ class Tensor:
         # Flip all index directions
         self.indices = tuple(idx.flip() for idx in self.indices)
 
-    def permute(self, order: Sequence[int]) -> Tensor:
+    def permute(self, order: Sequence[int]) -> None:
         """Permute tensor axes according to the provided reordering."""
         if sorted(order) != list(range(len(self.indices))):
             raise ValueError("Invalid permutation order")
-        new_indices = tuple(self.indices[i] for i in order)
-        new_itags = tuple(self.itags[i] for i in order)
+        
+        # Update indices and itags
+        self.indices = tuple(self.indices[i] for i in order)
+        self.itags = tuple(self.itags[i] for i in order)
+        
+        # Update data blocks
         new_data = {}
         for key, arr in self.data.items():
             new_key = tuple(key[i] for i in order)
             new_data[new_key] = np.transpose(arr, axes=order)
-        return Tensor(indices=new_indices, itags=new_itags, data=new_data, dtype=self.dtype, label=self.label)
+        self.data = new_data
 
-    def transpose(self, *order: int) -> Tensor:
+    def transpose(self, *order: int) -> None:
         """Transpose tensor axes; defaults to reversing the index order."""
         if not order:
             order = tuple(reversed(range(len(self.indices))))
-        return self.permute(order)
+        self.permute(order)
 
     def retag(self, mapping: Mapping[str, str]) -> Tensor:
         """Return a new tensor whose indices are retagged using the provided map."""
