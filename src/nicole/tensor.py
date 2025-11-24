@@ -67,7 +67,7 @@ class Tensor:
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
     conj()
-        Complex conjugate every dense block, leaving indices untouched.
+        Complex conjugate every dense block, and revert all index directions.
     permute()
         Permute tensor axes according to the provided reordering.
     transpose()
@@ -223,10 +223,14 @@ class Tensor:
 
     __rmul__ = __mul__
 
-    def conj(self) -> Tensor:
-        """Complex conjugate every dense block, leaving indices untouched."""
-        new_data = {k: np.conjugate(v) for k, v in self.data.items()}
-        return Tensor(indices=self.indices, itags=self.itags, data=new_data, dtype=self.dtype, label=self.label)
+    def conj(self) -> None:
+        """Complex conjugate every dense block if dtype is complex, and revert all index directions."""
+        # Only conjugate data if dtype is complex
+        if np.issubdtype(self.dtype, np.complexfloating):
+            for k in self.data:
+                self.data[k] = np.conjugate(self.data[k])
+        # Flip all index directions
+        self.indices = tuple(idx.flip() for idx in self.indices)
 
     def permute(self, order: Sequence[int]) -> Tensor:
         """Permute tensor axes according to the provided reordering."""
