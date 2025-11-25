@@ -50,7 +50,7 @@ def _dir_weight(idx: Index, charge: Charge) -> Tuple[AbelianGroup, Charge]:
 def contract(
     A: Tensor,
     B: Tensor,
-    pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]],
+    pairs: Optional[Sequence[Tuple[int, int]]] = None,
     perm: Optional[Sequence[int]] = None,
 ) -> Tensor:
     """Contract two tensors along provided index pairs while respecting symmetry.
@@ -60,8 +60,10 @@ def contract(
     A, B:
         Input tensors to be contracted.
     pairs:
-        Sequence describing which indices to contract. Entries may be positional
-        tuples (axis in `A`, axis in `B`) or `itag` name tuples.
+        Optional sequence of integer index pairs (axis in `A`, axis in `B`) to contract.
+        If None, automatically contracts all indices where itags match and directions
+        are opposite. If provided, validates that each pair has matching itags and
+        opposite directions.
     perm:
         Optional permutation for the resulting tensor axes. If provided, the axes
         of the contracted tensor will be reordered according to this sequence.
@@ -71,16 +73,56 @@ def contract(
     Tensor
         Tensor whose indices are the non-contracted axes of `A` followed by those
         of `B`, populated with blocks that satisfy charge conservation.
+    
+    Raises
+    ------
+    ValueError
+        If manually specified pairs have mismatched itags or non-opposite directions,
+        or if no valid contraction pairs are found.
     """
-    # Parse the contraction pairs into axis indices.
-    if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
-        name_to_axis_A = {tag: i for i, tag in enumerate(A.itags)}
-        name_to_axis_B = {tag: i for i, tag in enumerate(B.itags)}
-        axes = [(name_to_axis_A[a], name_to_axis_B[b]) for a, b in pairs]  # type: ignore[arg-type]
+    # Determine contraction pairs
+    if pairs is None:
+        # Automatic mode: find all pairs where itags match and directions are opposite
+        axes = []
+        used_B = set()
+        for ia, tag_a in enumerate(A.itags):
+            for ib, tag_b in enumerate(B.itags):
+                if ib in used_B:
+                    continue
+                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction:
+                    axes.append((ia, ib))
+                    used_B.add(ib)
+                    break
+        if not axes:
+            raise ValueError(
+                "No valid contraction pairs found. Indices must have matching itags "
+                "and opposite directions."
+            )
     else:
-        axes = pairs  # type: ignore[assignment]
-    if not axes:
-        raise ValueError("No contraction pairs provided")
+        # Manual mode: validate matching itags and opposite directions
+        axes = list(pairs)
+        
+        for ia, ib in axes:
+            # Check bounds
+            if ia < 0 or ia >= len(A.indices):
+                raise ValueError(f"Index {ia} out of range for tensor A")
+            if ib < 0 or ib >= len(B.indices):
+                raise ValueError(f"Index {ib} out of range for tensor B")
+            
+            # Check matching itags
+            if A.itags[ia] != B.itags[ib]:
+                raise ValueError(
+                    f"Contraction pair ({ia}, {ib}) has mismatched itags: "
+                    f"'{A.itags[ia]}' (A) != '{B.itags[ib]}' (B). "
+                    f"Contracted indices must have matching itags."
+                )
+            
+            # Check opposite directions
+            if A.indices[ia].direction == B.indices[ib].direction:
+                raise ValueError(
+                    f"Contraction pair ({ia}, {ib}) with itag '{A.itags[ia]}' has same direction: "
+                    f"{A.indices[ia].direction}. Contracted indices must have opposite directions."
+                )
 
     # Validate that the contraction pairs have matching symmetry groups.
     for ia, ib in axes:
