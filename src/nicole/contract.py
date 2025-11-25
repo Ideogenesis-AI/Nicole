@@ -51,7 +51,7 @@ def contract(
     A: Tensor,
     B: Tensor,
     pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]],
-    out_order: Optional[Sequence[int]] = None,
+    perm: Optional[Sequence[int]] = None,
 ) -> Tensor:
     """Contract two tensors along provided index pairs while respecting symmetry.
 
@@ -62,8 +62,9 @@ def contract(
     pairs:
         Sequence describing which indices to contract. Entries may be positional
         tuples (axis in `A`, axis in `B`) or `itag` name tuples.
-    out_order:
-        Optional axis order for the resulting tensor; unused presently.
+    perm:
+        Optional permutation for the resulting tensor axes. If provided, the axes
+        of the contracted tensor will be reordered according to this sequence.
 
     Returns
     -------
@@ -130,7 +131,18 @@ def contract(
             else:
                 out_blocks[out_key] = res
 
-    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=np.result_type(A.dtype, B.dtype))
+    result = Tensor(
+        indices=out_indices,
+        itags=out_itags,
+        data=out_blocks,
+        dtype=np.result_type(A.dtype, B.dtype)
+    )
+
+    # Apply permutation if requested.
+    if perm is not None:
+        result.permute(perm)
+    
+    return result
 
 
 def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]]) -> Tensor:
@@ -174,6 +186,7 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
             reshaped = np.trace(reshaped, axis1=len(keep_shape) + k, axis2=len(keep_shape) + k + len(axes))
         out_key = tuple(key[i] for i in keep_axes)
         out_blocks[out_key] = out_blocks.get(out_key, 0) + reshaped
+
     return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
 
 
