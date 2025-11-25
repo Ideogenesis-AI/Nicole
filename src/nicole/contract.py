@@ -83,6 +83,30 @@ def contract(
     # Determine contraction pairs
     if pairs is None:
         # Automatic mode: find all pairs where itags match and directions are opposite
+        # Check for ambiguity: each index in A should match at most one index in B, and vice versa
+        for ia, tag_a in enumerate(A.itags):
+            matches = sum(
+                1 for ib, tag_b in enumerate(B.itags)
+                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
+            )
+            if matches > 1:
+                raise ValueError(
+                    f"Ambiguous automatic contraction: index {ia} (itag '{tag_a}') in tensor A "
+                    f"matches {matches} indices in tensor B. Please specify pairs explicitly."
+                )
+        
+        for ib, tag_b in enumerate(B.itags):
+            matches = sum(
+                1 for ia, tag_a in enumerate(A.itags)
+                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
+            )
+            if matches > 1:
+                raise ValueError(
+                    f"Ambiguous automatic contraction: index {ib} (itag '{tag_b}') in tensor B "
+                    f"matches {matches} indices in tensor A. Please specify pairs explicitly."
+                )
+        
+        # Build unique pairing
         axes = []
         used_B = set()
         for ia, tag_a in enumerate(A.itags):
@@ -93,6 +117,7 @@ def contract(
                     axes.append((ia, ib))
                     used_B.add(ib)
                     break
+        
         if not axes:
             raise ValueError(
                 "No valid contraction pairs found. Indices must have matching itags "
