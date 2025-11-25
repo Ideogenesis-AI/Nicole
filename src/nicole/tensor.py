@@ -73,7 +73,7 @@ class Tensor:
     transpose()
         In-place: Transpose tensor axes; defaults to reversing the index order.
     retag()
-        Return a new tensor whose indices are retagged using the provided map.
+        Retag indices: update specific tags by name/index, or replace all tags.
     
     Notes
     -----
@@ -259,7 +259,56 @@ class Tensor:
             order = tuple(reversed(range(len(self.indices))))
         self.permute(order)
 
-    def retag(self, mapping: Mapping[str, str]) -> Tensor:
-        """Return a new tensor whose indices are retagged using the provided map."""
-        new_itags = tuple(mapping.get(tag, tag) for tag in self.itags)
-        return Tensor(indices=self.indices, itags=new_itags, data=self.data.copy(), dtype=self.dtype, label=self.label)
+    def retag(self, mapping_or_indices: Union[Mapping[str, str], Sequence[str], Sequence[int]], 
+              new_tags: Optional[Sequence[str]] = None) -> None:
+        """Retag indices using one of three modes.
+        
+        Parameters
+        ----------
+        mapping_or_indices:
+            Can be one of:
+            - Mapping[str, str]: Dictionary mapping old tags to new tags
+            - Sequence[str]: Complete list of new tags (must match number of indices)
+            - Sequence[int]: List of index positions to update (requires new_tags)
+        new_tags:
+            New tags to use when mapping_or_indices is a sequence of integers.
+            Must have the same length as mapping_or_indices.
+        
+        Examples
+        --------
+        # Mode 1: Mapping (update specific tags by name)
+        tensor.retag({"a": "left", "b": "right"})
+        
+        # Mode 2: Full replacement (replace all tags)
+        tensor.retag(["left", "middle", "right"])
+        
+        # Mode 3: Selective update by position
+        tensor.retag([0, 2], ["left", "right"])
+        """
+        if isinstance(mapping_or_indices, Mapping):
+            # Mode 1: Mapping dictionary
+            self.itags = tuple(mapping_or_indices.get(tag, tag) for tag in self.itags)
+        elif new_tags is not None:
+            # Mode 3: Update specific indices
+            if not isinstance(mapping_or_indices, Sequence):
+                raise TypeError("When new_tags is provided, first argument must be a sequence of integers")
+            indices = list(mapping_or_indices)
+            if len(indices) != len(new_tags):
+                raise ValueError("Number of indices must match number of new tags")
+            if not all(isinstance(i, int) for i in indices):
+                raise TypeError("Index positions must be integers")
+            if any(i < 0 or i >= len(self.itags) for i in indices):
+                raise IndexError("Index position out of range")
+            
+            # Convert to list for mutation, then back to tuple
+            new_itags = list(self.itags)
+            for idx, tag in zip(indices, new_tags):
+                new_itags[idx] = tag
+            self.itags = tuple(new_itags)
+        else:
+            # Mode 2: Full replacement
+            if not isinstance(mapping_or_indices, Sequence):
+                raise TypeError("Expected a sequence of strings for full replacement")
+            if len(mapping_or_indices) != len(self.itags):
+                raise ValueError(f"Number of new tags ({len(mapping_or_indices)}) must match number of indices ({len(self.itags)})")
+            self.itags = tuple(mapping_or_indices)
