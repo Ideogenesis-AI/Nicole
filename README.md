@@ -21,7 +21,7 @@ Inspired by [QSpace](https://bitbucket.org/qspace4u/), Nicole reimagines the blo
 We welcome contributions from the community! Whether you're fixing bugs, adding features, implementing new symmetry groups, or improving documentation, your help is appreciated.
 
 **Ways to contribute:**
-- Report bugs and request features via [GitHub Issues](https://github.com/changkaizhang/nicole/issues)
+- Report bugs and request features via [GitHub Issues](https://github.com/Ideogenesis-AI/Nicole/issues)
 - Submit pull requests with bug fixes or enhancements
 - Improve documentation and add examples
 - Share your use cases and feedback

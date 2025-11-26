@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "nicole"
 version = "0.1.0"
 description = "Nicole: a symmetry-aware tensor library"
-readme = { file = "README", content-type = "text/markdown" }
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Changkai Zhang", email = "changkai.zhang@lmu.de" }]
