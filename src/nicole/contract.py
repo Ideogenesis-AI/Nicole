@@ -78,7 +78,64 @@ def contract(
     ------
     ValueError
         If manually specified pairs have mismatched itags or non-opposite directions,
-        or if no valid contraction pairs are found.
+        or if no valid contraction pairs are found, or if automatic detection
+        encounters ambiguous pairing.
+
+    Examples
+    --------
+    **Automatic contraction** (recommended for most cases):
+
+    >>> # Tensors with matching itags and opposite directions
+    >>> A = Tensor.random([idx_a, idx_b], itags=["left", "mid"])
+    >>> B = Tensor.random([idx_b_flip, idx_c], itags=["mid", "right"])
+    >>> result = contract(A, B)  # Automatically contracts "mid" indices
+    >>> result.itags
+    ('left', 'right')
+
+    **Manual contraction** with integer pairs:
+
+    >>> # Explicitly specify which indices to contract
+    >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
+    >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
+    >>> result = contract(A, B, pairs=[(1, 0)])
+    >>> result.itags
+    ('i', 'k')
+
+    **Multiple contractions**:
+
+    >>> # Contract multiple index pairs at once
+    >>> A = Tensor.random([idx_a, idx_b, idx_c], itags=["a", "b", "c"])
+    >>> B = Tensor.random([idx_b_flip, idx_c_flip, idx_d], itags=["b", "c", "d"])
+    >>> result = contract(A, B)  # Contracts both "b" and "c"
+    >>> result.itags
+    ('a', 'd')
+
+    **Using permutation** to reorder output:
+
+    >>> # Contract and then permute the result
+    >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
+    >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
+    >>> result = contract(A, B, pairs=[(1, 0)], perm=[1, 0])
+    >>> result.itags  # Swapped from default order
+    ('k', 'i')
+
+    **Resolving ambiguity** with manual pairs:
+
+    >>> # When automatic detection is ambiguous, specify explicitly
+    >>> A = Tensor.random([idx_a, idx_a], itags=["x", "x"])  # Duplicate tags
+    >>> B = Tensor.random([idx_a_flip, idx_a_flip], itags=["x", "x"])
+    >>> # contract(A, B) would raise ValueError due to ambiguity
+    >>> result = contract(A, B, pairs=[(0, 0), (1, 1)])  # Explicitly pair them
+
+    Notes
+    -----
+    The automatic detection mode checks for unique pairings. If an itag appears
+    multiple times with valid opposite directions, manual specification is required
+    to avoid ambiguity.
+
+    The output tensor has indices ordered as: non-contracted indices from A,
+    followed by non-contracted indices from B. Use the `perm` parameter to
+    reorder if needed.
     """
     # Determine contraction pairs
     if pairs is None:
@@ -213,7 +270,49 @@ def contract(
 
 
 def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]]) -> Tensor:
-    """Trace over pairs of indices on a tensor, preserving symmetry constraints."""
+    """Trace over pairs of indices on a single tensor while preserving symmetry.
+
+    This function performs a partial trace by summing over diagonal elements of
+    specified index pairs. Each pair must have matching charges, opposite directions,
+    and equal dimensions within each symmetry block.
+
+    Parameters
+    ----------
+    T:
+        Tensor to be traced.
+    pairs:
+        Sequence of index pairs to trace over. Each pair (a, b) specifies two indices
+        of the tensor to trace. Entries can be integer axis positions or string itag names.
+        All indices in pairs must have opposite directions and matching charges.
+
+    Returns
+    -------
+    Tensor
+        Tensor with the traced indices removed. The remaining indices retain their
+        original order.
+
+    Raises
+    ------
+    NotImplementedError
+        If the tensor uses non-Abelian symmetry groups.
+    ValueError
+        If paired indices have the same direction, mismatched charges, or
+        incompatible dimensions.
+
+    Notes
+    -----
+    The trace operation sums over matching diagonal entries: Tr(A) = Σᵢ Aᵢᵢ.
+    For multiple pairs, traces are performed sequentially. The order of pairs
+    does not affect the final result for commuting traces.
+
+    Examples
+    --------
+    >>> # Trace over indices 0 and 1 of a 3-index tensor
+    >>> result = trace(T, pairs=[(0, 1)])
+    >>> 
+    >>> # Trace over multiple pairs using itag names
+    >>> result = trace(T, pairs=[("left", "right"), ("top", "bottom")])
+    """
     if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
         name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
         axes = [(name_to_axis[a], name_to_axis[b]) for a, b in pairs]  # type: ignore[arg-type]
@@ -271,7 +370,50 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
 
 
 def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
-    """Trace over a subset of axes specified as a flat list of pairs."""
+    """Trace over a subset of indices specified as a flat sequential list.
+
+    This is a convenience wrapper around `trace` that accepts a flat list of axes
+    and automatically pairs them sequentially: [a₀, a₁, a₂, a₃, ...] becomes
+    pairs [(a₀, a₁), (a₂, a₃), ...].
+
+    Parameters
+    ----------
+    T:
+        Tensor to be traced.
+    axes:
+        Flat sequence of indices to trace over. Must have even length. Indices
+        are paired sequentially: first with second, third with fourth, etc.
+        Can be integer axis positions or string itag names.
+
+    Returns
+    -------
+    Tensor
+        Tensor with the specified indices traced out. Remaining indices retain
+        their original order.
+
+    Raises
+    ------
+    ValueError
+        If the number of axes is odd (cannot form complete pairs).
+    NotImplementedError
+        If the tensor uses non-Abelian symmetry groups.
+
+    Examples
+    --------
+    >>> # Trace indices 0 with 1, and 2 with 3
+    >>> result = partial_trace(T, axes=[0, 1, 2, 3])
+    >>> # Equivalent to: trace(T, pairs=[(0, 1), (2, 3)])
+    >>>
+    >>> # Using itag names
+    >>> result = partial_trace(T, axes=["left", "right", "top", "bottom"])
+    >>> # Equivalent to: trace(T, pairs=[("left", "right"), ("top", "bottom")])
+
+    Notes
+    -----
+    This function is particularly useful when you have a natural sequential
+    ordering of index pairs, such as tracing out entangled pairs in a quantum
+    system or reducing tensor products in a systematic way.
+    """
     if axes and isinstance(axes[0], str):  # type: ignore[index]
         name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
         iaxes = [name_to_axis[a] for a in axes]  # type: ignore[arg-type]
