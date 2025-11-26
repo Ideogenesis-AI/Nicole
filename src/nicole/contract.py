@@ -249,10 +249,23 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
         keep_shape = [arr.shape[i] for i in keep_axes]
         traced_shapes = [arr.shape[a] for a, _ in axes]
         reshaped = permuted.reshape((*keep_shape, *traced_shapes, *traced_shapes))
+        # Trace each pair sequentially; after each trace, dimensions are reduced by 2
         for k in range(len(axes)):
-            reshaped = np.trace(reshaped, axis1=len(keep_shape) + k, axis2=len(keep_shape) + k + len(axes))
+            # After k traces, we've removed 2*k dimensions
+            # So the next pair starts at len(keep_shape)
+            reshaped = np.trace(reshaped, axis1=len(keep_shape), axis2=len(keep_shape) + len(axes) - k)
+        # Ensure reshaped is a proper ndarray (not a scalar)
+        if not isinstance(reshaped, np.ndarray):
+            reshaped = np.array(reshaped)
         out_key = tuple(key[i] for i in keep_axes)
-        out_blocks[out_key] = out_blocks.get(out_key, 0) + reshaped
+        if out_key in out_blocks:
+            result = out_blocks[out_key] + reshaped
+            # Ensure result is also an ndarray
+            if not isinstance(result, np.ndarray):
+                result = np.array(result)
+            out_blocks[out_key] = result
+        else:
+            out_blocks[out_key] = reshaped
 
     return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
 
