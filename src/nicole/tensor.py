@@ -66,6 +66,8 @@ class Tensor:
         Create a tensor filled with random values for each admissible block.
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
+    copy()
+        Create a deep copy of this tensor with independent block data.
     conj()
         In-place: Complex conjugate every dense block, and revert all index directions.
     permute()
@@ -159,6 +161,17 @@ class Tensor:
             return 0.0
         return float(
             np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in self.data.values()))
+        )
+
+    def copy(self) -> Tensor:
+        """Create a deep copy of this tensor."""
+        new_data = {k: v.copy() for k, v in self.data.items()}
+        return Tensor(
+            indices=self.indices,
+            itags=self.itags,
+            data=new_data,
+            dtype=self.dtype,
+            label=self.label,
         )
 
     def _align_for_binary(self, other: "Tensor") -> Tuple["Tensor", "Tensor"]:

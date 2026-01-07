@@ -16,13 +16,101 @@
 # along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor manipulation operations: conj, permute, transpose, retag."""
+"""Tests for tensor manipulation operations: copy, conj, permute, transpose, retag."""
 
 import numpy as np
 import pytest
 
 from nicole import Direction, Tensor, U1Group, conj, permute, transpose
 from .utils import make_u1_index
+
+
+# Copy tests
+
+def test_copy_returns_new_instance():
+    """Test that copy returns a new tensor instance."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=123, itags=["A", "B"])
+
+    copied = tensor.copy()
+
+    assert copied is not tensor
+
+
+def test_copy_has_identical_data():
+    """Test that copy has identical data values."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=456, dtype=np.complex128, itags=["A", "B"])
+
+    copied = tensor.copy()
+
+    assert set(copied.data.keys()) == set(tensor.data.keys())
+    for key in tensor.data:
+        np.testing.assert_array_equal(copied.data[key], tensor.data[key])
+
+
+def test_copy_creates_independent_data():
+    """Test that modifying copy doesn't affect original."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    tensor = Tensor.random([idx], seed=789, itags=["X"])
+
+    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    copied = tensor.copy()
+
+    # Modify the copy's data
+    for key in copied.data:
+        copied.data[key] *= 100.0
+
+    # Original should be unchanged
+    for key in original_data:
+        np.testing.assert_array_equal(tensor.data[key], original_data[key])
+
+
+def test_copy_preserves_metadata():
+    """Test that copy preserves indices, itags, dtype, and label."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 2)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=111, dtype=np.complex128, itags=["left", "right"])
+    tensor.label = "MyTensor"
+
+    copied = tensor.copy()
+
+    assert copied.indices == tensor.indices
+    assert copied.itags == tensor.itags
+    assert copied.dtype == tensor.dtype
+    assert copied.label == tensor.label
+
+
+def test_copy_shares_immutable_indices():
+    """Test that copy shares the same Index objects (since they're immutable)."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    tensor = Tensor.random([idx], seed=222, itags=["A"])
+
+    copied = tensor.copy()
+
+    # Index objects should be the same (shared) since they're immutable
+    for orig_idx, copy_idx in zip(tensor.indices, copied.indices):
+        assert orig_idx is copy_idx
+
+
+def test_copy_data_arrays_are_independent():
+    """Test that numpy arrays in copy are different objects."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    tensor = Tensor.random([idx], seed=333, itags=["A"])
+
+    copied = tensor.copy()
+
+    # Each array should be a different object
+    for key in tensor.data:
+        assert copied.data[key] is not tensor.data[key]
 
 
 # Conjugation tests
