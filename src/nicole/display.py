@@ -116,6 +116,7 @@ def tensor_summary(
     dtype: np.dtype,
     label: str,
     norm: float,
+    sorted_keys: Sequence[Tuple[Charge, ...]] = None,
 ) -> str:
     """Create a multi-line summary for a tensor.
 
@@ -133,6 +134,9 @@ def tensor_summary(
         Human-readable tag printed in the header (e.g. "Tensor").
     norm:
         Frobenius norm of the tensor; pre-computed by the caller for efficiency.
+    sorted_keys:
+        Optional pre-sorted sequence of block keys. If None, keys are sorted
+        internally by string representation.
 
     Returns
     -------
@@ -202,7 +206,9 @@ def tensor_summary(
         ]
 
         # Iterate deterministically over blocks; limit display to at most nine entries.
-        sorted_blocks = sorted(data.items(), key=lambda kv: str(kv[0]))
+        if sorted_keys is None:
+            sorted_keys = sorted(data.keys(), key=str)
+        sorted_blocks = [(k, data[k]) for k in sorted_keys]
         max_lines = 9
         for idx_num, (key, arr) in enumerate(sorted_blocks[:max_lines], start=1):
             # Dense dims (state space) and trivial CGC placeholder (Abelian => all ones).
