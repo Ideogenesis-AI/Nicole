@@ -22,7 +22,7 @@ from .contract import contract, partial_trace, trace
 from .decomp import svd
 from .identity import identity, isometry
 from .index import Index, Sector
-from .operators import conj, permute, transpose
+from .operators import conj, getsub, permute, transpose
 from .symmetry.abelian import U1Group, Z2Group
 from .tensor import Tensor
 from .typing import Charge, Direction
@@ -42,6 +42,7 @@ __all__ = [
     "identity",
     "isometry",
     "conj",
+    "getsub",
     "permute",
     "transpose",
 ]

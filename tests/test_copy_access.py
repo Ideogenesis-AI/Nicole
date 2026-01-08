@@ -21,7 +21,7 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, U1Group
+from nicole import Direction, Tensor, U1Group, getsub
 from .utils import make_u1_index
 
 
@@ -253,4 +253,116 @@ def test_display_numbering_matches_block_index():
         # Verify the block index matches
         assert tensor.key(i) == key
         np.testing.assert_array_equal(tensor.block(i), tensor.data[key])
+
+
+# getsub tests
+
+def test_getsub_returns_new_instance():
+    """Test that getsub returns a new tensor instance."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=200, itags=["A", "B"])
+
+    sub = getsub(tensor, [1, 2])
+
+    assert sub is not tensor
+
+
+def test_getsub_contains_only_specified_blocks():
+    """Test that getsub returns only the specified blocks."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=201, itags=["A", "B"])
+
+    indices_to_get = [1, 3]
+    sub = getsub(tensor, indices_to_get)
+
+    # Should have exactly the specified number of blocks
+    assert len(sub.data) == len(indices_to_get)
+    
+    # Should contain the correct keys
+    expected_keys = {tensor.key(i) for i in indices_to_get}
+    assert set(sub.data.keys()) == expected_keys
+
+
+def test_getsub_data_is_copied():
+    """Test that getsub creates independent copies of data."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=202, itags=["A", "B"])
+
+    sub = getsub(tensor, [1])
+    
+    # Modify the sub tensor's data
+    for key in sub.data:
+        original_value = tensor.data[key].copy()
+        sub.data[key] *= 100.0
+        # Original should be unchanged
+        np.testing.assert_array_equal(tensor.data[key], original_value)
+
+
+def test_getsub_preserves_metadata():
+    """Test that getsub preserves indices, itags, dtype, and label."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=np.complex128, itags=["left", "right"])
+    tensor.label = "TestTensor"
+
+    sub = getsub(tensor, [1])
+
+    assert sub.indices == tensor.indices
+    assert sub.itags == tensor.itags
+    assert sub.dtype == tensor.dtype
+    assert sub.label == tensor.label
+
+
+def test_getsub_single_block():
+    """Test getsub with a single block index."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=204, itags=["A", "B"])
+
+    sub = getsub(tensor, [1])
+
+    assert len(sub.data) == 1
+    key = tensor.key(1)
+    np.testing.assert_array_equal(sub.data[key], tensor.data[key])
+
+
+def test_getsub_all_blocks():
+    """Test getsub with all block indices."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    tensor = Tensor.random([idx_a, idx_b], seed=205, itags=["A", "B"])
+
+    all_indices = list(range(1, len(tensor.data) + 1))
+    sub = getsub(tensor, all_indices)
+
+    assert len(sub.data) == len(tensor.data)
+    for key in tensor.data:
+        np.testing.assert_array_equal(sub.data[key], tensor.data[key])
+
+
+def test_getsub_raises_on_invalid_index():
+    """Test that getsub raises IndexError for invalid indices."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    tensor = Tensor.random([idx], seed=206, itags=["A"])
+
+    num_blocks = len(tensor.data)
+
+    with pytest.raises(IndexError):
+        getsub(tensor, [0])  # 0 is invalid (1-indexed)
+
+    with pytest.raises(IndexError):
+        getsub(tensor, [num_blocks + 1])  # Out of range
+
+    with pytest.raises(IndexError):
+        getsub(tensor, [1, num_blocks + 1])  # One valid, one invalid
 

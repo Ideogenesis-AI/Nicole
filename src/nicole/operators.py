@@ -33,6 +33,8 @@ permute(tensor, order)
     Return a new tensor with permuted axes according to the provided order.
 transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
+getsub(tensor, block_indices)
+    Return a new tensor containing only the specified blocks.
 """
 
 from typing import Sequence
@@ -137,4 +139,48 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     if not order:
         order = tuple(reversed(range(len(tensor.indices))))
     return permute(tensor, order)
+
+
+def getsub(tensor: Tensor, block_indices: Sequence[int]) -> Tensor:
+    """Return a new tensor containing only the specified blocks.
+    
+    Parameters
+    ----------
+    tensor:
+        The input tensor to extract blocks from.
+    block_indices:
+        Sequence of block indices (1-indexed, matching display numbering)
+        specifying which blocks to include in the new tensor.
+    
+    Returns
+    -------
+    Tensor
+        A new tensor instance containing only the specified blocks,
+        with all other attributes (indices, itags, dtype, label) preserved.
+    
+    Raises
+    ------
+    IndexError
+        If any block index is out of range.
+    
+    Examples
+    --------
+    >>> from nicole import getsub, Tensor
+    >>> # Assuming t has 5 blocks numbered 1-5 in display
+    >>> t_sub = getsub(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
+    """
+    num_blocks = len(tensor.data)
+    for i in block_indices:
+        if i < 1 or i > num_blocks:
+            raise IndexError(f"Block index {i} out of range [1, {num_blocks}]")
+    
+    new_data = {tensor.key(i): tensor.block(i).copy() for i in block_indices}
+    
+    return Tensor(
+        indices=tensor.indices,
+        itags=tensor.itags,
+        data=new_data,
+        dtype=tensor.dtype,
+        label=tensor.label,
+    )
 
