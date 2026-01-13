@@ -74,6 +74,8 @@ class Tensor:
         Get the BlockKey for the i-th block (1-indexed, matching display).
     block()
         Access the i-th block by integer index (1-indexed, matching display).
+    show()
+        Display selected blocks without max_line limits.
     conj()
         In-place: Complex conjugate every dense block, and revert all index directions.
     permute()
@@ -162,6 +164,16 @@ class Tensor:
                               self.label, self.norm(), self.sorted_keys)
 
     __repr__ = __str__
+
+    def show(self, block_indices: Sequence[int]) -> None:
+        """Display selected blocks without max_line limits.
+        """
+        # Convert block indices to their corresponding keys
+        selected_keys = [self.key(i) for i in block_indices]
+        
+        # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
+        print(tensor_summary(self.indices, self.itags, self.data, self.dtype, self.label, self.norm(),
+                             sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
 
     def norm(self) -> float:
         """Compute the Frobenius norm aggregated across all dense blocks."""

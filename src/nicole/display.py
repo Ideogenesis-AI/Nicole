@@ -43,7 +43,7 @@ state counts, showing charge conservation per block) to ease adoption for users 
 from traditional workflows.
 """
 
-from typing import Iterable, List, Mapping, Sequence, Tuple
+from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -117,6 +117,8 @@ def tensor_summary(
     label: str,
     norm: float,
     sorted_keys: Sequence[Tuple[Charge, ...]] = None,
+    max_lines: Optional[int] = 9,
+    block_numbers: Optional[Sequence[int]] = None,
 ) -> str:
     """Create a multi-line summary for a tensor.
 
@@ -137,6 +139,13 @@ def tensor_summary(
     sorted_keys:
         Optional pre-sorted sequence of block keys. If None, keys are sorted
         internally by string representation.
+    max_lines:
+        Maximum number of blocks to display. If None, displays all blocks.
+        Defaults to 9.
+    block_numbers:
+        Optional sequence of block numbers (1-indexed) to use for display.
+        If provided, must match the length of sorted_keys. Used to preserve
+        original block numbering when displaying a subset of blocks.
 
     Returns
     -------
@@ -205,12 +214,21 @@ def tensor_summary(
             max((len(value) for value in values), default=1) for values in components_per_position
         ]
 
-        # Iterate deterministically over blocks; limit display to at most nine entries.
+        # Iterate deterministically over blocks; limit display if max_lines is set.
         if sorted_keys is None:
             sorted_keys = sorted(data.keys(), key=str)
         sorted_blocks = [(k, data[k]) for k in sorted_keys]
-        max_lines = 9
-        for idx_num, (key, arr) in enumerate(sorted_blocks[:max_lines], start=1):
+        blocks_to_show = sorted_blocks if max_lines is None else sorted_blocks[:max_lines]
+        
+        # Determine block numbers for display
+        if block_numbers is not None:
+            # Use provided block numbers (preserves original indices)
+            display_numbers = list(block_numbers) if max_lines is None else list(block_numbers[:max_lines])
+        else:
+            # Default: sequential numbering starting from 1
+            display_numbers = list(range(1, len(blocks_to_show) + 1))
+        
+        for idx_num, (key, arr) in zip(display_numbers, blocks_to_show):
             # Dense dims (state space) and trivial CGC placeholder (Abelian => all ones).
             state_dims = "x".join(str(dim) for dim in arr.shape) or "1"
             cgc_dims = "x".join("1" for _ in arr.shape) or "1"
@@ -239,7 +257,7 @@ def tensor_summary(
                 )
 
         # If more than max_lines blocks, note how many are omitted.
-        if len(sorted_blocks) > max_lines:
+        if max_lines is not None and len(sorted_blocks) > max_lines:
             remaining = len(sorted_blocks) - max_lines
             block_lines.append(f"    ... ({remaining} more)")
     else:
