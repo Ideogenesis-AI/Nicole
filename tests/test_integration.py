@@ -173,9 +173,9 @@ def test_workflow_arithmetic_operations_chain():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["a"])
-    B = Tensor.random([idx], seed=2, itags=["a"])
-    C = Tensor.random([idx], seed=3, itags=["a"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["a", "b"])
+    C = Tensor.random([idx, idx.flip()], seed=3, itags=["a", "b"])
     
     # Complex expression: 2*A + 3*B - 0.5*C
     result = 2 * A + 3 * B - 0.5 * C
@@ -241,17 +241,21 @@ def test_workflow_tensor_network_contraction_order():
     idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx2 = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx3 = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx_extra1 = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_extra2 = make_u1_index(Direction.IN, [(0, 1)], group)
     
-    A = Tensor.random([idx1, idx2.dual()], seed=1, itags=["a", "b"])
+    A = Tensor.random([idx1, idx2.dual(), idx_extra1], seed=1, itags=["a", "b", "x"])
     B = Tensor.random([idx2, idx3.dual()], seed=2, itags=["b", "c"])
-    C = Tensor.random([idx3, idx1.dual()], seed=3, itags=["c", "a"])
+    C = Tensor.random([idx3, idx1.dual(), idx_extra2], seed=3, itags=["c", "a", "y"])
     
-    # Contract in different orders
+    # Contract in different orders - result will have indices x and y
     result1 = contract(contract(A, B), C)
     result2 = contract(A, contract(B, C))
     
     # Should give same result (up to numerical precision)
     assert np.isclose(result1.norm(), result2.norm())
+    assert len(result1.indices) == 2
+    assert len(result2.indices) == 2
 
 
 def test_workflow_build_mpo_and_apply():
@@ -356,10 +360,10 @@ def test_workflow_mixed_dtypes():
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
     # float32 tensor
-    A = Tensor.random([idx], dtype=np.float32, seed=1, itags=["a"])
+    A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["a", "b"])
     
     # float64 tensor
-    B = Tensor.random([idx], dtype=np.float64, seed=2, itags=["a"])
+    B = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=2, itags=["a", "b"])
     
     # Add (should promote to float64)
     C = A + B

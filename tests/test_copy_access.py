@@ -57,7 +57,7 @@ def test_copy_creates_independent_data():
     """Test that modifying copy doesn't affect original."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=789, itags=["X"])
+    tensor = Tensor.random([idx, idx.flip()], seed=789, itags=["X", "Y"])
 
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     copied = tensor.copy()
@@ -91,7 +91,7 @@ def test_copy_shares_immutable_indices():
     """Test that copy shares the same Index objects (since they're immutable)."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=222, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=222, itags=["A", "B"])
 
     copied = tensor.copy()
 
@@ -104,7 +104,7 @@ def test_copy_data_arrays_are_independent():
     """Test that numpy arrays in copy are different objects."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=333, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=333, itags=["A", "B"])
 
     copied = tensor.copy()
 
@@ -149,7 +149,7 @@ def test_sorted_keys_is_cached():
     """Test that sorted_keys property is cached."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=102, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=102, itags=["A", "B"])
 
     keys1 = tensor.sorted_keys
     keys2 = tensor.sorted_keys
@@ -174,7 +174,7 @@ def test_key_raises_on_invalid_index():
     """Test that key(i) raises IndexError for invalid indices."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=104, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=104, itags=["A", "B"])
     
     num_blocks = len(tensor.data)
     
@@ -203,7 +203,7 @@ def test_block_returns_same_object_as_data():
     """Test that block(i) returns the same array object as data[key]."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=106, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=106, itags=["A", "B"])
 
     for i, key in enumerate(tensor.sorted_keys, start=1):
         assert tensor.block(i) is tensor.data[key]
@@ -353,7 +353,7 @@ def test_getsub_raises_on_invalid_index():
     """Test that getsub raises IndexError for invalid indices."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=206, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=206, itags=["A", "B"])
 
     num_blocks = len(tensor.data)
 

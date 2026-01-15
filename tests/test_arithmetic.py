@@ -73,8 +73,8 @@ def test_addition_zero_tensor():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    Z = Tensor.zeros([idx], itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    Z = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
     result = A + Z
     assert_blocks_equal(result, A)
@@ -85,8 +85,8 @@ def test_addition_commutative():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx], seed=2, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
     
     assert_blocks_equal(A + B, B + A)
 
@@ -96,9 +96,9 @@ def test_addition_associative():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx], seed=2, itags=["A"])
-    C = Tensor.random([idx], seed=3, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    C = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
     
     assert_blocks_equal((A + B) + C, A + (B + C))
 
@@ -123,9 +123,10 @@ def test_addition_requires_matching_directions():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx_flipped = idx.flip()
+    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx_flipped], seed=2, itags=["A"])
+    A = Tensor.random([idx, idx2], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_flipped, idx2], seed=2, itags=["A", "B"])
     
     with pytest.raises(ValueError, match="directions must match"):
         _ = A + B
@@ -136,8 +137,8 @@ def test_addition_requires_matching_order():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx, idx], seed=2, itags=["A", "B"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip(), idx], seed=2, itags=["A", "B", "C"])
     
     with pytest.raises(ValueError, match="different order"):
         _ = A + B
@@ -150,8 +151,8 @@ def test_subtraction_simple():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx], seed=2, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
     
     C = A - B
     
@@ -165,7 +166,7 @@ def test_subtraction_self_gives_zero():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     result = A - A
     
@@ -199,7 +200,7 @@ def test_scalar_multiplication_int():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     result = A * 3
     
@@ -212,7 +213,7 @@ def test_scalar_multiplication_float():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     result = A * 2.5
     
@@ -237,7 +238,7 @@ def test_scalar_multiplication_left():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     result = 3.5 * A
     
@@ -250,7 +251,7 @@ def test_scalar_multiplication_commutative():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     assert_blocks_equal(A * 2.5, 2.5 * A)
 
@@ -260,7 +261,7 @@ def test_scalar_multiplication_zero():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     result = A * 0
     
@@ -275,7 +276,7 @@ def test_norm_positive():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
     assert A.norm() >= 0
 
@@ -285,7 +286,7 @@ def test_norm_zero_iff_zero_tensor():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    Z = Tensor.zeros([idx], itags=["A"])
+    Z = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
     assert Z.norm() == 0.0
 
@@ -293,7 +294,7 @@ def test_norm_zero_iff_zero_tensor():
 def test_norm_linear_scaling():
     """Test that norm scales linearly with scalar multiplication."""
     idx = make_u1_index(Direction.OUT, [(0, 4)])
-    tensor = Tensor.random([idx], seed=0, itags=["X"])
+    tensor = Tensor.random([idx, idx.flip()], seed=0, itags=["X", "Y"])
     scaled = tensor * 5.0
     assert np.isclose(scaled.norm(), tensor.norm() * 5.0)
 
@@ -302,7 +303,7 @@ def test_norm_manual_computation():
     """Test norm against manual computation."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
-    tensor = Tensor.random([idx], seed=11, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
     
     manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
     
@@ -314,7 +315,7 @@ def test_norm_complex():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3)], group)
     
-    tensor = Tensor.random([idx], dtype=np.complex128, seed=1, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["A", "B"])
     
     manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
     
@@ -328,9 +329,9 @@ def test_combined_arithmetic_operations():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx], seed=2, itags=["A"])
-    C = Tensor.random([idx], seed=3, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    C = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
     
     # Test: 2*A + 3*B - C
     result = 2 * A + 3 * B - C
@@ -345,8 +346,8 @@ def test_dtype_promotion():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], dtype=np.float32, seed=1, itags=["A"])
-    B = Tensor.random([idx], dtype=np.float64, seed=2, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=2, itags=["A", "B"])
     
     result = A + B
     
@@ -358,7 +359,7 @@ def test_complex_dtype_promotion():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], dtype=np.float64, seed=1, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=1, itags=["A", "B"])
     
     result = A * (1 + 2j)
     
@@ -370,8 +371,8 @@ def test_z2_arithmetic():
     group = Z2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     
-    A = Tensor.random([idx], seed=1, itags=["A"])
-    B = Tensor.random([idx], seed=2, itags=["A"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
     
     C = A + B
     D = A - B
@@ -393,8 +394,8 @@ def test_product_group_addition():
         Sector((1, -1), 1),
     ))
     
-    A = Tensor.random([idx], seed=1, itags=["x"])
-    B = Tensor.random([idx], seed=2, itags=["x"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["x", "y"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["x", "y"])
     
     C = A + B
     
@@ -413,8 +414,8 @@ def test_product_group_subtraction():
         Sector((1, 1), 1),
     ))
     
-    A = Tensor.random([idx], seed=10, itags=["y"])
-    B = Tensor.random([idx], seed=11, itags=["y"])
+    A = Tensor.random([idx, idx.flip()], seed=10, itags=["y", "z"])
+    B = Tensor.random([idx, idx.flip()], seed=11, itags=["y", "z"])
     
     C = A - B
     
@@ -431,7 +432,7 @@ def test_product_group_scalar_multiplication():
         Sector((1, 2), 2),
     ))
     
-    A = Tensor.random([idx], seed=42, itags=["z"])
+    A = Tensor.random([idx, idx.flip()], seed=42, itags=["z", "w"])
     scalar = 3.5
     
     B = scalar * A

@@ -69,7 +69,7 @@ def test_conj_inplace_modifies_original():
     """Test that in-place conj modifies the original tensor."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=1, dtype=np.complex128, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     original_direction = tensor.indices[0].direction
@@ -88,7 +88,7 @@ def test_conj_real_dtype_no_data_change():
     """Test that conj on real dtype doesn't change data."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=1, dtype=np.float64, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.float64, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     
@@ -103,7 +103,7 @@ def test_conj_double_application():
     """Test that conjugating twice returns to original."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
-    tensor = Tensor.random([idx], seed=1, dtype=np.complex128, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     original_direction = tensor.indices[0].direction
@@ -393,12 +393,12 @@ def test_retag_preserves_tensor_data():
     """Test that retag never modifies tensor data or structure."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    tensor = Tensor.random([idx], seed=1, itags=["original"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["original", "second"])
     
     original_norm = tensor.norm()
     original_keys = set(tensor.data.keys())
     
-    tensor.retag(["new_name"])
+    tensor.retag(["new_name", "new_second"])
     
     assert tensor.norm() == original_norm
     assert set(tensor.data.keys()) == original_keys
