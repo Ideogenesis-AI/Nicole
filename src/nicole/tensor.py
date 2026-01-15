@@ -100,6 +100,10 @@ class Tensor:
 
     def __post_init__(self) -> None:
         """Validate the provided block dictionary against the index schema."""
+        if len(self.indices) < 2:
+            raise ValueError(
+                f"Tensors must have at least 2 indices for symmetry consistency, got {len(self.indices)}"
+            )
         if len(self.itags) != len(self.indices):
             raise ValueError(
                 f"Number of itags ({len(self.itags)}) must match number of indices ({len(self.indices)})"
