@@ -43,14 +43,15 @@ def test_tensor_zeros_basic():
 
 
 def test_tensor_zeros_single_index():
-    """Test Tensor.zeros with single index."""
+    """Test Tensor.zeros with minimum two indices."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    tensor = Tensor.zeros([idx], itags=["A"])
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
-    assert set(tensor.data.keys()) == {(0,)}
-    assert tensor.data[(0,)].shape == (2,)
+    assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
+    assert tensor.data[(0, 0)].shape == (2, 2)
+    assert tensor.data[(1, 1)].shape == (3, 3)
 
 
 def test_tensor_zeros_no_itags():
@@ -58,10 +59,11 @@ def test_tensor_zeros_no_itags():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx])
+    tensor = Tensor.zeros([idx, idx.flip()])
     
-    assert len(tensor.itags) == 1
+    assert len(tensor.itags) == 2
     assert tensor.itags[0] == "_init_"
+    assert tensor.itags[1] == "_init_"
 
 
 def test_tensor_zeros_complex_dtype():
@@ -106,10 +108,10 @@ def test_tensor_random_seed_reproducible():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3)], group)
     
-    t1 = Tensor.random([idx], seed=42, itags=["A"])
-    t2 = Tensor.random([idx], seed=42, itags=["A"])
+    t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
+    t2 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     
-    np.testing.assert_allclose(t1.data[(0,)], t2.data[(0,)])
+    np.testing.assert_allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
 def test_tensor_random_different_seeds():
@@ -117,10 +119,10 @@ def test_tensor_random_different_seeds():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3)], group)
     
-    t1 = Tensor.random([idx], seed=42, itags=["A"])
-    t2 = Tensor.random([idx], seed=99, itags=["A"])
+    t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
+    t2 = Tensor.random([idx, idx.flip()], seed=99, itags=["A", "B"])
     
-    assert not np.allclose(t1.data[(0,)], t2.data[(0,)])
+    assert not np.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
 def test_tensor_random_complex():
@@ -128,10 +130,10 @@ def test_tensor_random_complex():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3)], group)
     
-    tensor = Tensor.random([idx], dtype=np.complex128, seed=123, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=123, itags=["A", "B"])
     
     assert tensor.dtype == np.complex128
-    assert np.iscomplexobj(tensor.data[(0,)])
+    assert np.iscomplexobj(tensor.data[(0, 0)])
 
 
 def test_tensor_random_no_itags():
@@ -139,15 +141,16 @@ def test_tensor_random_no_itags():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.random([idx], seed=1)
+    tensor = Tensor.random([idx, idx.flip()], seed=1)
     
     assert tensor.itags[0] == "_init_"
+    assert tensor.itags[1] == "_init_"
 
 
 def test_tensor_norm_matches_manual():
     """Test that Tensor.norm() matches manual computation."""
     idx = make_u1_index(Direction.OUT, [(0, 3), (1, 2)])
-    tensor = Tensor.random([idx], seed=11, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
     manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
     assert np.isclose(tensor.norm(), manual)
 
@@ -157,7 +160,7 @@ def test_tensor_norm_zero():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 3)], group)
     
-    tensor = Tensor.zeros([idx], itags=["A"])
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
     assert tensor.norm() == 0.0
 
@@ -167,7 +170,7 @@ def test_tensor_norm_empty():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=())
     
-    tensor = Tensor(indices=(idx,), itags=("A",), data={}, dtype=np.float64)
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data={}, dtype=np.float64)
     
     assert tensor.norm() == 0.0
 
@@ -178,7 +181,7 @@ def test_tensor_validation_mismatched_itags():
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
     with pytest.raises(ValueError, match="must match number of indices"):
-        Tensor(indices=(idx,), itags=("A", "B"), data={}, dtype=np.float64)
+        Tensor(indices=(idx, idx.flip()), itags=("A", "B", "C"), data={}, dtype=np.float64)
 
 
 def test_tensor_validation_invalid_block_shape():
@@ -186,10 +189,10 @@ def test_tensor_validation_invalid_block_shape():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    blocks = {(0,): np.zeros((3,))}  # Wrong shape, should be (2,)
+    blocks = {(0, 0): np.zeros((3, 2))}  # Wrong shape, should be (2, 2)
     
     with pytest.raises(ValueError, match="expected"):
-        Tensor(indices=(idx,), itags=("A",), data=blocks, dtype=np.float64)
+        Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data=blocks, dtype=np.float64)
 
 
 def test_tensor_validation_charge_violation():
@@ -210,7 +213,7 @@ def test_tensor_str_repr():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx], itags=["A"])
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
     string_repr = str(tensor)
     assert "Tensor" in string_repr
@@ -225,10 +228,10 @@ def test_tensor_construction_float32():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx], dtype=np.float32, itags=["A"])
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["A", "B"])
     
     assert tensor.dtype == np.float32
-    assert tensor.data[(0,)].dtype == np.float32
+    assert tensor.data[(0, 0)].dtype == np.float32
 
 
 def test_tensor_construction_complex64():
@@ -236,10 +239,10 @@ def test_tensor_construction_complex64():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.random([idx], dtype=np.complex64, seed=1, itags=["A"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex64, seed=1, itags=["A", "B"])
     
     assert tensor.dtype == np.complex64
-    assert tensor.data[(0,)].dtype == np.complex64
+    assert tensor.data[(0, 0)].dtype == np.complex64
 
 
 def test_tensor_zeros_three_indices():

@@ -158,7 +158,7 @@ def test_tensor_summary_basic():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx], itags=["a"])
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -171,7 +171,7 @@ def test_tensor_summary_includes_norm():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.random([idx], seed=1, itags=["a"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -183,7 +183,7 @@ def test_tensor_summary_includes_dtype():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx], dtype=np.float32, itags=["a"])
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -258,7 +258,7 @@ def test_tensor_summary_scalar_block():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 1)], group)
     
-    tensor = Tensor.random([idx], seed=1, itags=["a"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -271,7 +271,7 @@ def test_tensor_summary_empty_tensor():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=())
     
-    tensor = Tensor(indices=(idx,), itags=("a",), data={}, dtype=np.float64)
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data={}, dtype=np.float64)
     
     summary = str(tensor)
     
@@ -283,7 +283,7 @@ def test_tensor_summary_complex_dtype():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.random([idx], dtype=np.complex128, seed=1, itags=["a"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -295,7 +295,7 @@ def test_tensor_repr_equals_str():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    tensor = Tensor.zeros([idx], itags=["a"])
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
     
     assert repr(tensor) == str(tensor)
 
@@ -322,8 +322,8 @@ def test_tensor_summary_custom_label():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    data = {(0,): np.zeros((2,))}
-    tensor = Tensor(indices=(idx,), itags=("a",), data=data, dtype=np.float64, label="MyTensor")
+    data = {(0, 0): np.zeros((2, 2))}
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data=data, dtype=np.float64, label="MyTensor")
     
     summary = str(tensor)
     
@@ -335,7 +335,7 @@ def test_tensor_summary_formatting_consistent():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
     
-    tensor = Tensor.random([idx], seed=1, itags=["a"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
     summary1 = str(tensor)
     summary2 = str(tensor)

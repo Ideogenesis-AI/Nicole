@@ -234,8 +234,8 @@ def test_contract_no_pairs_raises():
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    A = Tensor.random([idx], seed=1, itags=["a"])
-    B = Tensor.random([idx], seed=2, itags=["b"])
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "c"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["b", "d"])
     
     with pytest.raises(ValueError, match="No valid contraction pairs"):
         contract(A, B)
@@ -249,7 +249,7 @@ def test_contract_ambiguous_automatic_raises():
     
     # Both indices have same itag and opposite directions - should be fine with 1:1
     A = Tensor.random([idx_out, idx_in], seed=1, itags=["x", "y"])
-    B = Tensor.random([idx_out], seed=2, itags=["y"])
+    B = Tensor.random([idx_out, idx_out.flip()], seed=2, itags=["y", "z"])
     
     # This should work fine (1 match per index)
     result = contract(A, B)
@@ -283,20 +283,25 @@ def test_trace_integer_pairs():
     idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
+    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[(0, 1)])
-    assert traced.indices == (idx_c,)
+    assert traced.indices == (idx_c, idx_d)
 
     manual = {}
-    for (qa, qb, qc), block in tensor.data.items():
+    for (qa, qb, qc, qd), block in tensor.data.items():
         if qa == qb:
             diag = np.trace(block, axis1=0, axis2=1)
-            manual[qc] = manual.get(qc, 0) + diag
+            key = (qc, qd)
+            if key in manual:
+                manual[key] += diag
+            else:
+                manual[key] = diag
 
-    assert set(traced.data.keys()) == {(qc,) for qc in manual}
-    for qc, expected in manual.items():
-        np.testing.assert_allclose(traced.data[(qc,)], expected)
+    assert set(traced.data.keys()) == set(manual.keys())
+    for key, expected in manual.items():
+        np.testing.assert_allclose(traced.data[key], expected)
 
 
 def test_trace_string_pairs():
@@ -305,10 +310,11 @@ def test_trace_string_pairs():
     idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
+    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
-    assert traced.indices == (idx_c,)
+    assert traced.indices == (idx_c, idx_d)
 
 
 def test_trace_multiple_pairs():
@@ -318,12 +324,15 @@ def test_trace_multiple_pairs():
     idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
     idx_d = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_e = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_f = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e, idx_f], seed=601, itags=["a", "b", "c", "d", "e", "f"])
     traced = trace(tensor, pairs=[("a", "b"), ("c", "d")])
     
-    # Result should be scalar (no indices left)
-    assert len(traced.indices) == 0
+    # Result should have 2 indices left (e and f)
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_e, idx_f)
 
 
 # Partial trace tests
@@ -334,11 +343,12 @@ def test_partial_trace_integer_axes():
     idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
+    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     
     pt = partial_trace(tensor, axes=[0, 1])
-    assert pt.indices == (idx_c,)
+    assert pt.indices == (idx_c, idx_d)
 
 
 def test_partial_trace_string_axes():
@@ -347,8 +357,9 @@ def test_partial_trace_string_axes():
     idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
+    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
     
     # Partial trace should match explicit trace call
@@ -441,15 +452,16 @@ def test_contract_product_group_manual_pairs():
     
     left = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
     right = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
+    extra = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1),))
     
-    A = Tensor.random([left], seed=10, itags=["x"])
-    B = Tensor.random([right], seed=11, itags=["x"])  # Same itag for contraction
+    A = Tensor.random([left, extra], seed=10, itags=["x", "a"])
+    B = Tensor.random([right, extra.flip()], seed=11, itags=["x", "b"])  # Same itag for contraction
     
     # Contract using manual pairs
     C = contract(A, B, pairs=[(0, 0)])
     
-    assert len(C.indices) == 0
-    assert len(C.data) == 1  # Scalar result
+    assert len(C.indices) == 2  # extra and extra.flip() remain
+    assert C.itags == ("a", "b")
     assert_charge_neutral(C)
 
 
@@ -465,13 +477,15 @@ def test_trace_product_group():
         Sector((0, 0), 2),
         Sector((1, 1), 1),
     ))
+    extra = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1),))
+    extra2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 1),))
     
-    T = Tensor.random([left, right], seed=99, itags=["i", "j"])
+    T = Tensor.random([left, right, extra, extra2], seed=99, itags=["i", "j", "k", "l"])
     
-    # Trace over both indices
+    # Trace over first two indices
     result = trace(T, pairs=[(0, 1)])
     
-    assert len(result.indices) == 0
-    assert len(result.data) == 1  # Scalar
+    assert len(result.indices) == 2  # extra and extra2 remain
+    assert result.itags == ("k", "l")
     assert_charge_neutral(result)
 
