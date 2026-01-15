@@ -24,6 +24,15 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Hashable
 
+# Charge can be any hashable value. For single symmetry groups (U1Group, Z2Group),
+# charges are typically integers. For ProductGroup (multiple symmetries), charges
+# are tuples of hashable values, one per component group.
+#
+# Examples:
+#   - U1Group charge: 2, -1, 0 (integers)
+#   - Z2Group charge: 0, 1 (integers 0 or 1)
+#   - ProductGroup(U1, U1) charge: (2, -1), (0, 0) (tuples of integers)
+#   - ProductGroup(U1, Z2) charge: (3, 1), (-2, 0) (tuples: int, 0/1)
 Charge = Hashable
 
 
