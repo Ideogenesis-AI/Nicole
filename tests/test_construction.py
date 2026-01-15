@@ -42,7 +42,7 @@ def test_tensor_zeros_basic():
     assert_charge_neutral(tensor)
 
 
-def test_tensor_zeros_single_index():
+def test_tensor_zeros_two_indices():
     """Test Tensor.zeros with minimum two indices."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
@@ -206,6 +206,24 @@ def test_tensor_validation_charge_violation():
     
     with pytest.raises(ValueError, match="violates charge conservation"):
         Tensor(indices=(idx1, idx2), itags=("A", "B"), data=blocks, dtype=np.float64)
+
+
+def test_tensor_validation_requires_two_indices():
+    """Test that Tensor rejects tensors with fewer than 2 indices."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    
+    # Test with Tensor constructor
+    with pytest.raises(ValueError, match="must have at least 2 indices"):
+        Tensor(indices=(idx,), itags=("A",), data={}, dtype=np.float64)
+    
+    # Test with Tensor.zeros
+    with pytest.raises(ValueError, match="must have at least 2 indices"):
+        Tensor.zeros([idx], itags=["A"])
+    
+    # Test with Tensor.random
+    with pytest.raises(ValueError, match="must have at least 2 indices"):
+        Tensor.random([idx], seed=1, itags=["A"])
 
 
 def test_tensor_str_repr():
