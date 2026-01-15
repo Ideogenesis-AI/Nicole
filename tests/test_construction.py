@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole.symmetry.product import ProductGroup
 from .utils import make_u1_index, assert_charge_neutral
 
 
@@ -253,4 +254,98 @@ def test_tensor_zeros_three_indices():
     assert_charge_neutral(tensor)
     for block in tensor.data.values():
         assert np.allclose(block, 0.0)
+
+
+# ProductGroup integration tests
+
+def test_tensor_zeros_product_group_u1_u1():
+    """Test Tensor.zeros with U1×U1 ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    # Create indices with tuple charges
+    left = Index(
+        Direction.OUT,
+        group,
+        sectors=(
+            Sector((0, 0), 2),
+            Sector((1, 0), 1),
+            Sector((0, 1), 1),
+        )
+    )
+    right = Index(
+        Direction.IN,
+        group,
+        sectors=(
+            Sector((0, 0), 3),
+            Sector((1, 0), 1),
+            Sector((0, 1), 2),
+        )
+    )
+    
+    tensor = Tensor.zeros([left, right], itags=["L", "R"])
+    
+    # Charge conservation: OUT charges equal IN charges
+    # Valid blocks: ((0,0), (0,0)), ((1,0), (1,0)), ((0,1), (0,1))
+    assert set(tensor.data.keys()) == {((0, 0), (0, 0)), ((1, 0), (1, 0)), ((0, 1), (0, 1))}
+    
+    assert tensor.data[((0, 0), (0, 0))].shape == (2, 3)
+    assert tensor.data[((1, 0), (1, 0))].shape == (1, 1)
+    assert tensor.data[((0, 1), (0, 1))].shape == (1, 2)
+    
+    for block in tensor.data.values():
+        assert np.allclose(block, 0.0)
+
+
+def test_tensor_zeros_product_group_u1_z2():
+    """Test Tensor.zeros with U1×Z2 ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    left = Index(
+        Direction.OUT,
+        group,
+        sectors=(
+            Sector((0, 0), 2),
+            Sector((1, 1), 1),
+        )
+    )
+    right = Index(
+        Direction.IN,
+        group,
+        sectors=(
+            Sector((0, 0), 1),
+            Sector((1, 1), 2),
+        )
+    )
+    
+    tensor = Tensor.zeros([left, right], itags=["L", "R"])
+    
+    assert set(tensor.data.keys()) == {((0, 0), (0, 0)), ((1, 1), (1, 1))}
+    assert tensor.data[((0, 0), (0, 0))].shape == (2, 1)
+    assert tensor.data[((1, 1), (1, 1))].shape == (1, 2)
+
+
+def test_tensor_random_product_group():
+    """Test Tensor.random with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    left = Index(
+        Direction.OUT,
+        group,
+        sectors=(Sector((0, 0), 2), Sector((1, -1), 1))
+    )
+    right = Index(
+        Direction.IN,
+        group,
+        sectors=(Sector((0, 0), 3), Sector((1, -1), 2))
+    )
+    
+    tensor = Tensor.random([left, right], seed=42, itags=["L", "R"])
+    
+    assert set(tensor.data.keys()) == {((0, 0), (0, 0)), ((1, -1), (1, -1))}
+    assert tensor.data[((0, 0), (0, 0))].shape == (2, 3)
+    assert tensor.data[((1, -1), (1, -1))].shape == (1, 2)
+    
+    # Check that blocks are not all zeros
+    assert not np.allclose(tensor.data[((0, 0), (0, 0))], 0.0)
+    assert tensor.norm() > 0.0
 
