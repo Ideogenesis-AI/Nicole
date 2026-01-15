@@ -49,6 +49,8 @@ import numpy as np
 
 from .index import Index
 from .symmetry.base import AbelianGroup
+from .symmetry.abelian import U1Group
+from .symmetry.product import ProductGroup
 from .typing import Charge
 
 
@@ -64,17 +66,31 @@ def _charge_components(charge: Charge) -> Tuple:
 
 
 def _group_signature(indices: Sequence[Index], components_per_charge: int) -> str:
-    """Return a symmetry signature string such as 'A' for Abelian groups."""
+    """Return a symmetry signature string identifying the group type.
+    
+    U1Group uses 'A', other Abelian groups use their name (e.g., 'Z2'), and
+    ProductGroup uses the full product name (e.g., 'U1×Z2').
+    """
     if not indices:
         return ""
     group = indices[0].group
-    if isinstance(group, AbelianGroup):
+    if isinstance(group, ProductGroup):
+        # ProductGroup has a descriptive name like "U1×Z2"
+        return group.name
+    elif isinstance(group, U1Group):
+        # U1Group specifically gets 'A' label
         label = "A"
+        count = max(components_per_charge, 1)
+        return ",".join([label] * count)
+    elif isinstance(group, AbelianGroup):
+        # Other Abelian groups use their name
+        return group.name
     else:
+        # Non-Abelian groups
         gname = getattr(group, "name", "")
         label = gname.upper() if gname else "?"
-    count = max(components_per_charge, 1)
-    return ",".join([label] * count)
+        count = max(components_per_charge, 1)
+        return ",".join([label] * count)
 
 
 def _format_bytes(size: int) -> str:
