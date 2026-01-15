@@ -35,6 +35,7 @@ import numpy as np
 from .blocks import BlockKey
 from .index import Index
 from .symmetry.base import AbelianGroup
+from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
 
@@ -42,8 +43,8 @@ from .typing import Charge, Direction
 def _dir_weight(idx: Index, charge: Charge) -> Tuple[AbelianGroup, Charge]:
     """Return the symmetry group and orientation-adjusted charge contribution."""
     group = idx.group
-    if not isinstance(group, AbelianGroup):
-        raise NotImplementedError("Only Abelian contraction supported initially")
+    if not isinstance(group, (AbelianGroup, ProductGroup)):
+        raise NotImplementedError("Only Abelian/Product contraction supported")
     return group, (charge if idx.direction == Direction.OUT else group.inverse(charge))
 
 
@@ -327,8 +328,8 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
         ok = True
         for a, b in axes:
             group = T.indices[a].group
-            if not isinstance(group, AbelianGroup):
-                raise NotImplementedError("Only Abelian trace supported")
+            if not isinstance(group, (AbelianGroup, ProductGroup)):
+                raise NotImplementedError("Only Abelian/Product trace supported")
             qa = key[a]
             qb = key[b]
             if T.indices[a].direction == T.indices[b].direction:

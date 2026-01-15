@@ -42,6 +42,7 @@ from typing import Dict, Sequence, Tuple
 
 from .typing import Charge, Direction, Sector
 from .symmetry.base import AbelianGroup, SymmetryGroup
+from .symmetry.product import ProductGroup
 
 
 
@@ -138,8 +139,8 @@ def combine_indices(direction: Direction, *inds: Index) -> Index:
     if not inds:
         raise ValueError("No indices to combine")
     group = inds[0].group
-    if not isinstance(group, AbelianGroup):
-        raise NotImplementedError("Only Abelian combine supported initially")
+    if not isinstance(group, (AbelianGroup, ProductGroup)):
+        raise NotImplementedError("Only Abelian/Product combine supported")
     if any(ind.group != group for ind in inds):
         raise ValueError("All indices must share the same group to combine")
 
@@ -182,8 +183,8 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
 
     # Sanity checks
     group = parent.group
-    if not isinstance(group, AbelianGroup):
-        raise NotImplementedError("Only Abelian split supported initially")
+    if not isinstance(group, (AbelianGroup, ProductGroup)):
+        raise NotImplementedError("Only Abelian/Product split supported")
 
     # Reuse `combine_indices` to ensure the proposed parts reproduce the parent.
     fused = combine_indices(parent.direction, *parts)

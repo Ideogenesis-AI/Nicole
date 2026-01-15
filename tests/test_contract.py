@@ -21,7 +21,8 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, contract, identity, partial_trace, trace, U1Group, permute
+from nicole import Direction, Tensor, contract, identity, partial_trace, trace, U1Group, Z2Group, permute, Index, Sector
+from nicole.symmetry.product import ProductGroup
 from .utils import make_u1_index, assert_charge_neutral
 
 
@@ -395,4 +396,82 @@ def test_partial_trace_odd_axes_raises():
     
     with pytest.raises(ValueError, match="even number of axes"):
         partial_trace(tensor, axes=[0, 1, 2])
+
+
+# ProductGroup integration tests for contraction
+
+def test_contract_product_group():
+    """Test contracting two tensors with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    # A: OUT, OUT with charges
+    left_a = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, 0), 1),
+    ))
+    right_a = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 1),
+        Sector((0, 1), 2),
+    ))
+    
+    # B: IN, OUT with charges (contract first index with A's second)
+    left_b = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 1),
+        Sector((0, 1), 2),
+    ))
+    right_b = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 0), 1),
+    ))
+    
+    A = Tensor.random([left_a, right_a], seed=42, itags=["a", "mid"])
+    B = Tensor.random([left_b, right_b], seed=43, itags=["mid", "b"])
+    
+    # Contract automatically on matching "mid" tag
+    C = contract(A, B)
+    
+    assert len(C.indices) == 2
+    assert C.itags == ("a", "b")
+    assert_charge_neutral(C)
+
+
+def test_contract_product_group_manual_pairs():
+    """Test manual contraction with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    left = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
+    right = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
+    
+    A = Tensor.random([left], seed=10, itags=["x"])
+    B = Tensor.random([right], seed=11, itags=["x"])  # Same itag for contraction
+    
+    # Contract using manual pairs
+    C = contract(A, B, pairs=[(0, 0)])
+    
+    assert len(C.indices) == 0
+    assert len(C.data) == 1  # Scalar result
+    assert_charge_neutral(C)
+
+
+def test_trace_product_group():
+    """Test trace operation with ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    left = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, 1), 1),
+    ))
+    right = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, 1), 1),
+    ))
+    
+    T = Tensor.random([left, right], seed=99, itags=["i", "j"])
+    
+    # Trace over both indices
+    result = trace(T, pairs=[(0, 1)])
+    
+    assert len(result.indices) == 0
+    assert len(result.data) == 1  # Scalar
+    assert_charge_neutral(result)
 

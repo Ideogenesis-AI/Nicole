@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole.symmetry.product import ProductGroup
 from .utils import make_u1_index, assert_blocks_equal
 
 
@@ -380,4 +381,65 @@ def test_z2_arithmetic():
     assert C.norm() > 0
     assert D.norm() >= 0
     assert E.norm() > 0
+
+
+# ProductGroup integration tests for arithmetic
+
+def test_product_group_addition():
+    """Test addition with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, -1), 1),
+    ))
+    
+    A = Tensor.random([idx], seed=1, itags=["x"])
+    B = Tensor.random([idx], seed=2, itags=["x"])
+    
+    C = A + B
+    
+    assert set(C.data.keys()) == set(A.data.keys())
+    # Verify block-wise addition
+    for key in C.data:
+        expected = A.data[key] + B.data[key]
+        np.testing.assert_allclose(C.data[key], expected)
+
+
+def test_product_group_subtraction():
+    """Test subtraction with ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, 1), 1),
+    ))
+    
+    A = Tensor.random([idx], seed=10, itags=["y"])
+    B = Tensor.random([idx], seed=11, itags=["y"])
+    
+    C = A - B
+    
+    for key in C.data:
+        expected = A.data[key] - B.data[key]
+        np.testing.assert_allclose(C.data[key], expected)
+
+
+def test_product_group_scalar_multiplication():
+    """Test scalar multiplication with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 2), 2),
+    ))
+    
+    A = Tensor.random([idx], seed=42, itags=["z"])
+    scalar = 3.5
+    
+    B = scalar * A
+    C = A * scalar
+    
+    # Both should give same result
+    for key in A.data:
+        expected = scalar * A.data[key]
+        np.testing.assert_allclose(B.data[key], expected)
+        np.testing.assert_allclose(C.data[key], expected)
 

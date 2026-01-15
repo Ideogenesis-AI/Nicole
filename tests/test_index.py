@@ -22,6 +22,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, U1Group, Z2Group
 from nicole.index import combine_indices, split_index
+from nicole.symmetry.product import ProductGroup
 
 
 def test_index_construction():
@@ -306,4 +307,42 @@ def test_combine_split_roundtrip():
     recovered = split_index(combined, [idx1, idx2, idx3])
     
     assert recovered == (idx1, idx2, idx3)
+
+
+# ProductGroup integration tests for combine/split
+
+def test_combine_indices_product_group():
+    """Test combining indices with ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((1, 0), 2)))
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Check that combined index has correct sectors
+    assert combined.direction == Direction.OUT
+    assert combined.group == group
+    
+    # Expected combined sectors:
+    # (0,0) ⊗ (0,0) -> (0,0) with dim 2*1=2
+    # (0,0) ⊗ (1,0) -> (1,0) with dim 2*2=4
+    # (1,1) ⊗ (0,0) -> (1,1) with dim 1*1=1
+    # (1,1) ⊗ (1,0) -> (2,1) with dim 1*2=2
+    expected_charges = {(0, 0), (1, 0), (1, 1), (2, 1)}
+    actual_charges = {s.charge for s in combined.sectors}
+    assert actual_charges == expected_charges
+
+
+def test_split_index_product_group():
+    """Test splitting an index with ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((1, 0), 2)))
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    recovered = split_index(combined, [idx1, idx2])
+    
+    assert recovered == (idx1, idx2)
 
