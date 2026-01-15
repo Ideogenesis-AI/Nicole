@@ -24,6 +24,7 @@ from .identity import identity, isometry
 from .index import Index, Sector
 from .operators import conj, getsub, permute, transpose
 from .symmetry.abelian import U1Group, Z2Group
+from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
 
@@ -35,6 +36,7 @@ __all__ = [
     "Tensor",
     "U1Group",
     "Z2Group",
+    "ProductGroup",
     "contract",
     "trace",
     "partial_trace",
