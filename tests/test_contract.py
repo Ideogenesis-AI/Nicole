@@ -324,15 +324,13 @@ def test_trace_multiple_pairs():
     idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
     idx_c = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
     idx_d = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
-    idx_e = make_u1_index(Direction.OUT, [(0, 1)], group)
-    idx_f = make_u1_index(Direction.IN, [(0, 1)], group)
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e, idx_f], seed=601, itags=["a", "b", "c", "d", "e", "f"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b"), ("c", "d")])
     
-    # Result should have 2 indices left (e and f)
-    assert len(traced.indices) == 2
-    assert traced.indices == (idx_e, idx_f)
+    # Result should be scalar (all indices traced)
+    assert len(traced.indices) == 0
+    assert traced.is_scalar()
 
 
 # Partial trace tests
@@ -452,16 +450,15 @@ def test_contract_product_group_manual_pairs():
     
     left = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
     right = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
-    extra = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1),))
     
-    A = Tensor.random([left, extra], seed=10, itags=["x", "a"])
-    B = Tensor.random([right, extra.flip()], seed=11, itags=["x", "b"])  # Same itag for contraction
+    A = Tensor.random([left, left.dual()], seed=10, itags=["x", "y"])
+    B = Tensor.random([right, right.dual()], seed=11, itags=["x", "z"])
     
     # Contract using manual pairs
     C = contract(A, B, pairs=[(0, 0)])
     
-    assert len(C.indices) == 2  # extra and extra.flip() remain
-    assert C.itags == ("a", "b")
+    assert len(C.indices) == 2  # y and z remain
+    assert C.itags == ("y", "z")
     assert_charge_neutral(C)
 
 
@@ -477,15 +474,111 @@ def test_trace_product_group():
         Sector((0, 0), 2),
         Sector((1, 1), 1),
     ))
-    extra = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1),))
-    extra2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 1),))
     
-    T = Tensor.random([left, right, extra, extra2], seed=99, itags=["i", "j", "k", "l"])
+    T = Tensor.random([left, right], seed=99, itags=["i", "j"])
     
-    # Trace over first two indices
+    # Trace over both indices
     result = trace(T, pairs=[(0, 1)])
     
-    assert len(result.indices) == 2  # extra and extra2 remain
-    assert result.itags == ("k", "l")
+    assert result.is_scalar()
+    assert len(result.indices) == 0
     assert_charge_neutral(result)
+
+
+# Scalar result tests
+
+def test_trace_produces_scalar():
+    """Test that tracing all indices produces a scalar (0D tensor)."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["a", "b"])
+    
+    # Trace all indices
+    scalar = trace(tensor, pairs=[(0, 1)])
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert len(scalar.itags) == 0
+    assert () in scalar.data
+    
+    # Verify it's a valid scalar value
+    value = scalar.item()
+    assert isinstance(value, (int, float, complex))
+
+
+def test_contract_produces_scalar():
+    """Test that full contraction produces a scalar."""
+    group = U1Group()
+    idx_out = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
+    idx_in = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
+    
+    A = Tensor.random([idx_out, idx_in], seed=1, itags=["a", "b"])
+    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=2, itags=["b", "a"])
+    
+    # Contract all indices automatically (matching itags with opposite directions)
+    scalar = contract(A, B)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert len(scalar.itags) == 0
+    assert () in scalar.data
+
+
+def test_trace_multiple_pairs_produces_scalar():
+    """Test that tracing multiple pairs can produce a scalar."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
+    idx_d = make_u1_index(Direction.IN, [(0, 1), (1, 1)], group)
+    
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
+    
+    # Trace all pairs
+    scalar = trace(tensor, pairs=[("a", "b"), ("c", "d")])
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert scalar.item() is not None
+
+
+def test_scalar_result_operations():
+    """Test operations on scalar results from contractions."""
+    group = U1Group()
+    idx_out = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx_in = make_u1_index(Direction.IN, [(0, 2)], group)
+    
+    A = Tensor.random([idx_out, idx_in], seed=10, itags=["a", "b"])
+    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=20, itags=["b", "a"])
+    
+    # Get two scalars from contractions
+    s1 = contract(A, B)
+    s2 = contract(B, A)
+    
+    # Operations on scalar results
+    s_sum = s1 + s2
+    assert s_sum.is_scalar()
+    
+    s_diff = s1 - s2
+    assert s_diff.is_scalar()
+    
+    s_scaled = s1 * 2.0
+    assert s_scaled.is_scalar()
+
+
+def test_partial_trace_produces_scalar():
+    """Test partial_trace with all indices produces scalar."""
+    group = U1Group()
+    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
+    
+    # Partial trace over all indices
+    scalar = partial_trace(tensor, axes=[0, 1])
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
 
