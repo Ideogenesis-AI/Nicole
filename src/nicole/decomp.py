@@ -36,7 +36,7 @@ decomp(T, axis, mode)
     - "LV": Returns (L, V) where L = U*S
 """
 
-from typing import Dict, List, MutableMapping, Sequence, Tuple, Union
+from typing import Dict, List, MutableMapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -53,7 +53,11 @@ def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
     return [name_to_axis[n] for n in names]
 
 
-def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]:
+def svd(
+    T: Tensor, 
+    axis: int | str,
+    trunc: Optional[Tuple[str, Union[int, float]]] = None
+) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
 
     Parameters
@@ -63,6 +67,10 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
     axis:
         Index to separate from all others. Can be an integer position or index tag.
         This axis forms the left partition, all others form the right partition.
+    trunc:
+        Truncation specification as a tuple (mode, value). If None, no truncation.
+        - ("nkeep", n): Keep at most n singular values globally (largest across all blocks)
+        - ("thresh", t): Keep singular values >= t per block
 
     Returns
     -------
@@ -72,11 +80,27 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
         - S_blocks is a Dict mapping block keys to 1D arrays of singular values
         - Vh has indices (bond_index.flip(), *right_indices)
     
+    Raises
+    ------
+    ValueError
+        If trunc mode is not "nkeep" or "thresh".
+    
     Notes
     -----
     The singular values are returned as 1D arrays for memory efficiency.
     Use the `decomp()` function with mode="SVD" if you need S as a diagonal matrix tensor.
+    
+    For "nkeep" mode, truncation is applied globally: the top n singular values across
+    all blocks are retained. For "thresh" mode, truncation is applied per block: each
+    block independently keeps singular values >= threshold.
     """
+    # Validate trunc parameter if provided
+    if trunc is not None:
+        if not isinstance(trunc, tuple) or len(trunc) != 2:
+            raise ValueError("trunc must be a tuple (mode, value)")
+        if trunc[0] not in ("nkeep", "thresh"):
+            raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
+    
     # Parse axis parameter into integer index
     if isinstance(axis, str):
         # Check for ambiguity: ensure the itag appears exactly once
@@ -140,6 +164,18 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
         # Perform single SVD on concatenated matrix
         U, s, Vh = np.linalg.svd(concatenated_mat, full_matrices=False)
         
+        # Apply per-block truncation for thresh mode
+        if trunc is not None and trunc[0] == "thresh":
+            threshold = trunc[1]
+            keep_mask = s >= threshold
+            U = U[:, keep_mask]
+            s = s[keep_mask]
+            Vh = Vh[keep_mask, :]
+        
+        # Skip this block if completely truncated
+        if len(s) == 0:
+            continue
+        
         # Split Vh back to individual blocks
         Vh_dict: Dict[BlockKey, np.ndarray] = {}
         col_offset = 0
@@ -155,6 +191,44 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
         # Store results grouped by left charge
         svd_results[q_left] = (U, s, Vh_dict)
         bond_charge_dims[q_left] = len(s)
+    
+    # Apply global truncation for nkeep mode
+    if trunc is not None and trunc[0] == "nkeep":
+        nkeep = trunc[1]
+        
+        # Collect all singular values with their charges
+        all_singular_values = []
+        for q_left, (U, s, Vh_dict) in svd_results.items():
+            for i, val in enumerate(s):
+                all_singular_values.append((val, q_left, i))
+        
+        # Keep top nkeep singular values
+        all_singular_values.sort(key=lambda x: x[0], reverse=True)
+        keep_set = set((q, idx) for _, q, idx in all_singular_values[:nkeep])
+        
+        # Apply truncation to each block
+        new_svd_results = {}
+        new_bond_charge_dims = {}
+        for q_left, (U, s, Vh_dict) in svd_results.items():
+            # Find which indices to keep for this charge
+            keep_indices = [i for i in range(len(s)) if (q_left, i) in keep_set]
+            
+            if len(keep_indices) > 0:
+                # Truncate U, s, and Vh
+                U_truncated = U[:, keep_indices]
+                s_truncated = s[keep_indices]
+                
+                # Truncate all Vh blocks
+                Vh_dict_truncated = {}
+                for key, vh_block in Vh_dict.items():
+                    Vh_dict_truncated[key] = vh_block[keep_indices, ...]
+                
+                new_svd_results[q_left] = (U_truncated, s_truncated, Vh_dict_truncated)
+                new_bond_charge_dims[q_left] = len(s_truncated)
+            # If no singular values kept for this charge, omit the block entirely
+        
+        svd_results = new_svd_results
+        bond_charge_dims = new_bond_charge_dims
     
     # Build bond index with sectors from left charges
     bond_sectors = tuple(Sector(q, d) for q, d in sorted(bond_charge_dims.items(), key=lambda x: str(x[0])))
@@ -207,7 +281,8 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
 def decomp(
     T: Tensor,
     axis: int | str,
-    mode: str = "SVD"
+    mode: str = "SVD",
+    trunc: Optional[Tuple[str, Union[int, float]]] = None
 ) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
     """Perform tensor decomposition with flexible output modes.
     
@@ -222,6 +297,10 @@ def decomp(
         - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
         - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
+    trunc:
+        Truncation specification as a tuple (mode, value). If None, no truncation.
+        - ("nkeep", n): Keep at most n singular values globally
+        - ("thresh", t): Keep singular values >= t per block
     
     Returns
     -------
@@ -266,7 +345,7 @@ def decomp(
         raise ValueError(f"Invalid mode '{mode}'. Must be 'UR', 'SVD', or 'LV'")
     
     # Perform SVD to get U, singular values dict, and Vh
-    U, S_blocks, Vh = svd(T, axis)
+    U, S_blocks, Vh = svd(T, axis, trunc=trunc)
     
     if mode == "SVD":
         # Construct full diagonal S tensor

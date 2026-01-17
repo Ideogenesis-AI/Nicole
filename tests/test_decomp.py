@@ -695,3 +695,132 @@ def test_decomp_lv_efficiency():
         # Verify it's been scaled by singular values (not all zeros)
         assert np.abs(block).max() > 1e-10
 
+
+# Truncation tests
+
+def test_svd_truncation_nkeep():
+    """Test SVD with nkeep (keep at most N singular values globally)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=100)
+    
+    # Perform SVD with nkeep to keep at most 5 singular values globally
+    U, S_blocks, Vh = svd(T, axis=0, trunc=("nkeep", 5))
+    
+    # Check that total number of kept singular values is at most 5
+    total_kept = sum(len(s_array) for s_array in S_blocks.values())
+    assert total_kept <= 5, f"Expected at most 5 singular values, got {total_kept}"
+    
+    # Check bond dimension
+    bond_index = U.indices[1]
+    assert bond_index.dim == total_kept
+
+
+def test_svd_truncation_thresh():
+    """Test SVD with thresh (keep singular values >= threshold per block)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=200)
+    
+    # Perform SVD with threshold truncation (use higher threshold to ensure truncation)
+    threshold = 0.5
+    U, S_blocks, Vh = svd(T, axis=0, trunc=("thresh", threshold))
+    
+    # Check that all kept singular values are >= threshold
+    for key, s_array in S_blocks.items():
+        assert np.all(s_array >= threshold), f"Block {key} has singular values < {threshold}"
+    
+    # Verify truncation happened (should have fewer than 10 singular values)
+    total_kept = sum(len(s_array) for s_array in S_blocks.values())
+    assert total_kept < 10, "Expected truncation to reduce number of singular values"
+
+
+def test_decomp_truncation_ur_mode():
+    """Test decomp with nkeep truncation in UR mode."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=300)
+    
+    # Decomp with nkeep truncation
+    U, R = decomp(T, axis=0, mode="UR", trunc=("nkeep", 4))
+    
+    # Check bond dimension
+    bond_index = U.indices[1]
+    assert bond_index.dim <= 4
+    
+    # Verify reconstruction is approximate (not exact due to truncation)
+    reconstructed = contract(U, R, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    
+    # Error should be non-zero (truncation loses information)
+    # but not too large (we kept significant singular values)
+    assert rel_error > 1e-10, "Expected non-zero error due to truncation"
+    assert rel_error < 0.5, "Truncation error too large"
+
+
+def test_decomp_truncation_svd_mode():
+    """Test decomp with nkeep truncation in SVD mode."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=400)
+    
+    # Decomp with nkeep truncation
+    U, S, Vh = decomp(T, axis=0, mode="SVD", trunc=("nkeep", 3))
+    
+    # Check that total singular values is at most 3
+    total_svs = sum(block.shape[0] for block in S.data.values())
+    assert total_svs <= 3
+
+
+def test_svd_truncation_no_truncation():
+    """Test that no truncation parameters performs no truncation."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 7),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=500)
+    
+    # SVD without truncation
+    U, S_blocks, Vh = svd(T, axis=0)
+    
+    # Should have min(5, 7) = 5 singular values
+    total_kept = sum(len(s_array) for s_array in S_blocks.values())
+    assert total_kept == 5
+
+
+def test_svd_truncation_multiblock():
+    """Test global truncation with multiple charge blocks."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6), Sector(1, 4)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
+    
+    # Truncate to 3 singular values globally (across all blocks)
+    U, S_blocks, Vh = svd(T, axis=0, trunc=("nkeep", 3))
+    
+    # Total should be at most 3 singular values across all blocks
+    total_kept = sum(len(s_array) for s_array in S_blocks.values())
+    assert total_kept <= 3, f"Expected at most 3 singular values globally, got {total_kept}"
+
+
+def test_svd_truncation_invalid_mode():
+    """Test that invalid truncation mode raises error."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=700)
+    
+    # Should raise error for invalid mode
+    with pytest.raises(ValueError, match="Invalid truncation mode"):
+        svd(T, axis=0, trunc=("invalid", 3))
+
