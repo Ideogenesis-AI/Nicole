@@ -21,13 +21,22 @@ from __future__ import annotations
 """Decomposition utilities for symmetry-aware Nicole (TN) tensors.
 
 This module provides functions for decomposing tensors into their singular
-value decomposition (SVD) components. The `svd` function implements a
-general-purpose symmetry-preserving SVD that separates a single tensor axis
-from all others, returning properly structured U, S, and Vh tensors with
-charge-conserving bond indices.
+value decomposition (SVD) components.
+
+Functions
+---------
+svd(T, axis)
+    Low-level SVD returning U tensor, singular values dict, and Vh tensor.
+    Returns singular values as 1D arrays for memory efficiency.
+
+decomp(T, axis, mode)
+    High-level decomposition with three modes:
+    - "UR": Returns (U, R) where R = S*Vh
+    - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
+    - "LV": Returns (L, V) where L = U*S
 """
 
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, MutableMapping, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -44,7 +53,7 @@ def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
     return [name_to_axis[n] for n in names]
 
 
-def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, Tensor, Tensor]:
+def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
 
     Parameters
@@ -57,11 +66,16 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, Tensor, Tensor]:
 
     Returns
     -------
-    tuple[Tensor, Tensor, Tensor]
-        Triplet `(U, S, Vh)` where:
+    tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]
+        Triplet `(U, S_blocks, Vh)` where:
         - U has indices (left_index, bond_index)
-        - S has indices (bond_index.flip(), bond_index) with diagonal singular value matrices
+        - S_blocks is a Dict mapping block keys to 1D arrays of singular values
         - Vh has indices (bond_index.flip(), *right_indices)
+    
+    Notes
+    -----
+    The singular values are returned as 1D arrays for memory efficiency.
+    Use the `decomp()` function with mode="SVD" if you need S as a diagonal matrix tensor.
     """
     # Parse axis parameter into integer index
     if isinstance(axis, str):
@@ -154,10 +168,10 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, Tensor, Tensor]:
         U_key = (q_left, q_left)
         U_blocks[U_key] = U
         
-        # For S tensor: indices (bond_index.flip(), bond_index)
-        # Block key: (q_left, q_left) as diagonal matrix
+        # For S: store singular values as 1D array (memory efficient)
+        # Block key: (q_left, q_left)
         S_key = (q_left, q_left)
-        S_blocks[S_key] = np.diag(s).astype(np.result_type(T.dtype, float))
+        S_blocks[S_key] = s.astype(np.result_type(T.dtype, float))
         
         # For Vh tensor: indices (bond_index.flip(), *right_indices)
         # Each block gets its corresponding Vh from the dictionary
@@ -174,13 +188,6 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, Tensor, Tensor]:
         dtype=T.dtype
     )
     
-    S_tensor = Tensor(
-        indices=(bond_index.flip(), bond_index),
-        itags=("_bond_L", "_bond_R"),
-        data=S_blocks,
-        dtype=np.result_type(T.dtype, float)
-    )
-    
     Vh_tensor = Tensor(
         indices=(bond_index.flip(),) + right_indices,
         itags=("_bond_R",) + right_itags,
@@ -188,4 +195,153 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, Tensor, Tensor]:
         dtype=T.dtype
     )
     
-    return U_tensor, S_tensor, Vh_tensor
+    return U_tensor, S_blocks, Vh_tensor
+
+
+def decomp(
+    T: Tensor,
+    axis: int | str,
+    mode: str = "SVD"
+) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
+    """Perform tensor decomposition with flexible output modes.
+    
+    Parameters
+    ----------
+    T:
+        Tensor to be decomposed.
+    axis:
+        Index to separate from all others. Can be integer position or index tag.
+    mode:
+        Decomposition mode:
+        - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
+        - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
+        - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
+    
+    Returns
+    -------
+    tuple[Tensor, Tensor] or tuple[Tensor, Tensor, Tensor]
+        - "UR" mode: (U, R) where R incorporates singular values
+        - "SVD" mode: (U, S, Vh) with S as diagonal matrix tensor
+        - "LV" mode: (L, V) where L incorporates singular values
+    
+    Raises
+    ------
+    ValueError
+        If mode is not one of "UR", "SVD", or "LV"
+    
+    Examples
+    --------
+    >>> from nicole import Tensor, decomp, U1Group, Direction, Index, Sector
+    >>> 
+    >>> # Create a sample tensor
+    >>> group = U1Group()
+    >>> idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    >>> idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    >>> T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
+    >>> 
+    >>> # UR mode: Get U and R=S*Vh (most efficient for reconstruction)
+    >>> U, R = decomp(T, axis=0, mode="UR")
+    >>> 
+    >>> # SVD mode: Get full SVD with diagonal S
+    >>> U, S, Vh = decomp(T, axis=0, mode="SVD")
+    >>> 
+    >>> # LV mode: Get L=U*S and V
+    >>> L, V = decomp(T, axis=0, mode="LV")
+    
+    Notes
+    -----
+    - UR and LV modes are more memory and computationally efficient than SVD mode
+    - SVD mode constructs a full diagonal matrix tensor for S
+    - All modes produce mathematically equivalent decompositions
+    """
+    # Validate mode
+    mode = mode.upper()
+    if mode not in ("UR", "SVD", "LV"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'UR', 'SVD', or 'LV'")
+    
+    # Perform SVD to get U, singular values dict, and Vh
+    U, S_blocks, Vh = svd(T, axis)
+    
+    if mode == "SVD":
+        # Construct full diagonal S tensor
+        bond_index = U.indices[1]  # Extract bond index from U
+        
+        S_diag_blocks: Dict[BlockKey, np.ndarray] = {}
+        for key, s_array in S_blocks.items():
+            # Convert 1D singular values to diagonal matrix
+            S_diag_blocks[key] = np.diag(s_array)
+        
+        S_tensor = Tensor(
+            indices=(bond_index.flip(), bond_index),
+            itags=("_bond_L", "_bond_R"),
+            data=S_diag_blocks,
+            dtype=np.result_type(T.dtype, float)
+        )
+        
+        return U, S_tensor, Vh
+    
+    elif mode == "UR":
+        # Multiply singular values into Vh to get R = S*Vh
+        R_blocks: Dict[BlockKey, np.ndarray] = {}
+        
+        for key, vh_block in Vh.data.items():
+            # key = (q_bond, *q_right)
+            # S_blocks key = (q_bond, q_bond)
+            q_bond = key[0]
+            s_key = (q_bond, q_bond)
+            
+            if s_key in S_blocks:
+                s_array = S_blocks[s_key]
+                # Multiply: R = diag(s) @ Vh = s[:, None, ...] * Vh
+                # vh_block shape: (rank, *right_dims)
+                # Broadcast multiplication along first axis
+                rank = len(s_array)
+                s_broadcasted = s_array.reshape((rank,) + (1,) * (vh_block.ndim - 1))
+                R_blocks[key] = (s_broadcasted * vh_block).astype(T.dtype)
+            else:
+                # No singular values for this block (shouldn't happen normally)
+                R_blocks[key] = vh_block
+        
+        # Change bond tag to match U's bond tag for easier contraction
+        R_itags = ("_bond_L",) + Vh.itags[1:]
+        
+        R_tensor = Tensor(
+            indices=Vh.indices,
+            itags=R_itags,
+            data=R_blocks,
+            dtype=T.dtype
+        )
+        
+        return U, R_tensor
+    
+    else:  # mode == "LV"
+        # Multiply singular values into U to get L = U*S
+        L_blocks: Dict[BlockKey, np.ndarray] = {}
+        
+        for key, u_block in U.data.items():
+            # key = (q_left, q_bond)
+            # S_blocks key = (q_bond, q_bond)
+            q_bond = key[1]
+            s_key = (q_bond, q_bond)
+            
+            if s_key in S_blocks:
+                s_array = S_blocks[s_key]
+                # Multiply: L = U @ diag(s) = U * s[None, :]
+                # u_block shape: (dim_left, rank)
+                # Broadcast multiplication along second axis
+                L_blocks[key] = (u_block * s_array[None, :]).astype(T.dtype)
+            else:
+                # No singular values for this block (shouldn't happen normally)
+                L_blocks[key] = u_block
+        
+        # Change bond tag to match Vh's bond tag for easier contraction
+        L_itags = (U.itags[0], "_bond_R")
+        
+        L_tensor = Tensor(
+            indices=U.indices,
+            itags=L_itags,
+            data=L_blocks,
+            dtype=T.dtype
+        )
+        
+        return L_tensor, Vh
