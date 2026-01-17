@@ -255,6 +255,11 @@ def contract(
                 out_blocks[out_key] = out_blocks[out_key] + res
             else:
                 out_blocks[out_key] = res
+    
+    # For 0D scalars, ensure the result is a proper numpy array
+    # Reason: addition of 0D np.arrays becomes a scalar instead of a numpy array
+    if len(out_indices) == 0 and () in out_blocks:
+        out_blocks[()] = np.asarray(out_blocks[()])
 
     result = Tensor(
         indices=out_indices,
