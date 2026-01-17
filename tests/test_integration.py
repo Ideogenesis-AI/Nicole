@@ -22,7 +22,7 @@ import numpy as np
 
 from nicole import Direction, Tensor, contract, svd, identity, isometry, U1Group, Z2Group, permute, conj
 from nicole import Index, Sector
-from .utils import make_u1_index, assert_charge_neutral, assert_blocks_equal
+from .utils import assert_charge_neutral, assert_blocks_equal
 
 
 # Construction → Contract → SVD → Reconstruct workflows
@@ -32,10 +32,10 @@ def test_workflow_construct_contract_svd_reconstruct():
     group = U1Group()
     
     # Construct tensors
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
     
     A = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
     B = Tensor.random([idx_b.dual(), idx_c], seed=2, itags=["b", "c"])
@@ -65,9 +65,9 @@ def test_workflow_mps_like_contraction():
     group = U1Group()
     
     # Create MPS-like tensors
-    phys = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    bond1 = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
-    bond2 = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
+    phys = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    bond1 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    bond2 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
     
     # Three-site MPS
     M1 = Tensor.random([phys, bond1], seed=1, itags=["p1", "b1"])
@@ -87,7 +87,7 @@ def test_workflow_mps_like_contraction():
 def test_workflow_identity_insertion():
     """Test inserting and removing identities."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     # Create tensor
     T = Tensor.random([idx, idx.dual()], seed=1, itags=["a", "b"])
@@ -106,8 +106,8 @@ def test_workflow_fusion_contraction():
     group = U1Group()
     
     # Create indices
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     
     # Create isometry - by default fused has opposite direction (IN)
     iso = isometry(idx_a, idx_b, itags=("a", "b", "ab"))
@@ -125,8 +125,8 @@ def test_workflow_svd_truncation_and_contraction():
     group = U1Group()
     
     # Create large tensor
-    idx1 = make_u1_index(Direction.OUT, [(0, 10)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 10)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
     
     T = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
@@ -149,9 +149,9 @@ def test_workflow_permute_contract_permute():
     """Test permutation before and after contraction."""
     group = U1Group()
     
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 2), (-1, 2)], group)
-    idx_c = make_u1_index(Direction.IN, [(0, 2), (1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     A = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
     B = Tensor.random([idx_b.dual(), idx_c], seed=2, itags=["b", "c"])
@@ -171,7 +171,7 @@ def test_workflow_permute_contract_permute():
 def test_workflow_arithmetic_operations_chain():
     """Test chain of arithmetic operations."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["a", "b"])
@@ -190,8 +190,8 @@ def test_workflow_conjugation_and_contraction():
     """Test conjugation combined with contraction."""
     group = U1Group()
     
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx_a, idx_b], dtype=np.complex128, seed=1, itags=["a", "b"])
     
@@ -218,7 +218,7 @@ def test_workflow_retag_and_contract():
     """Test retagging before contraction."""
     group = U1Group()
     
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.dual()], seed=1, itags=["old1", "old2"])
     B = Tensor.random([idx.dual(), idx], seed=2, itags=["x", "y"])
@@ -238,9 +238,9 @@ def test_workflow_tensor_network_contraction_order():
     """Test that contraction order doesn't affect result."""
     group = U1Group()
     
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx1, idx2.dual()], seed=1, itags=["a", "b"])
     B = Tensor.random([idx2, idx3.dual()], seed=2, itags=["b", "c"])
@@ -262,10 +262,10 @@ def test_workflow_build_mpo_and_apply():
     
     # Create a simple MPO-MPS contraction workflow
     # MPS state has physical index as OUT direction
-    phys_mps = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
+    phys_mps = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     # MPO has physical_in as IN to match with MPS OUT direction
-    phys_mpo = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
-    bond = make_u1_index(Direction.OUT, [(0, 3)], group)
+    phys_mpo = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    bond = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     # MPO: operator - phys_out OUT, phys_in IN, bond OUT
     W = Tensor.random([phys_mpo.flip(), phys_mpo, bond], seed=1, itags=["p_out", "p", "b"])
@@ -312,7 +312,7 @@ def test_workflow_norm_preservation():
     """Test that norm is preserved through various operations."""
     group = U1Group()
     
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     T = Tensor.random([idx, idx.dual()], seed=1, itags=["a", "b"])
     original_norm = T.norm()
@@ -336,9 +336,9 @@ def test_workflow_large_tensor_operations():
     
     # Create larger indices
     charges = [(i, 2) for i in range(5)]
-    idx1 = make_u1_index(Direction.OUT, charges, group)
-    idx2 = make_u1_index(Direction.IN, charges, group)
-    idx3 = make_u1_index(Direction.OUT, charges, group)
+    idx1 = Index(Direction.OUT, group, sectors=tuple(Sector(c, d) for c, d in charges))
+    idx2 = Index(Direction.IN, group, sectors=tuple(Sector(c, d) for c, d in charges))
+    idx3 = Index(Direction.OUT, group, sectors=tuple(Sector(c, d) for c, d in charges))
     
     # Create tensors
     A = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
@@ -355,7 +355,7 @@ def test_workflow_large_tensor_operations():
 def test_workflow_mixed_dtypes():
     """Test workflow with dtype promotion."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     # float32 tensor
     A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["a", "b"])

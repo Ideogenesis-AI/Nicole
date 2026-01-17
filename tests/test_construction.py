@@ -23,14 +23,14 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
-from .utils import make_u1_index, assert_charge_neutral
+from .utils import assert_charge_neutral
 
 
 def test_tensor_zeros_basic():
     """Test Tensor.zeros with basic indices."""
     group = U1Group()
-    left = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    right = make_u1_index(Direction.IN, [(0, 3), (1, 1)], group)
+    left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    right = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
 
     tensor = Tensor.zeros([left, right], dtype=np.float64, itags=["L", "R"])
     
@@ -45,7 +45,7 @@ def test_tensor_zeros_basic():
 def test_tensor_zeros_two_indices():
     """Test Tensor.zeros with minimum two indices."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
@@ -57,7 +57,7 @@ def test_tensor_zeros_two_indices():
 def test_tensor_zeros_no_itags():
     """Test Tensor.zeros without providing itags."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()])
     
@@ -69,8 +69,8 @@ def test_tensor_zeros_no_itags():
 def test_tensor_zeros_complex_dtype():
     """Test Tensor.zeros with complex dtype."""
     group = U1Group()
-    left = make_u1_index(Direction.OUT, [(0, 2)], group)
-    right = make_u1_index(Direction.IN, [(0, 3)], group)
+    left = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    right = Index(Direction.IN, group, sectors=(Sector(0, 3),))
     
     tensor = Tensor.zeros([left, right], dtype=np.complex128, itags=["L", "R"])
     
@@ -93,9 +93,9 @@ def test_tensor_zeros_z2():
 def test_tensor_random_basic():
     """Test Tensor.random with basic indices."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c], seed=2024, itags=["A", "B", "C"])
     
@@ -106,7 +106,7 @@ def test_tensor_random_basic():
 def test_tensor_random_seed_reproducible():
     """Test that Tensor.random with same seed gives same result."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     t2 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
@@ -117,7 +117,7 @@ def test_tensor_random_seed_reproducible():
 def test_tensor_random_different_seeds():
     """Test that Tensor.random with different seeds gives different results."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     t2 = Tensor.random([idx, idx.flip()], seed=99, itags=["A", "B"])
@@ -128,7 +128,7 @@ def test_tensor_random_different_seeds():
 def test_tensor_random_complex():
     """Test Tensor.random with complex dtype."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=123, itags=["A", "B"])
     
@@ -139,7 +139,7 @@ def test_tensor_random_complex():
 def test_tensor_random_no_itags():
     """Test Tensor.random without itags."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], seed=1)
     
@@ -149,7 +149,7 @@ def test_tensor_random_no_itags():
 
 def test_tensor_norm_matches_manual():
     """Test that Tensor.norm() matches manual computation."""
-    idx = make_u1_index(Direction.OUT, [(0, 3), (1, 2)])
+    idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 3), Sector(1, 2)))
     tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
     manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
     assert np.isclose(tensor.norm(), manual)
@@ -158,7 +158,7 @@ def test_tensor_norm_matches_manual():
 def test_tensor_norm_zero():
     """Test Tensor.norm() for zero tensor."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
@@ -178,7 +178,7 @@ def test_tensor_norm_empty():
 def test_tensor_validation_mismatched_itags():
     """Test that Tensor rejects mismatched itag count."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     with pytest.raises(ValueError, match="must match number of indices"):
         Tensor(indices=(idx, idx.flip()), itags=("A", "B", "C"), data={}, dtype=np.float64)
@@ -187,7 +187,7 @@ def test_tensor_validation_mismatched_itags():
 def test_tensor_validation_invalid_block_shape():
     """Test that Tensor rejects invalid block shapes."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     blocks = {(0, 0): np.zeros((3, 2))}  # Wrong shape, should be (2, 2)
     
@@ -211,7 +211,7 @@ def test_tensor_validation_charge_violation():
 def test_tensor_validation_rejects_single_index():
     """Test that Tensor rejects tensors with exactly 1 index."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     # Exactly 1 index should raise error
     with pytest.raises(ValueError, match="exactly 1 index"):
@@ -312,7 +312,7 @@ def test_tensor_scalar_display():
 def test_tensor_item_raises_on_non_scalar():
     """Test that item() raises error on non-scalar tensors."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
     with pytest.raises(ValueError, match="can only be called on scalars"):
@@ -333,7 +333,7 @@ def test_tensor_scalar_validation():
 def test_tensor_str_repr():
     """Test Tensor.__str__ and __repr__ methods."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
@@ -348,7 +348,7 @@ def test_tensor_str_repr():
 def test_tensor_construction_float32():
     """Test Tensor construction with float32 dtype."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["A", "B"])
     
@@ -359,7 +359,7 @@ def test_tensor_construction_float32():
 def test_tensor_construction_complex64():
     """Test Tensor construction with complex64 dtype."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], dtype=np.complex64, seed=1, itags=["A", "B"])
     
@@ -370,9 +370,9 @@ def test_tensor_construction_complex64():
 def test_tensor_zeros_three_indices():
     """Test Tensor.zeros with three indices."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 1), (-1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 3), (-1, 1)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(-1, 1)))
     
     tensor = Tensor.zeros([idx1, idx2, idx3], itags=["A", "B", "C"])
     

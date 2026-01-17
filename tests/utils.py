@@ -18,13 +18,11 @@
 
 """Shared test utilities and helper functions for the Nicole test suite.
 
-This module provides convenience functions for creating test tensors, indices,
-and performing common assertions on symmetry-aware tensor structures.
+This module provides convenience functions for performing common assertions
+on symmetry-aware tensor structures.
 
 Functions
 ---------
-make_u1_index:
-    Create a U(1) symmetric index from charge-dimension pairs.
 assert_charge_neutral:
     Verify that all blocks in a tensor satisfy charge neutrality.
 assert_blocks_equal:
@@ -33,38 +31,10 @@ assert_blocks_equal:
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple
-
 import numpy as np
 
-from nicole import Direction, Index, Sector, Tensor, U1Group
+from nicole import Tensor
 from nicole.blocks import BlockSchema
-
-
-def make_u1_index(
-    direction: Direction,
-    charges_dims: Sequence[Tuple[int, int]],
-    group: Optional[U1Group] = None,
-) -> Index:
-    """Create a U(1) symmetric index from charge-dimension pairs.
-
-    Parameters
-    ----------
-    direction:
-        Index direction (IN or OUT).
-    charges_dims:
-        Sequence of (charge, dimension) tuples.
-    group:
-        Optional U(1) group instance. If None, creates a new U1Group().
-
-    Returns
-    -------
-    Index
-        A U(1) symmetric index with the specified sectors.
-    """
-    g = group or U1Group()
-    sectors = tuple(Sector(charge, dim) for charge, dim in charges_dims)
-    return Index(direction, g, sectors=sectors)
 
 
 def assert_charge_neutral(tensor: Tensor) -> None:

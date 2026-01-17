@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
-from .utils import make_u1_index, assert_blocks_equal
+from .utils import assert_blocks_equal
 
 
 # Addition tests
@@ -32,8 +32,8 @@ def test_addition_simple():
     """Test simple tensor addition."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group),
-        make_u1_index(Direction.IN, [(0, 3), (1, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1))),
     ]
     itags = ["L", "R"]
     
@@ -51,9 +51,9 @@ def test_addition_multi_tensor():
     """Test addition of multiple tensors."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group),
-        make_u1_index(Direction.IN, [(0, 3), (2, 1)], group),
-        make_u1_index(Direction.OUT, [(0, 2)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(2, 1))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
     ]
     itags = ["L", "M", "R"]
 
@@ -71,7 +71,7 @@ def test_addition_multi_tensor():
 def test_addition_zero_tensor():
     """Test adding zero tensor."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     Z = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
@@ -83,7 +83,7 @@ def test_addition_zero_tensor():
 def test_addition_commutative():
     """Test that addition is commutative."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
@@ -94,7 +94,7 @@ def test_addition_commutative():
 def test_addition_associative():
     """Test that addition is associative."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
@@ -106,12 +106,12 @@ def test_addition_associative():
 def test_addition_requires_matching_structure():
     """Test that addition requires matching structure."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1),))
     tensor = Tensor.random([idx_a, idx_b], seed=7, itags=["A", "B"])
 
     # Different sector structure on B
-    idx_b_mismatch = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_b_mismatch = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     tensor_mismatch = Tensor.random([idx_a, idx_b_mismatch], seed=9, itags=["A", "B"])
 
     with pytest.raises(ValueError, match="sector structures must match"):
@@ -121,9 +121,9 @@ def test_addition_requires_matching_structure():
 def test_addition_requires_matching_directions():
     """Test that addition requires matching directions."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_flipped = idx.flip()
-    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx2], seed=1, itags=["A", "B"])
     B = Tensor.random([idx_flipped, idx2], seed=2, itags=["A", "B"])
@@ -135,7 +135,7 @@ def test_addition_requires_matching_directions():
 def test_addition_requires_matching_order():
     """Test that addition requires matching tensor order."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip(), idx], seed=2, itags=["A", "B", "C"])
@@ -149,7 +149,7 @@ def test_addition_requires_matching_order():
 def test_subtraction_simple():
     """Test simple tensor subtraction."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
@@ -164,7 +164,7 @@ def test_subtraction_simple():
 def test_subtraction_self_gives_zero():
     """Test that A - A gives zero."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -178,9 +178,9 @@ def test_subtraction_inverse_of_addition():
     """Test that subtraction is inverse of addition."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group),
-        make_u1_index(Direction.IN, [(0, 3), (2, 1)], group),
-        make_u1_index(Direction.OUT, [(0, 2)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(2, 1))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
     ]
     itags = ["L", "M", "R"]
 
@@ -198,7 +198,7 @@ def test_subtraction_inverse_of_addition():
 def test_scalar_multiplication_int():
     """Test scalar multiplication with integer."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -211,7 +211,7 @@ def test_scalar_multiplication_int():
 def test_scalar_multiplication_float():
     """Test scalar multiplication with float."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -224,8 +224,8 @@ def test_scalar_multiplication_float():
 def test_scalar_multiplication_complex():
     """Test scalar multiplication with complex number."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
 
     scaled = tensor * (2 - 3j)
@@ -236,7 +236,7 @@ def test_scalar_multiplication_complex():
 def test_scalar_multiplication_left():
     """Test left scalar multiplication (rmul)."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -249,7 +249,7 @@ def test_scalar_multiplication_left():
 def test_scalar_multiplication_commutative():
     """Test that scalar multiplication is commutative."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -259,7 +259,7 @@ def test_scalar_multiplication_commutative():
 def test_scalar_multiplication_zero():
     """Test scalar multiplication by zero."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -274,7 +274,7 @@ def test_scalar_multiplication_zero():
 def test_norm_positive():
     """Test that norm is always non-negative."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     
@@ -284,7 +284,7 @@ def test_norm_positive():
 def test_norm_zero_iff_zero_tensor():
     """Test that norm is zero iff tensor is zero."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     Z = Tensor.zeros([idx, idx.flip()], itags=["A", "B"])
     
@@ -293,7 +293,7 @@ def test_norm_zero_iff_zero_tensor():
 
 def test_norm_linear_scaling():
     """Test that norm scales linearly with scalar multiplication."""
-    idx = make_u1_index(Direction.OUT, [(0, 4)])
+    idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 4),))
     tensor = Tensor.random([idx, idx.flip()], seed=0, itags=["X", "Y"])
     scaled = tensor * 5.0
     assert np.isclose(scaled.norm(), tensor.norm() * 5.0)
@@ -302,7 +302,7 @@ def test_norm_linear_scaling():
 def test_norm_manual_computation():
     """Test norm against manual computation."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
     tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
     
     manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
@@ -313,7 +313,7 @@ def test_norm_manual_computation():
 def test_norm_complex():
     """Test norm with complex tensors."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["A", "B"])
     
@@ -327,7 +327,7 @@ def test_norm_complex():
 def test_combined_arithmetic_operations():
     """Test combining multiple arithmetic operations."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
@@ -344,7 +344,7 @@ def test_combined_arithmetic_operations():
 def test_dtype_promotion():
     """Test that dtype is promoted correctly."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["A", "B"])
     B = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=2, itags=["A", "B"])
@@ -357,7 +357,7 @@ def test_dtype_promotion():
 def test_complex_dtype_promotion():
     """Test dtype promotion with complex types."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=1, itags=["A", "B"])
     

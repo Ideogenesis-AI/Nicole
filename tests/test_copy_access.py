@@ -21,8 +21,7 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, U1Group, getsub
-from .utils import make_u1_index
+from nicole import Direction, Tensor, U1Group, getsub, Index, Sector
 
 
 # Copy tests
@@ -30,8 +29,8 @@ from .utils import make_u1_index
 def test_copy_returns_new_instance():
     """Test that copy returns a new tensor instance."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, itags=["A", "B"])
 
     copied = tensor.copy()
@@ -42,8 +41,8 @@ def test_copy_returns_new_instance():
 def test_copy_has_identical_data():
     """Test that copy has identical data values."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=456, dtype=np.complex128, itags=["A", "B"])
 
     copied = tensor.copy()
@@ -56,7 +55,7 @@ def test_copy_has_identical_data():
 def test_copy_creates_independent_data():
     """Test that modifying copy doesn't affect original."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=789, itags=["X", "Y"])
 
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -74,8 +73,8 @@ def test_copy_creates_independent_data():
 def test_copy_preserves_metadata():
     """Test that copy preserves indices, itags, dtype, and label."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     tensor = Tensor.random([idx_a, idx_b], seed=111, dtype=np.complex128, itags=["left", "right"])
     tensor.label = "MyTensor"
 
@@ -90,7 +89,7 @@ def test_copy_preserves_metadata():
 def test_copy_shares_immutable_indices():
     """Test that copy shares the same Index objects (since they're immutable)."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=222, itags=["A", "B"])
 
     copied = tensor.copy()
@@ -103,7 +102,7 @@ def test_copy_shares_immutable_indices():
 def test_copy_data_arrays_are_independent():
     """Test that numpy arrays in copy are different objects."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=333, itags=["A", "B"])
 
     copied = tensor.copy()
@@ -118,8 +117,8 @@ def test_copy_data_arrays_are_independent():
 def test_sorted_keys_returns_tuple():
     """Test that sorted_keys returns a tuple of BlockKeys."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=100, itags=["A", "B"])
 
     keys = tensor.sorted_keys
@@ -132,8 +131,8 @@ def test_sorted_keys_returns_tuple():
 def test_sorted_keys_is_deterministic():
     """Test that sorted_keys returns keys in consistent order."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=101, itags=["A", "B"])
 
     # Multiple calls should return same order
@@ -148,7 +147,7 @@ def test_sorted_keys_is_deterministic():
 def test_sorted_keys_is_cached():
     """Test that sorted_keys property is cached."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=102, itags=["A", "B"])
 
     keys1 = tensor.sorted_keys
@@ -161,8 +160,8 @@ def test_sorted_keys_is_cached():
 def test_key_returns_correct_blockkey():
     """Test that key(i) returns the correct BlockKey."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=103, itags=["A", "B"])
 
     sorted_keys = tensor.sorted_keys
@@ -173,7 +172,7 @@ def test_key_returns_correct_blockkey():
 def test_key_raises_on_invalid_index():
     """Test that key(i) raises IndexError for invalid indices."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=104, itags=["A", "B"])
     
     num_blocks = len(tensor.data)
@@ -191,8 +190,8 @@ def test_key_raises_on_invalid_index():
 def test_block_returns_correct_data():
     """Test that block(i) returns the correct data array."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=105, itags=["A", "B"])
 
     for i, key in enumerate(tensor.sorted_keys, start=1):
@@ -202,7 +201,7 @@ def test_block_returns_correct_data():
 def test_block_returns_same_object_as_data():
     """Test that block(i) returns the same array object as data[key]."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=106, itags=["A", "B"])
 
     for i, key in enumerate(tensor.sorted_keys, start=1):
@@ -213,8 +212,8 @@ def test_permute_invalidates_sorted_keys():
     """Test that permute invalidates the sorted_keys cache."""
     group = U1Group()
     # Use indices that produce asymmetric keys (e.g., (1, -1) becomes (-1, 1) after permute)
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=107, itags=["A", "B"])
 
     # Access sorted_keys to populate cache
@@ -240,8 +239,8 @@ def test_permute_invalidates_sorted_keys():
 def test_display_numbering_matches_block_index():
     """Test that display numbering is consistent with block() indexing."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 1), (1, 1), (-1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=108, itags=["A", "B"])
     
     # Get display string
@@ -260,8 +259,8 @@ def test_display_numbering_matches_block_index():
 def test_getsub_returns_new_instance():
     """Test that getsub returns a new tensor instance."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=200, itags=["A", "B"])
 
     sub = getsub(tensor, [1, 2])
@@ -272,8 +271,8 @@ def test_getsub_returns_new_instance():
 def test_getsub_contains_only_specified_blocks():
     """Test that getsub returns only the specified blocks."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=201, itags=["A", "B"])
 
     indices_to_get = [1, 3]
@@ -290,8 +289,8 @@ def test_getsub_contains_only_specified_blocks():
 def test_getsub_data_is_copied():
     """Test that getsub creates independent copies of data."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=202, itags=["A", "B"])
 
     sub = getsub(tensor, [1])
@@ -307,8 +306,8 @@ def test_getsub_data_is_copied():
 def test_getsub_preserves_metadata():
     """Test that getsub preserves indices, itags, dtype, and label."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=np.complex128, itags=["left", "right"])
     tensor.label = "TestTensor"
 
@@ -323,8 +322,8 @@ def test_getsub_preserves_metadata():
 def test_getsub_single_block():
     """Test getsub with a single block index."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=204, itags=["A", "B"])
 
     sub = getsub(tensor, [1])
@@ -337,8 +336,8 @@ def test_getsub_single_block():
 def test_getsub_all_blocks():
     """Test getsub with all block indices."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=205, itags=["A", "B"])
 
     all_indices = list(range(1, len(tensor.data) + 1))
@@ -352,7 +351,7 @@ def test_getsub_all_blocks():
 def test_getsub_raises_on_invalid_index():
     """Test that getsub raises IndexError for invalid indices."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=206, itags=["A", "B"])
 
     num_blocks = len(tensor.data)

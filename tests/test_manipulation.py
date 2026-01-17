@@ -21,8 +21,7 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, U1Group, conj, permute, transpose
-from .utils import make_u1_index
+from nicole import Direction, Tensor, U1Group, conj, permute, transpose, Index, Sector
 
 
 # Conjugation tests
@@ -30,8 +29,8 @@ from .utils import make_u1_index
 def test_conj_functional_returns_new_instance():
     """Test that functional conj returns a new instance."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
@@ -42,8 +41,8 @@ def test_conj_functional_returns_new_instance():
 def test_conj_functional_conjugates_data():
     """Test that functional conj conjugates the data."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
@@ -55,8 +54,8 @@ def test_conj_functional_conjugates_data():
 def test_conj_functional_flips_directions():
     """Test that functional conj flips index directions."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
@@ -68,7 +67,7 @@ def test_conj_functional_flips_directions():
 def test_conj_inplace_modifies_original():
     """Test that in-place conj modifies the original tensor."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -87,7 +86,7 @@ def test_conj_inplace_modifies_original():
 def test_conj_real_dtype_no_data_change():
     """Test that conj on real dtype doesn't change data."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.float64, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -102,7 +101,7 @@ def test_conj_real_dtype_no_data_change():
 def test_conj_double_application():
     """Test that conjugating twice returns to original."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -122,9 +121,9 @@ def test_permute_functional_returns_new_instance():
     """Test that functional permute returns a new instance."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 1), (1, 2)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(-1, 1), (0, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 1))),
     ]
     tensor = Tensor.random(indices, seed=10, itags=["a", "b", "c"])
     
@@ -137,10 +136,10 @@ def test_permute_reorders_indices_and_blocks():
     """Test that permute correctly reorders indices and blocks."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 1), (1, 2)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(-1, 1), (0, 1)], group),
-        make_u1_index(Direction.IN, [(0, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 1),)),
     ]
     itags = ["a", "b", "c", "d"]
 
@@ -164,8 +163,8 @@ def test_permute_inplace():
     """Test in-place permute method."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 1)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
     ]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
     
@@ -182,7 +181,7 @@ def test_permute_inplace():
 def test_permute_identity():
     """Test that identity permutation leaves tensor unchanged."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -197,7 +196,7 @@ def test_permute_identity():
 def test_permute_invalid_order():
     """Test that invalid permutation raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
     with pytest.raises(ValueError, match="Invalid permutation"):
@@ -212,7 +211,7 @@ def test_permute_invalid_order():
 def test_transpose_functional_returns_new_instance():
     """Test that functional transpose returns a new instance."""
     group = U1Group()
-    indices = [make_u1_index(Direction.OUT, [(0, 1)], group) for _ in range(3)]
+    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
     
     transposed = transpose(tensor)
@@ -224,9 +223,9 @@ def test_transpose_default_reverses_order():
     """Test that transpose with no args reverses order."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1))),
     ]
     itags = ["i0", "i1", "i2"]
     tensor = Tensor.random(indices, seed=11, itags=itags)
@@ -247,7 +246,7 @@ def test_transpose_default_reverses_order():
 def test_transpose_with_explicit_order():
     """Test transpose with explicit order."""
     group = U1Group()
-    indices = [make_u1_index(Direction.OUT, [(0, 1)], group) for _ in range(3)]
+    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
     
     transposed = transpose(tensor, 1, 0, 2)
@@ -258,7 +257,7 @@ def test_transpose_with_explicit_order():
 def test_transpose_inplace():
     """Test in-place transpose method."""
     group = U1Group()
-    indices = [make_u1_index(Direction.OUT, [(0, 1)], group) for _ in range(2)]
+    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(2)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
     
     original_itags = list(tensor.itags)
@@ -271,7 +270,7 @@ def test_transpose_inplace():
 def test_transpose_double_application():
     """Test that transposing twice returns to original."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
     original_data = {k: v.copy() for k, v in tensor.data.items()}
@@ -289,9 +288,9 @@ def test_retag_mode1_mapping():
     """Test retag with mapping dictionary (mode 1)."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(0, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
     ]
     itags = ["x", "y", "z"]
     
@@ -310,9 +309,9 @@ def test_retag_mode2_full_replacement():
     """Test retag with full replacement (mode 2)."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(0, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
     ]
     itags = ["x", "y", "z"]
     
@@ -331,9 +330,9 @@ def test_retag_mode3_selective_update():
     """Test retag with selective update by index (mode 3)."""
     group = U1Group()
     indices = [
-        make_u1_index(Direction.OUT, [(0, 2)], group),
-        make_u1_index(Direction.IN, [(0, 2)], group),
-        make_u1_index(Direction.OUT, [(0, 1)], group),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
     ]
     itags = ["x", "y", "z"]
     
@@ -351,7 +350,7 @@ def test_retag_mode3_selective_update():
 def test_retag_mapping_unmapped_tags_preserved():
     """Test that unmapped tags are preserved in mode 1."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
     
     tensor.retag({"a": "alpha"})
@@ -362,7 +361,7 @@ def test_retag_mapping_unmapped_tags_preserved():
 def test_retag_mode2_wrong_count_raises():
     """Test that mode 2 with wrong count raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
     with pytest.raises(ValueError, match="must match number of indices"):
@@ -372,7 +371,7 @@ def test_retag_mode2_wrong_count_raises():
 def test_retag_mode3_wrong_count_raises():
     """Test that mode 3 with mismatched counts raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
     with pytest.raises(ValueError, match="must match number of new tags"):
@@ -382,7 +381,7 @@ def test_retag_mode3_wrong_count_raises():
 def test_retag_mode3_out_of_range_raises():
     """Test that mode 3 with out of range index raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
     with pytest.raises(IndexError, match="out of range"):
@@ -392,7 +391,7 @@ def test_retag_mode3_out_of_range_raises():
 def test_retag_preserves_tensor_data():
     """Test that retag never modifies tensor data or structure."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["original", "second"])
     
     original_norm = tensor.norm()

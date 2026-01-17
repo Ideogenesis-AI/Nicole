@@ -20,7 +20,7 @@
 
 import numpy as np
 
-from nicole import Direction, Index, Tensor, U1Group
+from nicole import Direction, Index, Tensor, U1Group, Sector
 from nicole.display import (
     _charge_components,
     _format_bytes,
@@ -29,7 +29,6 @@ from nicole.display import (
     _group_signature,
     tensor_summary,
 )
-from .utils import make_u1_index
 
 
 # Helper function tests
@@ -129,7 +128,7 @@ def test_charge_components_list():
 def test_group_signature_abelian():
     """Test _group_signature with Abelian group."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     sig = _group_signature([idx], 1)
     assert "A" in sig
@@ -138,7 +137,7 @@ def test_group_signature_abelian():
 def test_group_signature_multiple_components():
     """Test _group_signature with multiple charge components."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     sig = _group_signature([idx], 3)
     assert sig.count("A") == 3
@@ -156,7 +155,7 @@ def test_group_signature_empty():
 def test_tensor_summary_basic():
     """Test tensor_summary with basic tensor."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
     
@@ -169,7 +168,7 @@ def test_tensor_summary_basic():
 def test_tensor_summary_includes_norm():
     """Test that tensor_summary includes norm."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
@@ -181,7 +180,7 @@ def test_tensor_summary_includes_norm():
 def test_tensor_summary_includes_dtype():
     """Test that tensor_summary includes dtype."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["a", "b"])
     
@@ -193,8 +192,8 @@ def test_tensor_summary_includes_dtype():
 def test_tensor_summary_includes_blocks():
     """Test that tensor_summary includes block information."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 3)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
     
     tensor = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
@@ -207,8 +206,8 @@ def test_tensor_summary_includes_blocks():
 def test_tensor_summary_direction_markers():
     """Test that tensor_summary marks OUT directions with asterisk."""
     group = U1Group()
-    idx_out = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_in = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx_out, idx_in], itags=["out", "in"])
     
@@ -223,8 +222,8 @@ def test_tensor_summary_direction_markers():
 def test_tensor_summary_multiple_blocks():
     """Test tensor_summary with multiple blocks."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 2), (-1, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 2), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2), Sector(1, 2)))
     
     tensor = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
@@ -241,8 +240,8 @@ def test_tensor_summary_truncates_many_blocks():
     group = U1Group()
     # Create indices with many sectors
     charges = [(i, 1) for i in range(10)]
-    idx1 = make_u1_index(Direction.OUT, charges, group)
-    idx2 = make_u1_index(Direction.IN, charges, group)
+    idx1 = Index(Direction.OUT, group, sectors=tuple(Sector(c, d) for c, d in charges))
+    idx2 = Index(Direction.IN, group, sectors=tuple(Sector(c, d) for c, d in charges))
     
     tensor = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
@@ -256,7 +255,7 @@ def test_tensor_summary_truncates_many_blocks():
 def test_tensor_summary_scalar_block():
     """Test tensor_summary with scalar (1x1) blocks."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
@@ -281,7 +280,7 @@ def test_tensor_summary_empty_tensor():
 def test_tensor_summary_complex_dtype():
     """Test tensor_summary with complex dtype."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["a", "b"])
     
@@ -293,7 +292,7 @@ def test_tensor_summary_complex_dtype():
 def test_tensor_repr_equals_str():
     """Test that __repr__ equals __str__."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
     
@@ -303,9 +302,9 @@ def test_tensor_repr_equals_str():
 def test_tensor_summary_three_indices():
     """Test tensor_summary with three indices."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     tensor = Tensor.random([idx1, idx2, idx3], seed=1, itags=["a", "b", "c"])
     
@@ -320,7 +319,7 @@ def test_tensor_summary_three_indices():
 def test_tensor_summary_custom_label():
     """Test tensor_summary with custom label."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     data = {(0, 0): np.zeros((2, 2))}
     tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data=data, dtype=np.float64, label="MyTensor")
@@ -333,7 +332,7 @@ def test_tensor_summary_custom_label():
 def test_tensor_summary_formatting_consistent():
     """Test that tensor_summary produces consistent formatting."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     

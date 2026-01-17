@@ -23,8 +23,8 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, contract, svd, U1Group
-from .utils import make_u1_index, assert_charge_neutral
+from nicole import Direction, Tensor, contract, svd, U1Group, Index, Sector
+from .utils import assert_charge_neutral
 
 
 # Basic SVD tests
@@ -32,9 +32,9 @@ from .utils import make_u1_index, assert_charge_neutral
 def test_svd_basic_reconstruction():
     """Test basic SVD and reconstruction on a simple tensor."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 3)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 1), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=42)
     original_norm = T.norm()
@@ -63,8 +63,8 @@ def test_svd_basic_reconstruction():
 def test_svd_integer_axis():
     """Test SVD with integer axis specification."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 3)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
     
@@ -78,9 +78,9 @@ def test_svd_integer_axis():
 def test_svd_string_axis():
     """Test SVD with axis specified by string tag."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
 
@@ -110,9 +110,9 @@ def test_svd_string_axis():
 def test_svd_different_axis_positions():
     """Test SVD on different axis positions."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 3)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 4)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=111)
 
@@ -148,9 +148,9 @@ def test_svd_multiple_blocks_same_charge():
     group = U1Group()
     
     # Create a tensor where multiple blocks share the same left charge
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
 
     # Manually create tensor with specific blocks
     data = {}
@@ -185,8 +185,8 @@ def test_svd_multiple_blocks_same_charge():
 def test_svd_single_block():
     """Test SVD with single block tensor."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 4)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=999)
     
@@ -202,9 +202,9 @@ def test_svd_single_block():
 def test_svd_index_directions():
     """Test that SVD produces correct index directions for contraction."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 1), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
 
@@ -236,8 +236,8 @@ def test_svd_index_directions():
 def test_svd_bond_index_structure():
     """Test that bond index has correct structure."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=2)
     
@@ -263,8 +263,8 @@ def test_svd_bond_index_structure():
 def test_svd_singular_values_positive():
     """Test that singular values are positive and sorted."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 4)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
 
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=789)
 
@@ -283,8 +283,8 @@ def test_svd_singular_values_positive():
 def test_svd_bond_dimensions():
     """Test that bond dimensions are computed correctly."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 5)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
 
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=444)
 
@@ -303,8 +303,8 @@ def test_svd_bond_dimensions():
 def test_svd_s_diagonal():
     """Test that S tensor contains diagonal matrices."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 4)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=3)
     
@@ -321,9 +321,9 @@ def test_svd_s_diagonal():
 def test_svd_preserves_charge_conservation():
     """Test that SVD preserves charge conservation in all output tensors."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=222)
     
@@ -342,9 +342,9 @@ def test_svd_preserves_charge_conservation():
 def test_svd_charge_conservation_all_axes():
     """Test charge conservation for SVD on all axes."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
-    idx3 = make_u1_index(Direction.OUT, [(0, 2), (1, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=4)
     
@@ -361,8 +361,8 @@ def test_svd_charge_conservation_all_axes():
 def test_svd_invalid_integer_axis():
     """Test that SVD raises error for invalid integer axis."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=333)
 
@@ -377,8 +377,8 @@ def test_svd_invalid_integer_axis():
 def test_svd_invalid_string_axis():
     """Test that SVD raises error for invalid string axis."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=333)
 
@@ -392,8 +392,8 @@ def test_svd_invalid_string_axis():
 def test_svd_complex_dtype():
     """Test SVD with complex dtype."""
     group = U1Group()
-    idx1 = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx2 = make_u1_index(Direction.IN, [(0, 4)], group)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
     
     T = Tensor.random([idx1, idx2], dtype=np.complex128, itags=["a", "b"], seed=5)
     

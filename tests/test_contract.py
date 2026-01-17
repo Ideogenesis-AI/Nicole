@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Tensor, contract, identity, partial_trace, trace, U1Group, Z2Group, permute, Index, Sector
 from nicole.symmetry.product import ProductGroup
-from .utils import make_u1_index, assert_charge_neutral
+from .utils import assert_charge_neutral
 
 
 # Basic contraction tests
@@ -31,10 +31,10 @@ from .utils import make_u1_index, assert_charge_neutral
 def test_contract_two_tensors_manual_pairs():
     """Test two-tensor contraction with manual pairs matches block-wise computation."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b_left = make_u1_index(Direction.IN, [(0, 1), (1, 1)], group)
-    idx_b_right = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_c = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b_left = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_b_right = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
 
     A = Tensor.random([idx_a, idx_b_left], seed=20, itags=["a", "b"])
     B = Tensor.random([idx_b_right, idx_c], seed=21, itags=["b", "c"])
@@ -59,13 +59,13 @@ def test_contract_two_tensors_manual_pairs():
 def test_contract_automatic_detection():
     """Test automatic contraction pair detection."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b_out = make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group)
-    idx_c_out = make_u1_index(Direction.OUT, [(0, 2), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 1)))
 
-    idx_c_in = make_u1_index(Direction.IN, [(0, 2), (-1, 1)], group)
-    idx_b_in = make_u1_index(Direction.IN, [(0, 1), (2, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1), (1, 2)], group)
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 1)))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
 
     A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=101, itags=["a", "b", "c"])
     B = Tensor.random([idx_c_in, idx_b_in, idx_d], seed=102, itags=["c", "b", "d"])
@@ -91,12 +91,12 @@ def test_contract_automatic_detection():
 def test_contract_named_vs_positional():
     """Test that named axis automatic detection matches position-based pairs."""
     group = U1Group()
-    idx_left = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_mid_out = make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group)
-    idx_right_in = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_right_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
 
-    idx_mid_in = make_u1_index(Direction.IN, [(0, 1), (2, 1)], group)
-    idx_end = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_end = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     A = Tensor.random([idx_left, idx_mid_out, idx_right_in], seed=201, itags=["L", "M", "R"])
     B = Tensor.random([idx_right_in.dual(), idx_mid_in, idx_end], seed=202, itags=["R", "M", "E"])
@@ -113,10 +113,10 @@ def test_contract_named_vs_positional():
 def test_contract_with_perm():
     """Test contraction with permutation parameter."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b_out = make_u1_index(Direction.OUT, [(0, 1)], group)
-    idx_b_in = make_u1_index(Direction.IN, [(0, 1)], group)
-    idx_c = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx_a, idx_b_out], seed=1, itags=["a", "b"])
     B = Tensor.random([idx_b_in, idx_c], seed=2, itags=["b", "c"])
@@ -131,12 +131,12 @@ def test_contract_with_perm():
 def test_contract_three_tensor_associativity():
     """Test that tensor contraction is associative."""
     group = U1Group()
-    idx_x = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_y_out = make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group)
-    idx_y_in = make_u1_index(Direction.IN, [(0, 1), (2, 1)], group)
-    idx_z_out = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
-    idx_z_in = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
-    idx_w = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_x = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_y_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_y_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_z_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_z_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_w = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     A = Tensor.random([idx_x, idx_y_out], seed=301, itags=["X", "Y"])
     B = Tensor.random([idx_y_in, idx_z_out], seed=302, itags=["Y", "Z"])
@@ -154,10 +154,10 @@ def test_contract_three_tensor_associativity():
 def test_contract_with_identity():
     """Test that contracting with identity matches direct contraction."""
     group = U1Group()
-    idx_left = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_mid_in = make_u1_index(Direction.IN, [(0, 1), (2, 1)], group)
-    idx_mid_out = make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group)
-    idx_right = make_u1_index(Direction.IN, [(0, 2), (-1, 1)], group)
+    idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 1)))
 
     A = Tensor.random([idx_left, idx_mid_in], seed=401, itags=["L", "M"])
     B = Tensor.random([idx_mid_out, idx_right], seed=402, itags=["M", "R"])
@@ -177,10 +177,10 @@ def test_contract_with_identity():
 def test_contract_after_permuting():
     """Test contraction after permuting axes."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (2, 1)], group)
-    idx_c = make_u1_index(Direction.IN, [(0, 1), (2, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     A = Tensor.random([idx_a, idx_b], seed=801, itags=["a", "b"])
     B = Tensor.random([idx_c, idx_d], seed=802, itags=["b", "d"])  # Use "b" instead of "c"
@@ -200,10 +200,10 @@ def test_contract_after_permuting():
 def test_contract_empty_result_mismatched_dimensions():
     """Test contraction with mismatched dimensions gives empty result."""
     group = U1Group()
-    idx_left = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_mid_out = make_u1_index(Direction.OUT, [(0, 3)], group)
-    idx_mid_in_bad = make_u1_index(Direction.IN, [(0, 4)], group)
-    idx_right = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx_mid_in_bad = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     A = Tensor.random([idx_left, idx_mid_out], seed=501, itags=["L", "M"])
     B_bad = Tensor.random([idx_mid_in_bad, idx_right], seed=503, itags=["M", "R"])
@@ -216,10 +216,10 @@ def test_contract_empty_result_mismatched_dimensions():
 def test_contract_empty_result_no_matching_charge():
     """Test contraction with no matching charges gives empty result."""
     group = U1Group()
-    idx_left = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_mid_out = make_u1_index(Direction.OUT, [(1, 1)], group)
-    idx_mid_in = make_u1_index(Direction.IN, [(0, 1)], group)
-    idx_right = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(1, 1),))
+    idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 
     A = Tensor.random([idx_left, idx_mid_out], seed=701, itags=["L", "M"])
     B = Tensor.random([idx_mid_in, idx_right], seed=702, itags=["M", "R"])
@@ -232,7 +232,7 @@ def test_contract_empty_result_no_matching_charge():
 def test_contract_no_pairs_raises():
     """Test that contract without valid pairs raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "c"])
     B = Tensor.random([idx, idx.flip()], seed=2, itags=["b", "d"])
@@ -244,8 +244,8 @@ def test_contract_no_pairs_raises():
 def test_contract_ambiguous_automatic_raises():
     """Test that ambiguous automatic contraction raises error."""
     group = U1Group()
-    idx_out = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_in = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     # Both indices have same itag and opposite directions - should be fine with 1:1
     A = Tensor.random([idx_out, idx_in], seed=1, itags=["x", "y"])
@@ -259,10 +259,10 @@ def test_contract_ambiguous_automatic_raises():
 def test_contract_large_block_shapes():
     """Test contraction with large block shapes."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 3), (1, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 2), (-1, 2)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 2), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
 
     A = Tensor.random([idx_a, idx_b], seed=901, itags=["a", "b"])
     B = Tensor.random([idx_b.dual(), idx_c, idx_d], seed=902, itags=["b", "c", "d"])
@@ -280,10 +280,10 @@ def test_contract_large_block_shapes():
 def test_trace_integer_pairs():
     """Test trace with integer index pairs."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[(0, 1)])
@@ -307,10 +307,10 @@ def test_trace_integer_pairs():
 def test_trace_string_pairs():
     """Test trace with string index pairs."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
@@ -320,10 +320,10 @@ def test_trace_string_pairs():
 def test_trace_multiple_pairs():
     """Test trace with multiple pairs."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b"), ("c", "d")])
@@ -338,10 +338,10 @@ def test_trace_multiple_pairs():
 def test_partial_trace_integer_axes():
     """Test partial_trace with integer axes."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     
@@ -352,10 +352,10 @@ def test_partial_trace_integer_axes():
 def test_partial_trace_string_axes():
     """Test partial_trace with string axes."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
@@ -370,10 +370,10 @@ def test_partial_trace_string_axes():
 def test_partial_trace_multiple_pairs():
     """Test partial_trace with multiple pairs."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
     first = partial_trace(tensor, axes=["a", "b"])
@@ -400,7 +400,7 @@ def test_partial_trace_multiple_pairs():
 def test_partial_trace_odd_axes_raises():
     """Test that partial_trace with odd number of axes raises error."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
     
     with pytest.raises(ValueError, match="even number of axes"):
@@ -490,8 +490,8 @@ def test_trace_product_group():
 def test_trace_produces_scalar():
     """Test that tracing all indices produces a scalar (0D tensor)."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
     
     tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["a", "b"])
     
@@ -511,8 +511,8 @@ def test_trace_produces_scalar():
 def test_contract_produces_scalar():
     """Test that full contraction produces a scalar."""
     group = U1Group()
-    idx_out = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_in = make_u1_index(Direction.IN, [(0, 2), (1, 1)], group)
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
     
     A = Tensor.random([idx_out, idx_in], seed=1, itags=["a", "b"])
     B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=2, itags=["b", "a"])
@@ -529,10 +529,10 @@ def test_contract_produces_scalar():
 def test_trace_multiple_pairs_produces_scalar():
     """Test that tracing multiple pairs can produce a scalar."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
-    idx_c = make_u1_index(Direction.OUT, [(0, 1), (1, 1)], group)
-    idx_d = make_u1_index(Direction.IN, [(0, 1), (1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
     
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
     
@@ -547,8 +547,8 @@ def test_trace_multiple_pairs_produces_scalar():
 def test_scalar_result_operations():
     """Test operations on scalar results from contractions."""
     group = U1Group()
-    idx_out = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_in = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx_out, idx_in], seed=10, itags=["a", "b"])
     B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=20, itags=["b", "a"])
@@ -571,8 +571,8 @@ def test_scalar_result_operations():
 def test_partial_trace_produces_scalar():
     """Test partial_trace with all indices produces scalar."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.IN, [(0, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
     

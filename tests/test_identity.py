@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Tensor, identity, isometry, U1Group, Z2Group, contract, permute
 from nicole import Index, Sector
-from .utils import make_u1_index, assert_charge_neutral
+from .utils import assert_charge_neutral
 
 
 # Identity tensor tests
@@ -31,7 +31,7 @@ from .utils import make_u1_index, assert_charge_neutral
 def test_identity_basic():
     """Test basic identity tensor construction."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 3), (1, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
     ident = identity(idx, itags=("p", "p_dual"))
 
     # Identity should have matching charges on both legs
@@ -43,7 +43,7 @@ def test_identity_basic():
 def test_identity_default_itags():
     """Test identity tensor with default itags."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     ident = identity(idx)
     
     assert ident.itags[0] == "_init_"
@@ -53,7 +53,7 @@ def test_identity_default_itags():
 def test_identity_dtype():
     """Test identity tensor with different dtypes."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     # float32
     ident_f32 = identity(idx, dtype=np.float32)
@@ -67,7 +67,7 @@ def test_identity_dtype():
 def test_identity_directions():
     """Test that identity has flipped directions."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     ident = identity(idx)
     
     assert ident.indices[0].direction == Direction.OUT
@@ -77,7 +77,7 @@ def test_identity_directions():
 def test_identity_blocks_are_identity_matrices():
     """Test that all identity blocks are identity matrices."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3), (-1, 4)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(-1, 4)))
     ident = identity(idx)
     
     for (q_left, q_right), block in ident.data.items():
@@ -89,7 +89,7 @@ def test_identity_blocks_are_identity_matrices():
 def test_identity_charge_neutral():
     """Test that identity tensor is charge neutral."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     ident = identity(idx)
     
     assert_charge_neutral(ident)
@@ -109,7 +109,7 @@ def test_identity_with_z2():
 def test_identity_contraction_preserves_tensor():
     """Test that contracting with identity preserves the tensor."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     # Create tensor with two indices that can be connected by identity
     T = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
@@ -131,8 +131,8 @@ def test_identity_contraction_preserves_tensor():
 def test_isometry_basic():
     """Test basic isometry tensor construction."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     
     fused_tensor = isometry(idx_a, idx_b, itags=("a", "b", "ab"))
     
@@ -143,8 +143,8 @@ def test_isometry_basic():
 def test_isometry_fused_charges():
     """Test that isometry has correct fused charges."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     
     fused_tensor = isometry(idx_a, idx_b, itags=("a", "b", "ab"))
 
@@ -158,8 +158,8 @@ def test_isometry_fused_charges():
 def test_isometry_structure():
     """Test that isometry has correct selection structure."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     
     fused_tensor = isometry(idx_a, idx_b, itags=("a", "b", "ab"))
 
@@ -178,8 +178,8 @@ def test_isometry_structure():
 def test_isometry_default_itags():
     """Test isometry with default itags."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     fused_tensor = isometry(idx_a, idx_b)
     
@@ -189,8 +189,8 @@ def test_isometry_default_itags():
 def test_isometry_dtype():
     """Test isometry with different dtypes."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     # float32
     iso_f32 = isometry(idx_a, idx_b, dtype=np.float32)
@@ -204,8 +204,8 @@ def test_isometry_dtype():
 def test_isometry_fused_direction():
     """Test isometry with custom fused direction."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     # Default should be dual of first
     iso_default = isometry(idx_a, idx_b)
@@ -219,8 +219,8 @@ def test_isometry_fused_direction():
 def test_isometry_charge_neutral():
     """Test that isometry tensor is charge neutral."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 2)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     
     fused_tensor = isometry(idx_a, idx_b)
     
@@ -230,8 +230,8 @@ def test_isometry_charge_neutral():
 def test_isometry_dimensions():
     """Test that isometry has correct dimensions."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 4), (-1, 5)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 4), Sector(-1, 5)))
     
     fused_tensor = isometry(idx_a, idx_b)
     
@@ -269,8 +269,8 @@ def test_isometry_z2():
 def test_isometry_fusion_unfusion_roundtrip():
     """Test that fusion followed by unfusion recovers original."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2), (1, 1)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1), (-1, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     
     # Create random tensor on product space
     T = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
@@ -290,8 +290,8 @@ def test_isometry_fusion_unfusion_roundtrip():
 def test_isometry_orthonormality():
     """Test that isometry columns are orthonormal."""
     group = U1Group()
-    idx_a = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_b = make_u1_index(Direction.OUT, [(0, 1)], group)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     iso = isometry(idx_a, idx_b)
     
@@ -307,7 +307,7 @@ def test_isometry_orthonormality():
 def test_identity_and_isometry_consistent():
     """Test that identity is consistent with isometry for single index."""
     group = U1Group()
-    idx = make_u1_index(Direction.OUT, [(0, 2), (1, 3)], group)
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     # Identity should behave like isometry with one index
     ident = identity(idx, itags=("a", "b"))
