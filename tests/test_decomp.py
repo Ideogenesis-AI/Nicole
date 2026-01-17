@@ -34,7 +34,7 @@ def test_svd_basic_reconstruction():
     """Test basic SVD and reconstruction on a simple tensor."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=42)
@@ -80,7 +80,7 @@ def test_svd_string_axis():
     """Test SVD with axis specified by string tag."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
@@ -205,7 +205,7 @@ def test_svd_index_directions():
     """Test that SVD produces correct index directions for contraction."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
@@ -324,7 +324,7 @@ def test_svd_preserves_charge_conservation():
     """Test that SVD preserves charge conservation in all output tensors."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=222)
@@ -345,7 +345,7 @@ def test_svd_charge_conservation_all_axes():
     """Test charge conservation for SVD on all axes."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=4)
@@ -435,7 +435,7 @@ def test_decomp_ur_mode():
     """Test decomp in UR mode."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
@@ -457,7 +457,7 @@ def test_decomp_lv_mode():
     """Test decomp in LV mode."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
@@ -479,7 +479,7 @@ def test_decomp_svd_mode():
     """Test decomp in SVD mode returns same as full SVD."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
@@ -564,7 +564,7 @@ def test_decomp_ur_multiindex():
     """Test UR mode with multi-index tensor."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
@@ -590,7 +590,7 @@ def test_decomp_lv_multiindex():
     """Test LV mode with multi-index tensor."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
@@ -640,7 +640,7 @@ def test_decomp_preserves_charge_neutrality():
     """Test that all decomp modes preserve charge neutrality."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=321)
@@ -800,7 +800,7 @@ def test_svd_truncation_multiblock():
     """Test global truncation with multiple charge blocks."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6), Sector(1, 4)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 3)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
     
