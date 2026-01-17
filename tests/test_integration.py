@@ -241,21 +241,19 @@ def test_workflow_tensor_network_contraction_order():
     idx1 = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx2 = make_u1_index(Direction.OUT, [(0, 2)], group)
     idx3 = make_u1_index(Direction.OUT, [(0, 2)], group)
-    idx_extra1 = make_u1_index(Direction.OUT, [(0, 1)], group)
-    idx_extra2 = make_u1_index(Direction.IN, [(0, 1)], group)
     
-    A = Tensor.random([idx1, idx2.dual(), idx_extra1], seed=1, itags=["a", "b", "x"])
+    A = Tensor.random([idx1, idx2.dual()], seed=1, itags=["a", "b"])
     B = Tensor.random([idx2, idx3.dual()], seed=2, itags=["b", "c"])
-    C = Tensor.random([idx3, idx1.dual(), idx_extra2], seed=3, itags=["c", "a", "y"])
+    C = Tensor.random([idx3, idx1.dual()], seed=3, itags=["c", "a"])
     
-    # Contract in different orders - result will have indices x and y
+    # Contract in different orders - result will be scalar
     result1 = contract(contract(A, B), C)
     result2 = contract(A, contract(B, C))
     
     # Should give same result (up to numerical precision)
     assert np.isclose(result1.norm(), result2.norm())
-    assert len(result1.indices) == 2
-    assert len(result2.indices) == 2
+    assert result1.is_scalar()
+    assert result2.is_scalar()
 
 
 def test_workflow_build_mpo_and_apply():

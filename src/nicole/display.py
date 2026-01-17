@@ -174,6 +174,29 @@ def tensor_summary(
     total_bytes = sum(int(arr.nbytes) for arr in data.values())
     order = len(indices)
 
+    # Special handling for scalars (0D tensors)
+    if order == 0:
+        if () in data:
+            value = data[()].item()
+            # Format value nicely
+            if np.iscomplexobj(value):
+                real_part = f"{value.real:.6g}"
+                imag_part = f"{abs(value.imag):.6g}"
+                sign = "+" if value.imag >= 0 else "-"
+                value_str = f"{real_part}{sign}{imag_part}i"
+            else:
+                value_str = f"{value:.6g}"
+            dtype_name = np.dtype(dtype).name
+            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            data_line = f"  data:  0-D {dtype_name} ({_format_bytes(total_bytes)})    [ {value_str} ]"
+            return info_line + "\n" + data_line
+        else:
+            # Empty scalar
+            dtype_name = np.dtype(dtype).name
+            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            data_line = f"  data:  0-D {dtype_name} (0 B)    [ empty ]"
+            return info_line + "\n" + data_line
+
     # Determine how many charge components to display (e.g. tuples vs scalars)
     sample_components = 0
     if indices:

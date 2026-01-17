@@ -208,22 +208,126 @@ def test_tensor_validation_charge_violation():
         Tensor(indices=(idx1, idx2), itags=("A", "B"), data=blocks, dtype=np.float64)
 
 
-def test_tensor_validation_requires_two_indices():
-    """Test that Tensor rejects tensors with fewer than 2 indices."""
+def test_tensor_validation_rejects_single_index():
+    """Test that Tensor rejects tensors with exactly 1 index."""
     group = U1Group()
     idx = make_u1_index(Direction.OUT, [(0, 2)], group)
     
-    # Test with Tensor constructor
-    with pytest.raises(ValueError, match="must have at least 2 indices"):
+    # Exactly 1 index should raise error
+    with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor(indices=(idx,), itags=("A",), data={}, dtype=np.float64)
     
-    # Test with Tensor.zeros
-    with pytest.raises(ValueError, match="must have at least 2 indices"):
+    with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor.zeros([idx], itags=["A"])
     
-    # Test with Tensor.random
-    with pytest.raises(ValueError, match="must have at least 2 indices"):
+    with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor.random([idx], seed=1, itags=["A"])
+
+
+# Scalar (0D tensor) tests
+
+def test_tensor_scalar_creation():
+    """Test creating scalars (0D tensors) with from_scalar."""
+    # Test with integer
+    s_int = Tensor.from_scalar(42)
+    assert s_int.is_scalar()
+    assert s_int.item() == 42
+    assert len(s_int.indices) == 0
+    assert len(s_int.itags) == 0
+    
+    # Test with float
+    s_float = Tensor.from_scalar(3.14, dtype=np.float64)
+    assert s_float.is_scalar()
+    assert np.isclose(s_float.item(), 3.14)
+    
+    # Test with complex
+    s_complex = Tensor.from_scalar(1 + 2j, dtype=np.complex128)
+    assert s_complex.is_scalar()
+    assert s_complex.item() == 1 + 2j
+    
+    # Test with custom label
+    s_labeled = Tensor.from_scalar(5.0, label="MyScalar")
+    assert s_labeled.label == "MyScalar"
+
+
+def test_tensor_scalar_operations():
+    """Test arithmetic operations with scalars."""
+    s1 = Tensor.from_scalar(2.0)
+    s2 = Tensor.from_scalar(3.0)
+    
+    # Scalar addition
+    s3 = s1 + s2
+    assert s3.is_scalar()
+    assert np.isclose(s3.item(), 5.0)
+    
+    # Scalar multiplication
+    s4 = s1 * 2.5
+    assert s4.is_scalar()
+    assert np.isclose(s4.item(), 5.0)
+    
+    # Left scalar multiplication
+    s5 = 1.5 * s1
+    assert s5.is_scalar()
+    assert np.isclose(s5.item(), 3.0)
+    
+    # Scalar subtraction
+    s6 = s2 - s1
+    assert s6.is_scalar()
+    assert np.isclose(s6.item(), 1.0)
+
+
+def test_tensor_scalar_norm():
+    """Test norm of scalar tensors."""
+    s = Tensor.from_scalar(3.0)
+    assert np.isclose(s.norm(), 3.0)
+    
+    s_negative = Tensor.from_scalar(-4.0)
+    assert np.isclose(s_negative.norm(), 4.0)
+    
+    s_complex = Tensor.from_scalar(3 + 4j, dtype=np.complex128)
+    assert np.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
+
+
+def test_tensor_scalar_copy():
+    """Test copying scalar tensors."""
+    s = Tensor.from_scalar(42.0)
+    s_copy = s.copy()
+    
+    assert s_copy.is_scalar()
+    assert s_copy.item() == s.item()
+    assert s_copy.data[()] is not s.data[()]  # Different array objects
+
+
+def test_tensor_scalar_display():
+    """Test string representation of scalar tensors."""
+    s = Tensor.from_scalar(3.14)
+    str_repr = str(s)
+    
+    assert "0-D" in str_repr
+    assert "3.14" in str_repr
+    assert "0x { 1 x 0 }" in str_repr
+    assert repr(s) == str(s)
+
+
+def test_tensor_item_raises_on_non_scalar():
+    """Test that item() raises error on non-scalar tensors."""
+    group = U1Group()
+    idx = make_u1_index(Direction.OUT, [(0, 2)], group)
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
+    
+    with pytest.raises(ValueError, match="can only be called on scalars"):
+        tensor.item()
+
+
+def test_tensor_scalar_validation():
+    """Test scalar-specific validation."""
+    # Scalar must have empty key
+    with pytest.raises(ValueError, match="empty tuple"):
+        Tensor(indices=(), itags=(), data={(0,): np.array(1.0)}, dtype=np.float64)
+    
+    # Scalar can only have one block
+    with pytest.raises(ValueError, match="only have one block"):
+        Tensor(indices=(), itags=(), data={(): np.array(1.0), (1,): np.array(2.0)}, dtype=np.float64)
 
 
 def test_tensor_str_repr():
