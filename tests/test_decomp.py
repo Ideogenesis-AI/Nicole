@@ -824,3 +824,245 @@ def test_svd_truncation_invalid_mode():
     with pytest.raises(ValueError, match="Invalid truncation mode"):
         svd(T, axis=0, trunc=("invalid", 3))
 
+
+# High-order tensor tests
+
+def test_decomp_4index_tensor():
+    """Test decomp on 4-index tensor with reconstruction."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=800)
+    original_norm = T.norm()
+    
+    # Test decomposition on different axes
+    for axis in [0, 1, 2, 3]:
+        U, R = decomp(T, axis=axis, mode="UR")
+        
+        # Reconstruct
+        reconstructed = contract(U, R, pairs=[(1, 0)])
+        
+        # Permute back to original order
+        if axis == 0:
+            pass  # (a, b, c, d)
+        elif axis == 1:
+            reconstructed.permute([1, 0, 2, 3])  # (b, a, c, d) -> (a, b, c, d)
+        elif axis == 2:
+            reconstructed.permute([1, 2, 0, 3])  # (c, a, b, d) -> (a, b, c, d)
+        elif axis == 3:
+            reconstructed.permute([1, 2, 3, 0])  # (d, a, b, c) -> (a, b, c, d)
+        
+        # Verify accuracy
+        rel_error = (T - reconstructed).norm() / original_norm
+        assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+
+
+def test_decomp_5index_tensor():
+    """Test decomp on 5-index tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d", "e"], seed=900)
+    
+    # Test SVD mode on middle axis
+    U, S, Vh = decomp(T, axis=2, mode="SVD")
+    
+    # Check structure
+    assert len(U.indices) == 2  # (c, bond)
+    assert len(S.indices) == 2  # (bond.flip(), bond)
+    assert len(Vh.indices) == 5  # (bond.flip(), a, b, d, e)
+    
+    # Verify charge conservation
+    assert_charge_neutral(U)
+    assert_charge_neutral(S)
+    assert_charge_neutral(Vh)
+    
+    # Reconstruct
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    
+    # Permute: (c, a, b, d, e) -> (a, b, c, d, e)
+    reconstructed.permute([1, 2, 0, 3, 4])
+    
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_6index_tensor_with_truncation():
+    """Test decomp on 6-index tensor with truncation."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 3),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 3),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d", "e", "f"], seed=1000)
+    
+    # Decompose with truncation (separate first index from rest)
+    U, R = decomp(T, axis=0, mode="UR", trunc=("nkeep", 5))
+    
+    # Check that truncation worked
+    bond_dim = U.indices[1].dim
+    assert bond_dim <= 5
+    
+    # Reconstruct (will be approximate due to truncation)
+    reconstructed = contract(U, R, pairs=[(1, 0)])
+    
+    # Verify dimensions
+    assert len(reconstructed.indices) == 6
+    for i, idx in enumerate(reconstructed.indices):
+        assert idx.dim == T.indices[i].dim
+
+
+def test_high_order_tensor_multiple_charges():
+    """Test high-order tensor with multiple charge blocks."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1100)
+    
+    # Test LV mode
+    L, V = decomp(T, axis=0, mode="LV")
+    
+    # Check that we have multiple charge sectors
+    bond_charges = set(L.indices[1].charges())
+    assert len(bond_charges) > 1, "Should have multiple charge sectors"
+    
+    # Reconstruct
+    reconstructed = contract(L, V, pairs=[(1, 0)])
+    
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_high_order_tensor_different_axis_sizes():
+    """Test high-order tensor with varying axis dimensions."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 5),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1200)
+    
+    # Decompose on axis 1 (separates axis 1 from axes 0,2,3)
+    U, S_blocks, Vh = svd(T, axis=1)
+    
+    # Bond dimension should be min(dim_axis1, dim_others)
+    # dim_axis1 = 5, dim_others = 2*3*4 = 24
+    # So bond_dim = min(5, 24) = 5
+    total_bond_dim = sum(len(s) for s in S_blocks.values())
+    assert total_bond_dim == 5
+    
+    # Verify singular values are sorted
+    for key, s_array in S_blocks.items():
+        assert np.all(s_array[:-1] >= s_array[1:]), "Singular values should be sorted descending"
+
+
+def test_high_order_tensor_all_modes():
+    """Test all decomp modes on high-order tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1300)
+    
+    # Test all three modes give equivalent results
+    U_ur, R = decomp(T, axis=1, mode="UR")
+    recon_ur = contract(U_ur, R, pairs=[(1, 0)])
+    
+    U_svd, S, Vh_svd = decomp(T, axis=1, mode="SVD")
+    S_Vh = contract(S, Vh_svd, pairs=[(1, 0)])
+    recon_svd = contract(U_svd, S_Vh, pairs=[(1, 0)])
+    
+    L, V_lv = decomp(T, axis=1, mode="LV")
+    recon_lv = contract(L, V_lv, pairs=[(1, 0)])
+    
+    # All reconstructions should match (after permuting to same order)
+    # Current order is (b, a, c, d), need (a, b, c, d)
+    recon_ur.permute([1, 0, 2, 3])
+    recon_svd.permute([1, 0, 2, 3])
+    recon_lv.permute([1, 0, 2, 3])
+    
+    assert (recon_ur - recon_svd).norm() / T.norm() < 1e-12
+    assert (recon_svd - recon_lv).norm() / T.norm() < 1e-12
+
+
+def test_high_order_tensor_bond_structure():
+    """Test bond index structure in high-order tensor decomposition."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1400)
+    
+    U, S_blocks, Vh = svd(T, axis=0)
+    
+    bond_index = U.indices[1]
+    
+    # Bond should have charges that appear in the tensor's first index
+    left_charges_in_data = set(key[0] for key in T.data.keys())
+    bond_charges = set(bond_index.charges())
+    
+    assert bond_charges == left_charges_in_data
+    
+    # Bond should have correct group
+    assert bond_index.group == indices[0].group
+    
+    # Bond direction should be opposite of left index
+    assert bond_index.direction == indices[0].direction.reverse()
+
+
+def test_high_order_tensor_thresh_truncation():
+    """Test threshold truncation on high-order tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 4),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 4),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 4),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1500)
+    
+    # Apply threshold truncation
+    threshold = 1.0
+    U, S_blocks, Vh = svd(T, axis=0, trunc=("thresh", threshold))
+    
+    # All kept singular values should be >= threshold
+    for key, s_array in S_blocks.items():
+        assert np.all(s_array >= threshold)
+    
+    # Verify we can still reconstruct (approximately)
+    U_full = decomp(T, axis=0, mode="UR", trunc=("thresh", threshold))[0]
+    assert len(U_full.indices) == 2
+    assert U_full.indices[0].dim == 4  # Left index unchanged
+
