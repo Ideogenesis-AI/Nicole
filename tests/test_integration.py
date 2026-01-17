@@ -32,9 +32,9 @@ def test_workflow_construct_contract_svd_reconstruct():
     group = U1Group()
     
     # Construct tensors
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
     
     A = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
     B = Tensor.random([idx_b.dual(), idx_c], seed=2, itags=["b", "c"])
