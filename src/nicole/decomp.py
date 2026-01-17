@@ -79,10 +79,16 @@ def svd(T: Tensor, axis: int | str) -> Tuple[Tensor, MutableMapping[BlockKey, np
     """
     # Parse axis parameter into integer index
     if isinstance(axis, str):
-        try:
-            axis_idx = T.itags.index(axis)
-        except ValueError:
+        # Check for ambiguity: ensure the itag appears exactly once
+        matching_indices = [i for i, tag in enumerate(T.itags) if tag == axis]
+        if len(matching_indices) == 0:
             raise ValueError(f"Index tag '{axis}' not found in tensor")
+        elif len(matching_indices) > 1:
+            raise ValueError(
+                f"Ambiguous axis specification: index tag '{axis}' appears at "
+                f"multiple positions {matching_indices}. Please use integer index instead."
+            )
+        axis_idx = matching_indices[0]
     else:
         axis_idx = axis
         if axis_idx < 0 or axis_idx >= len(T.indices):

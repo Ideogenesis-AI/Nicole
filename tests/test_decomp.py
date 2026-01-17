@@ -389,6 +389,21 @@ def test_svd_invalid_string_axis():
         svd(T, axis="nonexistent")
 
 
+def test_svd_ambiguous_string_axis():
+    """Test that SVD raises error for ambiguous string axis (duplicate itags)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+
+    # Create tensor with duplicate itags
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "a"], seed=444)
+
+    # Test ambiguous string axis
+    with pytest.raises(ValueError, match="Ambiguous axis specification"):
+        svd(T, axis="a")
+
+
 # dtype tests
 
 def test_svd_complex_dtype():
