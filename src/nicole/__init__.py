@@ -19,7 +19,7 @@
 """Nicole (TN) public API surface for symmetry-aware tensor utilities."""
 
 from .contract import contract, partial_trace, trace
-from .decomp import svd
+from .decomp import decomp
 from .identity import identity, isometry
 from .index import Index, Sector
 from .operators import conj, getsub, oplus, permute, transpose
@@ -40,7 +40,7 @@ __all__ = [
     "contract",
     "trace",
     "partial_trace",
-    "svd",
+    "decomp",
     "identity",
     "isometry",
     "conj",

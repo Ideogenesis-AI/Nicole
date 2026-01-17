@@ -20,7 +20,7 @@
 
 import numpy as np
 
-from nicole import Direction, Tensor, contract, svd, identity, isometry, U1Group, Z2Group, permute, conj
+from nicole import Direction, Tensor, contract, decomp, identity, isometry, U1Group, Z2Group, permute, conj
 from nicole import Index, Sector
 from .utils import assert_charge_neutral, assert_blocks_equal
 
@@ -44,15 +44,15 @@ def test_workflow_construct_contract_svd_reconstruct():
     C = contract(A, B)
     assert_charge_neutral(C)
     
-    # SVD
-    U, S, Vh = svd(C, axis=0)
+    # SVD using decomp
+    U, S, Vh = decomp(C, axis=0, mode="SVD")
     assert_charge_neutral(U)
     assert_charge_neutral(S)
     assert_charge_neutral(Vh)
     
     # Reconstruct
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
     
     # Verify reconstruction
     diff_norm = (C - reconstructed).norm()
@@ -130,13 +130,11 @@ def test_workflow_svd_truncation_and_contraction():
     
     T = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
-    # SVD
-    U, S, Vh = svd(T, axis=0)
+    # SVD using decomp (UR mode for efficiency)
+    U, R = decomp(T, axis=0, mode="UR")
     
-    # Truncate (keep only half of singular values)
-    # For this test, just verify reconstruction works
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
+    # Reconstruct
+    reconstructed = contract(U, R, pairs=[(1, 0)])
     
     # Should approximately recover original
     rel_error = (T - reconstructed).norm() / T.norm()
@@ -296,12 +294,11 @@ def test_workflow_z2_tensors():
     # Contract
     C = contract(A, B)
     
-    # SVD
-    U, S, Vh = svd(C, axis=0)
+    # SVD using decomp (UR mode for efficiency)
+    U, R = decomp(C, axis=0, mode="UR")
     
     # Reconstruct
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
+    reconstructed = contract(U, R, pairs=[(1, 0)])
     
     # Verify
     rel_error = (C - reconstructed).norm() / C.norm()
