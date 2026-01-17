@@ -34,7 +34,7 @@ def test_contract_two_tensors_manual_pairs():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_b_left = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
     idx_b_right = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     A = Tensor.random([idx_a, idx_b_left], seed=20, itags=["a", "b"])
     B = Tensor.random([idx_b_right, idx_c], seed=21, itags=["b", "c"])
@@ -93,10 +93,10 @@ def test_contract_named_vs_positional():
     group = U1Group()
     idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
-    idx_right_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_right_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
-    idx_end = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_end = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 1)))
 
     A = Tensor.random([idx_left, idx_mid_out, idx_right_in], seed=201, itags=["L", "M", "R"])
     B = Tensor.random([idx_right_in.dual(), idx_mid_in, idx_end], seed=202, itags=["R", "M", "E"])
@@ -134,9 +134,9 @@ def test_contract_three_tensor_associativity():
     idx_x = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_y_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
     idx_y_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
-    idx_z_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    idx_z_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    idx_w = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_z_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_z_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_w = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 1)))
 
     A = Tensor.random([idx_x, idx_y_out], seed=301, itags=["X", "Y"])
     B = Tensor.random([idx_y_in, idx_z_out], seed=302, itags=["Y", "Z"])
@@ -155,9 +155,9 @@ def test_contract_with_identity():
     """Test that contracting with identity matches direct contraction."""
     group = U1Group()
     idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
-    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
-    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 1)))
+    idx_mid_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_mid_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
 
     A = Tensor.random([idx_left, idx_mid_in], seed=401, itags=["L", "M"])
     B = Tensor.random([idx_mid_out, idx_right], seed=402, itags=["M", "R"])
