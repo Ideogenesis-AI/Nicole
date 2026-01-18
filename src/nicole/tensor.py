@@ -27,7 +27,7 @@ charge conservation dictated by the index metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -68,6 +68,8 @@ class Tensor:
         Compute the Frobenius norm aggregated across all dense blocks.
     copy()
         Create a deep copy of this tensor with independent block data.
+    rand_fill()
+        In-place: Fill all data blocks with random values.
     sorted_keys
         Property returning block keys in display order (cached).
     key()
@@ -309,6 +311,22 @@ class Tensor:
     def block(self, i: int) -> np.ndarray:
         """Access the i-th block by integer index (1-indexed, matching display)."""
         return self.data[self.key(i)]
+
+    # ------------------------------------------------------------
+    #   Utility methods: rand_fill
+    # ------------------------------------------------------------
+
+    def rand_fill(self, seed: Optional[int] = None) -> None:
+        """Fill all data blocks with random values in-place."""
+        rng = np.random.default_rng(seed)
+        for key in self.data:
+            shape = self.data[key].shape
+            if np.issubdtype(self.dtype, np.complexfloating):
+                real = rng.standard_normal(shape)
+                imag = rng.standard_normal(shape)
+                self.data[key] = (real + 1j * imag).astype(self.dtype, copy=False)
+            else:
+                self.data[key] = rng.standard_normal(shape).astype(self.dtype, copy=False)
 
     # ------------------------------------------------------------
     #   Binary operations: add, sub, mul

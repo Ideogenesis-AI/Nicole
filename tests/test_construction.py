@@ -685,3 +685,238 @@ def test_prune_with_negative_charges():
     # Verify blocks exist for all charge combinations
     assert len(tensor.data) == 5  # (-2,-2), (-1,-1), (0,0), (1,1), (2,2)
 
+
+def test_rand_fill_basic():
+    """Test rand_fill fills zero tensor with random values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # Verify initially zeros
+    for block in tensor.data.values():
+        assert np.allclose(block, 0.0)
+    
+    # Fill with random values
+    tensor.rand_fill(seed=42)
+    
+    # Verify no longer all zeros
+    for block in tensor.data.values():
+        assert not np.allclose(block, 0.0)
+    
+    # Verify structure preserved
+    assert len(tensor.data) == 2
+    assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
+    assert tensor.data[(0, 0)].shape == (3, 2)
+    assert tensor.data[(1, 1)].shape == (2, 3)
+
+
+def test_rand_fill_reproducible():
+    """Test rand_fill with seed produces reproducible results."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor1 = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    tensor2 = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # Fill both with same seed
+    tensor1.rand_fill(seed=123)
+    tensor2.rand_fill(seed=123)
+    
+    # Should be identical
+    for key in tensor1.data:
+        assert np.allclose(tensor1.data[key], tensor2.data[key])
+
+
+def test_rand_fill_different_seeds():
+    """Test rand_fill with different seeds produces different results."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor1 = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    tensor2 = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # Fill with different seeds
+    tensor1.rand_fill(seed=1)
+    tensor2.rand_fill(seed=2)
+    
+    # Should be different
+    for key in tensor1.data:
+        assert not np.allclose(tensor1.data[key], tensor2.data[key])
+
+
+def test_rand_fill_complex_dtype():
+    """Test rand_fill with complex dtype fills with complex values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=np.complex128, itags=["a", "b"])
+    tensor.rand_fill(seed=42)
+    
+    block = tensor.data[(0, 0)]
+    
+    # Verify it's complex
+    assert np.iscomplexobj(block)
+    
+    # Verify both real and imaginary parts are non-zero
+    assert not np.allclose(block.real, 0.0)
+    assert not np.allclose(block.imag, 0.0)
+
+
+def test_rand_fill_inplace():
+    """Test rand_fill modifies tensor in-place."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    original_id = id(tensor)
+    original_data_id = id(tensor.data)
+    
+    # Fill in-place
+    result = tensor.rand_fill(seed=42)
+    
+    # Should return None (in-place operation)
+    assert result is None
+    
+    # Tensor object should be the same
+    assert id(tensor) == original_id
+    assert id(tensor.data) == original_data_id
+    
+    # But data should be modified
+    for block in tensor.data.values():
+        assert not np.allclose(block, 0.0)
+
+
+def test_rand_fill_preserves_metadata():
+    """Test rand_fill preserves tensor metadata."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=np.float64, itags=["left", "right"])
+    tensor.label = "TestTensor"
+    
+    original_indices = tensor.indices
+    original_itags = tensor.itags
+    original_dtype = tensor.dtype
+    original_label = tensor.label
+    
+    tensor.rand_fill(seed=42)
+    
+    # All metadata should be preserved
+    assert tensor.indices == original_indices
+    assert tensor.itags == original_itags
+    assert tensor.dtype == original_dtype
+    assert tensor.label == original_label
+
+
+def test_rand_fill_multiple_times():
+    """Test rand_fill can be called multiple times."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # First fill
+    tensor.rand_fill(seed=1)
+    first_values = tensor.data[(0, 0)].copy()
+    
+    # Second fill with different seed
+    tensor.rand_fill(seed=2)
+    second_values = tensor.data[(0, 0)]
+    
+    # Values should be different
+    assert not np.allclose(first_values, second_values)
+
+
+def test_rand_fill_z2_group():
+    """Test rand_fill works with Z2 group."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    tensor.rand_fill(seed=42)
+    
+    # Verify structure preserved
+    assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
+    
+    # Verify filled with non-zero values
+    for block in tensor.data.values():
+        assert not np.allclose(block, 0.0)
+
+
+def test_rand_fill_product_group():
+    """Test rand_fill works with product group."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2), Sector((1, 1), 3)
+    ))
+    idx2 = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 2), Sector((1, 1), 3)
+    ))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    tensor.rand_fill(seed=42)
+    
+    # Verify structure preserved
+    assert len(tensor.data) == 2
+    
+    # Verify filled with non-zero values
+    for block in tensor.data.values():
+        assert not np.allclose(block, 0.0)
+
+
+def test_rand_fill_different_dtypes():
+    """Test rand_fill works with different numpy dtypes."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    dtypes = [np.float32, np.float64, np.complex64, np.complex128]
+    
+    for dtype in dtypes:
+        tensor = Tensor.zeros([idx1, idx2], dtype=dtype, itags=["a", "b"])
+        tensor.rand_fill(seed=42)
+        
+        block = tensor.data[(0, 0)]
+        assert block.dtype == dtype
+        assert not np.allclose(block, 0.0)
+
+
+def test_rand_fill_scalar_tensor():
+    """Test rand_fill works with scalar tensor."""
+    tensor = Tensor.from_scalar(0.0, dtype=np.float64)
+    
+    # Fill with random value
+    tensor.rand_fill(seed=42)
+    
+    # Verify it's no longer zero
+    assert tensor.item() != 0.0
+
+
+def test_rand_fill_empty_tensor():
+    """Test rand_fill on tensor with no blocks does nothing."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    
+    # These indices can't form charge-neutral blocks
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # Should have no blocks
+    assert len(tensor.data) == 0
+    
+    # rand_fill should do nothing (no error)
+    tensor.rand_fill(seed=42)
+    
+    # Still no blocks
+    assert len(tensor.data) == 0
+
