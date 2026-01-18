@@ -88,6 +88,154 @@ def test_contract_automatic_detection():
         np.testing.assert_allclose(result.data[key], manual[key])
 
 
+def test_contract_high_order_two_pairs():
+    """Test high-order tensor contraction with two index pairs - manual verification."""
+    group = U1Group()
+    # A: 4 indices (a, b, c, d) - contract b and d with B
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    
+    # B: 4 indices (d, e, b, f) - contract d and b with A
+    idx_d_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b_out, idx_c, idx_d_out], seed=1001, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx_d_in, idx_e, idx_b_in, idx_f], seed=1002, itags=["d", "e", "b", "f"])
+    
+    # Automatic detection should contract b and d
+    result = contract(A, B)
+    assert set(result.itags) == {"a", "c", "e", "f"}
+    assert_charge_neutral(result)
+    
+    # Manual block-wise computation
+    manual = {}
+    for (qa, qb, qc, qd), block_a in A.data.items():
+        for (qd2, qe, qb2, qf), block_b in B.data.items():
+            # Check if charges match for contraction
+            if group.equal(qb, qb2) and group.equal(qd, qd2):
+                out_key = (qa, qc, qe, qf)
+                # A: (a, b, c, d), B: (d, e, b, f)
+                # Contract: b (axis 1 of A) with b (axis 2 of B)
+                #           d (axis 3 of A) with d (axis 0 of B)
+                # Result order: (a, c, e, f)
+                contracted = np.einsum('abcd,debf->acef', block_a, block_b)
+                
+                if out_key not in manual:
+                    manual[out_key] = contracted
+                else:
+                    manual[out_key] = manual[out_key] + contracted
+    
+    # Verify results match
+    assert set(result.data.keys()) == set(manual.keys()), \
+        f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
+    for key in manual:
+        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_high_order_three_pairs():
+    """Test high-order tensor contraction with three index pairs - manual verification."""
+    group = U1Group()
+    # A: 5 indices (a, b, c, d, e) - contract b, c, e with B
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_e_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    
+    # B: 5 indices (e, f, c, b, g) - contract e, c, b with A
+    idx_e_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_g = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d, idx_e_out], seed=2001, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_e_in, idx_f, idx_c_in, idx_b_in, idx_g], seed=2002, itags=["e", "f", "c", "b", "g"])
+    
+    # Contract b, c, e
+    result = contract(A, B)
+    assert set(result.itags) == {"a", "d", "f", "g"}
+    assert_charge_neutral(result)
+    
+    # Manual block-wise computation
+    manual = {}
+    for (qa, qb, qc, qd, qe), block_a in A.data.items():
+        for (qe2, qf, qc2, qb2, qg), block_b in B.data.items():
+            # Check if charges match for contraction
+            if group.equal(qb, qb2) and group.equal(qc, qc2) and group.equal(qe, qe2):
+                out_key = (qa, qd, qf, qg)
+                # A: (a, b, c, d, e), B: (e, f, c, b, g)
+                # Contract: b (axis 1 of A) with b (axis 3 of B)
+                #           c (axis 2 of A) with c (axis 2 of B)
+                #           e (axis 4 of A) with e (axis 0 of B)
+                # Result order: (a, d, f, g)
+                contracted = np.einsum('abcde,efcbg->adfg', block_a, block_b)
+                
+                if out_key not in manual:
+                    manual[out_key] = contracted
+                else:
+                    manual[out_key] = manual[out_key] + contracted
+    
+    # Verify results match
+    assert set(result.data.keys()) == set(manual.keys()), \
+        f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
+    for key in manual:
+        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_high_order_asymmetric():
+    """Test high-order asymmetric contraction (3-index x 6-index) - manual verification."""
+    group = U1Group()
+    # A: 3 indices (a, b, c) - contract a and c with B
+    idx_a_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    
+    # B: 6 indices (c, d, e, a, f, g) - contract c and a with A
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx_d = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_a_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    
+    A = Tensor.random([idx_a_out, idx_b, idx_c_out], seed=3001, itags=["a", "b", "c"])
+    B = Tensor.random([idx_c_in, idx_d, idx_e, idx_a_in, idx_f, idx_g], seed=3002, itags=["c", "d", "e", "a", "f", "g"])
+    
+    # Contract a and c
+    result = contract(A, B)
+    assert set(result.itags) == {"b", "d", "e", "f", "g"}
+    assert_charge_neutral(result)
+    
+    # Manual block-wise computation
+    manual = {}
+    for (qa, qb, qc), block_a in A.data.items():
+        for (qc2, qd, qe, qa2, qf, qg), block_b in B.data.items():
+            # Check if charges match for contraction
+            if group.equal(qa, qa2) and group.equal(qc, qc2):
+                out_key = (qb, qd, qe, qf, qg)
+                # A: (a, b, c), B: (c, d, e, a, f, g)
+                # Contract: a (axis 0 of A) with a (axis 3 of B)
+                #           c (axis 2 of A) with c (axis 0 of B)
+                # Result order: (b, d, e, f, g)
+                contracted = np.einsum('abc,cdeafg->bdefg', block_a, block_b)
+                
+                if out_key not in manual:
+                    manual[out_key] = contracted
+                else:
+                    manual[out_key] = manual[out_key] + contracted
+    
+    # Verify results match
+    assert set(result.data.keys()) == set(manual.keys()), \
+        f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
+    for key in manual:
+        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
 def test_contract_named_vs_positional():
     """Test that named axis automatic detection matches position-based pairs."""
     group = U1Group()
