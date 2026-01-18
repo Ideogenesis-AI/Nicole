@@ -545,6 +545,84 @@ def test_partial_trace_multiple_pairs():
     assert np.isclose(total_manual, total_from_tensor)
 
 
+def test_contract_trace_consistency_high_order():
+    """Test consistency: direct 3-index contraction vs 2-index contraction + partial trace.
+    
+    Two 5-index tensors contracted on 3 indices can be computed in two ways:
+    1. Direct 3-index contraction: contract all 3 pairs at once
+    2. Sequential: contract 2 pairs first, then partial trace the remaining pair
+    
+    Both approaches should give identical results.
+    """
+    group = U1Group()
+    
+    # A: 5 indices (a, b, c, d, e) - will contract b, c, d with B
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # B: 5 indices (b, c, d, f, g) - will contract b, c, d with A
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d_out, idx_e], 
+                      seed=4001, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b_in, idx_c_in, idx_d_in, idx_f, idx_g], 
+                      seed=4002, itags=["b", "c", "d", "f", "g"])
+    
+    # Method 1: Direct 3-index contraction
+    # Contract b, c, d all at once using automatic detection
+    direct_result = contract(A, B)
+    
+    assert set(direct_result.itags) == {"a", "e", "f", "g"}
+    assert_charge_neutral(direct_result)
+    
+    # Method 2: Contract 2 indices first, then partial trace the third
+    # First contract only b and c (using manual pairs to avoid contracting d)
+    # A indices: 0=a, 1=b, 2=c, 3=d, 4=e
+    # B indices: 0=b, 1=c, 2=d, 3=f, 4=g
+    partial_result = contract(A, B, pairs=[(1, 0), (2, 1)])  # Contract b and c only
+    
+    # After contracting b and c, we have:
+    # - From A: a, d_out, e (d_out not contracted)
+    # - From B: d_in, f, g (d_in not contracted)
+    # Result should have: a, d_out, e, d_in, f, g
+    # where d_out and d_in have matching tags "d" but weren't contracted
+    
+    # Now trace over the remaining d pair
+    # Find which axes correspond to the two "d" indices
+    d_axes = [i for i, tag in enumerate(partial_result.itags) if tag == "d"]
+    assert len(d_axes) == 2, f"Expected 2 'd' indices, got {len(d_axes)}"
+    
+    traced_result = partial_trace(partial_result, axes=d_axes)
+    
+    assert set(traced_result.itags) == {"a", "e", "f", "g"}
+    assert_charge_neutral(traced_result)
+    
+    # Verify both methods give identical results
+    # Compare block keys
+    assert set(direct_result.data.keys()) == set(traced_result.data.keys()), \
+        f"Block keys mismatch: direct has {set(direct_result.data.keys())}, traced has {set(traced_result.data.keys())}"
+    
+    # Compare block values
+    for key in direct_result.data.keys():
+        np.testing.assert_allclose(
+            direct_result.data[key], 
+            traced_result.data[key], 
+            rtol=1e-10, 
+            atol=1e-12,
+            err_msg=f"Block {key} values differ between direct and traced methods"
+        )
+    
+    # Also verify norms match
+    assert abs(direct_result.norm() - traced_result.norm()) < 1e-10
+
+
 def test_partial_trace_odd_axes_raises():
     """Test that partial_trace with odd number of axes raises error."""
     group = U1Group()
