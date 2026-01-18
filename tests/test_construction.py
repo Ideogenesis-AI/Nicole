@@ -984,3 +984,47 @@ def test_product_group_consistency():
     with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
         Tensor.zeros([idx1, idx2], itags=["a", "b"])
 
+
+def test_group_property():
+    """Test that group property returns the correct symmetry group."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    assert tensor.group == group
+    assert tensor.group.name == "U1"
+
+
+def test_group_property_z2():
+    """Test group property with Z2 group."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    assert tensor.group == group
+    assert tensor.group.name == "Z2"
+
+
+def test_group_property_product_group():
+    """Test group property with product group."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    assert tensor.group == group
+    assert tensor.group.name == "U1×Z2"
+
+
+def test_group_property_scalar_raises():
+    """Test that accessing group property on scalar tensor raises error."""
+    tensor = Tensor.from_scalar(5.0)
+    
+    with pytest.raises(ValueError, match="Scalar tensor has no symmetry group"):
+        _ = tensor.group
+

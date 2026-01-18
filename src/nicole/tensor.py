@@ -35,6 +35,7 @@ from .blocks import BlockKey, BlockSchema
 from .display import tensor_summary
 from .index import Index
 from .typing import Direction, Sector
+from .symmetry.base import SymmetryGroup
 
 
 @dataclass
@@ -73,6 +74,8 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
+    group
+        Property returning the symmetry group of this tensor.
     sorted_keys
         Property returning block keys in display order (cached).
     key()
@@ -326,8 +329,15 @@ class Tensor:
         return self.data[self.key(i)]
 
     # ------------------------------------------------------------
-    #   Utility methods: rand_fill
+    #   Utility methods: rand_fill, insert_index
     # ------------------------------------------------------------
+
+    @property
+    def group(self) -> SymmetryGroup:
+        """Fetch the symmetry group of this tensor."""
+        if len(self.indices) == 0:
+            raise ValueError("Scalar tensor has no symmetry group")
+        return self.indices[0].group
 
     def rand_fill(self, seed: Optional[int] = None) -> None:
         """Fill all data blocks with random values in-place."""
