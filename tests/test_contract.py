@@ -431,7 +431,7 @@ def test_trace_integer_pairs():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[(0, 1)])
@@ -458,7 +458,7 @@ def test_trace_string_pairs():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
@@ -489,7 +489,7 @@ def test_partial_trace_integer_axes():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     
@@ -503,7 +503,7 @@ def test_partial_trace_string_axes():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     traced = trace(tensor, pairs=[("a", "b")])
