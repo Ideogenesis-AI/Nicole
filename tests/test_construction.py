@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole.blocks import BlockSchema
 from nicole.symmetry.product import ProductGroup
 from .utils import assert_charge_neutral
 
@@ -473,4 +474,214 @@ def test_tensor_random_product_group():
     # Check that blocks are not all zeros
     assert not np.allclose(tensor.data[((0, 0), (0, 0))], 0.0)
     assert tensor.norm() > 0.0
+
+
+# ============================================================================
+# Sector pruning tests
+# ============================================================================
+
+def test_zeros_prunes_unused_sectors():
+    """Test that Tensor.zeros removes sectors that don't appear in any charge-conserving block."""
+    group = U1Group()
+    
+    # Create indices where charge 2 can't be conserved with charge 0
+    # OUT(2) + IN(0) = 2 - 0 = 2 (not conserved)
+    # OUT(0) + IN(0) = 0 - 0 = 0 (conserved)
+    # OUT(1) + IN(1) = 1 - 1 = 0 (conserved)
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    tensor = Tensor.zeros([idx_out, idx_in], itags=["a", "b"])
+    
+    # Verify that charge 2 was pruned from the first index
+    assert len(tensor.indices[0].sectors) == 2  # Only 0 and 1 should remain
+    charges_out = tensor.indices[0].charges()
+    assert 0 in charges_out
+    assert 1 in charges_out
+    assert 2 not in charges_out  # This sector was pruned
+    
+    # Verify all charges in block keys match sectors in indices
+    for block_key in tensor.data.keys():
+        for axis, charge in enumerate(block_key):
+            assert charge in tensor.indices[axis].charges(), \
+                f"Charge {charge} in block key not found in index {axis} sectors"
+
+
+def test_random_prunes_unused_sectors():
+    """Test that Tensor.random removes sectors that don't appear in any charge-conserving block."""
+    group = U1Group()
+    
+    # Create a scenario where multiple sectors won't be used
+    # OUT(0) + OUT(1) + IN(0) = 0 + 1 - 0 = 1 (not conserved)
+    # OUT(0) + OUT(0) + IN(0) = 0 + 0 - 0 = 0 (conserved)
+    # OUT(1) + OUT(-1) + IN(0) = 1 + (-1) - 0 = 0 (conserved)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2), Sector(-2, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    
+    # Verify that sectors were pruned
+    # Not all original sectors should remain
+    assert len(tensor.indices[0].sectors) <= 3
+    assert len(tensor.indices[1].sectors) <= 3
+    assert len(tensor.indices[2].sectors) <= 2
+    
+    # Verify all charges in block keys match sectors in indices
+    for block_key in tensor.data.keys():
+        for axis, charge in enumerate(block_key):
+            assert charge in tensor.indices[axis].charges(), \
+                f"Charge {charge} at axis {axis} in block key not found in index sectors"
+
+
+def test_zeros_random_consistency():
+    """Test that zeros and random produce tensors with matching index structures."""
+    group = U1Group()
+    
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(2, 2), Sector(3, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    
+    zeros_tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    random_tensor = Tensor.random([idx1, idx2], seed=123, itags=["a", "b"])
+    
+    # Both should have pruned to the same index structure
+    assert len(zeros_tensor.indices) == len(random_tensor.indices)
+    for i in range(len(zeros_tensor.indices)):
+        assert len(zeros_tensor.indices[i].sectors) == len(random_tensor.indices[i].sectors)
+        assert set(zeros_tensor.indices[i].charges()) == set(random_tensor.indices[i].charges())
+    
+    # Both should have the same block keys
+    assert set(zeros_tensor.data.keys()) == set(random_tensor.data.keys())
+
+
+def test_prune_with_no_conserving_blocks():
+    """Test pruning when no blocks satisfy charge conservation."""
+    group = U1Group()
+    
+    # Create indices where no combination conserves charge
+    # OUT(1) + OUT(1) + IN(0) = 1 + 1 - 0 = 2 (not conserved)
+    # All combinations will fail
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], itags=["a", "b", "c"])
+    
+    # Should have no blocks
+    assert len(tensor.data) == 0
+    
+    # All indices should be pruned to empty
+    for idx in tensor.indices:
+        assert len(idx.sectors) == 0
+
+
+def test_prune_preserves_all_used_sectors():
+    """Test that pruning doesn't remove sectors that ARE used."""
+    group = U1Group()
+    
+    # Create indices where all sectors participate
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    tensor = Tensor.random([idx_out, idx_in], seed=99, itags=["a", "b"])
+    
+    # All sectors should be preserved (all can be conserved)
+    assert len(tensor.indices[0].sectors) == 2
+    assert len(tensor.indices[1].sectors) == 2
+    assert set(tensor.indices[0].charges()) == {0, 1}
+    assert set(tensor.indices[1].charges()) == {0, 1}
+
+
+def test_prune_with_complex_charge_structure():
+    """Test pruning with complex multi-index tensors."""
+    group = U1Group()
+    
+    # 4-index tensor with various charge combinations
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2), Sector(3, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2), Sector(-2, 2)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=777, itags=["a", "b", "c", "d"])
+    
+    # Verify consistency: all block charges match index sectors
+    for block_key in tensor.data.keys():
+        assert len(block_key) == 4
+        for axis, charge in enumerate(block_key):
+            index_charges = tensor.indices[axis].charges()
+            assert charge in index_charges, \
+                f"Block charge {charge} at axis {axis} not in index: {index_charges}"
+    
+    # Verify charge conservation for all blocks
+    for block_key in tensor.data.keys():
+        assert BlockSchema.charges_conserved(tensor.indices, block_key)
+
+
+def test_prune_maintains_block_validity():
+    """Test that after pruning, all blocks remain valid."""
+    group = U1Group()
+    
+    # Create indices with many sectors, some of which won't be used
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(2, 2), Sector(3, 2), Sector(4, 2)
+    ))
+    idx2 = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(2, 2)
+    ))
+    idx3 = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(-1, 2), Sector(-2, 2)
+    ))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], seed=888, itags=["a", "b", "c"])
+    
+    # Verify all blocks have correct shapes
+    for block_key, block in tensor.data.items():
+        expected_shape = BlockSchema.shape_for_key(tensor.indices, block_key)
+        assert block.shape == expected_shape, \
+            f"Block {block_key} has shape {block.shape}, expected {expected_shape}"
+    
+    # Verify charge conservation
+    for block_key in tensor.data.keys():
+        assert BlockSchema.charges_conserved(tensor.indices, block_key)
+
+
+def test_prune_with_single_sector_indices():
+    """Test pruning when indices have only one sector."""
+    group = U1Group()
+    
+    # Single sector per index
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 3),))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    
+    # Should have one block
+    assert len(tensor.data) == 1
+    assert (1, 1) in tensor.data
+    
+    # Indices should still have their sectors
+    assert len(tensor.indices[0].sectors) == 1
+    assert len(tensor.indices[1].sectors) == 1
+
+
+def test_prune_with_negative_charges():
+    """Test pruning works correctly with negative charges."""
+    group = U1Group()
+    
+    # Mix of positive and negative charges
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector(-2, 2), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 2)
+    ))
+    idx2 = Index(Direction.IN, group, sectors=(
+        Sector(-2, 2), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 2)
+    ))
+    
+    tensor = Tensor.random([idx1, idx2], seed=999, itags=["a", "b"])
+    
+    # All sectors should be preserved (all can pair to conserve charge)
+    assert len(tensor.indices[0].sectors) == 5
+    assert len(tensor.indices[1].sectors) == 5
+    
+    # Verify blocks exist for all charge combinations
+    assert len(tensor.data) == 5  # (-2,-2), (-1,-1), (0,0), (1,1), (2,2)
 

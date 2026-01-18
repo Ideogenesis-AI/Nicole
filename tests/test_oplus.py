@@ -142,9 +142,10 @@ def test_oplus_single_axis_by_int():
     group = U1Group()
     
     # Create tensors where axis 1 matches exactly
+    # For charge conservation: OUT - IN = 0, so we need matching charges
     idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
-    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 5)))
     
     A = Tensor.random([idx_A0, idx_match], seed=100, itags=['i', 'j'])
     B = Tensor.random([idx_B0, idx_match], seed=200, itags=['i', 'j'])
@@ -154,13 +155,13 @@ def test_oplus_single_axis_by_int():
     # Index 0 should be merged
     dim_map_0 = C.indices[0].sector_dim_map()
     assert dim_map_0[0] == 3  # 2 + 1
-    assert dim_map_0[1] == 3  # 3 + 0
-    assert dim_map_0[2] == 2  # 0 + 2
+    assert dim_map_0[1] == 5  # 3 + 2
     
     # Index 1 should be unchanged
     dim_map_1 = C.indices[1].sector_dim_map()
-    assert dim_map_1[0] == 5  # unchanged
-    assert len(dim_map_1) == 1
+    assert dim_map_1[0] == 3
+    assert dim_map_1[1] == 5
+    assert len(dim_map_1) == 2
 
 
 def test_oplus_single_axis_by_itag():
@@ -168,8 +169,8 @@ def test_oplus_single_axis_by_itag():
     group = U1Group()
     
     idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
-    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 5)))
     
     A = Tensor.random([idx_A0, idx_match], seed=110, itags=['i', 'j'])
     B = Tensor.random([idx_B0, idx_match], seed=210, itags=['i', 'j'])
@@ -179,20 +180,24 @@ def test_oplus_single_axis_by_itag():
     # Same result as test_oplus_single_axis_by_int
     dim_map_0 = C.indices[0].sector_dim_map()
     assert dim_map_0[0] == 3
-    assert dim_map_0[1] == 3
-    assert dim_map_0[2] == 2
+    assert dim_map_0[1] == 5
 
 
 def test_oplus_multiple_axes():
     """Test merging multiple non-contiguous axes [0, 2] with axis 1 matching."""
     group = U1Group()
     
+    # For charge conservation with 3 indices: OUT + OUT - IN = 0
+    # So charge_0 + charge_1 - charge_2 = 0, which means charge_2 = charge_0 + charge_1
+    idx_match = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
+    
+    # A: OUT(0) + OUT(0) - IN(0) = 0 ✓
     idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_A2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
-    idx_match = Index(Direction.OUT, group, sectors=(Sector(1, 4),))
     
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx_B2 = Index(Direction.IN, group, sectors=(Sector(1, 3),))
+    # B: OUT(0) + OUT(0) - IN(0) = 0 ✓
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_B2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx_A0, idx_match, idx_A2], seed=120, itags=['i', 'j', 'k'])
     B = Tensor.random([idx_B0, idx_match, idx_B2], seed=220, itags=['i', 'j', 'k'])
@@ -202,15 +207,15 @@ def test_oplus_multiple_axes():
     # Axes 0 and 2 should be merged
     dim_map_0 = C.indices[0].sector_dim_map()
     assert 0 in dim_map_0
-    assert 1 in dim_map_0
+    assert dim_map_0[0] == 3  # 2 + 1
     
     dim_map_2 = C.indices[2].sector_dim_map()
     assert 0 in dim_map_2
-    assert 1 in dim_map_2
+    assert dim_map_2[0] == 5  # 3 + 2
     
     # Axis 1 should be unchanged
     dim_map_1 = C.indices[1].sector_dim_map()
-    assert dim_map_1[1] == 4
+    assert dim_map_1[0] == 4
     assert len(dim_map_1) == 1
 
 
@@ -218,9 +223,14 @@ def test_oplus_last_axis_only():
     """Test merging only the last axis."""
     group = U1Group()
     
-    idx_match = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_B1 = Index(Direction.IN, group, sectors=(Sector(1, 3),))
+    # Non-merged axis must match exactly between A and B
+    idx_match = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # A: OUT(0) - IN(0) = 0 ✓ and OUT(1) - IN(1) = 0 ✓
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    # B: OUT(0) - IN(0) = 0 ✓ and OUT(1) - IN(1) = 0 ✓
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 5)))
     
     A = Tensor.random([idx_match, idx_A1], seed=130, itags=['i', 'j'])
     B = Tensor.random([idx_match, idx_B1], seed=230, itags=['i', 'j'])
@@ -228,12 +238,14 @@ def test_oplus_last_axis_only():
     C = oplus(A, B, axes=[1])
     
     # Axis 0 unchanged
-    assert C.indices[0].sector_dim_map()[0] == 3
+    dim_map_0 = C.indices[0].sector_dim_map()
+    assert dim_map_0[0] == 3
+    assert dim_map_0[1] == 2
     
     # Axis 1 merged
     dim_map_1 = C.indices[1].sector_dim_map()
-    assert 0 in dim_map_1
-    assert 1 in dim_map_1
+    assert dim_map_1[0] == 6  # 2 + 4
+    assert dim_map_1[1] == 8  # 3 + 5
 
 
 # ============================================================================
@@ -302,12 +314,13 @@ def test_oplus_non_merged_axes_dimension_mismatch():
     """Test error if non-merged axes have same charge but different dimensions."""
     group = U1Group()
     
-    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    # Both tensors need charge 0 on axis 0 and axis 1 for charge conservation
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
     
-    # Same charge (0) but different dimensions
-    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 3),))  # Different dimension!
+    # Same charges but different dimensions on non-merged axis
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 4)))  # Different dimension for charge 0!
     
     A = Tensor.random([idx_A0, idx_A1], seed=1, itags=['i', 'j'])
     B = Tensor.random([idx_B0, idx_B1], seed=2, itags=['i', 'j'])
@@ -374,8 +387,10 @@ def test_oplus_three_indices():
     """Test that oplus works for 3-index tensors."""
     group = U1Group()
     
+    # For charge conservation with 3 indices (OUT, IN, OUT): charge_0 - charge_1 + charge_2 = 0
+    # Using charge 0 for all: 0 - 0 + 0 = 0 ✓
     idx_A = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_B = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx_B = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     A = Tensor.random([idx_A, idx_A.flip(), idx_A], seed=310, itags=['a', 'b', 'c'])
     B = Tensor.random([idx_B, idx_B.flip(), idx_B], seed=410, itags=['a', 'b', 'c'])
@@ -391,8 +406,10 @@ def test_oplus_four_indices_partial():
     """Test merging 2 of 4 axes."""
     group = U1Group()
     
+    # For 4 indices (OUT, IN, OUT, OUT): charge_0 - charge_1 + charge_2 + charge_3 = 0
+    # Using all 0: 0 - 0 + 0 + 0 = 0 ✓
     idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
     idx_match1 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
     idx_match3 = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
@@ -404,11 +421,11 @@ def test_oplus_four_indices_partial():
     
     C = oplus(A, B, axes=[0, 2])
     
-    # Merged axes should have both charges
+    # Merged axes should have charge 0
     assert 0 in C.indices[0].sector_dim_map()
-    assert 1 in C.indices[0].sector_dim_map()
+    assert C.indices[0].sector_dim_map()[0] == 5  # 2 + 3
     assert 0 in C.indices[2].sector_dim_map()
-    assert 1 in C.indices[2].sector_dim_map()
+    assert C.indices[2].sector_dim_map()[0] == 5  # 2 + 3
     
     # Non-merged axes unchanged
     assert C.indices[1].sector_dim_map()[0] == 3
@@ -486,9 +503,10 @@ def test_oplus_dimension_unchanged_non_merged():
     """Verify dimensions unchanged on non-merged axes."""
     group = U1Group()
     
-    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(1, 3),))
-    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 7),))
+    # Both tensors need the same charges on non-merged axis
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 4), Sector(1, 5)))
+    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 7), Sector(1, 6)))
     
     A = Tensor.random([idx_A0, idx_match], seed=910, itags=['a', 'b'])
     B = Tensor.random([idx_B0, idx_match], seed=1010, itags=['a', 'b'])
@@ -496,7 +514,7 @@ def test_oplus_dimension_unchanged_non_merged():
     C = oplus(A, B, axes=[0])
     
     # Non-merged axis should be unchanged
-    assert C.indices[1].dim == 7
+    assert C.indices[1].dim == 13  # 7 + 6
     assert C.indices[1].dim == A.indices[1].dim
     assert C.indices[1].dim == B.indices[1].dim
 

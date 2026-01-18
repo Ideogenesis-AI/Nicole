@@ -225,7 +225,7 @@ def test_scalar_multiplication_complex():
     """Test scalar multiplication with complex number."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
 
     scaled = tensor * (2 - 3j)
