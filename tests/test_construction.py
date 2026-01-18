@@ -920,3 +920,67 @@ def test_rand_fill_empty_tensor():
     # Still no blocks
     assert len(tensor.data) == 0
 
+
+def test_mixed_groups_raises_error():
+    """Test that tensors with indices from different groups raise an error."""
+    u1_group = U1Group()
+    z2_group = Z2Group()
+    
+    idx1 = Index(Direction.OUT, u1_group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, z2_group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
+        Tensor.zeros([idx1, idx2], itags=["a", "b"])
+
+
+def test_mixed_groups_random_raises_error():
+    """Test that random tensor with mixed groups raises an error."""
+    u1_group = U1Group()
+    z2_group = Z2Group()
+    
+    idx1 = Index(Direction.OUT, u1_group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, z2_group, sectors=(Sector(0, 2),))
+    
+    with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
+        Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+
+
+def test_mixed_groups_direct_construction_raises_error():
+    """Test that direct tensor construction with mixed groups raises an error."""
+    u1_group = U1Group()
+    z2_group = Z2Group()
+    
+    idx1 = Index(Direction.OUT, u1_group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, z2_group, sectors=(Sector(0, 2),))
+    
+    import numpy as np
+    data = {(0, 0): np.zeros((2, 2))}
+    
+    with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data)
+
+
+def test_same_group_type_different_instances_works():
+    """Test that indices with the same group type but different instances work."""
+    u1_group1 = U1Group()
+    u1_group2 = U1Group()
+    
+    idx1 = Index(Direction.OUT, u1_group1, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, u1_group2, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    # Should work - same group type
+    tensor = Tensor.zeros([idx1, idx2], itags=["a", "b"])
+    assert len(tensor.data) == 2
+
+
+def test_product_group_consistency():
+    """Test that all indices must use the same product group."""
+    group1 = ProductGroup([U1Group(), U1Group()])
+    group2 = ProductGroup([U1Group(), Z2Group()])
+    
+    idx1 = Index(Direction.OUT, group1, sectors=(Sector((0, 0), 2),))
+    idx2 = Index(Direction.IN, group2, sectors=(Sector((0, 0), 2),))
+    
+    with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
+        Tensor.zeros([idx1, idx2], itags=["a", "b"])
+

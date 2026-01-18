@@ -34,7 +34,7 @@ import numpy as np
 from .blocks import BlockKey, BlockSchema
 from .display import tensor_summary
 from .index import Index
-from .typing import Direction
+from .typing import Direction, Sector
 
 
 @dataclass
@@ -120,6 +120,16 @@ class Tensor:
             raise ValueError(
                 f"Number of itags ({len(self.itags)}) must match number of indices ({len(self.indices)})"
             )
+        # Validate all indices share the same symmetry group
+        if len(self.indices) >= 2:
+            first_group = self.indices[0].group
+            for i, idx in enumerate(self.indices[1:], start=1):
+                if idx.group != first_group:
+                    raise ValueError(
+                        f"All indices must share the same symmetry group. "
+                        f"Index 0 has {type(first_group).__name__}, "
+                        f"but index {i} has {type(idx.group).__name__}"
+                    )
         # For scalars, ensure only neutral charge block exists
         if len(self.indices) == 0:
             if len(self.data) > 1:
@@ -353,8 +363,6 @@ class Tensor:
         
         The symmetry group for the new index is taken from the existing indices.
         """
-        from .typing import Sector
-        
         # Validate position
         n = len(self.indices)
         if position < 0 or position > n:
