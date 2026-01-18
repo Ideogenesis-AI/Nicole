@@ -34,6 +34,7 @@ import numpy as np
 from .blocks import BlockKey, BlockSchema
 from .display import tensor_summary
 from .index import Index
+from .typing import Direction
 
 
 @dataclass
@@ -70,6 +71,8 @@ class Tensor:
         Create a deep copy of this tensor with independent block data.
     rand_fill()
         In-place: Fill all data blocks with random values.
+    insert_index()
+        In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
     sorted_keys
         Property returning block keys in display order (cached).
     key()
@@ -327,6 +330,71 @@ class Tensor:
                 self.data[key] = (real + 1j * imag).astype(self.dtype, copy=False)
             else:
                 self.data[key] = rng.standard_normal(shape).astype(self.dtype, copy=False)
+
+    def insert_index(self, position: int, direction: Direction, itag: Optional[str] = None) -> None:
+        """Insert a trivial index (neutral charge, dimension 1) at a specified position.
+        
+        Parameters
+        ----------
+        position:
+            Position where the new index should be inserted (0-indexed).
+            Must be in range [0, len(self.indices)].
+        direction:
+            Direction for the new index (Direction.IN or Direction.OUT).
+        itag:
+            Optional tag for the new index. If None, uses "_init_".
+        
+        Notes
+        -----
+        This operation modifies the tensor in-place by:
+        - Inserting a new index with a single sector (neutral charge, dimension 1)
+        - Adding a singleton dimension to all data blocks at the corresponding axis
+        - Updating block keys to include the neutral charge at the new position
+        
+        The symmetry group for the new index is taken from the existing indices.
+        """
+        from .typing import Sector
+        
+        # Validate position
+        n = len(self.indices)
+        if position < 0 or position > n:
+            raise ValueError(f"Position {position} out of range [0, {n}]")
+        
+        # Get the symmetry group from existing indices
+        if n == 0:
+            raise ValueError("Cannot insert index into scalar tensor")
+        group = self.indices[0].group
+        
+        # Create trivial index with neutral charge and dimension 1
+        neutral_charge = group.neutral
+        trivial_sector = Sector(neutral_charge, 1)
+        new_index = Index(direction, group, sectors=(trivial_sector,))
+        
+        # Insert the new index
+        indices_list = list(self.indices)
+        indices_list.insert(position, new_index)
+        self.indices = tuple(indices_list)
+        
+        # Insert the new itag
+        if itag is None:
+            itag = "_init_"
+        itags_list = list(self.itags)
+        itags_list.insert(position, itag)
+        self.itags = tuple(itags_list)
+        
+        # Update data blocks: insert neutral charge in keys and add singleton dimension
+        new_data = {}
+        for key, arr in self.data.items():
+            # Insert neutral charge at the appropriate position in the key
+            key_list = list(key)
+            key_list.insert(position, neutral_charge)
+            new_key = tuple(key_list)
+            
+            # Add singleton dimension at the appropriate axis
+            new_data[new_key] = np.expand_dims(arr, axis=position)
+        
+        self.data = new_data
+        self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------
     #   Binary operations: add, sub, mul

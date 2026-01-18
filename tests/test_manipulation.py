@@ -21,7 +21,8 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, U1Group, conj, permute, transpose, Index, Sector
+from nicole import Direction, Index, Sector, Tensor, conj, permute, transpose
+from nicole import ProductGroup, U1Group, Z2Group
 
 
 # Conjugation tests
@@ -401,4 +402,308 @@ def test_retag_preserves_tensor_data():
     
     assert tensor.norm() == original_norm
     assert set(tensor.data.keys()) == original_keys
+
+
+# insert_index tests
+
+def test_insert_index_at_beginning():
+    """Test inserting a trivial index at the beginning."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    original_norm = tensor.norm()
+    original_block_00 = tensor.data[(0, 0)].copy()
+    
+    # Insert at position 0
+    tensor.insert_index(0, Direction.OUT, itag="new")
+    
+    # Verify structure
+    assert len(tensor.indices) == 3
+    assert len(tensor.itags) == 3
+    assert tensor.itags[0] == "new"
+    assert tensor.itags[1] == "a"
+    assert tensor.itags[2] == "b"
+    
+    # Verify new index is trivial
+    assert len(tensor.indices[0].sectors) == 1
+    assert tensor.indices[0].sectors[0].charge == 0
+    assert tensor.indices[0].sectors[0].dim == 1
+    assert tensor.indices[0].direction == Direction.OUT
+    
+    # Verify block keys updated
+    assert (0, 0, 0) in tensor.data
+    assert (0, 1, 1) in tensor.data
+    
+    # Verify block shapes updated (added dimension at axis 0)
+    assert tensor.data[(0, 0, 0)].shape == (1, 2, 2)
+    assert tensor.data[(0, 1, 1)].shape == (1, 3, 3)
+    
+    # Verify data preserved (just reshaped)
+    assert np.allclose(tensor.data[(0, 0, 0)][0], original_block_00)
+    assert tensor.norm() == original_norm
+
+
+def test_insert_index_at_end():
+    """Test inserting a trivial index at the end."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    original_norm = tensor.norm()
+    
+    # Insert at end (position 2)
+    tensor.insert_index(2, Direction.IN, itag="new")
+    
+    # Verify structure
+    assert len(tensor.indices) == 3
+    assert tensor.itags[2] == "new"
+    
+    # Verify block keys updated
+    assert (0, 0, 0) in tensor.data
+    assert (1, 1, 0) in tensor.data
+    
+    # Verify block shapes updated (added dimension at axis 2)
+    assert tensor.data[(0, 0, 0)].shape == (2, 2, 1)
+    assert tensor.data[(1, 1, 0)].shape == (3, 3, 1)
+    
+    # Verify norm preserved
+    assert np.isclose(tensor.norm(), original_norm)
+
+
+def test_insert_index_in_middle():
+    """Test inserting a trivial index in the middle."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    
+    # Insert at position 1
+    tensor.insert_index(1, Direction.IN, itag="mid")
+    
+    # Verify structure
+    assert len(tensor.indices) == 4
+    assert list(tensor.itags) == ["a", "mid", "b", "c"]
+    
+    # Verify block keys updated (neutral charge inserted at position 1)
+    for key in tensor.data:
+        assert len(key) == 4
+        assert key[1] == 0  # Neutral charge at position 1
+    
+    # Verify dimensions
+    for arr in tensor.data.values():
+        assert arr.ndim == 4
+        assert arr.shape[1] == 1  # Singleton dimension at axis 1
+
+
+def test_insert_index_default_itag():
+    """Test inserting index without specifying itag."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    tensor.insert_index(1, Direction.OUT)
+    
+    # Should use default "_init_" tag
+    assert tensor.itags[1] == "_init_"
+
+
+def test_insert_index_inherits_group():
+    """Test that inserted index inherits group from existing indices."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Insert index - should inherit Z2 group
+    tensor.insert_index(1, Direction.OUT, itag="z2_trivial")
+    
+    # Verify the new index has Z2 group (inherited)
+    assert tensor.indices[1].group == group
+    assert tensor.indices[1].sectors[0].charge == 0  # Z2 neutral is also 0
+
+
+def test_insert_index_preserves_data_values():
+    """Test that insertion preserves all data values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Store all original values
+    original_values = {}
+    for key, arr in tensor.data.items():
+        original_values[key] = arr.copy()
+    
+    # Insert index
+    tensor.insert_index(1, Direction.OUT, itag="inserted")
+    
+    # Verify all values preserved (just reshaped)
+    for old_key, old_arr in original_values.items():
+        new_key = (old_key[0], 0, old_key[1])  # Insert neutral charge
+        assert new_key in tensor.data
+        assert np.allclose(tensor.data[new_key][:, 0, :], old_arr)
+
+
+def test_insert_index_multiple_insertions():
+    """Test multiple consecutive insertions."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    original_norm = tensor.norm()
+    
+    # Insert at beginning
+    tensor.insert_index(0, Direction.OUT, itag="first")
+    assert len(tensor.indices) == 3
+    
+    # Insert at end
+    tensor.insert_index(3, Direction.IN, itag="last")
+    assert len(tensor.indices) == 4
+    
+    # Insert in middle
+    tensor.insert_index(2, Direction.OUT, itag="middle")
+    assert len(tensor.indices) == 5
+    
+    # Verify structure
+    assert list(tensor.itags) == ["first", "a", "middle", "b", "last"]
+    
+    # Verify all new indices are trivial
+    assert tensor.indices[0].sectors[0].dim == 1
+    assert tensor.indices[2].sectors[0].dim == 1
+    assert tensor.indices[4].sectors[0].dim == 1
+    
+    # Verify norm preserved
+    assert np.isclose(tensor.norm(), original_norm)
+
+
+def test_insert_index_position_validation():
+    """Test that invalid positions raise errors."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    
+    # Position too large
+    with pytest.raises(ValueError, match="out of range"):
+        tensor.insert_index(3, Direction.OUT)
+    
+    # Negative position
+    with pytest.raises(ValueError, match="out of range"):
+        tensor.insert_index(-1, Direction.OUT)
+
+
+def test_insert_index_scalar_raises_error():
+    """Test that inserting into scalar tensor raises error."""
+    tensor = Tensor.from_scalar(1.0)
+    
+    with pytest.raises(ValueError, match="Cannot insert index into scalar tensor"):
+        tensor.insert_index(0, Direction.OUT)
+
+
+def test_insert_index_z2_group():
+    """Test inserting trivial index with Z2 group."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    tensor.insert_index(1, Direction.OUT, itag="z2_trivial")
+    
+    # Z2 neutral is 0
+    assert tensor.indices[1].sectors[0].charge == 0
+    assert tensor.indices[1].sectors[0].dim == 1
+    
+    # Verify keys
+    assert (0, 0, 0) in tensor.data
+    assert (1, 0, 1) in tensor.data
+
+
+def test_insert_index_product_group():
+    """Test inserting trivial index with product group."""
+    group = ProductGroup([U1Group(), U1Group()])
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    tensor.insert_index(1, Direction.OUT, itag="prod_trivial")
+    
+    # Product group neutral is (0, 0)
+    assert tensor.indices[1].sectors[0].charge == (0, 0)
+    assert tensor.indices[1].sectors[0].dim == 1
+
+
+def test_insert_index_complex_dtype():
+    """Test inserting index preserves complex dtype."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, dtype=np.complex128, itags=["a", "b"])
+    
+    tensor.insert_index(1, Direction.OUT)
+    
+    # Verify dtype preserved
+    assert tensor.dtype == np.complex128
+    for arr in tensor.data.values():
+        assert arr.dtype == np.complex128
+
+
+def test_insert_index_inplace_modification():
+    """Test that insert_index modifies tensor in-place."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    original_id = id(tensor)
+    
+    result = tensor.insert_index(1, Direction.OUT)
+    
+    # Should return None (in-place operation)
+    assert result is None
+    
+    # Tensor object should be the same
+    assert id(tensor) == original_id
+    
+    # But structure should be modified
+    assert len(tensor.indices) == 3
+
+
+def test_insert_index_preserves_label():
+    """Test that insert_index preserves tensor label."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    tensor.label = "MyTensor"
+    
+    tensor.insert_index(1, Direction.OUT)
+    
+    assert tensor.label == "MyTensor"
+
+
+def test_insert_index_invalidates_sorted_keys():
+    """Test that insert_index invalidates the sorted keys cache."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    
+    # Access sorted_keys to populate cache
+    _ = tensor.sorted_keys
+    
+    # Insert index
+    tensor.insert_index(1, Direction.OUT)
+    
+    # Sorted keys should be recalculated with new structure
+    keys = tensor.sorted_keys
+    for key in keys:
+        assert len(key) == 3  # Now 3D
 
