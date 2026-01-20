@@ -90,6 +90,8 @@ class Tensor:
         In-place: Permute tensor axes according to the provided reordering.
     transpose()
         In-place: Transpose tensor axes; defaults to reversing the index order.
+    flip()
+        In-place: Flip the direction of specified index/indices (uses dual to maintain charge conservation).
     retag()
         Retag indices: update specific tags by name/index, or replace all tags.
     
@@ -547,6 +549,50 @@ class Tensor:
         if not order:
             order = tuple(reversed(range(len(self.indices))))
         self.permute(order)
+
+    def flip(self, positions: Union[int, Sequence[int]]) -> None:
+        """Flip the direction of specified index/indices while maintaining charge conservation.
+        
+        Parameters
+        ----------
+        positions:
+            Index position(s) to flip. Can be a single int or a sequence of ints.
+            Positions are 0-indexed.
+        
+        Notes
+        -----
+        This operation uses Index.dual() to flip both the direction and conjugate
+        the charges, ensuring charge conservation is maintained. The tensor data
+        blocks are unchanged, but the index metadata (direction and charges) are
+        updated to reflect the flipped arrow convention.
+        
+        This differs from Index.flip() which only reverses direction without
+        conjugating charges. For tensors, we need charge conjugation to maintain
+        proper charge conservation rules.
+        
+        Examples
+        --------
+        # Flip a single index at position 0
+        tensor.flip(0)
+        
+        # Flip multiple indices at positions 0 and 2
+        tensor.flip([0, 2])
+        """
+        # Normalize to a sequence
+        if isinstance(positions, int):
+            positions = [positions]
+        
+        # Validate positions
+        n = len(self.indices)
+        for pos in positions:
+            if pos < 0 or pos >= n:
+                raise IndexError(f"Index position {pos} out of range [0, {n})")
+        
+        # Create new indices with dual (flipped direction + conjugated charges) at specified positions
+        indices_list = list(self.indices)
+        for pos in positions:
+            indices_list[pos] = indices_list[pos].dual()
+        self.indices = tuple(indices_list)
 
     # ------------------------------------------------------------
     #   itag manipulations: multiple modes of retagging
