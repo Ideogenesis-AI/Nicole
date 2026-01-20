@@ -562,9 +562,9 @@ class Tensor:
         Notes
         -----
         This operation uses Index.dual() to flip both the direction and conjugate
-        the charges, ensuring charge conservation is maintained. The tensor data
-        blocks are unchanged, but the index metadata (direction and charges) are
-        updated to reflect the flipped arrow convention.
+        the charges, ensuring charge conservation is maintained. Both the index
+        metadata and the block keys are updated to reflect the conjugated charges.
+        The tensor data arrays themselves remain unchanged.
         
         This differs from Index.flip() which only reverses direction without
         conjugating charges. For tensors, we need charge conjugation to maintain
@@ -588,11 +588,27 @@ class Tensor:
             if pos < 0 or pos >= n:
                 raise IndexError(f"Index position {pos} out of range [0, {n})")
         
+        # Get the symmetry group
+        if n == 0:
+            return  # Scalar tensor, nothing to flip
+        group = self.indices[0].group
+        
         # Create new indices with dual (flipped direction + conjugated charges) at specified positions
         indices_list = list(self.indices)
         for pos in positions:
             indices_list[pos] = indices_list[pos].dual()
         self.indices = tuple(indices_list)
+        
+        # Update block keys: conjugate charges at flipped positions
+        new_data = {}
+        for key, arr in self.data.items():
+            key_list = list(key)
+            for pos in positions:
+                key_list[pos] = group.dual(key_list[pos])
+            new_key = tuple(key_list)
+            new_data[new_key] = arr
+        self.data = new_data
+        self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------
     #   itag manipulations: multiple modes of retagging

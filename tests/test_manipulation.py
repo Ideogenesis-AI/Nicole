@@ -484,6 +484,59 @@ def test_flip_uses_dual():
     assert tensor.indices[0].charges() == (0, -1, 1)  # For U1, dual(q) = -q
 
 
+def test_flip_updates_block_keys():
+    """Test that flip updates block keys to reflect conjugated charges."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    original_keys = set(tensor.data.keys())
+    
+    # Store data arrays by their original keys
+    original_data_by_key = {k: v.copy() for k, v in tensor.data.items()}
+    
+    # Flip first index
+    tensor.flip(0)
+    
+    # Block keys should be updated: charge at position 0 should be conjugated
+    # For U1: dual(0) = 0, dual(1) = -1
+    expected_keys = set()
+    for old_key in original_keys:
+        new_key = (group.dual(old_key[0]), old_key[1])
+        expected_keys.add(new_key)
+    
+    assert set(tensor.data.keys()) == expected_keys
+    
+    # Verify that data arrays are still the same, just under new keys
+    for old_key, old_arr in original_data_by_key.items():
+        new_key = (group.dual(old_key[0]), old_key[1])
+        assert new_key in tensor.data
+        np.testing.assert_allclose(tensor.data[new_key], old_arr)
+
+
+def test_flip_multiple_indices_updates_keys():
+    """Test that flipping multiple indices updates all relevant positions in block keys."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    original_keys = set(tensor.data.keys())
+    
+    # Flip indices 0 and 2
+    tensor.flip([0, 2])
+    
+    # Block keys should be updated at positions 0 and 2
+    expected_keys = set()
+    for old_key in original_keys:
+        new_key = (group.dual(old_key[0]), old_key[1], group.dual(old_key[2]))
+        expected_keys.add(new_key)
+    
+    assert set(tensor.data.keys()) == expected_keys
+
+
 def test_flip_all_indices():
     """Test flipping all indices."""
     group = U1Group()
