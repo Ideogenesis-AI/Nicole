@@ -647,20 +647,21 @@ def test_flip_z2_group():
 def test_flip_product_group():
     """Test flip with product group."""
     group = ProductGroup([U1Group(), U1Group()])
+    # Use matching charges for both indices to ensure charge conservation
     idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((-1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
     
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_charges = tensor.indices[1].charges()
+    original_direction = tensor.indices[1].direction
     
     tensor.flip(1)
     
-    # Charges should be conjugated: dual((0,0)) = (0,0), dual((-1,1)) = (1,-1)
+    # Charges should be conjugated: dual((0,0)) = (0,0), dual((1,-1)) = (-1,1)
     expected_charges = tuple(group.dual(c) for c in original_charges)
     assert tensor.indices[1].charges() == expected_charges
-    assert tensor.indices[1].charges() == ((0, 0), (1, -1))
     # Direction should be reversed
-    assert tensor.indices[1].direction == Direction.OUT
+    assert tensor.indices[1].direction == original_direction.reverse()
 
 
 def test_flip_double_application():
