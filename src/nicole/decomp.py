@@ -29,12 +29,12 @@ svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
 
-decomp(T, axis, mode="SVD", flow="><", trunc=None)
+decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     High-level decomposition with three modes:
     - "UR": Returns (U, R) where R = S*Vh
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
     - "LV": Returns (L, V) where L = U*S
-    The flow parameter controls arrow directions. Default is "><" (both incoming).
+    The flow parameter controls arrow directions. The itag parameter customizes bond tags.
 """
 
 from typing import Dict, List, MutableMapping, Optional, Sequence, Tuple, Union
@@ -284,6 +284,7 @@ def decomp(
     axis: int | str,
     mode: str = "SVD",
     flow: str = "><",
+    itag: Optional[Union[str, Tuple[str, str]]] = None,
     trunc: Optional[Tuple[str, Union[int, float]]] = None
 ) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
     """Perform tensor decomposition with flexible output modes.
@@ -306,6 +307,11 @@ def decomp(
         - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
         Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
         This parameter uses tensor.flip() to adjust from the natural flow to the desired flow.
+    itag:
+        Index tag(s) for the bond dimension(s). Can be:
+        - None: Use default tags "_bond_L" and "_bond_R"
+        - str: Use same tag for both left and right bonds
+        - tuple[str, str]: Use (left_tag, right_tag) for left and right bonds respectively
     trunc:
         Truncation specification as a tuple (mode, value). If None, no truncation.
         - ("nkeep", n): Keep at most n singular values globally
@@ -357,6 +363,18 @@ def decomp(
     if flow not in (">>", "<<", "><"):
         raise ValueError(f"Invalid flow '{flow}'. Must be '>>', '<<', or '><'")
     
+    # Parse itag parameter
+    if itag is None:
+        bond_tag_left = "_bond_L"
+        bond_tag_right = "_bond_R"
+    elif isinstance(itag, str):
+        bond_tag_left = itag
+        bond_tag_right = itag
+    elif isinstance(itag, tuple) and len(itag) == 2:
+        bond_tag_left, bond_tag_right = itag
+    else:
+        raise ValueError("itag must be None, a string, or a tuple of two strings")
+    
     # Parse axis to get left_index (do this once to avoid duplication in svd)
     if isinstance(axis, str):
         matching_indices = [i for i, tag in enumerate(T.itags) if tag == axis]
@@ -379,6 +397,10 @@ def decomp(
     # Perform SVD to get U, singular values dict, and Vh (pass integer axis_idx)
     U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc)
     
+    # Update U and Vh bond tags to use custom tags
+    U.retag({U.itags[1]: bond_tag_left})
+    Vh.retag({Vh.itags[0]: bond_tag_right})
+    
     if mode == "SVD":
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
@@ -391,7 +413,7 @@ def decomp(
         # Natural S has indices matching the natural flow from svd
         S_tensor = Tensor(
             indices=(bond_index.flip(), bond_index),
-            itags=("_bond_L", "_bond_R"),
+            itags=(bond_tag_left, bond_tag_right),
             data=S_diag_blocks,
             dtype=np.result_type(T.dtype, float)
         )
@@ -448,7 +470,7 @@ def decomp(
                 R_blocks[key] = vh_block
         
         # Change bond tag to match U's bond tag for easier contraction
-        R_itags = ("_bond_L",) + Vh.itags[1:]
+        R_itags = (bond_tag_left,) + Vh.itags[1:]
         
         # R inherits Vh's bond index structure
         R_tensor = Tensor(
@@ -489,7 +511,7 @@ def decomp(
                 L_blocks[key] = u_block
         
         # Change bond tag to match Vh's bond tag for easier contraction
-        L_itags = (U.itags[0], "_bond_R")
+        L_itags = (U.itags[0], bond_tag_right)
         
         # L inherits U's bond index structure
         L_tensor = Tensor(

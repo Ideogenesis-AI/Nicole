@@ -1371,3 +1371,152 @@ def test_decomp_flow_charge_conservation():
             for tensor in result:
                 assert_charge_neutral(tensor)
 
+
+# Itag parameter tests
+
+def test_decomp_itag_svd_single_string():
+    """Test SVD mode with single string itag (both bonds use same tag)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=56)
+    
+    U, S, Vh = decomp(T, axis=0, mode="SVD", itag="bond")
+    
+    # Both U and Vh should have "bond" as their bond tag
+    assert U.itags[1] == "bond"
+    assert Vh.itags[0] == "bond"
+    assert S.itags[0] == "bond"
+    assert S.itags[1] == "bond"
+    
+    # Verify reconstruction (need explicit pairs since both bonds have same tag)
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_itag_svd_tuple():
+    """Test SVD mode with tuple itag (different tags for left and right)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=57)
+    
+    U, S, Vh = decomp(T, axis=0, mode="SVD", itag=("bond_u", "bond_vh"))
+    
+    # U should have "bond_u", Vh should have "bond_vh"
+    assert U.itags[1] == "bond_u"
+    assert Vh.itags[0] == "bond_vh"
+    assert S.itags[0] == "bond_u"
+    assert S.itags[1] == "bond_vh"
+    
+    # Verify reconstruction with integer pairs
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_itag_ur_mode():
+    """Test UR mode with custom itag."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=58)
+    
+    # Test with single string itag
+    U, R = decomp(T, axis=0, mode="UR", itag="k")
+    assert U.itags[1] == "k"
+    assert R.itags[0] == "k"
+    
+    # Verify reconstruction (explicit pairs needed since both have same tag)
+    reconstructed = contract(U, R, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+    
+    # Test with tuple itag
+    U2, R2 = decomp(T, axis=0, mode="UR", itag=("i", "j"))
+    assert U2.itags[1] == "i"
+    assert R2.itags[0] == "i"  # R uses left tag for bond
+    
+    # Verify reconstruction
+    reconstructed2 = contract(U2, R2, pairs=[(1, 0)])
+    rel_error2 = (T - reconstructed2).norm() / T.norm()
+    assert rel_error2 < 1e-12
+
+
+def test_decomp_itag_lv_mode():
+    """Test LV mode with custom itag."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=59)
+    
+    # Test with single string itag
+    L, V = decomp(T, axis=0, mode="LV", itag="m")
+    assert L.itags[1] == "m"
+    assert V.itags[0] == "m"
+    
+    # Verify reconstruction (explicit pairs needed since both have same tag)
+    reconstructed = contract(L, V, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+    
+    # Test with tuple itag
+    L2, V2 = decomp(T, axis=0, mode="LV", itag=("p", "q"))
+    assert L2.itags[1] == "q"  # L uses right tag for bond
+    assert V2.itags[0] == "q"
+    
+    # Verify reconstruction
+    reconstructed2 = contract(L2, V2, pairs=[(1, 0)])
+    rel_error2 = (T - reconstructed2).norm() / T.norm()
+    assert rel_error2 < 1e-12
+
+
+def test_decomp_itag_multiindex():
+    """Test itag parameter with multi-index tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c"], seed=60)
+    
+    # Test SVD mode with custom tags
+    # Decomposing on axis 1 ("b") separates "b" from "a" and "c"
+    U, S, Vh = decomp(T, axis=1, mode="SVD", itag=("left", "right"))
+    assert U.itags == ("b", "left")  # U has (separated_index, bond)
+    assert S.itags == ("left", "right")
+    assert Vh.itags == ("right", "a", "c")  # Vh has (bond, *rest)
+    
+    # Verify reconstruction with integer pairs
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    reconstructed.permute([1, 0, 2])  # Reorder (b, a, c) to (a, b, c)
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_itag_invalid():
+    """Test that invalid itag values raise errors."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=61)
+    
+    # Invalid itag: tuple with wrong length
+    with pytest.raises(ValueError, match="itag must be"):
+        decomp(T, axis=0, mode="SVD", itag=("a", "b", "c"))
+    
+    # Invalid itag: wrong type
+    with pytest.raises(ValueError, match="itag must be"):
+        decomp(T, axis=0, mode="SVD", itag=123)
+
