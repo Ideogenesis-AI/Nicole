@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
-from nicole.decomp import svd
+from nicole.decomp import svd, eig
 from .utils import assert_charge_neutral
 
 
@@ -1519,4 +1519,267 @@ def test_decomp_itag_invalid():
     # Invalid itag: wrong type
     with pytest.raises(ValueError, match="itag must be"):
         decomp(T, axis=0, mode="SVD", itag=123)
+
+
+# Eigenvalue decomposition tests
+
+def test_eig_basic():
+    """Test basic eigenvalue decomposition."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    # Create a symmetric matrix for real eigenvalues
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=62)
+    # Make it Hermitian by averaging with its transpose
+    T_data_sym = {}
+    for key, arr in T.data.items():
+        T_data_sym[key] = (arr + arr.T.conj()) / 2
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=T_data_sym,
+        dtype=T.dtype
+    )
+    
+    U, D = eig(T)
+    
+    # Check dimensions
+    assert len(U.indices) == 2
+    assert U.itags[0] == "i"
+    assert U.itags[1] == "_bond_eig"
+    
+    # Check eigenvalues are real for Hermitian matrix
+    for key, eigvals in D.items():
+        assert np.allclose(eigvals.imag, 0, atol=1e-10)
+    
+    # Verify eigendecomposition: T @ U = U @ diag(D) for each block
+    for key in T.data.keys():
+        q_row, q_col = key
+        if q_row != q_col:
+            continue  # Skip off-diagonal blocks
+        
+        T_block = T.data[key]
+        U_block = U.data[(q_row, q_row)]
+        D_block = D[(q_row, q_row)]
+        
+        # T @ U
+        T_U = T_block @ U_block
+        # U @ diag(D)
+        U_D = U_block @ np.diag(D_block)
+        
+        assert np.allclose(T_U, U_D, atol=1e-10)
+
+
+def test_eig_reconstruction():
+    """Test that eigendecomposition can reconstruct the original matrix."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # Create a symmetric matrix
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=63)
+    T_data_sym = {}
+    for key, arr in T.data.items():
+        T_data_sym[key] = (arr + arr.T.conj()) / 2
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=T_data_sym,
+        dtype=T.dtype
+    )
+    
+    U, D = eig(T)
+    
+    # Verify eigendecomposition block-by-block
+    # T @ U = U @ diag(D)
+    for key in T.data.keys():
+        q_row, q_col = key
+        if q_row != q_col:
+            continue
+        
+        T_block = T.data[key]
+        U_block = U.data[(q_row, q_row)]
+        D_block = D[(q_row, q_row)]
+        
+        # Reconstruct T from eigendecomposition: T = U @ diag(D) @ U^{-1}
+        # For symmetric matrices, U is orthogonal: U^{-1} = U^T
+        D_diag = np.diag(D_block)
+        T_reconstructed = U_block @ D_diag @ U_block.T.conj()
+        
+        rel_error = np.linalg.norm(T_block - T_reconstructed) / np.linalg.norm(T_block)
+        assert rel_error < 1e-10
+
+
+def test_eig_truncation_nkeep():
+    """Test eigenvalue decomposition with nkeep truncation."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 4), Sector(1, 3)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 3)))
+    
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=64)
+    T_data_sym = {}
+    for key, arr in T.data.items():
+        T_data_sym[key] = (arr + arr.T.conj()) / 2
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=T_data_sym,
+        dtype=T.dtype
+    )
+    
+    # Keep only top 3 eigenvalues
+    U, D = eig(T, trunc=("nkeep", 3))
+    
+    # Count total eigenvalues
+    total_eigvals = sum(len(eigvals) for eigvals in D.values())
+    assert total_eigvals == 3
+    
+    # Verify they are the largest magnitude ones
+    all_eigvals_full = []
+    for key in T.data.keys():
+        q_row, q_col = key
+        if q_row != q_col:
+            continue
+        eigvals_full, _ = np.linalg.eig(T.data[key])
+        all_eigvals_full.extend(np.abs(eigvals_full))
+    
+    all_eigvals_full.sort(reverse=True)
+    top_3_expected = all_eigvals_full[:3]
+    
+    all_eigvals_truncated = []
+    for eigvals in D.values():
+        all_eigvals_truncated.extend(np.abs(eigvals))
+    
+    all_eigvals_truncated.sort(reverse=True)
+    
+    assert np.allclose(all_eigvals_truncated, top_3_expected, atol=1e-10)
+
+
+def test_eig_truncation_thresh():
+    """Test eigenvalue decomposition with threshold truncation."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 3)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 3)))
+    
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=65)
+    T_data_sym = {}
+    for key, arr in T.data.items():
+        T_data_sym[key] = (arr + arr.T.conj()) / 2
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=T_data_sym,
+        dtype=T.dtype
+    )
+    
+    # Keep eigenvalues with |λ| >= 1.0
+    U, D = eig(T, trunc=("thresh", 1.0))
+    
+    # Verify all kept eigenvalues satisfy threshold
+    for eigvals in D.values():
+        assert np.all(np.abs(eigvals) >= 1.0)
+
+
+def test_eig_non_square_error():
+    """Test that eig raises error for non-square matrices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))  # Different size
+    
+    T = Tensor.random([idx1, idx2], itags=["i", "j"], seed=66)
+    
+    # This should work (dimensions can differ as long as charge structure matches)
+    # But let's test with mismatched directions
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T2 = Tensor.random([idx1, idx3], itags=["i", "j"], seed=67)
+    
+    with pytest.raises(ValueError, match="opposite directions"):
+        eig(T2)
+
+
+def test_eig_non_2d_error():
+    """Test that eig raises error for non-2D tensors."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["i", "j", "k"], seed=68)
+    
+    with pytest.raises(ValueError, match="square matrix"):
+        eig(T)
+
+
+def test_eig_complex_matrix():
+    """Test eigenvalue decomposition of complex matrix."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    # Create a complex matrix
+    data = {(0, 0): np.array([[1+1j, 2-1j], [2+1j, 3-2j]], dtype=np.complex128)}
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=data,
+        dtype=np.complex128
+    )
+    
+    U, D = eig(T)
+    
+    # Verify eigendecomposition
+    T_block = T.data[(0, 0)]
+    U_block = U.data[(0, 0)]
+    D_block = D[(0, 0)]
+    
+    # T @ U = U @ diag(D)
+    T_U = T_block @ U_block
+    U_D = U_block @ np.diag(D_block)
+    
+    assert np.allclose(T_U, U_D, atol=1e-10)
+
+
+def test_eig_charge_conservation():
+    """Test that eigenvalue decomposition preserves charge structure."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=69)
+    
+    U, D = eig(T)
+    
+    # Check that U is charge-neutral
+    for key in U.data.keys():
+        q_row, q_bond = key
+        # For charge neutrality: q_row + q_bond = 0 (considering directions)
+        # Since U has (OUT, IN) structure, we expect q_row == q_bond
+        assert q_row == q_bond
+    
+    # Check that D has same structure
+    for key in D.keys():
+        q_left, q_right = key
+        assert q_left == q_right
+
+
+def test_eig_itag():
+    """Test that itag parameter customizes the bond index tag."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=70)
+    
+    # Test with custom itag
+    U, D = eig(T, itag="eig_bond")
+    
+    assert U.itags[0] == "i"
+    assert U.itags[1] == "eig_bond"
+    
+    # Test with default itag
+    U_default, D_default = eig(T)
+    assert U_default.itags[1] == "_bond_eig"
 

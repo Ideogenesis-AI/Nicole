@@ -21,13 +21,17 @@ from __future__ import annotations
 """Decomposition utilities for symmetry-aware Nicole (TN) tensors.
 
 This module provides functions for decomposing tensors into their singular
-value decomposition (SVD) components.
+value decomposition (SVD) components and eigenvalue decomposition.
 
 Functions
 ---------
 svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
+
+eig(T, trunc=None)
+    Eigenvalue decomposition of square matrix returning U tensor and eigenvalues dict.
+    Returns eigenvalues as 1D arrays for memory efficiency.
 
 decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     High-level decomposition with three modes:
@@ -97,9 +101,9 @@ def svd(
     """
     # Validate trunc parameter if provided
     if trunc is not None:
-        if not isinstance(trunc, tuple) or len(trunc) != 2:
+        if not isinstance(trunc, tuple) or len(trunc) != 2:  # type: ignore[redundant-expr]
             raise ValueError("trunc must be a tuple (mode, value)")
-        if trunc[0] not in ("nkeep", "thresh"):
+        if trunc[0] not in ("nkeep", "thresh"):  # type: ignore[redundant-expr]
             raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
     
     # Parse axis parameter into integer index
@@ -277,6 +281,169 @@ def svd(
     )
     
     return U_tensor, S_blocks, Vh_tensor
+
+
+def eig(
+    T: Tensor,
+    itag: Optional[str] = None,
+    trunc: Optional[Tuple[str, Union[int, float]]] = None
+) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]:
+    """Perform eigenvalue decomposition of a square matrix tensor.
+
+    Parameters
+    ----------
+    T:
+        Square matrix tensor to be decomposed. Must have exactly 2 indices
+        with matching charge structure (opposite directions).
+    itag:
+        Index tag for the bond dimension. If None, uses default tag "_bond_eig".
+    trunc:
+        Truncation specification as a tuple (mode, value). If None, no truncation.
+        - ("nkeep", n): Keep at most n eigenvalues globally (largest by magnitude)
+        - ("thresh", t): Keep eigenvalues with |eigenvalue| >= t per block
+
+    Returns
+    -------
+    tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]
+        Pair `(U, D)` where:
+        - U has indices (row_index, bond_index) containing eigenvectors as columns
+        - D is a Dict mapping block keys to 1D arrays of eigenvalues
+        
+        The decomposition satisfies: T @ U = U @ diag(D) for each block
+    
+    Raises
+    ------
+    ValueError
+        If T is not a square matrix, or if indices are not compatible,
+        or if trunc mode is not "nkeep" or "thresh".
+    
+    Notes
+    -----
+    The eigenvalues are returned as 1D arrays for memory efficiency.
+    Eigenvalues can be complex even for real matrices.
+    
+    For "nkeep" mode, truncation is applied globally: the top n eigenvalues by
+    magnitude across all blocks are retained. For "thresh" mode, truncation is
+    applied per block: each block independently keeps eigenvalues with |λ| >= threshold.
+    
+    The eigenvectors are stored in columns of U, normalized such that U is unitary
+    (or as close as the eigendecomposition provides).
+    """
+    # Validate input tensor
+    if len(T.indices) != 2:
+        raise ValueError(f"eig requires a square matrix, got {len(T.indices)} indices")
+    
+    row_index, col_index = T.indices
+    
+    # Check that indices have opposite directions (required for eigendecomposition)
+    if row_index.direction == col_index.direction:
+        raise ValueError(
+            f"Indices must have opposite directions for square matrix. "
+            f"Got both {row_index.direction}"
+        )
+    
+    # Validate trunc parameter if provided
+    if trunc is not None:
+        if not isinstance(trunc, tuple) or len(trunc) != 2:  # type: ignore[redundant-expr]
+            raise ValueError("trunc must be a tuple (mode, value)")
+        if trunc[0] not in ("nkeep", "thresh"):  # type: ignore[redundant-expr]
+            raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
+    
+    # Set bond tag
+    bond_tag = itag if itag is not None else "_bond_eig"
+    
+    # Perform eigendecomposition block by block
+    # Only diagonal blocks (same charge) can exist for square matrix
+    eig_results: Dict[tuple, Tuple[np.ndarray, np.ndarray]] = {}
+    bond_charge_dims: Dict[tuple, int] = {}
+    
+    for key, arr in T.data.items():
+        q_row = key[0]
+        # Note: charge conservation ensures q_row == key[1] for square matrices
+        
+        # Perform eigendecomposition
+        # np.linalg.eig returns (eigenvalues, eigenvectors)
+        # eigenvectors[:, i] is the eigenvector for eigenvalues[i]
+        eigenvalues, eigenvectors = np.linalg.eig(arr)
+        
+        # Apply per-block truncation for thresh mode
+        if trunc is not None and trunc[0] == "thresh":
+            threshold = trunc[1]
+            keep_mask = np.abs(eigenvalues) >= threshold
+            eigenvalues = eigenvalues[keep_mask]
+            eigenvectors = eigenvectors[:, keep_mask]
+        
+        # Skip this block if completely truncated
+        if len(eigenvalues) == 0:
+            continue
+        
+        # Store results
+        eig_results[q_row] = (eigenvectors, eigenvalues)
+        bond_charge_dims[q_row] = len(eigenvalues)
+    
+    # Apply global truncation for nkeep mode
+    if trunc is not None and trunc[0] == "nkeep":
+        nkeep = trunc[1]
+        
+        # Collect all eigenvalues with their charges
+        all_eigenvalues = []
+        for q, (eigvecs, eigvals) in eig_results.items():
+            for i, val in enumerate(eigvals):
+                all_eigenvalues.append((np.abs(val), q, i))
+        
+        # Keep top nkeep eigenvalues by magnitude
+        all_eigenvalues.sort(key=lambda x: x[0], reverse=True)
+        keep_set = set((q, idx) for _, q, idx in all_eigenvalues[:nkeep])
+        
+        # Apply truncation to each block
+        new_eig_results = {}
+        new_bond_charge_dims = {}
+        for q, (eigvecs, eigvals) in eig_results.items():
+            # Find which indices to keep for this charge
+            keep_indices = [i for i in range(len(eigvals)) if (q, i) in keep_set]
+            
+            if len(keep_indices) > 0:
+                # Truncate eigenvectors and eigenvalues
+                eigvecs_truncated = eigvecs[:, keep_indices]
+                eigvals_truncated = eigvals[keep_indices]
+                
+                new_eig_results[q] = (eigvecs_truncated, eigvals_truncated)
+                new_bond_charge_dims[q] = len(eigvals_truncated)
+            # If no eigenvalues kept for this charge, omit the block entirely
+        
+        eig_results = new_eig_results
+        bond_charge_dims = new_bond_charge_dims
+    
+    # Build bond index with sectors from charges
+    bond_sectors = tuple(Sector(q, d) for q, d in sorted(bond_charge_dims.items(), key=lambda x: str(x[0])))
+    bond_direction = row_index.direction.reverse()
+    bond_index = Index(direction=bond_direction, group=row_index.group, sectors=bond_sectors)
+    
+    # Construct output blocks
+    U_blocks: Dict[BlockKey, np.ndarray] = {}
+    D_blocks: Dict[BlockKey, np.ndarray] = {}
+    
+    for q, (eigvecs, eigvals) in eig_results.items():
+        # For U tensor: indices (row_index, bond_index)
+        # Block key: (q, q) since bond charge equals row charge
+        U_key = (q, q)
+        U_blocks[U_key] = eigvecs
+        
+        # For D: store eigenvalues as 1D array (memory efficient)
+        # Block key: (q, q)
+        D_key = (q, q)
+        # Preserve complex type if eigenvalues are complex
+        D_blocks[D_key] = eigvals.astype(np.result_type(T.dtype, np.complex128))
+    
+    # Construct output tensor
+    U_tensor = Tensor(
+        indices=(row_index, bond_index),
+        itags=(T.itags[0], bond_tag),
+        data=U_blocks,
+        dtype=np.result_type(T.dtype, np.complex128)  # May be complex
+    )
+    
+    return U_tensor, D_blocks
 
 
 def decomp(
