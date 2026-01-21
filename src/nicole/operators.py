@@ -35,6 +35,9 @@ transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
 getsub(tensor, block_indices)
     Return a new tensor containing only the specified blocks.
+merge_axes(tensor, axes, merged_tag=None, direction=OUT)
+    Merge multiple tensor axes into one using isometry fusion, returning both
+    the merged tensor and conjugate isometry for potential unfusing.
 """
 
 from typing import Dict, Optional, Sequence, Tuple, Union
@@ -43,7 +46,7 @@ import numpy as np
 
 from .index import Index
 from .tensor import Tensor
-from .typing import Charge, Sector
+from .typing import Charge, Direction, Sector
 
 
 def conj(tensor: Tensor) -> Tensor:
@@ -442,4 +445,136 @@ def oplus(
         dtype=np.result_type(A.dtype, B.dtype),
         label=A.label
     )
+
+
+def merge_axes(
+    tensor: Tensor,
+    axes: Sequence[Union[int, str]],
+    *,
+    merged_tag: Optional[str] = None,
+    direction: Direction = Direction.OUT,
+) -> Tuple[Tensor, Tensor]:
+    """Merge multiple tensor axes into a single axis using isometry fusion.
+
+    This function creates an n-to-1 isometry that fuses the specified axes,
+    contracts it with the input tensor to perform the merging, and returns
+    both the merged tensor and the conjugate of the isometry (which can be
+    used to unfuse the axis later).
+
+    Parameters
+    ----------
+    tensor:
+        Input tensor whose axes should be merged.
+    axes:
+        Sequence of axes to merge. Each element can be either an integer
+        position (0-indexed) or a string itag. Must specify at least 2 axes.
+    merged_tag:
+        Optional tag for the merged axis in the result. If None, uses "_merged_".
+    direction:
+        Direction for the merged axis. Defaults to Direction.OUT.
+
+    Returns
+    -------
+    merged_tensor:
+        Tensor with the specified axes merged into a single axis. The merged
+        axis appears first, followed by the remaining unmerged axes in their
+        original order.
+    isometry_conj:
+        Conjugate of the isometry used for merging. Can be contracted with
+        the merged tensor to unfuse the axis back to the original indices.
+
+    Raises
+    ------
+    ValueError:
+        If fewer than 2 axes are specified, if axis specifications are invalid,
+        or if axes don't exist in the tensor.
+    TypeError:
+        If axis specifications are neither int nor str.
+
+    Examples
+    --------
+    Merge three axes of a tensor:
+
+    >>> tensor = Tensor.random([idx1, idx2, idx3, idx4], itags=['a', 'b', 'c', 'd'])
+    >>> merged, iso_conj = merge_axes(tensor, ['a', 'b', 'c'], merged_tag='abc')
+    >>> merged.itags  # Merged index 'abc' appears first
+    ('abc', 'd')
+
+    Merge using integer positions:
+
+    >>> merged, iso_conj = merge_axes(tensor, [0, 1, 2], merged_tag='merged')
+
+    Unfuse the merged axis (approximately recover original):
+
+    >>> from nicole import contract
+    >>> unmerged = contract(merged, iso_conj)  # Should match original structure
+
+    Notes
+    -----
+    - The merged axis will have direction opposite to what natural fusion produces
+      unless specified otherwise via the `direction` parameter
+    - The isometry conjugate has all its indices flipped, making it suitable for
+      contracting with the merged tensor to reverse the operation
+    - Axes are merged in the order they appear in the tensor, not the order
+      specified in the `axes` parameter
+    """
+    # Import here to avoid circular dependency
+    from .contract import contract
+    from .identity import isometry_n
+
+    # Validate input
+    if len(axes) < 2:
+        raise ValueError(f"Need at least 2 axes to merge, got {len(axes)}")
+
+    # Check for duplicates in input
+    if len(axes) != len(set(axes)):
+        raise ValueError("Duplicate axes specified - there are ambiguities in the provided itags")
+
+    # Convert axes to integer positions
+    positions = []
+    for ax in axes:
+        if isinstance(ax, int):
+            if ax < 0 or ax >= len(tensor.indices):
+                raise ValueError(
+                    f"Axis position {ax} out of range [0, {len(tensor.indices)})"
+                )
+            positions.append(ax)
+        elif isinstance(ax, str):
+            if ax not in tensor.itags:
+                raise ValueError(f"Axis tag '{ax}' not found in tensor tags {tensor.itags}")
+            positions.append(tensor.itags.index(ax))
+        else:
+            raise TypeError(f"Axis must be int or str, got {type(ax)}")
+
+
+    # Sort positions to maintain tensor axis order
+    sorted_positions = sorted(positions)
+
+    # Extract indices and tags to merge
+    indices_to_merge = [tensor.indices[i] for i in sorted_positions]
+    tags_to_merge = [tensor.itags[i] for i in sorted_positions]
+
+    # Determine merged tag
+    if merged_tag is None:
+        merged_tag = "_merged_"
+
+    # Create isometry for fusion
+    # The isometry will have opposite directions to enable contraction
+    iso = isometry_n(
+        indices_to_merge,
+        itags=tuple(tags_to_merge) + (merged_tag,),
+        direction=direction,
+        dtype=tensor.dtype,
+    )
+
+    # Contract isometry with tensor to merge axes
+    # The isometry indices are opposite to tensor indices, so they'll contract
+    # Order: iso first, tensor second -> merged index comes first
+    merged = contract(iso, tensor)
+
+    # Create conjugate of isometry for potential unfusing
+    # This flips all directions and conjugates data
+    iso_conj = conj(iso)
+
+    return merged, iso_conj
 
