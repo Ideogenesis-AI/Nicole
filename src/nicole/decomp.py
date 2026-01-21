@@ -25,15 +25,16 @@ value decomposition (SVD) components.
 
 Functions
 ---------
-svd(T, axis)
+svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
 
-decomp(T, axis, mode)
+decomp(T, axis, mode="SVD", flow="><", trunc=None)
     High-level decomposition with three modes:
     - "UR": Returns (U, R) where R = S*Vh
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
     - "LV": Returns (L, V) where L = U*S
+    The flow parameter controls arrow directions. Default is "><" (both incoming).
 """
 
 from typing import Dict, List, MutableMapping, Optional, Sequence, Tuple, Union
@@ -43,7 +44,7 @@ import numpy as np
 from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
-from .typing import Sector
+from .typing import Direction, Sector
 
 
 def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
@@ -282,6 +283,7 @@ def decomp(
     T: Tensor,
     axis: int | str,
     mode: str = "SVD",
+    flow: str = "><",
     trunc: Optional[Tuple[str, Union[int, float]]] = None
 ) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
     """Perform tensor decomposition with flexible output modes.
@@ -297,6 +299,13 @@ def decomp(
         - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
         - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
+    flow:
+        Arrow direction control. Default is "><" (both arrows incoming).
+        - For SVD mode: Controls S matrix arrow directions ("><", ">>", or "<<")
+        - For UR mode: Both ">>" and "><" normalize to ">>" (outward bonds); "<<" is also accepted
+        - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
+        Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
+        This parameter uses tensor.flip() to adjust from the natural flow to the desired flow.
     trunc:
         Truncation specification as a tuple (mode, value). If None, no truncation.
         - ("nkeep", n): Keep at most n singular values globally
@@ -312,7 +321,7 @@ def decomp(
     Raises
     ------
     ValueError
-        If mode is not one of "UR", "SVD", or "LV"
+        If mode is not one of "UR", "SVD", or "LV", or if flow is not ">>", "<<", or "><"
     
     Examples
     --------
@@ -344,8 +353,31 @@ def decomp(
     if mode not in ("UR", "SVD", "LV"):
         raise ValueError(f"Invalid mode '{mode}'. Must be 'UR', 'SVD', or 'LV'")
     
-    # Perform SVD to get U, singular values dict, and Vh
-    U, S_blocks, Vh = svd(T, axis, trunc=trunc)
+    # Validate flow parameter
+    if flow not in (">>", "<<", "><"):
+        raise ValueError(f"Invalid flow '{flow}'. Must be '>>', '<<', or '><'")
+    
+    # Parse axis to get left_index (do this once to avoid duplication in svd)
+    if isinstance(axis, str):
+        matching_indices = [i for i, tag in enumerate(T.itags) if tag == axis]
+        if len(matching_indices) == 0:
+            raise ValueError(f"Index tag '{axis}' not found in tensor")
+        elif len(matching_indices) > 1:
+            raise ValueError(
+                f"Ambiguous axis specification: index tag '{axis}' appears at "
+                f"multiple positions {matching_indices}. Please use integer index instead."
+            )
+        axis_idx = matching_indices[0]
+    else:
+        axis_idx = axis
+    
+    # Determine natural flow from svd based on left_index direction
+    left_index = T.indices[axis_idx]
+    # Natural flow is "<<" if left_index is OUT, ">>" if left_index is IN
+    natural_flow = "<<" if left_index.direction == Direction.OUT else ">>"
+    
+    # Perform SVD to get U, singular values dict, and Vh (pass integer axis_idx)
+    U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc)
     
     if mode == "SVD":
         # Construct full diagonal S tensor
@@ -356,12 +388,40 @@ def decomp(
             # Convert 1D singular values to diagonal matrix
             S_diag_blocks[key] = np.diag(s_array)
         
+        # Natural S has indices matching the natural flow from svd
         S_tensor = Tensor(
             indices=(bond_index.flip(), bond_index),
             itags=("_bond_L", "_bond_R"),
             data=S_diag_blocks,
             dtype=np.result_type(T.dtype, float)
         )
+        
+        # Apply tensor flip to convert from natural_flow to desired flow
+        # When we flip S, we must also flip the corresponding index in U or Vh
+        if natural_flow == ">>":
+            # Natural for S: (IN, OUT)
+            if flow == "><":
+                # Desired: (IN, IN) - flip S's right index and Vh's bond index
+                S_tensor.flip(1)
+                Vh.flip(0)
+            elif flow == "<<":
+                # Desired: (OUT, IN) - flip both S indices and both U's bond and Vh's bond
+                S_tensor.flip([0, 1])
+                U.flip(1)
+                Vh.flip(0)
+            # else flow == ">>": natural, no flip needed
+        else:  # natural_flow == "<<"
+            # Natural for S: (OUT, IN)
+            if flow == "><":
+                # Desired: (IN, IN) - flip S's left index and U's bond index
+                S_tensor.flip(0)
+                U.flip(1)
+            elif flow == ">>":
+                # Desired: (IN, OUT) - flip both S indices and both U's bond and Vh's bond
+                S_tensor.flip([0, 1])
+                U.flip(1)
+                Vh.flip(0)
+            # else flow == "<<": natural, no flip needed
         
         return U, S_tensor, Vh
     
@@ -390,12 +450,21 @@ def decomp(
         # Change bond tag to match U's bond tag for easier contraction
         R_itags = ("_bond_L",) + Vh.itags[1:]
         
+        # R inherits Vh's bond index structure
         R_tensor = Tensor(
             indices=Vh.indices,
             itags=R_itags,
             data=R_blocks,
             dtype=T.dtype
         )
+        
+        # For UR mode: normalize flow (both ">>" and "><" mean ">>")
+        normalized_flow = ">>" if flow in (">>", "><") else "<<"
+        
+        # Flip if normalized flow differs from natural flow
+        if normalized_flow != natural_flow:
+            U.flip(1)  # Flip U's bond index (position 1)
+            R_tensor.flip(0)  # Flip R's bond index (position 0)
         
         return U, R_tensor
     
@@ -422,11 +491,20 @@ def decomp(
         # Change bond tag to match Vh's bond tag for easier contraction
         L_itags = (U.itags[0], "_bond_R")
         
+        # L inherits U's bond index structure
         L_tensor = Tensor(
             indices=U.indices,
             itags=L_itags,
             data=L_blocks,
             dtype=T.dtype
         )
+        
+        # For LV mode: normalize flow (both "<<" and "><" mean "<<")
+        normalized_flow = "<<" if flow in ("<<", "><") else ">>"
+        
+        # Flip if normalized flow differs from natural flow
+        if normalized_flow != natural_flow:
+            L_tensor.flip(1)  # Flip L's bond index (position 1)
+            Vh.flip(0)  # Flip Vh's bond index (position 0)
         
         return L_tensor, Vh

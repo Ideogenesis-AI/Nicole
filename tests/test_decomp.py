@@ -210,21 +210,12 @@ def test_svd_index_directions():
 
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
 
+    # Test with default flow "><"
     U, S, Vh = decomp(T, axis=0, mode="SVD")
 
-    # Check index directions
-    left_dir = T.indices[0].direction
-    bond_dir = U.indices[1].direction
-    
-    # Bond should be reversed from left
-    assert bond_dir == left_dir.reverse(), "Bond index should be reversed from left"
-    
-    # S should have (bond.flip(), bond)
-    assert S.indices[0].direction == bond_dir.reverse(), "S first index should be bond.flip()"
-    assert S.indices[1].direction == bond_dir, "S second index should be bond"
-    
-    # Vh should have (bond.flip(), ...)
-    assert Vh.indices[0].direction == bond_dir.reverse(), "Vh first index should be bond.flip()"
+    # With corrected logic, default "><" gives both S indices IN
+    assert S.indices[0].direction == Direction.IN, "S first index should be IN for ><"
+    assert S.indices[1].direction == Direction.IN, "S second index should be IN for ><"
     
     # Verify contraction works
     S_Vh = contract(S, Vh)
@@ -1065,4 +1056,318 @@ def test_high_order_tensor_thresh_truncation():
     U_full = decomp(T, axis=0, mode="UR", trunc=("thresh", threshold))[0]
     assert len(U_full.indices) == 2
     assert U_full.indices[0].dim == 4  # Left index unchanged
+
+
+# Flow parameter tests
+
+def test_decomp_flow_svd_default():
+    """Test SVD mode with default flow ><."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
+    
+    # Default flow should be "><" (both arrows incoming)
+    U, S, Vh = decomp(T, axis=0, mode="SVD")
+
+    # Default "><" flow produces S with (IN, IN)
+    assert S.indices[0].direction == Direction.IN
+    assert S.indices[1].direction == Direction.IN
+    
+    # Verify reconstruction
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_svd_outward():
+    """Test SVD mode with flow >> (both arrows outward)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=43)
+    
+    U, S, Vh = decomp(T, axis=0, mode="SVD", flow=">>")
+    
+    # ">>" flow produces S with (IN, OUT)
+    assert S.indices[0].direction == Direction.IN
+    assert S.indices[1].direction == Direction.OUT
+    
+    # Verify reconstruction
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_svd_inward():
+    """Test SVD mode with flow << (both arrows inward)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=44)
+    
+    U, S, Vh = decomp(T, axis=0, mode="SVD", flow="<<")
+    
+    # "<<" flow produces S with (OUT, IN)
+    assert S.indices[0].direction == Direction.OUT
+    assert S.indices[1].direction == Direction.IN
+    
+    # Verify reconstruction
+    S_Vh = contract(S, Vh, pairs=[(1, 0)])
+    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_svd_with_in_index():
+    """Test SVD mode with left_index IN (natural flow is <<)."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=45)
+    
+    # Test all three flows - same results as OUT left_index
+    U_default, S_default, Vh_default = decomp(T, axis=0, mode="SVD")
+    assert S_default.indices[0].direction == Direction.IN
+    assert S_default.indices[1].direction == Direction.IN
+    
+    U_out, S_out, Vh_out = decomp(T, axis=0, mode="SVD", flow=">>")
+    assert S_out.indices[0].direction == Direction.IN
+    assert S_out.indices[1].direction == Direction.OUT
+    
+    U_in, S_in, Vh_in = decomp(T, axis=0, mode="SVD", flow="<<")
+    assert S_in.indices[0].direction == Direction.OUT
+    assert S_in.indices[1].direction == Direction.IN
+    
+    # All should reconstruct correctly
+    for U, S, Vh in [(U_default, S_default, Vh_default), 
+                      (U_out, S_out, Vh_out), 
+                      (U_in, S_in, Vh_in)]:
+        S_Vh = contract(S, Vh, pairs=[(1, 0)])
+        reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+        rel_error = (T - reconstructed).norm() / T.norm()
+        assert rel_error < 1e-12
+
+
+def test_decomp_flow_ur_mode_default():
+    """Test UR mode with default flow (should normalize to >>)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=46)
+    
+    # Default flow "><" should normalize to ">>" for UR mode
+    U, R = decomp(T, axis=0, mode="UR")
+    
+    # UR mode with "><" and ">>" both produce (OUT, IN) bonds
+    assert U.indices[1].direction == Direction.OUT
+    assert R.indices[0].direction == Direction.IN
+    
+    # Verify reconstruction
+    reconstructed = contract(U, R, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_ur_mode_explicit():
+    """Test UR mode with explicit flow values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=47)
+    
+    # Test with ">>" and "><" flow (both normalize to >> for UR mode)
+    U_out, R_out = decomp(T, axis=0, mode="UR", flow=">>")
+    assert U_out.indices[1].direction == Direction.OUT
+    assert R_out.indices[0].direction == Direction.IN
+    
+    # Test with "<<" flow (different from >>)
+    U_in, R_in = decomp(T, axis=0, mode="UR", flow="<<")
+    assert U_in.indices[1].direction == Direction.IN
+    assert R_in.indices[0].direction == Direction.OUT
+    
+    # Both should reconstruct correctly
+    recon_out = contract(U_out, R_out, pairs=[(1, 0)])
+    recon_in = contract(U_in, R_in, pairs=[(1, 0)])
+    
+    assert (T - recon_out).norm() / T.norm() < 1e-12
+    assert (T - recon_in).norm() / T.norm() < 1e-12
+
+
+def test_decomp_flow_ur_mode_in_index():
+    """Test UR mode with left_index IN (natural flow is <<)."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=48)
+    
+    # Default flow "><" normalizes to ">>" for UR mode
+    U, R = decomp(T, axis=0, mode="UR")
+    assert U.indices[1].direction == Direction.OUT
+    assert R.indices[0].direction == Direction.IN
+    
+    # Verify reconstruction
+    reconstructed = contract(U, R, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_lv_mode_default():
+    """Test LV mode with default flow (should normalize to <<)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=49)
+    
+    # Default flow "><" normalizes to "<<" for LV mode
+    L, V = decomp(T, axis=0, mode="LV")
+    
+    # LV mode with "><" and "<<" both produce (IN, OUT) bonds
+    assert L.indices[1].direction == Direction.IN
+    assert V.indices[0].direction == Direction.OUT
+    
+    # Verify reconstruction
+    reconstructed = contract(L, V, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_lv_mode_explicit():
+    """Test LV mode with explicit flow values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=50)
+    
+    # Test with "<<" and "><" flow (both normalize to << for LV mode)
+    L_in, V_in = decomp(T, axis=0, mode="LV", flow="<<")
+    assert L_in.indices[1].direction == Direction.IN
+    assert V_in.indices[0].direction == Direction.OUT
+    
+    # Test with ">>" flow (different from <<)
+    L_out, V_out = decomp(T, axis=0, mode="LV", flow=">>")
+    assert L_out.indices[1].direction == Direction.OUT
+    assert V_out.indices[0].direction == Direction.IN
+    
+    # Both should reconstruct correctly
+    recon_in = contract(L_in, V_in, pairs=[(1, 0)])
+    recon_out = contract(L_out, V_out, pairs=[(1, 0)])
+    
+    assert (T - recon_in).norm() / T.norm() < 1e-12
+    assert (T - recon_out).norm() / T.norm() < 1e-12
+
+
+def test_decomp_flow_lv_mode_in_index():
+    """Test LV mode with left_index IN (natural flow is <<)."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=51)
+    
+    # Default flow "><" normalizes to "<<"
+    L, V = decomp(T, axis=0, mode="LV")
+    assert L.indices[1].direction == Direction.IN
+    assert V.indices[0].direction == Direction.OUT
+    
+    # Verify reconstruction
+    reconstructed = contract(L, V, pairs=[(1, 0)])
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_decomp_flow_multiindex_svd():
+    """Test flow parameter with multi-index tensor in SVD mode."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c"], seed=52)
+    
+    # Test all three flows
+    for flow in ["><", ">>", "<<"]:
+        U, S, Vh = decomp(T, axis=0, mode="SVD", flow=flow)
+        
+        # Verify reconstruction
+        S_Vh = contract(S, Vh, pairs=[(1, 0)])
+        reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+        rel_error = (T - reconstructed).norm() / T.norm()
+        assert rel_error < 1e-12
+
+
+def test_decomp_flow_multiindex_ur_lv():
+    """Test flow parameter with multi-index tensor in UR and LV modes."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c"], seed=53)
+    
+    # Test UR mode with different flows
+    for flow in ["><", ">>", "<<"]:
+        U, R = decomp(T, axis=1, mode="UR", flow=flow)
+        reconstructed = contract(U, R, pairs=[(1, 0)])
+        # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
+        reconstructed.permute([1, 0, 2])
+        rel_error = (T - reconstructed).norm() / T.norm()
+        assert rel_error < 1e-12
+    
+    # Test LV mode with different flows
+    for flow in ["><", ">>", "<<"]:
+        L, V = decomp(T, axis=1, mode="LV", flow=flow)
+        reconstructed = contract(L, V, pairs=[(1, 0)])
+        # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
+        reconstructed.permute([1, 0, 2])
+        rel_error = (T - reconstructed).norm() / T.norm()
+        assert rel_error < 1e-12
+
+
+def test_decomp_flow_invalid():
+    """Test that invalid flow values raise errors."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=54)
+    
+    with pytest.raises(ValueError, match="Invalid flow"):
+        decomp(T, axis=0, mode="SVD", flow="<>")
+    
+    with pytest.raises(ValueError, match="Invalid flow"):
+        decomp(T, axis=0, mode="UR", flow="->")
+
+
+def test_decomp_flow_charge_conservation():
+    """Test that flow parameter preserves charge conservation."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=55)
+    
+    # Test all modes and flows preserve charge neutrality
+    for mode in ["SVD", "UR", "LV"]:
+        for flow in ["><", ">>", "<<"]:
+            result = decomp(T, axis=0, mode=mode, flow=flow)
+            
+            # Check charge neutrality of all output tensors
+            for tensor in result:
+                assert_charge_neutral(tensor)
 
