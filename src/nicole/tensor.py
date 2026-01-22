@@ -33,7 +33,7 @@ import numpy as np
 
 from .blocks import BlockKey, BlockSchema
 from .display import tensor_summary
-from .index import Index
+from .index import Index, union_indices
 from .typing import Direction, Sector
 from .symmetry.base import SymmetryGroup
 
@@ -426,8 +426,7 @@ class Tensor:
             raise ValueError("Cannot add/sub tensors with different order")
         if any((a.group != b.group) or (a.direction != b.direction) for a, b in zip(self.indices, other.indices)):
             raise ValueError("Indices groups and directions must match")
-        if any(a.sector_dim_map() != b.sector_dim_map() for a, b in zip(self.indices, other.indices)):
-            raise ValueError("Index sector structures must match")
+        
         return self, other
 
     def __add__(self, other: Tensor) -> Tensor:
@@ -442,6 +441,14 @@ class Tensor:
             )
         
         self._align_for_binary(other)
+        
+        # Union indices to include all sectors from both tensors
+        new_indices = tuple(
+            union_indices(idx_a, idx_b) 
+            for idx_a, idx_b in zip(self.indices, other.indices)
+        )
+        
+        # Perform addition on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, np.ndarray] = {}
         for k in keys:
@@ -453,8 +460,9 @@ class Tensor:
                 new_data[k] = (+a)
             else:
                 new_data[k] = a + b
+        
         return Tensor(
-            indices=self.indices,
+            indices=new_indices,
             itags=self.itags,
             data=new_data,
             dtype=np.result_type(self.dtype, other.dtype),
@@ -473,6 +481,14 @@ class Tensor:
             )
         
         self._align_for_binary(other)
+        
+        # Union indices to include all sectors from both tensors
+        new_indices = tuple(
+            union_indices(idx_a, idx_b) 
+            for idx_a, idx_b in zip(self.indices, other.indices)
+        )
+        
+        # Perform subtraction on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, np.ndarray] = {}
         for k in keys:
@@ -484,8 +500,9 @@ class Tensor:
                 new_data[k] = +a
             else:
                 new_data[k] = a - b
+        
         return Tensor(
-            indices=self.indices,
+            indices=new_indices,
             itags=self.itags,
             data=new_data,
             dtype=np.result_type(self.dtype, other.dtype),
