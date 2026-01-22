@@ -205,3 +205,66 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
     return tuple(parts)
 
 
+def union_indices(idx_a: Index, idx_b: Index) -> Index:
+    """Create an index containing the union of sectors from two indices.
+    
+    The two indices must have the same symmetry group and direction.
+    If a charge appears in both indices, it must have the same dimension.
+    
+    Parameters
+    ----------
+    idx_a : Index
+        First index
+    idx_b : Index
+        Second index
+    
+    Returns
+    -------
+    Index
+        New index containing all sectors from both inputs, sorted by charge
+    
+    Raises
+    ------
+    ValueError
+        If indices have different groups, directions, or overlapping sectors
+        with mismatched dimensions
+    
+    Examples
+    --------
+    >>> from nicole.symmetry import U1Group
+    >>> idx1 = Index(Direction.OUT, U1Group(), (Sector(0, 2), Sector(1, 2)))
+    >>> idx2 = Index(Direction.OUT, U1Group(), (Sector(0, 2), Sector(-1, 2)))
+    >>> idx_union = union_indices(idx1, idx2)
+    >>> [s.charge for s in idx_union.sectors]
+    [-1, 0, 1]
+    """
+    if idx_a.group != idx_b.group:
+        raise ValueError("Indices must have the same symmetry group")
+    if idx_a.direction != idx_b.direction:
+        raise ValueError("Indices must have the same direction")
+    
+    # Combine sectors: charge -> dim
+    sector_map = {}
+    for sector in idx_a.sectors:
+        sector_map[sector.charge] = sector.dim
+    
+    for sector in idx_b.sectors:
+        if sector.charge in sector_map:
+            # Charge appears in both - dimensions must match
+            if sector_map[sector.charge] != sector.dim:
+                raise ValueError(
+                    f"Sector with charge {sector.charge} has dimension "
+                    f"{sector_map[sector.charge]} in first index but {sector.dim} in second"
+                )
+        else:
+            sector_map[sector.charge] = sector.dim
+    
+    # Create new index with merged sectors, sorted by charge
+    merged_sectors = tuple(Sector(charge, dim) for charge, dim in sorted(sector_map.items()))
+    return Index(
+        direction=idx_a.direction,
+        group=idx_a.group,
+        sectors=merged_sectors
+    )
+
+
