@@ -25,6 +25,7 @@ from .index import Index, Sector
 from .operators import conj, permute, transpose
 from .operators import oplus, diag, inv
 from .operators import subsector, merge_axes
+from .space import load_space
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
@@ -53,6 +54,7 @@ __all__ = [
     "isometry_n",
     "subsector",
     "merge_axes",
+    "load_space",
 ]
 
 
