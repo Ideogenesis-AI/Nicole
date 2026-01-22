@@ -1002,10 +1002,10 @@ def test_insert_index_invalidates_sorted_keys():
 def test_merge_axes_basic():
     """Test basic merge_axes functionality with 3 axes."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 1)))
-    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(2, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 1), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 3), Sector(1, 1)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     
     T = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=['a', 'b', 'c', 'd'])
     
@@ -1023,12 +1023,13 @@ def test_merge_axes_basic():
 def test_merge_axes_with_int_positions():
     """Test merge_axes using integer axis positions."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 1), Sector(2, 1)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 1)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     
     # Use 4 indices to avoid 1-index tensor after merging
-    T = Tensor.random([idx1, idx2, idx3, idx1], seed=1, itags=['a', 'b', 'c', 'd'])
+    T = Tensor.random([idx1, idx2, idx3, idx4], seed=1, itags=['a', 'b', 'c', 'd'])
     
     merged, iso_conj = merge_axes(T, [0, 1, 2], merged_tag='merged')
     
@@ -1040,9 +1041,9 @@ def test_merge_axes_with_int_positions():
 def test_merge_axes_unfuse_with_conjugate():
     """Test that contracting with conjugate isometry unfuses the axis."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
-    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 1), Sector(2, 1)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(1, 1)))
     
     T = Tensor.random([idx1, idx2, idx3], seed=123, itags=['a', 'b', 'c'])
     
@@ -1073,9 +1074,9 @@ def test_merge_axes_unfuse_with_conjugate():
 def test_merge_axes_direction_parameter():
     """Test merge_axes with custom direction parameter."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
-    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 1), Sector(1, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     
     T = Tensor.random([idx1, idx2, idx3], seed=1, itags=['a', 'b', 'c'])
     
@@ -1095,7 +1096,7 @@ def test_merge_axes_direction_parameter():
 def test_merge_axes_too_few_axes_raises():
     """Test that merge_axes raises error with fewer than 2 axes."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip()], seed=1, itags=['a', 'b'])
     
     with pytest.raises(ValueError, match="at least 2 axes"):
@@ -1108,7 +1109,7 @@ def test_merge_axes_too_few_axes_raises():
 def test_merge_axes_invalid_tag_raises():
     """Test that merge_axes raises error for invalid tag."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip(), idx], seed=1, itags=['a', 'b', 'c'])
     
     with pytest.raises(ValueError, match="not found"):
@@ -1118,7 +1119,7 @@ def test_merge_axes_invalid_tag_raises():
 def test_merge_axes_invalid_position_raises():
     """Test that merge_axes raises error for invalid position."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip()], seed=1, itags=['a', 'b'])
     
     with pytest.raises(ValueError, match="out of range"):
@@ -1131,7 +1132,7 @@ def test_merge_axes_invalid_position_raises():
 def test_merge_axes_mixed_int_str():
     """Test merge_axes with mixed int and str specifications."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip(), idx, idx.flip()], seed=1, itags=['a', 'b', 'c', 'd'])
     
     merged, _ = merge_axes(T, [0, 'b', 2], merged_tag='abc')
@@ -1144,7 +1145,7 @@ def test_merge_axes_mixed_int_str():
 def test_merge_axes_duplicate_axes():
     """Test that merge_axes raises error for duplicate axis specifications."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip(), idx], seed=1, itags=['a', 'b', 'c'])
     
     # Specifying same axis twice should raise an error
@@ -1155,7 +1156,7 @@ def test_merge_axes_duplicate_axes():
 def test_merge_axes_default_merged_tag():
     """Test merge_axes with default merged tag."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 1)))
     T = Tensor.random([idx, idx.flip(), idx], seed=1, itags=['a', 'b', 'c'])
     
     merged, _ = merge_axes(T, [0, 1])
@@ -1179,14 +1180,17 @@ def test_merge_axes_z2_symmetry():
 
 
 def test_merge_axes_product_group():
-    """Test merge_axes with ProductGroup."""
+    """Test merge_axes with ProductGroup and validate unfusing."""
     u1 = U1Group()
     z2 = Z2Group()
     group = ProductGroup([u1, z2])
     
-    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 1)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((-1, 1), 2)))
-    idx3 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2),))
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector((-2, 0), 1), Sector((-1, 1), 2), Sector((0, 0), 2), Sector((1, 1), 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(
+        Sector((-1, 0), 1), Sector((0, 0), 1), Sector((1, 1), 2), Sector((2, 0), 1)))
+    idx3 = Index(Direction.IN, group, sectors=(
+        Sector((-1, 0), 1), Sector((0, 0), 2), Sector((1, 1), 1)))
     
     T = Tensor.random([idx1, idx2, idx3], seed=42, itags=['a', 'b', 'c'])
     
@@ -1194,12 +1198,29 @@ def test_merge_axes_product_group():
     
     assert len(merged.indices) == 2
     assert 'ab' in merged.itags
+    
+    # Validate unfusing restores original
+    unmerged = contract(merged, iso_conj)
+    
+    assert len(unmerged.indices) == 3
+    assert set(unmerged.itags) == {'a', 'b', 'c'}
+    
+    # Permute to match original order
+    tag_to_pos_original = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_unmerged = {tag: i for i, tag in enumerate(unmerged.itags)}
+    perm = [tag_to_pos_unmerged[tag] for tag in T.itags]
+    unmerged.permute(perm)
+    
+    # Verify data blocks match
+    assert set(T.data.keys()) == set(unmerged.data.keys())
+    for key in T.data.keys():
+        assert np.allclose(T.data[key], unmerged.data[key])
 
 
 def test_merge_axes_preserves_dtype():
     """Test that merge_axes preserves tensor dtype."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(1, 1)))
     
     # Test with complex dtype
     T = Tensor.random([idx, idx.flip(), idx], seed=1, dtype=np.complex128, itags=['a', 'b', 'c'])
