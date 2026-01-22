@@ -1,4 +1,4 @@
-# Copyright (C) 2025 Changkai Zhang.
+# Copyright (C) 2025-2026 Changkai Zhang.
 #
 # This file is part of Nicole (TN) library.
 #
@@ -85,7 +85,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     tensor:
         The input tensor to permute.
     order:
-        Sequence of axis indices specifying the new ordering. Must be a
+        Sequence of integer axes specifying the new ordering. Must be a
         permutation of range(len(tensor.indices)).
     
     Returns
@@ -101,7 +101,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     Examples
     --------
     >>> from nicole import permute, Tensor
-    >>> # Assuming t is a 3-index tensor with indices [a, b, c]
+    >>> # Assuming t is a 3-index tensor with itags [a, b, c]
     >>> t_perm = permute(t, [2, 0, 1])  # Reorder to [c, a, b]
     """
     if sorted(order) != list(range(len(tensor.indices))):
@@ -126,7 +126,7 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     tensor:
         The input tensor to transpose.
     *order:
-        Optional axis indices specifying the new ordering. If not provided,
+        Optional integer axes specifying the new ordering. If not provided,
         defaults to reversing the axis order.
     
     Returns
@@ -137,9 +137,9 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     Examples
     --------
     >>> from nicole import transpose, Tensor
-    >>> # Assuming t is a 3-index tensor with indices [a, b, c]
+    >>> # Assuming t is a 3-index tensor with itags [a, b, c]
     >>> t_T = transpose(t)  # Reverse order to [c, b, a]
-    >>> t_T2 = transpose(t, 1, 0, 2)  # Swap first two indices to [b, a, c]
+    >>> t_T2 = transpose(t, 1, 0, 2)  # Swap first two to [b, a, c]
     """
     if not order:
         order = tuple(reversed(range(len(tensor.indices))))

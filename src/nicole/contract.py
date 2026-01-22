@@ -1,4 +1,4 @@
-# Copyright (C) 2025 Changkai Zhang.
+# Copyright (C) 2025-2026 Changkai Zhang.
 #
 # This file is part of Nicole (TN) library.
 #
@@ -61,7 +61,7 @@ def contract(
     A, B:
         Input tensors to be contracted.
     pairs:
-        Optional sequence of integer index pairs (axis in `A`, axis in `B`) to contract.
+        Optional sequence of axis pairs (axis in `A`, axis in `B`) to contract.
         If None, automatically contracts all indices where itags match and directions
         are opposite. If provided, validates that each pair has matching itags and
         opposite directions.
@@ -188,9 +188,9 @@ def contract(
         for ia, ib in axes:
             # Check bounds
             if ia < 0 or ia >= len(A.indices):
-                raise ValueError(f"Index {ia} out of range for tensor A")
+                raise ValueError(f"Index position (axis) {ia} out of range for tensor A")
             if ib < 0 or ib >= len(B.indices):
-                raise ValueError(f"Index {ib} out of range for tensor B")
+                raise ValueError(f"Index position (axis) {ib} out of range for tensor B")
             
             # Check matching itags
             if A.itags[ia] != B.itags[ib]:
@@ -313,7 +313,7 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
 
     Examples
     --------
-    >>> # Trace over indices 0 and 1 of a 3-index tensor
+    >>> # Trace over indices at position 0 and 1 of a 3-index tensor
     >>> result = trace(T, pairs=[(0, 1)])
     >>> 
     >>> # Trace over multiple pairs using itag names
@@ -387,7 +387,7 @@ def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
     T:
         Tensor to be traced.
     axes:
-        Flat sequence of indices to trace over. Must have even length. Indices
+        Flat sequence of axes to trace over. Must have even length. Axes
         are paired sequentially: first with second, third with fourth, etc.
         Can be integer axis positions or string itag names.
 
@@ -406,7 +406,7 @@ def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
 
     Examples
     --------
-    >>> # Trace indices 0 with 1, and 2 with 3
+    >>> # Trace indices at position 0 with 1, and 2 with 3
     >>> result = partial_trace(T, axes=[0, 1, 2, 3])
     >>> # Equivalent to: trace(T, pairs=[(0, 1), (2, 3)])
     >>>

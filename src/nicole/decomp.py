@@ -1,4 +1,4 @@
-# Copyright (C) 2025 Changkai Zhang.
+# Copyright (C) 2025-2026 Changkai Zhang.
 #
 # This file is part of Nicole (TN) library.
 #
@@ -52,7 +52,7 @@ from .typing import Direction, Sector
 
 
 def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
-    """Translate index tags into positional axis indices."""
+    """Translate itags into integer axes."""
     # Build a lookup once to avoid repeated linear searches.
     name_to_axis = {tag: i for i, tag in enumerate(itags)}
     return [name_to_axis[n] for n in names]
@@ -70,7 +70,7 @@ def svd(
     T:
         Tensor to be decomposed.
     axis:
-        Index to separate from all others. Can be an integer position or index tag.
+        Axis to separate from all others. Can be an integer axis or itag.
         This axis forms the left partition, all others form the right partition.
     trunc:
         Truncation specification as a tuple (mode, value). If None, no truncation.
@@ -106,18 +106,18 @@ def svd(
         if trunc[0] not in ("nkeep", "thresh"):  # type: ignore[redundant-expr]
             raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
     
-    # Parse axis parameter into integer index
+    # Parse itags to integer axes
     if isinstance(axis, str):
         # Check for ambiguity: ensure the itag appears exactly once
-        matching_indices = [i for i, tag in enumerate(T.itags) if tag == axis]
-        if len(matching_indices) == 0:
-            raise ValueError(f"Index tag '{axis}' not found in tensor")
-        elif len(matching_indices) > 1:
+        matching_axes = [i for i, tag in enumerate(T.itags) if tag == axis]
+        if len(matching_axes) == 0:
+            raise ValueError(f"itag '{axis}' not found in tensor")
+        elif len(matching_axes) > 1:
             raise ValueError(
-                f"Ambiguous axis specification: index tag '{axis}' appears at "
-                f"multiple positions {matching_indices}. Please use integer index instead."
+                f"Ambiguous axis specification: itag '{axis}' appears at "
+                f"multiple positions {matching_axes}. Please use integer axis instead."
             )
-        axis_idx = matching_indices[0]
+        axis_idx = matching_axes[0]
     else:
         axis_idx = axis
         if axis_idx < 0 or axis_idx >= len(T.indices):
@@ -589,15 +589,15 @@ def decomp(
     
     # Parse axis to get left_index (do this once to avoid duplication in svd)
     if isinstance(axis, str):
-        matching_indices = [i for i, tag in enumerate(T.itags) if tag == axis]
-        if len(matching_indices) == 0:
-            raise ValueError(f"Index tag '{axis}' not found in tensor")
-        elif len(matching_indices) > 1:
+        matching_axes = [i for i, tag in enumerate(T.itags) if tag == axis]
+        if len(matching_axes) == 0:
+            raise ValueError(f"itag '{axis}' not found in tensor")
+        elif len(matching_axes) > 1:
             raise ValueError(
-                f"Ambiguous axis specification: index tag '{axis}' appears at "
-                f"multiple positions {matching_indices}. Please use integer index instead."
+                f"Ambiguous axis specification: itag '{axis}' appears at "
+                f"multiple positions {matching_axes}. Please use integer axis instead."
             )
-        axis_idx = matching_indices[0]
+        axis_idx = matching_axes[0]
     else:
         axis_idx = axis
     
