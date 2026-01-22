@@ -114,7 +114,7 @@ def test_addition_requires_matching_structure():
     idx_b_mismatch = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     tensor_mismatch = Tensor.random([idx_a, idx_b_mismatch], seed=9, itags=["A", "B"])
 
-    with pytest.raises(ValueError, match="sector structures must match"):
+    with pytest.raises(ValueError, match="Sector with charge .* has dimension"):
         _ = tensor + tensor_mismatch
 
 
@@ -443,4 +443,166 @@ def test_product_group_scalar_multiplication():
         expected = scalar * A.data[key]
         np.testing.assert_allclose(B.data[key], expected)
         np.testing.assert_allclose(C.data[key], expected)
+
+
+def test_addition_non_overlapping_sectors():
+    """Test addition of tensors with completely non-overlapping sectors."""
+    group = U1Group()
+    
+    # Tensor A has sectors [0, 1]
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor(
+        indices=[idx_a, idx_a.flip()],
+        itags=["i", "j"],
+        data={
+            (0, 0): np.array([[1.0, 2.0], [3.0, 4.0]]),
+            (1, 1): np.array([[5.0, 6.0], [7.0, 8.0]])
+        }
+    )
+    
+    # Tensor B has sectors [0, -1] (only 0 overlaps)
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    B = Tensor(
+        indices=[idx_b, idx_b.flip()],
+        itags=["i", "j"],
+        data={
+            (0, 0): np.array([[10.0, 20.0], [30.0, 40.0]]),
+            (-1, -1): np.array([[50.0, 60.0], [70.0, 80.0]])
+        }
+    )
+    
+    # Add them
+    C = A + B
+    
+    # Result should have all blocks
+    assert set(C.data.keys()) == {(0, 0), (1, 1), (-1, -1)}
+    
+    # Check overlapping block (0, 0) was added
+    expected_00 = np.array([[11.0, 22.0], [33.0, 44.0]])
+    assert np.allclose(C.data[(0, 0)], expected_00)
+    
+    # Check non-overlapping blocks preserved
+    assert np.allclose(C.data[(1, 1)], A.data[(1, 1)])
+    assert np.allclose(C.data[(-1, -1)], B.data[(-1, -1)])
+    
+    # Check result indices contain union of sectors
+    result_charges = [s.charge for s in C.indices[0].sectors]
+    assert sorted(result_charges) == [-1, 0, 1]
+
+
+def test_subtraction_non_overlapping_sectors():
+    """Test subtraction of tensors with non-overlapping sectors."""
+    group = U1Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    A = Tensor(
+        indices=[idx_a, idx_a.flip()],
+        itags=["i", "j"],
+        data={
+            (0, 0): np.array([[1.0, 2.0], [3.0, 4.0]]),
+            (1, 1): np.array([[5.0, 6.0, 7.0], [8.0, 9.0, 10.0], [11.0, 12.0, 13.0]])
+        }
+    )
+    
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 1)))
+    B = Tensor(
+        indices=[idx_b, idx_b.flip()],
+        itags=["i", "j"],
+        data={
+            (0, 0): np.array([[0.5, 1.0], [1.5, 2.0]]),
+            (-1, -1): np.array([[100.0]])
+        }
+    )
+    
+    # Subtract
+    C = A - B
+    
+    # Result should have all blocks
+    assert set(C.data.keys()) == {(0, 0), (1, 1), (-1, -1)}
+    
+    # Check overlapping block
+    expected_00 = np.array([[0.5, 1.0], [1.5, 2.0]])
+    assert np.allclose(C.data[(0, 0)], expected_00)
+    
+    # Check A's exclusive block preserved
+    assert np.allclose(C.data[(1, 1)], A.data[(1, 1)])
+    
+    # Check B's exclusive block negated
+    assert np.allclose(C.data[(-1, -1)], -B.data[(-1, -1)])
+
+
+def test_addition_partially_overlapping_sectors():
+    """Test addition where some sectors overlap and some don't."""
+    group = U1Group()
+    
+    # A has sectors [-1, 0, 1]
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(-1, 2), Sector(0, 2), Sector(1, 2)
+    ))
+    A = Tensor(
+        indices=[idx_a, idx_a.flip()],
+        itags=["i", "j"],
+        data={
+            (-1, -1): np.ones((2, 2)),
+            (0, 0): np.ones((2, 2)) * 2,
+            (1, 1): np.ones((2, 2)) * 3
+        }
+    )
+    
+    # B has sectors [0, 1, 2] (overlaps at 0 and 1)
+    idx_b = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(2, 3)
+    ))
+    B = Tensor(
+        indices=[idx_b, idx_b.flip()],
+        itags=["i", "j"],
+        data={
+            (0, 0): np.ones((2, 2)) * 10,
+            (1, 1): np.ones((2, 2)) * 20,
+            (2, 2): np.ones((3, 3)) * 30
+        }
+    )
+    
+    C = A + B
+    
+    # Result should have all sectors [-1, 0, 1, 2]
+    assert set(C.data.keys()) == {(-1, -1), (0, 0), (1, 1), (2, 2)}
+    
+    # Check exclusive blocks
+    assert np.allclose(C.data[(-1, -1)], np.ones((2, 2)))
+    assert np.allclose(C.data[(2, 2)], np.ones((3, 3)) * 30)
+    
+    # Check overlapping blocks
+    assert np.allclose(C.data[(0, 0)], np.ones((2, 2)) * 12)  # 2 + 10
+    assert np.allclose(C.data[(1, 1)], np.ones((2, 2)) * 23)  # 3 + 20
+
+
+def test_addition_empty_blocks():
+    """Test addition where one tensor has no blocks in certain charges."""
+    group = U1Group()
+    
+    # A has only charge 0
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor(
+        indices=[idx_a, idx_a.flip()],
+        itags=["i", "j"],
+        data={(0, 0): np.ones((2, 2))}
+        # Note: block (1, 1) is missing (implicitly zero)
+    )
+    
+    # B has only charge 1
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    B = Tensor(
+        indices=[idx_b, idx_b.flip()],
+        itags=["i", "j"],
+        data={(1, 1): np.ones((2, 2)) * 5}
+        # Note: block (0, 0) is missing (implicitly zero)
+    )
+    
+    C = A + B
+    
+    # Result should have both blocks
+    assert set(C.data.keys()) == {(0, 0), (1, 1)}
+    assert np.allclose(C.data[(0, 0)], np.ones((2, 2)))
+    assert np.allclose(C.data[(1, 1)], np.ones((2, 2)) * 5)
 
