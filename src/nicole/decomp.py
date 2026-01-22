@@ -448,7 +448,7 @@ def eig(
 
 def decomp(
     T: Tensor,
-    axis: int | str,
+    axis: Union[int, str, Sequence[Union[int, str]]],
     mode: str = "SVD",
     flow: str = "><",
     itag: Optional[Union[str, Tuple[str, str]]] = None,
@@ -461,7 +461,9 @@ def decomp(
     T:
         Tensor to be decomposed.
     axis:
-        Index to separate from all others. Can be integer position or index tag.
+        Index or indices to separate from all others. Can be:
+        - Single integer position or string tag
+        - Sequence of integer positions or string tags (merges multiple axes first)
     mode:
         Decomposition mode:
         - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
@@ -520,7 +522,50 @@ def decomp(
     - UR and LV modes are more memory and computationally efficient than SVD mode
     - SVD mode constructs a full diagonal matrix tensor for S
     - All modes produce mathematically equivalent decompositions
+    - When multiple axes are specified, they are first merged using an n-to-1 isometry,
+      decomposed, and then the U tensor is unmerged back to the original axes
     """
+    # Import merge_axes here to avoid circular dependency
+    from .operators import merge_axes
+    from .contract import contract
+    
+    # Check if axis is a sequence (multiple axes)
+    is_multi_axis = isinstance(axis, (list, tuple))
+    
+    if is_multi_axis:
+        # Multiple axes: merge, decompose, unmerge
+        axes = axis
+        if len(axes) < 2:
+            raise ValueError("When providing a sequence of axes, must specify at least 2 axes")
+        
+        # Merge the specified axes
+        merged_T, iso_conj = merge_axes(T, axes, merged_tag="_decomp_merged_")
+        
+        # The merged index is now at position 0 (merge_axes places it first)
+        # Decompose on the merged axis
+        result = decomp(
+            merged_T,
+            axis=0,  # Merged index is at position 0
+            mode=mode,
+            flow=flow,
+            itag=itag,
+            trunc=trunc
+        )
+        
+        # Unmerge the U tensor (first element of result)
+        if mode == "SVD":
+            U, S, Vh = result
+            # Unmerge U by contracting with conjugate isometry
+            U_unmerged = contract(U, iso_conj)
+            return U_unmerged, S, Vh
+        else:  # mode == "UR" or "LV"
+            first, second = result
+            # For UR mode, first is U; for LV mode, first is L
+            # Both have the merged index at position 0
+            first_unmerged = contract(first, iso_conj)
+            return first_unmerged, second
+    
+    # Single axis: original behavior
     # Validate mode
     mode = mode.upper()
     if mode not in ("UR", "SVD", "LV"):

@@ -21,7 +21,8 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, conj, permute, transpose, merge_axes, contract
+from nicole import Direction, Index, Sector, Tensor
+from nicole import conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group
 
 
