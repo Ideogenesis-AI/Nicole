@@ -20,9 +20,10 @@
 
 from .contract import contract, partial_trace, trace
 from .decomp import decomp
-from .identity import identity, isometry
+from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
-from .operators import conj, getsub, oplus, permute, transpose
+from .operators import conj, permute, transpose
+from .operators import getsub, oplus, merge_axes
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
@@ -43,8 +44,10 @@ __all__ = [
     "decomp",
     "identity",
     "isometry",
+    "isometry_n",
     "conj",
     "getsub",
+    "merge_axes",
     "oplus",
     "permute",
     "transpose",

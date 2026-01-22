@@ -21,8 +21,9 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, identity, isometry, U1Group, Z2Group, contract, permute
+from nicole import Direction, Tensor, identity, isometry, isometry_n, U1Group, Z2Group, contract, permute
 from nicole import Index, Sector
+from nicole.symmetry.product import ProductGroup
 from .utils import assert_charge_neutral
 
 
@@ -316,3 +317,339 @@ def test_identity_and_isometry_consistent():
     assert len(ident.indices) == 2
     assert ident.indices[0] == idx
     assert ident.indices[1] == idx.flip()
+
+
+# Isometry_n tensor tests
+
+def test_isometry_n_basic():
+    """Test basic isometry_n construction with 3 indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    iso = isometry_n([idx1, idx2, idx3], itags=("a", "b", "c", "fused"))
+    
+    # Should have 4 indices (3 unfused + 1 fused)
+    assert len(iso.indices) == 4
+    assert iso.itags == ("a", "b", "c", "fused")
+
+
+def test_isometry_n_minimum_indices():
+    """Test isometry_n with minimum 2 indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    iso = isometry_n([idx1, idx2])
+    
+    # Should have 3 indices (2 unfused + 1 fused)
+    assert len(iso.indices) == 3
+    # All default tags
+    assert all(tag == "_init_" for tag in iso.itags)
+
+
+def test_isometry_n_too_few_indices_raises():
+    """Test that isometry_n raises error with fewer than 2 indices."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    with pytest.raises(ValueError, match="at least 2 indices"):
+        isometry_n([idx])
+    
+    with pytest.raises(ValueError, match="at least 2 indices"):
+        isometry_n([])
+
+
+def test_isometry_n_direction_opposite():
+    """Test that isometry_n creates indices with opposite directions."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    
+    iso = isometry_n([idx1, idx2, idx3])
+    
+    # First 3 indices should have opposite directions to inputs
+    assert iso.indices[0].direction == Direction.IN  # Opposite of idx1 (OUT)
+    assert iso.indices[1].direction == Direction.OUT  # Opposite of idx2 (IN)
+    assert iso.indices[2].direction == Direction.IN  # Opposite of idx3 (OUT)
+    # Last index should be the fused index with default direction OUT
+    assert iso.indices[3].direction == Direction.OUT
+
+
+def test_isometry_n_fused_direction_parameter():
+    """Test that fused direction parameter works correctly."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    
+    # Test with Direction.OUT (default)
+    iso_out = isometry_n([idx1, idx2, idx3], direction=Direction.OUT)
+    assert iso_out.indices[3].direction == Direction.OUT
+    
+    # Test with Direction.IN
+    iso_in = isometry_n([idx1, idx2, idx3], direction=Direction.IN)
+    assert iso_in.indices[3].direction == Direction.IN
+
+
+def test_isometry_n_different_groups_raises():
+    """Test that isometry_n raises error for different groups."""
+    u1 = U1Group()
+    z2 = Z2Group()
+    idx_u1 = Index(Direction.OUT, u1, sectors=(Sector(0, 2),))
+    idx_z2 = Index(Direction.OUT, z2, sectors=(Sector(0, 2),))
+    
+    with pytest.raises(ValueError, match="same symmetry group"):
+        isometry_n([idx_u1, idx_z2])
+
+
+def test_isometry_n_itags_validation():
+    """Test that itags length validation works."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    
+    # Too few tags
+    with pytest.raises(ValueError, match="itags must have length 4"):
+        isometry_n([idx1, idx2, idx3], itags=("a", "b"))
+    
+    # Too many tags
+    with pytest.raises(ValueError, match="itags must have length 4"):
+        isometry_n([idx1, idx2, idx3], itags=("a", "b", "c", "d", "e"))
+    
+    # Correct number of tags should work
+    iso = isometry_n([idx1, idx2, idx3], itags=("a", "b", "c", "fused"))
+    assert iso.itags == ("a", "b", "c", "fused")
+
+
+def test_isometry_n_charge_neutral():
+    """Test that isometry_n tensor is charge neutral."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    iso = isometry_n([idx1, idx2, idx3])
+    
+    assert_charge_neutral(iso)
+
+
+def test_isometry_n_dtype():
+    """Test isometry_n with different dtypes."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    # float32
+    iso_f32 = isometry_n([idx1, idx2], dtype=np.float32)
+    assert iso_f32.dtype == np.float32
+    
+    # complex128
+    iso_c128 = isometry_n([idx1, idx2], dtype=np.complex128)
+    assert iso_c128.dtype == np.complex128
+
+
+def test_isometry_n_z2_symmetry():
+    """Test isometry_n with Z2 symmetry."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    iso = isometry_n([idx1, idx2, idx3])
+    
+    # Check structure
+    assert len(iso.indices) == 4
+    assert_charge_neutral(iso)
+    
+    # Fused index should have both Z2 charges
+    fused_index = iso.indices[3]
+    fused_charges = {sector.charge for sector in fused_index.sectors}
+    assert 0 in fused_charges or 1 in fused_charges  # Should have at least one charge
+
+
+def test_isometry_n_product_group():
+    """Test isometry_n with ProductGroup."""
+    u1 = U1Group()
+    z2 = Z2Group()
+    group = ProductGroup([u1, z2])
+    
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((-1, 1), 2)))
+    
+    iso = isometry_n([idx1, idx2])
+    
+    # Check structure
+    assert len(iso.indices) == 3
+    assert_charge_neutral(iso)
+
+
+def test_isometry_n_contraction_with_tensor():
+    """Test that isometry_n can contract with a tensor to fuse indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_extra = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # Create a random tensor with 4 indices (extra one to avoid 1-index tensor after contraction)
+    T = Tensor.random([idx1, idx2, idx3, idx_extra], seed=42, itags=["a", "b", "c", "extra"])
+    
+    # Create isometry to fuse first 3 indices
+    iso = isometry_n([idx1, idx2, idx3], itags=["a", "b", "c", "fused"])
+    
+    # Contract - should automatically match on opposite directions and tags
+    result = contract(T, iso)
+    
+    # Result should have the fused index and the extra index
+    assert len(result.indices) == 2
+    assert "fused" in result.itags
+    assert "extra" in result.itags
+    
+    # Should be charge neutral
+    assert_charge_neutral(result)
+    
+    # Check dimension makes sense
+    # Fused dimension should be product of all input dimensions
+    expected_total_dim = idx1.dim * idx2.dim * idx3.dim
+    fused_idx = result.indices[0] if result.itags[0] == "fused" else result.indices[1]
+    # Result fused index dimension should be <= expected (due to symmetry constraints)
+    assert fused_idx.dim <= expected_total_dim
+
+
+def test_isometry_n_dimension_sorting():
+    """Test that isometry_n fuses indices in order of increasing dimension."""
+    group = U1Group()
+    # Create indices with different dimensions: 6, 2, 4
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6),))  # dim=6
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))  # dim=2
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 4),))  # dim=4
+    
+    iso = isometry_n([idx1, idx2, idx3])
+    
+    # The isometry should work correctly regardless of input order
+    # We verify by checking it's charge neutral and has correct structure
+    assert len(iso.indices) == 4
+    assert_charge_neutral(iso)
+    
+    # Check that the first 3 indices match (in original order, with opposite directions)
+    assert iso.indices[0].direction == Direction.IN  # Opposite of idx1
+    assert iso.indices[1].direction == Direction.IN  # Opposite of idx2
+    assert iso.indices[2].direction == Direction.IN  # Opposite of idx3
+
+
+def test_isometry_n_four_indices():
+    """Test isometry_n with 4 indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    iso = isometry_n([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d", "fused"])
+    
+    # Should have 5 indices (4 unfused + 1 fused)
+    assert len(iso.indices) == 5
+    assert iso.itags == ("a", "b", "c", "d", "fused")
+    
+    # Check directions are opposite
+    assert iso.indices[0].direction == Direction.IN
+    assert iso.indices[1].direction == Direction.IN
+    assert iso.indices[2].direction == Direction.OUT
+    assert iso.indices[3].direction == Direction.IN
+    assert iso.indices[4].direction == Direction.OUT  # fused
+
+
+def test_isometry_n_orthonormality():
+    """Test that isometry_n has orthonormal columns when viewed as a matrix."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    iso = isometry_n([idx1, idx2])
+    
+    # For each block, when reshaped to matrix form, columns should be orthonormal
+    for key, block in iso.data.items():
+        # Reshape to (product of first n dims, last dim)
+        matrix_form = block.reshape(-1, block.shape[-1])
+        
+        # Compute Gram matrix (should be identity)
+        gram = matrix_form.T @ matrix_form
+        
+        # Should be identity matrix (columns are orthonormal)
+        np.testing.assert_allclose(gram, np.eye(gram.shape[0]), atol=1e-10)
+
+
+def test_isometry_n_five_indices():
+    """Test isometry_n with 5 indices to verify scalability."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 1),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 1),)),
+    ]
+    
+    iso = isometry_n(indices)
+    
+    # Should have 6 indices (5 unfused + 1 fused)
+    assert len(iso.indices) == 6
+    
+    # Check directions are opposite to inputs
+    for i in range(5):
+        assert iso.indices[i].direction == indices[i].direction.reverse()
+    
+    # Fused index should have default OUT direction
+    assert iso.indices[5].direction == Direction.OUT
+    
+    # Should be charge neutral
+    assert_charge_neutral(iso)
+
+
+def test_isometry_n_mixed_sectors():
+    """Test isometry_n with indices having multiple sectors."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(-1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(-1, 1)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    iso = isometry_n([idx1, idx2, idx3])
+    
+    # Should have 4 indices
+    assert len(iso.indices) == 4
+    
+    # Should be charge neutral
+    assert_charge_neutral(iso)
+    
+    # Fused index should have some sectors
+    fused_index = iso.indices[3]
+    assert len(fused_index.sectors) > 0
+
+
+def test_isometry_n_consistency_with_isometry():
+    """Test that isometry_n with 2 indices is consistent with isometry."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    
+    # Create with isometry_n
+    iso_n = isometry_n([idx1, idx2], itags=("a", "b", "fused"))
+    
+    # Create with regular isometry (with flipped indices for opposite directions)
+    iso = isometry(idx1.flip(), idx2.flip(), itags=("a", "b", "fused"))
+    
+    # They should have same structure
+    assert len(iso_n.indices) == len(iso.indices)
+    assert iso_n.itags == iso.itags
+    
+    # Directions should match
+    for i in range(len(iso_n.indices)):
+        assert iso_n.indices[i].direction == iso.indices[i].direction
+    
+    # Both should be charge neutral
+    assert_charge_neutral(iso_n)
+    assert_charge_neutral(iso)

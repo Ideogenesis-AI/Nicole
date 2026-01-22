@@ -1783,3 +1783,206 @@ def test_eig_itag():
     U_default, D_default = eig(T)
     assert U_default.itags[1] == "_bond_eig"
 
+
+# Multi-axis decomposition tests
+
+def test_decomp_multi_axis_svd():
+    """Test decomp with multiple axes in SVD mode."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=['a', 'b', 'c', 'd'])
+    
+    # Decompose on multiple axes
+    U, S, Vh = decomp(T, axis=['a', 'b', 'c'], mode='SVD')
+    
+    # U should have the 3 original axes plus bond
+    assert len(U.indices) == 4
+    assert set(['a', 'b', 'c']).issubset(set(U.itags))
+    
+    # Vh should have bond and remaining axis
+    assert len(Vh.indices) == 2
+    assert 'd' in Vh.itags
+    
+    # S should have 2 indices
+    assert len(S.indices) == 2
+    
+    # Check charge neutrality
+    assert_charge_neutral(U)
+    assert_charge_neutral(S)
+    assert_charge_neutral(Vh)
+
+
+def test_decomp_multi_axis_ur():
+    """Test decomp with multiple axes in UR mode."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2, idx3], seed=1, itags=['a', 'b', 'c'])
+    
+    # Decompose first two axes
+    U, R = decomp(T, axis=[0, 1], mode='UR')
+    
+    # U should have 2 original axes plus bond
+    assert len(U.indices) == 3
+    assert 'a' in U.itags and 'b' in U.itags
+    
+    # R should have bond and remaining axis
+    assert len(R.indices) == 2
+    assert 'c' in R.itags
+    
+    # Verify reconstruction
+    reconstructed = contract(U, R)
+    assert set(reconstructed.itags) == {'a', 'b', 'c'}
+
+
+def test_decomp_multi_axis_lv():
+    """Test decomp with multiple axes in LV mode."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2, idx3, idx4], seed=2, itags=['a', 'b', 'c', 'd'])
+    
+    # Decompose on 3 axes
+    L, V = decomp(T, axis=['a', 'b', 'c'], mode='LV')
+    
+    # L should have 3 original axes plus bond
+    assert len(L.indices) == 4
+    assert set(['a', 'b', 'c']).issubset(set(L.itags))
+    
+    # V should have bond and remaining axis
+    assert len(V.indices) == 2
+    assert 'd' in V.itags
+
+
+def test_decomp_multi_axis_by_positions():
+    """Test decomp with multiple axes specified by integer positions."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx, idx.flip(), idx, idx.flip()], seed=3, itags=['a', 'b', 'c', 'd'])
+    
+    # Decompose using positions
+    U, S, Vh = decomp(T, axis=[0, 2], mode='SVD')
+    
+    # U should have positions 0, 2 plus bond
+    assert len(U.indices) == 3
+    assert 'a' in U.itags and 'c' in U.itags
+    
+    # Vh should have bond and positions 1, 3
+    assert len(Vh.indices) == 3
+    assert 'b' in Vh.itags and 'd' in Vh.itags
+
+
+def test_decomp_multi_axis_reconstruction():
+    """Test that multi-axis decomposition can reconstruct the original tensor."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx1, idx2, idx3], seed=123, itags=['a', 'b', 'c'])
+    
+    # Decompose
+    U, R = decomp(T, axis=['a', 'b'], mode='UR')
+    
+    # Reconstruct
+    reconstructed = contract(U, R)
+    
+    # Should have same indices
+    assert len(reconstructed.indices) == 3
+    assert set(reconstructed.itags) == {'a', 'b', 'c'}
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Data should match (up to numerical precision)
+    for key in T.data.keys():
+        if key in reconstructed.data:
+            np.testing.assert_allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+
+
+def test_decomp_multi_axis_too_few_raises():
+    """Test that decomp raises error when sequence has fewer than 2 axes."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    T = Tensor.random([idx, idx.flip()], seed=1, itags=['a', 'b'])
+    
+    with pytest.raises(ValueError, match="at least 2 axes"):
+        decomp(T, axis=['a'], mode='SVD')
+
+
+def test_decomp_single_axis_unchanged():
+    """Test that single-axis behavior is unchanged."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    
+    T = Tensor.random([idx1, idx2], seed=50, itags=['a', 'b'])
+    
+    # Single axis by tag
+    U1, S1, Vh1 = decomp(T, axis='a', mode='SVD')
+    assert len(U1.indices) == 2
+    assert 'a' in U1.itags
+    
+    # Single axis by position
+    U2, S2, Vh2 = decomp(T, axis=0, mode='SVD')
+    assert len(U2.indices) == 2
+    assert 'a' in U2.itags
+
+
+def test_decomp_multi_axis_with_flow():
+    """Test multi-axis decomp with different flow parameters."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx, idx.flip(), idx, idx.flip()], seed=4, itags=['a', 'b', 'c', 'd'])
+    
+    # Test different flows
+    for flow in ["><", ">>", "<<"]:
+        U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', flow=flow)
+        assert len(U.indices) == 3
+        assert len(S.indices) == 2
+        assert len(Vh.indices) == 3
+
+
+def test_decomp_multi_axis_with_itag():
+    """Test multi-axis decomp with custom bond tags."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    T = Tensor.random([idx, idx.flip(), idx], seed=5, itags=['a', 'b', 'c'])
+    
+    # Custom bond tag
+    U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', itag='custom_bond')
+    
+    assert 'custom_bond' in U.itags
+    assert 'custom_bond' in S.itags
+    assert 'custom_bond' in Vh.itags
+
+
+def test_decomp_multi_axis_with_truncation():
+    """Test multi-axis decomp with truncation."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    T = Tensor.random([idx, idx.flip(), idx], seed=6, itags=['a', 'b', 'c'])
+    
+    # Decompose with truncation
+    U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', trunc=('nkeep', 2))
+    
+    # Should still have correct structure
+    assert len(U.indices) == 3
+    assert 'a' in U.itags and 'b' in U.itags
+
