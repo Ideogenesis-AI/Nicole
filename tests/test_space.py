@@ -430,9 +430,9 @@ class TestFermionBasic:
         assert Spc.dim == 2
         assert len(Spc.sectors) == 2
         
-        # Check sectors: |0⟩ (charge 0) and |1⟩ (charge 1)
+        # Check sectors: |0⟩ (charge -1) and |1⟩ (charge 1) - half-filling at 0
         charges = [s.charge for s in Spc.sectors]
-        assert charges == [0, 1]
+        assert charges == [-1, 1]
         for sector in Spc.sectors:
             assert sector.dim == 1
         
@@ -486,15 +486,15 @@ class TestFermionOperatorStructure:
         assert F.indices[1].direction == Direction.OUT
         assert F.indices[2].direction == Direction.OUT
         
-        # Auxiliary index should have single sector with charge -1
+        # Auxiliary index should have single sector with charge -2
         aux_idx = F.indices[2]
         assert len(aux_idx.sectors) == 1
-        assert aux_idx.sectors[0].charge == -1
+        assert aux_idx.sectors[0].charge == -2
         assert aux_idx.sectors[0].dim == 1
         
         # Should have single block: |1⟩ → |0⟩
         assert len(F.data) == 1
-        assert (0, 1, -1) in F.data
+        assert (-1, 1, -2) in F.data
     
     def test_f_structure_z2(self):
         """Test F (annihilation) operator structure with Z2."""
@@ -555,12 +555,12 @@ class TestFermionChargeConservation:
         Spc, Op = load_space("Ferm", "U1")
         F = Op["F"]
         
-        # Charge conservation: -q_out + q_in + q_aux = 0
+        # Charge conservation with directions (IN, OUT, OUT): (+1)*q₀ + (-1)*q₁ + (-1)*q₂ = 0
         for (q_out, q_in, q_aux), block in F.data.items():
-            assert -q_out + q_in + q_aux == 0
-            # F should annihilate: q_out = q_in - 1
-            assert q_out == q_in - 1
-            assert q_aux == -1
+            assert (+1)*q_out + (-1)*q_in + (-1)*q_aux == 0
+            # F should annihilate: q_out = q_in - 2 (from charge 1 to -1)
+            assert q_out == q_in - 2
+            assert q_aux == -2
     
     def test_f_charge_conservation_z2(self):
         """Test F charge conservation with Z2."""
@@ -579,9 +579,9 @@ class TestFermionChargeConservation:
         Spc, Op = load_space("Ferm", "U1")
         Z = Op["Z"]
         
-        # Charge conservation: -q_out + q_in = 0
+        # Charge conservation with directions (IN, OUT): (+1)*q₀ + (-1)*q₁ = 0
         for (q_out, q_in), block in Z.data.items():
-            assert -q_out + q_in == 0
+            assert (+1)*q_out + (-1)*q_in == 0
             assert q_out == q_in
     
     def test_z_charge_conservation_z2(self):
@@ -604,7 +604,7 @@ class TestFermionMatrixElements:
         F = Op["F"]
         
         # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
-        key = (0, 1, -1)
+        key = (-1, 1, -2)
         assert key in F.data
         assert np.isclose(F.data[key][0, 0, 0], 1.0)
     
@@ -623,11 +623,11 @@ class TestFermionMatrixElements:
         Spc, Op = load_space("Ferm", "U1")
         Z = Op["Z"]
         
-        # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1
-        assert (0, 0) in Z.data
-        assert np.isclose(Z.data[(0, 0)][0, 0], 1.0)
+        # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1 (charge -1)
+        assert (-1, -1) in Z.data
+        assert np.isclose(Z.data[(-1, -1)][0, 0], 1.0)
         
-        # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1
+        # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1 (charge 1)
         assert (1, 1) in Z.data
         assert np.isclose(Z.data[(1, 1)][0, 0], -1.0)
     
@@ -674,7 +674,7 @@ class TestFermionErrorHandling:
         aux_u1 = Op_u1["F"].indices[2]
         aux_z2 = Op_z2["F"].indices[2]
         
-        assert aux_u1.sectors[0].charge == -1  # U1
+        assert aux_u1.sectors[0].charge == -2  # U1
         assert aux_z2.sectors[0].charge == 1   # Z2
 
 
@@ -725,9 +725,9 @@ class TestBandBasic:
         assert Spc.dim == 4
         assert len(Spc.sectors) == 4
         
-        # Check sectors: |0⟩, |↓⟩, |↑⟩, |↑↓⟩
+        # Check sectors: |0⟩, |↓⟩, |↑⟩, |↑↓⟩ - half-filling at charge 0
         charges = [s.charge for s in Spc.sectors]
-        assert charges == [(0, 0), (1, -1), (1, 1), (2, 0)]
+        assert charges == [(-1, 0), (0, -1), (0, 1), (1, 0)]
         for sector in Spc.sectors:
             assert sector.dim == 1
         
@@ -840,10 +840,10 @@ class TestBandChargeConservation:
         F_up = Op["F_up"]
         
         for (q_out, q_in, q_aux), block in F_up.data.items():
-            # Charge conservation: -q_out + q_in + q_aux = 0
-            assert -q_out[0] + q_in[0] + q_aux[0] == 0  # Particle number
-            assert -q_out[1] + q_in[1] + q_aux[1] == 0  # Spin
-            # Should remove one particle and decrease spin by 1
+            # Charge conservation with directions (IN, OUT, OUT): (+1)*q₀ + (-1)*q₁ + (-1)*q₂ = 0
+            assert (+1)*q_out[0] + (-1)*q_in[0] + (-1)*q_aux[0] == 0  # Particle number
+            assert (+1)*q_out[1] + (-1)*q_in[1] + (-1)*q_aux[1] == 0  # Spin
+            # Charge changes: (0,1)→(-1,0), (1,0)→(0,-1) - both remove one particle and spin-up
             assert q_out[0] == q_in[0] - 1
             assert q_out[1] == q_in[1] - 1
     
@@ -853,9 +853,9 @@ class TestBandChargeConservation:
         F_dn = Op["F_dn"]
         
         for (q_out, q_in, q_aux), block in F_dn.data.items():
-            assert -q_out[0] + q_in[0] + q_aux[0] == 0
-            assert -q_out[1] + q_in[1] + q_aux[1] == 0
-            # Should remove one particle and increase spin by 1
+            assert (+1)*q_out[0] + (-1)*q_in[0] + (-1)*q_aux[0] == 0
+            assert (+1)*q_out[1] + (-1)*q_in[1] + (-1)*q_aux[1] == 0
+            # Charge changes: (0,-1)→(-1,0), (1,0)→(0,1) - both remove one particle and spin-down
             assert q_out[0] == q_in[0] - 1
             assert q_out[1] == q_in[1] + 1
     
@@ -884,13 +884,13 @@ class TestBandMatrixElements:
         Spc, Op = load_space("Band", "U1, U1")
         F_up = Op["F_up"]
         
-        # F_up|↑⟩ = |0⟩
-        key1 = ((0, 0), (1, 1), (-1, -1))
+        # F_up|↑⟩ = |0⟩: (0,1) → (-1,0)
+        key1 = ((-1, 0), (0, 1), (-1, -1))
         assert key1 in F_up.data
         assert np.isclose(F_up.data[key1][0, 0, 0], 1.0)
         
-        # F_up|↑↓⟩ = |↓⟩
-        key2 = ((1, -1), (2, 0), (-1, -1))
+        # F_up|↑↓⟩ = |↓⟩: (1,0) → (0,-1)
+        key2 = ((0, -1), (1, 0), (-1, -1))
         assert key2 in F_up.data
         assert np.isclose(F_up.data[key2][0, 0, 0], 1.0)
     
@@ -899,13 +899,13 @@ class TestBandMatrixElements:
         Spc, Op = load_space("Band", "U1, U1")
         F_dn = Op["F_dn"]
         
-        # F_dn|↓⟩ = |0⟩
-        key1 = ((0, 0), (1, -1), (-1, 1))
+        # F_dn|↓⟩ = |0⟩: (0,-1) → (-1,0)
+        key1 = ((-1, 0), (0, -1), (-1, 1))
         assert key1 in F_dn.data
         assert np.isclose(F_dn.data[key1][0, 0, 0], 1.0)
         
-        # F_dn|↑↓⟩ = -|↑⟩ (minus sign from anticommutation)
-        key2 = ((1, 1), (2, 0), (-1, 1))
+        # F_dn|↑↓⟩ = -|↑⟩ (minus sign from anticommutation): (1,0) → (0,1)
+        key2 = ((0, 1), (1, 0), (-1, 1))
         assert key2 in F_dn.data
         assert np.isclose(F_dn.data[key2][0, 0, 0], -1.0)
     
@@ -921,10 +921,10 @@ class TestBandMatrixElements:
                 eigenvalues[q_in] = block[0, 0]
         
         # Check expected values
-        assert np.isclose(eigenvalues[(0, 0)], 0.0)    # |0⟩
-        assert np.isclose(eigenvalues[(1, -1)], -0.5)  # |↓⟩
-        assert np.isclose(eigenvalues[(1, 1)], 0.5)    # |↑⟩
-        assert np.isclose(eigenvalues[(2, 0)], 0.0)    # |↑↓⟩
+        assert np.isclose(eigenvalues[(-1, 0)], 0.0)   # |0⟩
+        assert np.isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
+        assert np.isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
+        assert np.isclose(eigenvalues[(1, 0)], 0.0)    # |↑↓⟩
     
     def test_spin_ladder_operators(self):
         """Test spin ladder operator matrix elements."""
@@ -932,13 +932,13 @@ class TestBandMatrixElements:
         Sp = Op["Sp"]
         Sm = Op["Sm"]
         
-        # Sp|↓⟩ = |↑⟩
-        key_p = ((1, 1), (1, -1), (0, 2))
+        # Sp|↓⟩ = |↑⟩: (0,-1) → (0,1)
+        key_p = ((0, 1), (0, -1), (0, 2))
         assert key_p in Sp.data
         assert np.isclose(Sp.data[key_p][0, 0, 0], 1.0)
         
-        # Sm|↑⟩ = |↓⟩
-        key_m = ((1, -1), (1, 1), (0, -2))
+        # Sm|↑⟩ = |↓⟩: (0,1) → (0,-1)
+        key_m = ((0, -1), (0, 1), (0, -2))
         assert key_m in Sm.data
         assert np.isclose(Sm.data[key_m][0, 0, 0], 1.0)
 
