@@ -24,6 +24,7 @@ import numpy as np
 from .index import Index, Direction, Sector
 from .tensor import Tensor
 from .symmetry import U1Group, Z2Group
+from .symmetry import ProductGroup
 
 
 def load_space(
@@ -36,13 +37,19 @@ def load_space(
     Parameters
     ----------
     preset : str
-        System preset: "Spin" for bosonic spin systems, "Ferm" for fermionic systems
+        System preset: "Spin" for bosonic spin systems, "Ferm" for spinless fermions,
+        "Band" for spinful fermions in conduction band
     preserv : str
-        Symmetry to preserve: "U1" for U(1) charge conservation, "Z2" for Z2 parity
+        Symmetry to preserve:
+        - "U1" for U(1) charge conservation
+        - "Z2" for Z2 parity
+        - "Z2,U1" for Z2 parity + U1 spin (Band only)
+        - "U1,U1" for U1 particle number + U1 spin (Band only)
     option : dict, optional
         Additional options specific to the system:
         - For "Spin": {"J": float} where J is the total spin (half-integer)
         - For "Ferm": No options required for spinless fermions
+        - For "Band": No options required for spinful fermions
     
     Returns
     -------
@@ -55,10 +62,18 @@ def load_space(
         - Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
         - Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
         - vac: Index representing trivial vacuum space with charge 0
-        For fermionic systems: {"F", "Z", "vac"}
+        For spinless fermion systems: {"F", "Z", "vac"}
         - F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
         - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral
         - vac: Index representing trivial vacuum space with charge 0
+        For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
+        - F_up: 3-index tensor (IN, OUT, auxiliary) - spin-up annihilation operator
+        - F_dn: 3-index tensor (IN, OUT, auxiliary) - spin-down annihilation operator
+        - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string
+        - Sz: 2-index tensor (IN, OUT) - spin z-component
+        - Sp: 3-index tensor (IN, OUT, auxiliary) - spin raising operator
+        - Sm: 3-index tensor (IN, OUT, auxiliary) - spin lowering operator
+        - vac: Index representing trivial vacuum space
     
     Raises
     ------
@@ -85,6 +100,13 @@ def load_space(
     2
     >>> list(Op.keys())
     ['F', 'Z', 'vac']
+    
+    >>> # Create spinful fermion system with U(1)xU(1) symmetry
+    >>> Spc, Op = load_space("Band", "U1,U1")
+    >>> Spc.dim  # 4 states: |0⟩, |↑⟩, |↓⟩, |↑↓⟩
+    4
+    >>> list(Op.keys())
+    ['F_up', 'F_dn', 'Z', 'Sz', 'Sp', 'Sm', 'vac']
     """
     if option is None:
         option = {}
@@ -93,8 +115,10 @@ def load_space(
         return _load_spin_space(preserv, option)
     elif preset == "Ferm":
         return _load_ferm_space(preserv, option)
+    elif preset == "Band":
+        return _load_band_space(preserv, option)
     else:
-        raise ValueError(f"Unsupported system preset '{preset}'. Supported types: 'Spin', 'Ferm'.")
+        raise ValueError(f"Unsupported system preset '{preset}'. Supported types: 'Spin', 'Ferm', 'Band'.")
 
 
 def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
@@ -426,6 +450,338 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         direction=Direction.IN,
         group=group,
         sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
+    
+    return Spc, Op
+
+
+def _load_band_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinful fermion (Band) space and operators.
+    
+    Parameters
+    ----------
+    preserv : str
+        Symmetry to preserve: "U1,U1" or "Z2,U1"
+    option : dict
+        Options (none required for Band systems)
+    
+    Returns
+    -------
+    Spc : Index
+        Physical space index for spinful fermion (4 states: empty, up, down, doubly occupied)
+    Op : dict[str, Tensor | Index]
+        Fermionic and spin operators {F_up, F_dn, Z, Sz, Sp, Sm, vac}
+    """
+    # Normalize: remove spaces for comparison
+    preserv_normalized = preserv.replace(" ", "")
+    
+    if preserv_normalized == "U1,U1":
+        return _load_band_u1u1(option)
+    elif preserv_normalized == "Z2,U1":
+        return _load_band_z2u1(option)
+    else:
+        raise ValueError(f"Unsupported symmetry '{preserv}' for Band. Supported: 'U1, U1', 'Z2, U1'.")
+
+
+def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinful fermion space with U(1)xU(1) symmetry (particle number, spin).
+    
+    States:
+    - |0⟩: empty, charge = (0, 0)
+    - |↑⟩: spin-up, charge = (1, 1)  [2*Sz = 1]
+    - |↓⟩: spin-down, charge = (1, -1)  [2*Sz = -1]
+    - |↑↓⟩: doubly occupied, charge = (2, 0)
+    """
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    # Create physical space: four sectors
+    # Order: |0⟩, |↓⟩, |↑⟩, |↑↓⟩ (sorted by charge for consistency)
+    sectors = [
+        Sector(charge=(0, 0), dim=1),    # |0⟩: empty
+        Sector(charge=(1, -1), dim=1),   # |↓⟩: spin-down
+        Sector(charge=(1, 1), dim=1),    # |↑⟩: spin-up
+        Sector(charge=(2, 0), dim=1),    # |↑↓⟩: doubly occupied
+    ]
+    
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=tuple(sectors)
+    )
+    
+    Op = {}
+    
+    # Build F_up operator (annihilates spin-up electron)
+    # F_up|↑⟩ = |0⟩, F_up|↑↓⟩ = |↓⟩
+    # Charge conservation: -q_out + q_in + q_aux = 0
+    # For |↑⟩ → |0⟩: -(0,0) + (1,1) + q_aux = 0 → q_aux = (-1, -1)
+    aux_F_up = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(-1, -1), dim=1),)
+    )
+    
+    F_up_data = {}
+    # |↑⟩ → |0⟩: (1,1) → (0,0)
+    F_up_data[((0, 0), (1, 1), (-1, -1))] = np.array([[[1.0]]], dtype=np.float64)
+    # |↑↓⟩ → |↓⟩: (2,0) → (1,-1)
+    F_up_data[((1, -1), (2, 0), (-1, -1))] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["F_up"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F_up),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_up_data,
+        dtype=np.float64
+    )
+    
+    # Build F_dn operator (annihilates spin-down electron)
+    # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = |↑⟩
+    # For |↓⟩ → |0⟩: -(0,0) + (1,-1) + q_aux = 0 → q_aux = (-1, 1)
+    aux_F_dn = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(-1, 1), dim=1),)
+    )
+    
+    F_dn_data = {}
+    # |↓⟩ → |0⟩: (1,-1) → (0,0)
+    F_dn_data[((0, 0), (1, -1), (-1, 1))] = np.array([[[1.0]]], dtype=np.float64)
+    # |↑↓⟩ → |↑⟩: (2,0) → (1,1), with a minus sign from anticommutation
+    F_dn_data[((1, 1), (2, 0), (-1, 1))] = np.array([[[-1.0]]], dtype=np.float64)
+    
+    Op["F_dn"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F_dn),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_dn_data,
+        dtype=np.float64
+    )
+    
+    # Build Z operator (Jordan-Wigner string)
+    # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
+    Z_data = {}
+    Z_data[((0, 0), (0, 0))] = np.array([[1.0]], dtype=np.float64)
+    Z_data[((1, -1), (1, -1))] = np.array([[-1.0]], dtype=np.float64)
+    Z_data[((1, 1), (1, 1))] = np.array([[-1.0]], dtype=np.float64)
+    Z_data[((2, 0), (2, 0))] = np.array([[1.0]], dtype=np.float64)
+    
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        dtype=np.float64
+    )
+    
+    # Build Sz operator (spin z-component)
+    # Sz|0⟩ = 0, Sz|↑⟩ = +1/2|↑⟩, Sz|↓⟩ = -1/2|↓⟩, Sz|↑↓⟩ = 0
+    Sz_data = {}
+    Sz_data[((0, 0), (0, 0))] = np.array([[0.0]], dtype=np.float64)
+    Sz_data[((1, -1), (1, -1))] = np.array([[-0.5]], dtype=np.float64)
+    Sz_data[((1, 1), (1, 1))] = np.array([[0.5]], dtype=np.float64)
+    Sz_data[((2, 0), (2, 0))] = np.array([[0.0]], dtype=np.float64)
+    
+    Op["Sz"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Sz_data,
+        dtype=np.float64
+    )
+    
+    # Build Sp operator (spin raising: |↓⟩ → |↑⟩)
+    # Charge conservation: -(1,1) + (1,-1) + q_aux = 0 → q_aux = (0, 2)
+    aux_Sp = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, 2), dim=1),)
+    )
+    
+    Sp_data = {}
+    # |↓⟩ → |↑⟩ with coefficient 1
+    Sp_data[((1, 1), (1, -1), (0, 2))] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["Sp"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_Sp),
+        itags=("_init_", "_init_", "_aux_"),
+        data=Sp_data,
+        dtype=np.float64
+    )
+    
+    # Build Sm operator (spin lowering: |↑⟩ → |↓⟩)
+    # Charge conservation: -(1,-1) + (1,1) + q_aux = 0 → q_aux = (0, -2)
+    aux_Sm = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, -2), dim=1),)
+    )
+    
+    Sm_data = {}
+    # |↑⟩ → |↓⟩ with coefficient 1
+    Sm_data[((1, -1), (1, 1), (0, -2))] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["Sm"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_Sm),
+        itags=("_init_", "_init_", "_aux_"),
+        data=Sm_data,
+        dtype=np.float64
+    )
+    
+    # Create vacuum index
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=(0, 0), dim=1),)
+    )
+    Op["vac"] = vac_index
+    
+    return Spc, Op
+
+
+def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinful fermion space with Z2xU(1) symmetry (parity, spin).
+    
+    States:
+    - |0⟩: empty, charge = (0, 0)
+    - |↑⟩: spin-up, charge = (1, 1)  [odd parity, 2*Sz = 1]
+    - |↓⟩: spin-down, charge = (1, -1)  [odd parity, 2*Sz = -1]
+    - |↑↓⟩: doubly occupied, charge = (0, 0)  [even parity]
+    """
+    group = ProductGroup([Z2Group(), U1Group()])
+    
+    # Create physical space: three sectors
+    # Note: (0,0) appears twice: for |0⟩ and |↑↓⟩, so it has dim=2
+    # |0⟩ (index 0 in sector (0,0)) and |↑↓⟩ (index 1 in sector (0,0))
+    # |↓⟩ (sector (1,-1)) and |↑⟩ (sector (1,1))
+    sectors = [
+        Sector(charge=(0, 0), dim=2),    # |0⟩ and |↑↓⟩
+        Sector(charge=(1, -1), dim=1),   # |↓⟩
+        Sector(charge=(1, 1), dim=1),    # |↑⟩
+    ]
+    
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=tuple(sectors)
+    )
+    
+    Op = {}
+    
+    # Build F_up operator
+    # F_up|↑⟩ = |0⟩, F_up|↑↓⟩ = |↓⟩
+    # -(0,0) + (1,1) + q_aux = 0 (mod 2, exact) → q_aux = (-1, -1) = (1, -1) mod 2
+    aux_F_up = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(1, -1), dim=1),)
+    )
+    
+    F_up_data = {}
+    # |↑⟩ → |0⟩: from sector (1,1) to sector (0,0) index 0
+    # Block key: (charge_out, charge_in, charge_aux)
+    # Shape: (dim_out, dim_in, dim_aux) = (2, 1, 1)
+    F_up_data[((0, 0), (1, 1), (1, -1))] = np.array([[[1.0]], [[0.0]]], dtype=np.float64)  # Output to |0⟩
+    # |↑↓⟩ → |↓⟩: from sector (0,0) index 1 to sector (1,-1)
+    # Shape: (dim_out, dim_in, dim_aux) = (1, 2, 1)
+    F_up_data[((1, -1), (0, 0), (1, -1))] = np.array([[[0.0], [1.0]]], dtype=np.float64)  # Input from |↑↓⟩
+    
+    Op["F_up"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F_up),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_up_data,
+        dtype=np.float64
+    )
+    
+    # Build F_dn operator
+    # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = |↑⟩
+    # -(0,0) + (1,-1) + q_aux = 0 (mod 2, exact) → q_aux = (1, 1)
+    aux_F_dn = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(1, 1), dim=1),)
+    )
+    
+    F_dn_data = {}
+    # |↓⟩ → |0⟩: Shape: (2, 1, 1)
+    F_dn_data[((0, 0), (1, -1), (1, 1))] = np.array([[[1.0]], [[0.0]]], dtype=np.float64)
+    # |↑↓⟩ → |↑⟩ with minus sign: Shape: (1, 2, 1)
+    F_dn_data[((1, 1), (0, 0), (1, 1))] = np.array([[[0.0], [-1.0]]], dtype=np.float64)
+    
+    Op["F_dn"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F_dn),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_dn_data,
+        dtype=np.float64
+    )
+    
+    # Build Z operator
+    # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
+    Z_data = {}
+    # (0,0) sector: diagonal 2x2 with [1, 0; 0, 1] for |0⟩ and |↑↓⟩
+    Z_data[((0, 0), (0, 0))] = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float64)
+    Z_data[((1, -1), (1, -1))] = np.array([[-1.0]], dtype=np.float64)
+    Z_data[((1, 1), (1, 1))] = np.array([[-1.0]], dtype=np.float64)
+    
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        dtype=np.float64
+    )
+    
+    # Build Sz operator
+    Sz_data = {}
+    # (0,0) sector: both |0⟩ and |↑↓⟩ have Sz = 0
+    Sz_data[((0, 0), (0, 0))] = np.array([[0.0, 0.0], [0.0, 0.0]], dtype=np.float64)
+    Sz_data[((1, -1), (1, -1))] = np.array([[-0.5]], dtype=np.float64)
+    Sz_data[((1, 1), (1, 1))] = np.array([[0.5]], dtype=np.float64)
+    
+    Op["Sz"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Sz_data,
+        dtype=np.float64
+    )
+    
+    # Build Sp operator (|↓⟩ → |↑⟩)
+    # -(1,1) + (1,-1) + q_aux = 0 → q_aux = (0, 2)
+    aux_Sp = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, 2), dim=1),)
+    )
+    
+    Sp_data = {}
+    Sp_data[((1, 1), (1, -1), (0, 2))] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["Sp"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_Sp),
+        itags=("_init_", "_init_", "_aux_"),
+        data=Sp_data,
+        dtype=np.float64
+    )
+    
+    # Build Sm operator (|↑⟩ → |↓⟩)
+    # -(1,-1) + (1,1) + q_aux = 0 → q_aux = (0, -2)
+    aux_Sm = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, -2), dim=1),)
+    )
+    
+    Sm_data = {}
+    Sm_data[((1, -1), (1, 1), (0, -2))] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["Sm"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_Sm),
+        itags=("_init_", "_init_", "_aux_"),
+        data=Sm_data,
+        dtype=np.float64
+    )
+    
+    # Create vacuum index
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=(0, 0), dim=1),)
     )
     Op["vac"] = vac_index
     

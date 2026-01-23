@@ -24,6 +24,7 @@ import pytest
 from nicole import load_space, contract
 from nicole.index import Direction, Index
 from nicole.symmetry import U1Group, Z2Group
+from nicole.symmetry import ProductGroup
 
 
 class TestLoadSpaceBasic:
@@ -709,3 +710,258 @@ class TestFermionVacuumIndex:
         assert len(vac.sectors) == 1
         assert vac.sectors[0].charge == 0
         assert vac.sectors[0].dim == 1
+
+
+class TestBandBasic:
+    """Test basic functionality of spinful fermion (Band) space."""
+    
+    def test_band_u1u1_space(self):
+        """Test Band space creation with U(1)xU(1) symmetry."""
+        Spc, Op = load_space("Band", "U1, U1")
+        
+        # Check space properties
+        assert Spc.direction == Direction.IN
+        assert isinstance(Spc.group, ProductGroup)
+        assert Spc.dim == 4
+        assert len(Spc.sectors) == 4
+        
+        # Check sectors: |0⟩, |↓⟩, |↑⟩, |↑↓⟩
+        charges = [s.charge for s in Spc.sectors]
+        assert charges == [(0, 0), (1, -1), (1, 1), (2, 0)]
+        for sector in Spc.sectors:
+            assert sector.dim == 1
+        
+        # Check operators exist
+        assert set(Op.keys()) == {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
+    
+    def test_band_z2u1_space(self):
+        """Test Band space creation with Z2xU(1) symmetry."""
+        Spc, Op = load_space("Band", "Z2, U1")
+        
+        # Check space properties
+        assert Spc.direction == Direction.IN
+        assert isinstance(Spc.group, ProductGroup)
+        assert Spc.dim == 4
+        assert len(Spc.sectors) == 3  # (0,0) contains 2 states
+        
+        # Check sectors
+        charges = [s.charge for s in Spc.sectors]
+        dims = [s.dim for s in Spc.sectors]
+        assert charges == [(0, 0), (1, -1), (1, 1)]
+        assert dims == [2, 1, 1]
+        
+        # Check operators exist
+        assert set(Op.keys()) == {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
+    
+    def test_band_no_options_required(self):
+        """Test that no options are required for Band systems."""
+        Spc1, Op1 = load_space("Band", "U1, U1")
+        Spc2, Op2 = load_space("Band", "U1, U1", None)
+        Spc3, Op3 = load_space("Band", "U1, U1", {})
+        
+        # All should produce identical results
+        assert Spc1.dim == Spc2.dim == Spc3.dim
+        assert len(Op1["F_up"].data) == len(Op2["F_up"].data) == len(Op3["F_up"].data)
+    
+    def test_band_preserv_with_and_without_spaces(self):
+        """Test that preserv works with and without spaces."""
+        # U1,U1 variants
+        Spc1, Op1 = load_space("Band", "U1,U1")
+        Spc2, Op2 = load_space("Band", "U1, U1")
+        assert Spc1.dim == Spc2.dim
+        assert len(Op1["F_up"].data) == len(Op2["F_up"].data)
+        
+        # Z2,U1 variants
+        Spc3, Op3 = load_space("Band", "Z2,U1")
+        Spc4, Op4 = load_space("Band", "Z2, U1")
+        assert Spc3.dim == Spc4.dim
+        assert len(Op3["F_up"].data) == len(Op4["F_up"].data)
+
+
+class TestBandOperatorStructure:
+    """Test Band operator structure."""
+    
+    def test_f_up_structure_u1u1(self):
+        """Test F_up operator structure with U(1)xU(1)."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_up = Op["F_up"]
+        
+        # Should be 3-index tensor
+        assert len(F_up.indices) == 3
+        assert F_up.itags == ("_init_", "_init_", "_aux_")
+        
+        # Auxiliary index should have charge (-1, -1)
+        aux_idx = F_up.indices[2]
+        assert len(aux_idx.sectors) == 1
+        assert aux_idx.sectors[0].charge == (-1, -1)
+        
+        # Should have 2 blocks: |↑⟩ → |0⟩ and |↑↓⟩ → |↓⟩
+        assert len(F_up.data) == 2
+    
+    def test_f_dn_structure_u1u1(self):
+        """Test F_dn operator structure with U(1)xU(1)."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_dn = Op["F_dn"]
+        
+        # Auxiliary index should have charge (-1, 1)
+        aux_idx = F_dn.indices[2]
+        assert len(aux_idx.sectors) == 1
+        assert aux_idx.sectors[0].charge == (-1, 1)
+        
+        # Should have 2 blocks: |↓⟩ → |0⟩ and |↑↓⟩ → |↑⟩
+        assert len(F_dn.data) == 2
+    
+    def test_spin_operators_structure(self):
+        """Test spin operator structure."""
+        Spc, Op = load_space("Band", "U1, U1")
+        
+        # Sz should be diagonal
+        Sz = Op["Sz"]
+        assert len(Sz.indices) == 2
+        assert len(Sz.data) == 4  # All 4 sectors
+        
+        # Sp should have 1 block (|↓⟩ → |↑⟩)
+        Sp = Op["Sp"]
+        assert len(Sp.indices) == 3
+        assert len(Sp.data) == 1
+        
+        # Sm should have 1 block (|↑⟩ → |↓⟩)
+        Sm = Op["Sm"]
+        assert len(Sm.indices) == 3
+        assert len(Sm.data) == 1
+
+
+class TestBandChargeConservation:
+    """Test charge conservation in Band operators."""
+    
+    def test_f_up_charge_conservation_u1u1(self):
+        """Test F_up charge conservation with U(1)xU(1)."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_up = Op["F_up"]
+        
+        for (q_out, q_in, q_aux), block in F_up.data.items():
+            # Charge conservation: -q_out + q_in + q_aux = 0
+            assert -q_out[0] + q_in[0] + q_aux[0] == 0  # Particle number
+            assert -q_out[1] + q_in[1] + q_aux[1] == 0  # Spin
+            # Should remove one particle and decrease spin by 1
+            assert q_out[0] == q_in[0] - 1
+            assert q_out[1] == q_in[1] - 1
+    
+    def test_f_dn_charge_conservation_u1u1(self):
+        """Test F_dn charge conservation with U(1)xU(1)."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_dn = Op["F_dn"]
+        
+        for (q_out, q_in, q_aux), block in F_dn.data.items():
+            assert -q_out[0] + q_in[0] + q_aux[0] == 0
+            assert -q_out[1] + q_in[1] + q_aux[1] == 0
+            # Should remove one particle and increase spin by 1
+            assert q_out[0] == q_in[0] - 1
+            assert q_out[1] == q_in[1] + 1
+    
+    def test_spin_charge_conservation(self):
+        """Test spin operators conserve particle number."""
+        Spc, Op = load_space("Band", "U1, U1")
+        
+        # Sp should conserve particle number, increase spin by 2
+        Sp = Op["Sp"]
+        for (q_out, q_in, q_aux), block in Sp.data.items():
+            assert q_out[0] == q_in[0]  # Same particle number
+            assert q_out[1] == q_in[1] + 2  # Increase spin
+        
+        # Sm should conserve particle number, decrease spin by 2
+        Sm = Op["Sm"]
+        for (q_out, q_in, q_aux), block in Sm.data.items():
+            assert q_out[0] == q_in[0]  # Same particle number
+            assert q_out[1] == q_in[1] - 2  # Decrease spin
+
+
+class TestBandMatrixElements:
+    """Test Band operator matrix elements."""
+    
+    def test_f_up_matrix_elements(self):
+        """Test F_up matrix elements."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_up = Op["F_up"]
+        
+        # F_up|↑⟩ = |0⟩
+        key1 = ((0, 0), (1, 1), (-1, -1))
+        assert key1 in F_up.data
+        assert np.isclose(F_up.data[key1][0, 0, 0], 1.0)
+        
+        # F_up|↑↓⟩ = |↓⟩
+        key2 = ((1, -1), (2, 0), (-1, -1))
+        assert key2 in F_up.data
+        assert np.isclose(F_up.data[key2][0, 0, 0], 1.0)
+    
+    def test_f_dn_matrix_elements(self):
+        """Test F_dn matrix elements."""
+        Spc, Op = load_space("Band", "U1, U1")
+        F_dn = Op["F_dn"]
+        
+        # F_dn|↓⟩ = |0⟩
+        key1 = ((0, 0), (1, -1), (-1, 1))
+        assert key1 in F_dn.data
+        assert np.isclose(F_dn.data[key1][0, 0, 0], 1.0)
+        
+        # F_dn|↑↓⟩ = -|↑⟩ (minus sign from anticommutation)
+        key2 = ((1, 1), (2, 0), (-1, 1))
+        assert key2 in F_dn.data
+        assert np.isclose(F_dn.data[key2][0, 0, 0], -1.0)
+    
+    def test_sz_eigenvalues(self):
+        """Test Sz eigenvalues."""
+        Spc, Op = load_space("Band", "U1, U1")
+        Sz = Op["Sz"]
+        
+        # Collect diagonal elements
+        eigenvalues = {}
+        for (q_out, q_in), block in Sz.data.items():
+            if q_out == q_in:
+                eigenvalues[q_in] = block[0, 0]
+        
+        # Check expected values
+        assert np.isclose(eigenvalues[(0, 0)], 0.0)    # |0⟩
+        assert np.isclose(eigenvalues[(1, -1)], -0.5)  # |↓⟩
+        assert np.isclose(eigenvalues[(1, 1)], 0.5)    # |↑⟩
+        assert np.isclose(eigenvalues[(2, 0)], 0.0)    # |↑↓⟩
+    
+    def test_spin_ladder_operators(self):
+        """Test spin ladder operator matrix elements."""
+        Spc, Op = load_space("Band", "U1, U1")
+        Sp = Op["Sp"]
+        Sm = Op["Sm"]
+        
+        # Sp|↓⟩ = |↑⟩
+        key_p = ((1, 1), (1, -1), (0, 2))
+        assert key_p in Sp.data
+        assert np.isclose(Sp.data[key_p][0, 0, 0], 1.0)
+        
+        # Sm|↑⟩ = |↓⟩
+        key_m = ((1, -1), (1, 1), (0, -2))
+        assert key_m in Sm.data
+        assert np.isclose(Sm.data[key_m][0, 0, 0], 1.0)
+
+
+class TestBandErrorHandling:
+    """Test error handling for Band systems."""
+    
+    def test_unsupported_symmetry(self):
+        """Test error for unsupported symmetry."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Band", "U1")
+        
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Band", "Z2")
+    
+    def test_band_different_symmetries(self):
+        """Test that different symmetries produce different structures."""
+        Spc_u1u1, Op_u1u1 = load_space("Band", "U1, U1")
+        Spc_z2u1, Op_z2u1 = load_space("Band", "Z2, U1")
+        
+        # Different number of sectors
+        assert len(Spc_u1u1.sectors) == 4
+        assert len(Spc_z2u1.sectors) == 3
+        
+        # But same total dimension
+        assert Spc_u1u1.dim == Spc_z2u1.dim == 4
