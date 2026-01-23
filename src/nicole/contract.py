@@ -48,10 +48,99 @@ def _dir_weight(idx: Index, charge: Charge) -> Tuple[AbelianGroup, Charge]:
     return group, (charge if idx.direction == Direction.OUT else group.inverse(charge))
 
 
+def _detect_contraction_pairs(
+    A: Tensor,
+    B: Tensor,
+    excl_A: set[int] = None,
+    excl_B: set[int] = None,
+) -> list[tuple[int, int]]:
+    """Detect contraction pairs automatically with optional exclusions.
+    
+    Parameters
+    ----------
+    A, B:
+        Input tensors.
+    excl_A:
+        Set of axes in A to exclude from contraction.
+    excl_B:
+        Set of axes in B to exclude from contraction.
+    
+    Returns
+    -------
+    list[tuple[int, int]]
+        List of axis pairs to contract.
+    
+    Raises
+    ------
+    ValueError
+        If ambiguous pairing is detected or no valid pairs found.
+    """
+    if excl_A is None:
+        excl_A = set()
+    if excl_B is None:
+        excl_B = set()
+    
+    # Check for ambiguity: each index in A should match at most one index in B, and vice versa
+    for ia, tag_a in enumerate(A.itags):
+        if ia in excl_A:
+            continue
+        matches = sum(
+            1 for ib, tag_b in enumerate(B.itags)
+            if ib not in excl_B and tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
+        )
+        if matches > 1:
+            raise ValueError(
+                f"Ambiguous automatic contraction: index {ia} (itag '{tag_a}') in tensor A "
+                f"matches {matches} indices in tensor B. Please specify axes explicitly."
+            )
+    
+    for ib, tag_b in enumerate(B.itags):
+        if ib in excl_B:
+            continue
+        matches = sum(
+            1 for ia, tag_a in enumerate(A.itags)
+            if ia not in excl_A and tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
+        )
+        if matches > 1:
+            raise ValueError(
+                f"Ambiguous automatic contraction: index {ib} (itag '{tag_b}') in tensor B "
+                f"matches {matches} indices in tensor A. Please specify axes explicitly."
+            )
+    
+    # Build unique pairing
+    axes_list = []
+    used_B = set()
+    for ia, tag_a in enumerate(A.itags):
+        if ia in excl_A:
+            continue
+        for ib, tag_b in enumerate(B.itags):
+            if ib in used_B or ib in excl_B:
+                continue
+            if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction:
+                axes_list.append((ia, ib))
+                used_B.add(ib)
+                break
+    
+    if not axes_list:
+        if excl_A or excl_B:
+            raise ValueError(
+                "No valid contraction pairs found after applying exclusions. "
+                "Indices must have matching itags and opposite directions."
+            )
+        else:
+            raise ValueError(
+                "No valid contraction pairs found. Indices must have matching itags "
+                "and opposite directions."
+            )
+    
+    return axes_list
+
+
 def contract(
     A: Tensor,
     B: Tensor,
-    pairs: Optional[Sequence[Tuple[int, int]]] = None,
+    axes: Optional[Tuple[Sequence[int], Sequence[int]]] = None,
+    excl: Optional[Tuple[Sequence[int], Sequence[int]]] = None,
     perm: Optional[Sequence[int]] = None,
 ) -> Tensor:
     """Contract two tensors along provided index pairs while respecting symmetry.
@@ -60,11 +149,17 @@ def contract(
     ----------
     A, B:
         Input tensors to be contracted.
-    pairs:
-        Optional sequence of axis pairs (axis in `A`, axis in `B`) to contract.
-        If None, automatically contracts all indices where itags match and directions
-        are opposite. If provided, validates that each pair has matching itags and
-        opposite directions.
+    axes:
+        Optional tuple of two sequences specifying axes to contract: ([axes_in_A], [axes_in_B]).
+        Similar to np.tensordot syntax. If provided, contracts A[axes[0][i]] with B[axes[1][i]]
+        for each i. Validates that each pair has matching itags and opposite directions.
+        Mutually exclusive with `excl`.
+    excl:
+        Optional tuple of two sequences specifying axes to exclude from automatic contraction:
+        ([excl_axes_in_A], [excl_axes_in_B]). When specified, automatically contracts all
+        indices with matching itags and opposite directions, except those in the exclusion lists.
+        Examples: excl=((0,), ()) excludes A's axis 0; excl=((), (1,)) excludes B's axis 1.
+        Mutually exclusive with `axes`.
     perm:
         Optional permutation for the resulting tensor axes. If provided, the axes
         of the contracted tensor will be reordered according to this sequence.
@@ -78,9 +173,9 @@ def contract(
     Raises
     ------
     ValueError
-        If manually specified pairs have mismatched itags or non-opposite directions,
-        or if no valid contraction pairs are found, or if automatic detection
-        encounters ambiguous pairing.
+        If both axes and excl are specified, or if manually specified axes have
+        mismatched itags or non-opposite directions, or if no valid contraction
+        pairs are found, or if automatic detection encounters ambiguous pairing.
 
     Examples
     --------
@@ -93,40 +188,51 @@ def contract(
     >>> result.itags
     ('left', 'right')
 
-    **Manual contraction** with integer pairs:
+    **Manual contraction with axes parameter:**
 
-    >>> # Explicitly specify which indices to contract
+    >>> # Explicitly specify which indices to contract (np.tensordot style)
     >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
-    >>> result = contract(A, B, pairs=[(1, 0)])
+    >>> result = contract(A, B, axes=([1], [0]))
     >>> result.itags
     ('i', 'k')
 
-    **Multiple contractions**:
+    **Multiple contractions:**
 
     >>> # Contract multiple index pairs at once
     >>> A = Tensor.random([idx_a, idx_b, idx_c], itags=["a", "b", "c"])
     >>> B = Tensor.random([idx_b_flip, idx_c_flip, idx_d], itags=["b", "c", "d"])
-    >>> result = contract(A, B)  # Contracts both "b" and "c"
+    >>> result = contract(A, B, axes=([1, 2], [0, 1]))  # or use automatic mode
     >>> result.itags
     ('a', 'd')
+
+    **Using excl parameter for automatic contraction with exclusions:**
+
+    >>> # Contract all matching itags except A's axis 0
+    >>> result = contract(A, B, excl=((0,), ()))
+    
+    >>> # Contract all matching itags except B's axis 0
+    >>> result = contract(A, B, excl=((), (0,)))
+    
+    >>> # Exclude axes from both tensors
+    >>> result = contract(A, B, excl=((0, 1), (2,)))
 
     **Using permutation** to reorder output:
 
     >>> # Contract and then permute the result
     >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
-    >>> result = contract(A, B, pairs=[(1, 0)], perm=[1, 0])
+    >>> result = contract(A, B, axes=([1], [0]), perm=[1, 0])
     >>> result.itags  # Swapped from default order
     ('k', 'i')
 
-    **Resolving ambiguity** with manual pairs:
+    **Resolving ambiguity** with manual axes:
 
     >>> # When automatic detection is ambiguous, specify explicitly
     >>> A = Tensor.random([idx_a, idx_a], itags=["x", "x"])  # Duplicate tags
     >>> B = Tensor.random([idx_a_flip, idx_a_flip], itags=["x", "x"])
     >>> # contract(A, B) would raise ValueError due to ambiguity
-    >>> result = contract(A, B, pairs=[(0, 0), (1, 1)])  # Explicitly pair them
+    >>> result = contract(A, B, axes=([0, 1], [0, 1]))  # Explicitly pair them
 
     Notes
     -----
@@ -138,54 +244,24 @@ def contract(
     followed by non-contracted indices from B. Use the `perm` parameter to
     reorder if needed.
     """
+    # Validate mutually exclusive parameters
+    if axes is not None and excl is not None:
+        raise ValueError("Cannot specify both 'axes' and 'excl' parameters")
+    
     # Determine contraction pairs
-    if pairs is None:
-        # Automatic mode: find all pairs where itags match and directions are opposite
-        # Check for ambiguity: each index in A should match at most one index in B, and vice versa
-        for ia, tag_a in enumerate(A.itags):
-            matches = sum(
-                1 for ib, tag_b in enumerate(B.itags)
-                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
-            )
-            if matches > 1:
-                raise ValueError(
-                    f"Ambiguous automatic contraction: index {ia} (itag '{tag_a}') in tensor A "
-                    f"matches {matches} indices in tensor B. Please specify pairs explicitly."
-                )
-        
-        for ib, tag_b in enumerate(B.itags):
-            matches = sum(
-                1 for ia, tag_a in enumerate(A.itags)
-                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction
-            )
-            if matches > 1:
-                raise ValueError(
-                    f"Ambiguous automatic contraction: index {ib} (itag '{tag_b}') in tensor B "
-                    f"matches {matches} indices in tensor A. Please specify pairs explicitly."
-                )
-        
-        # Build unique pairing
-        axes = []
-        used_B = set()
-        for ia, tag_a in enumerate(A.itags):
-            for ib, tag_b in enumerate(B.itags):
-                if ib in used_B:
-                    continue
-                if tag_a == tag_b and A.indices[ia].direction != B.indices[ib].direction:
-                    axes.append((ia, ib))
-                    used_B.add(ib)
-                    break
-        
-        if not axes:
+    if axes is not None:
+        # Manual mode: convert axes tuple to pairs list
+        if len(axes) != 2:
+            raise ValueError(f"axes must be a tuple of two sequences, got length {len(axes)}")
+        axes_A, axes_B = axes
+        if len(axes_A) != len(axes_B):
             raise ValueError(
-                "No valid contraction pairs found. Indices must have matching itags "
-                "and opposite directions."
+                f"axes sequences must have same length: {len(axes_A)} != {len(axes_B)}"
             )
-    else:
-        # Manual mode: validate matching itags and opposite directions
-        axes = list(pairs)
+        axes_list = [(axes_A[i], axes_B[i]) for i in range(len(axes_A))]
         
-        for ia, ib in axes:
+        # Validate each pair
+        for ia, ib in axes_list:
             # Check bounds
             if ia < 0 or ia >= len(A.indices):
                 raise ValueError(f"Index position (axis) {ia} out of range for tensor A")
@@ -206,15 +282,24 @@ def contract(
                     f"Contraction pair ({ia}, {ib}) with itag '{A.itags[ia]}' has same direction: "
                     f"{A.indices[ia].direction}. Contracted indices must have opposite directions."
                 )
+    elif excl is not None:
+        # Automatic mode with exclusions
+        if len(excl) != 2:
+            raise ValueError(f"excl must be a tuple of two sequences, got length {len(excl)}")
+        excl_A, excl_B = set(excl[0]), set(excl[1])
+        axes_list = _detect_contraction_pairs(A, B, excl_A, excl_B)
+    else:
+        # Pure automatic mode
+        axes_list = _detect_contraction_pairs(A, B)
 
     # Validate that the contraction pairs have matching symmetry groups.
-    for ia, ib in axes:
+    for ia, ib in axes_list:
         if A.indices[ia].group != B.indices[ib].group:
             raise ValueError("Contraction requires matching groups on paired indices")
 
     # Identify the contracted axes.
-    contracted_A = {ia for ia, _ in axes}
-    contracted_B = {ib for _, ib in axes}
+    contracted_A = {ia for ia, _ in axes_list}
+    contracted_B = {ib for _, ib in axes_list}
     out_indices = tuple(idx for i, idx in enumerate(A.indices) if i not in contracted_A) + tuple(
         idx for i, idx in enumerate(B.indices) if i not in contracted_B
     )
@@ -229,7 +314,7 @@ def contract(
         for keyB, arrB in B.data.items():
             # Check if the blocks are compatible for contraction.
             ok = True
-            for ia, ib in axes:
+            for ia, ib in axes_list:
                 # Validate charge conservation for the pair.
                 group, qa = _dir_weight(A.indices[ia], keyA[ia])
                 _, qb = _dir_weight(B.indices[ib], keyB[ib])
@@ -243,8 +328,8 @@ def contract(
             if not ok:
                 continue
             # Perform the tensor contraction.
-            axesA = [ia for ia, _ in axes]
-            axesB = [ib for _, ib in axes]
+            axesA = [ia for ia, _ in axes_list]
+            axesB = [ib for _, ib in axes_list]
             res = np.tensordot(arrA, arrB, axes=(axesA, axesB))
             # Build the output charge key from the surviving axes.
             out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
