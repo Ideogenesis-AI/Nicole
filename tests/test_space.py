@@ -331,9 +331,9 @@ class TestMatrixElements:
 class TestErrorHandling:
     """Test error handling."""
     
-    def test_unsupported_stat(self):
-        """Test error for unsupported statistics."""
-        with pytest.raises(ValueError, match="Unsupported quantum statistics"):
+    def test_unsupported_preset(self):
+        """Test error for unsupported preset."""
+        with pytest.raises(ValueError, match="Unsupported system preset"):
             load_space("Boson", "U1", {})
     
     def test_unsupported_symmetry(self):

@@ -27,7 +27,7 @@ from .symmetry import U1Group, Z2Group
 
 
 def load_space(
-    stat: str,
+    preset: str,
     preserv: str,
     option: Optional[Dict[str, Any]] = None
 ) -> Tuple[Index, Dict[str, Tensor]]:
@@ -35,8 +35,8 @@ def load_space(
     
     Parameters
     ----------
-    stat : str
-        Statistics type: "Spin" for bosonic spin systems, "Ferm" for fermionic systems
+    preset : str
+        System preset: "Spin" for bosonic spin systems, "Ferm" for fermionic systems
     preserv : str
         Symmetry to preserve: "U1" for U(1) charge conservation, "Z2" for Z2 parity
     option : dict, optional
@@ -89,12 +89,12 @@ def load_space(
     if option is None:
         option = {}
     
-    if stat == "Spin":
+    if preset == "Spin":
         return _load_spin_space(preserv, option)
-    elif stat == "Ferm":
+    elif preset == "Ferm":
         return _load_ferm_space(preserv, option)
     else:
-        raise ValueError(f"Unsupported quantum statistics '{stat}'. Supported types: 'Spin', 'Ferm'.")
+        raise ValueError(f"Unsupported system preset '{preset}'. Supported types: 'Spin', 'Ferm'.")
 
 
 def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
