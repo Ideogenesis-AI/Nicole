@@ -45,8 +45,8 @@ class TestLoadSpaceBasic:
         for sector in Spc.sectors:
             assert sector.dim == 1
         
-        # Check operators exist
-        assert set(Op.keys()) == {"Sz", "Sp", "Sm"}
+        # Check operators exist (including vacuum index)
+        assert set(Op.keys()) == {"Sz", "Sp", "Sm", "vac"}
     
     def test_spin_zero(self):
         """Test spin-0 space (single state)."""
