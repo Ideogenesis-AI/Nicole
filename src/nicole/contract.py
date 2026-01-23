@@ -139,7 +139,7 @@ def _detect_contraction_pairs(
 def contract(
     A: Tensor,
     B: Tensor,
-    axes: Optional[Tuple[Sequence[int], Sequence[int]]] = None,
+    axes: Optional[Tuple[int, int] | Tuple[Sequence[int], Sequence[int]]] = None,
     excl: Optional[Tuple[Sequence[int], Sequence[int]]] = None,
     perm: Optional[Sequence[int]] = None,
 ) -> Tensor:
@@ -150,10 +150,11 @@ def contract(
     A, B:
         Input tensors to be contracted.
     axes:
-        Optional tuple of two sequences specifying axes to contract: ([axes_in_A], [axes_in_B]).
-        Similar to np.tensordot syntax. If provided, contracts A[axes[0][i]] with B[axes[1][i]]
-        for each i. Validates that each pair has matching itags and opposite directions.
-        Mutually exclusive with `excl`.
+        Optional specification of axes to contract. Can be either:
+        - Single pair: (axis_in_A, axis_in_B) for contracting one pair
+        - Multiple pairs: ([axes_in_A], [axes_in_B]) for contracting multiple pairs
+        Similar to np.tensordot syntax. Validates that each pair has matching itags 
+        and opposite directions. Mutually exclusive with `excl`.
     excl:
         Optional tuple of two sequences specifying axes to exclude from automatic contraction:
         ([excl_axes_in_A], [excl_axes_in_B]). When specified, automatically contracts all
@@ -190,12 +191,15 @@ def contract(
 
     **Manual contraction with axes parameter:**
 
-    >>> # Explicitly specify which indices to contract (np.tensordot style)
+    >>> # Single pair: concise syntax (axis_in_A, axis_in_B)
     >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
-    >>> result = contract(A, B, axes=([1], [0]))
+    >>> result = contract(A, B, axes=(1, 0))
     >>> result.itags
     ('i', 'k')
+
+    >>> # Single pair: also works with sequence syntax
+    >>> result = contract(A, B, axes=([1], [0]))
 
     **Multiple contractions:**
 
@@ -222,7 +226,7 @@ def contract(
     >>> # Contract and then permute the result
     >>> A = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> B = Tensor.random([idx_j_flip, idx_k], itags=["j", "k"])
-    >>> result = contract(A, B, axes=([1], [0]), perm=[1, 0])
+    >>> result = contract(A, B, axes=(1, 0), perm=[1, 0])
     >>> result.itags  # Swapped from default order
     ('k', 'i')
 
@@ -252,13 +256,20 @@ def contract(
     if axes is not None:
         # Manual mode: convert axes tuple to pairs list
         if len(axes) != 2:
-            raise ValueError(f"axes must be a tuple of two sequences, got length {len(axes)}")
-        axes_A, axes_B = axes
-        if len(axes_A) != len(axes_B):
-            raise ValueError(
-                f"axes sequences must have same length: {len(axes_A)} != {len(axes_B)}"
-            )
-        axes_list = [(axes_A[i], axes_B[i]) for i in range(len(axes_A))]
+            raise ValueError(f"axes must be a tuple of length 2, got length {len(axes)}")
+        
+        # Check if axes is a single pair (int, int) or multiple pairs ([int, ...], [int, ...])
+        if isinstance(axes[0], int) and isinstance(axes[1], int):
+            # Single pair: (axis_in_A, axis_in_B)
+            axes_list = [(axes[0], axes[1])]
+        else:
+            # Multiple pairs: ([axes_in_A], [axes_in_B])
+            axes_A, axes_B = axes
+            if len(axes_A) != len(axes_B):
+                raise ValueError(
+                    f"axes sequences must have same length: {len(axes_A)} != {len(axes_B)}"
+                )
+            axes_list = [(axes_A[i], axes_B[i]) for i in range(len(axes_A))]
         
         # Validate each pair
         for ia, ib in axes_list:
