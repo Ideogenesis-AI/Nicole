@@ -614,7 +614,7 @@ def test_oplus_then_contract():
     # C.indices[1] is IN, so D.indices[0] should be OUT (flip it)
     D = Tensor.random([C.indices[1].flip(), C.indices[0]], seed=1300, itags=['b', 'c'])
     
-    result = contract(C, D, axes=([1], [0]))
+    result = contract(C, D, axes=(1, 0))
     
     # Should have 2 indices remaining
     assert len(result.indices) == 2
