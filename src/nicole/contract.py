@@ -34,13 +34,14 @@ import numpy as np
 
 from .blocks import BlockKey
 from .index import Index
+from .symmetry.base import SymmetryGroup
 from .symmetry.base import AbelianGroup
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
 
 
-def _dir_weight(idx: Index, charge: Charge) -> Tuple[AbelianGroup, Charge]:
+def _dir_weight(idx: Index, charge: Charge) -> Tuple[SymmetryGroup, Charge]:
     """Return the symmetry group and orientation-adjusted charge contribution."""
     group = idx.group
     if not isinstance(group, (AbelianGroup, ProductGroup)):
