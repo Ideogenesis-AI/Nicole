@@ -1231,3 +1231,362 @@ def test_merge_axes_preserves_dtype():
     # Isometry uses the tensor's dtype
     assert iso_conj.dtype == np.complex128
 
+
+# Trim zero sectors tests
+
+def test_trim_zero_sectors_single_block():
+    """Test removing a single near-zero block."""
+    group = U1Group()
+    idx_in = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=-1, dim=2),
+            Sector(charge=0, dim=2),
+            Sector(charge=1, dim=2),
+        )
+    )
+    idx_out = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(
+            Sector(charge=-1, dim=2),
+            Sector(charge=0, dim=2),
+            Sector(charge=1, dim=2),
+        )
+    )
+    
+    # Create data with one near-zero block
+    data = {
+        (-1, -1): np.array([[1.0, 0.5], [0.3, 0.8]]),
+        (0, 0): np.array([[1e-20, 1e-20], [1e-20, 1e-20]]),  # Near-zero
+        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx_in, idx_out),
+        itags=("in", "out"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    # Apply trim
+    tensor.trim_zero_sectors()
+    
+    # Verify near-zero block is removed
+    assert len(tensor.data) == 2
+    assert (0, 0) not in tensor.data
+    assert (-1, -1) in tensor.data
+    assert (1, 1) in tensor.data
+    
+    # Verify sectors are updated
+    assert len(tensor.indices[0].sectors) == 2
+    assert len(tensor.indices[1].sectors) == 2
+    
+    charges_in = [s.charge for s in tensor.indices[0].sectors]
+    charges_out = [s.charge for s in tensor.indices[1].sectors]
+    
+    assert -1 in charges_in and 1 in charges_in
+    assert 0 not in charges_in
+    assert -1 in charges_out and 1 in charges_out
+    assert 0 not in charges_out
+
+
+def test_trim_zero_sectors_multiple_blocks():
+    """Test removing multiple near-zero blocks."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=-1, dim=1),
+            Sector(charge=0, dim=1),
+            Sector(charge=1, dim=1),
+            Sector(charge=2, dim=1),
+        )
+    )
+    
+    # Multiple near-zero blocks
+    eps = np.finfo(np.float64).eps
+    data = {
+        (-1, -1): np.array([[1.0]]),
+        (0, 0): np.array([[eps / 2]]),  # Below threshold
+        (1, 1): np.array([[eps / 10]]),  # Below threshold
+        (2, 2): np.array([[2.0]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    # Only two blocks should remain
+    assert len(tensor.data) == 2
+    assert (-1, -1) in tensor.data
+    assert (2, 2) in tensor.data
+    assert (0, 0) not in tensor.data
+    assert (1, 1) not in tensor.data
+    
+    # Sectors should be trimmed
+    charges = [s.charge for s in tensor.indices[0].sectors]
+    assert set(charges) == {-1, 2}
+
+
+def test_trim_zero_sectors_no_removal():
+    """Test that trim does nothing when all blocks are non-zero."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=2), Sector(charge=1, dim=2))
+    )
+    
+    data = {
+        (0, 0): np.array([[1.0, 0.5], [0.3, 0.8]]),
+        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    # Store original state
+    original_keys = set(tensor.data.keys())
+    original_sectors = len(tensor.indices[0].sectors)
+    
+    tensor.trim_zero_sectors()
+    
+    # Nothing should change
+    assert set(tensor.data.keys()) == original_keys
+    assert len(tensor.indices[0].sectors) == original_sectors
+
+
+def test_trim_zero_sectors_inplace():
+    """Test that trim modifies the tensor in-place."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1), Sector(charge=1, dim=1))
+    )
+    
+    data = {
+        (0, 0): np.array([[1e-20]]),
+        (1, 1): np.array([[1.0]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    # Get object id before
+    tensor_id = id(tensor)
+    
+    # Apply trim (returns None for in-place)
+    result = tensor.trim_zero_sectors()
+    
+    assert result is None  # In-place methods return None
+    assert id(tensor) == tensor_id  # Same object
+    assert len(tensor.data) == 1  # But modified
+
+
+def test_trim_zero_sectors_negative_values():
+    """Test trim with negative values in blocks."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=-1, dim=2),
+            Sector(charge=0, dim=2),
+            Sector(charge=1, dim=2),
+        )
+    )
+    
+    eps = np.finfo(np.float64).eps
+    data = {
+        (-1, -1): np.array([[-1.0, -0.5], [-0.3, -0.8]]),  # All negative, non-zero
+        (0, 0): np.array([[-eps/2, -eps/3], [-eps/4, -eps/5]]),  # All negative, near-zero
+        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),  # All positive, non-zero
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    # Near-zero block should be removed despite negative values
+    assert len(tensor.data) == 2
+    assert (-1, -1) in tensor.data
+    assert (1, 1) in tensor.data
+    assert (0, 0) not in tensor.data
+    
+    # Verify negative values are preserved
+    np.testing.assert_array_equal(
+        tensor.data[(-1, -1)],
+        np.array([[-1.0, -0.5], [-0.3, -0.8]])
+    )
+
+
+def test_trim_zero_sectors_mixed_signs():
+    """Test trim with mixed positive and negative values in blocks."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=-1, dim=2),
+            Sector(charge=0, dim=2),
+            Sector(charge=1, dim=2),
+        )
+    )
+    
+    eps = np.finfo(np.float64).eps
+    data = {
+        # Mixed signs with large magnitude - should be kept
+        (-1, -1): np.array([[1.5, -2.3], [-0.8, 1.2]]),
+        # Mixed signs with tiny magnitude - should be removed
+        (0, 0): np.array([[eps/2, -eps/3], [-eps/4, eps/5]]),
+        # Mixed signs with one large value - should be kept
+        (1, 1): np.array([[eps/2, -eps/3], [2.0, -eps/5]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    # Block with all tiny values should be removed
+    # Blocks with at least one large value should be kept
+    assert len(tensor.data) == 2
+    assert (-1, -1) in tensor.data
+    assert (1, 1) in tensor.data
+    assert (0, 0) not in tensor.data
+    
+    # Verify mixed-sign data is preserved exactly
+    np.testing.assert_array_equal(
+        tensor.data[(-1, -1)],
+        np.array([[1.5, -2.3], [-0.8, 1.2]])
+    )
+    assert np.max(np.abs(tensor.data[(1, 1)])) >= 2.0  # Has the large value
+
+
+def test_trim_zero_sectors_complex_values():
+    """Test trim with complex-valued data."""
+    group = U1Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=2), Sector(charge=1, dim=2))
+    )
+    
+    # Complex near-zero block (both real and imaginary parts near zero)
+    eps = np.finfo(np.float64).eps
+    data = {
+        (0, 0): np.array([[eps/2 + 1j*eps/3, eps/4 + 1j*eps/5],
+                        [eps/6 + 1j*eps/7, eps/8 + 1j*eps/9]], dtype=np.complex128),
+        (1, 1): np.array([[1.0 + 1.0j, 2.0 + 2.0j],
+                        [3.0 + 3.0j, 4.0 + 4.0j]], dtype=np.complex128),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.complex128
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    # Near-zero complex block should be removed
+    assert len(tensor.data) == 1
+    assert (1, 1) in tensor.data
+    assert (0, 0) not in tensor.data
+
+
+def test_trim_zero_sectors_z2_symmetry():
+    """Test trim with Z2 symmetry group."""
+    group = Z2Group()
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=2), Sector(charge=1, dim=2))
+    )
+    
+    data = {
+        (0, 0): np.array([[1e-20, 1e-20], [1e-20, 1e-20]]),
+        (1, 1): np.array([[0.5, 0.3], [0.2, 0.8]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    assert len(tensor.data) == 1
+    assert (1, 1) in tensor.data
+    assert (0, 0) not in tensor.data
+    
+    # Z2 charge 1 should remain
+    charges = [s.charge for s in tensor.indices[0].sectors]
+    assert charges == [1]
+
+
+def test_trim_zero_sectors_product_group():
+    """Test trim with ProductGroup symmetry."""
+    group = ProductGroup([U1Group(), U1Group()])
+    idx = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=(0, 0), dim=1),
+            Sector(charge=(0, 1), dim=1),
+            Sector(charge=(1, 0), dim=1),
+        )
+    )
+    
+    data = {
+        ((0, 0), (0, 0)): np.array([[1.0]]),
+        ((0, 1), (0, 1)): np.array([[1e-20]]),  # Near-zero
+        ((1, 0), (1, 0)): np.array([[0.5]]),
+    }
+    
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data=data,
+        dtype=np.float64
+    )
+    
+    tensor.trim_zero_sectors()
+    
+    assert len(tensor.data) == 2
+    assert ((0, 1), (0, 1)) not in tensor.data
+    
+    charges = [s.charge for s in tensor.indices[0].sectors]
+    assert (0, 0) in charges
+    assert (1, 0) in charges
+    assert (0, 1) not in charges
+

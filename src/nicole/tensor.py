@@ -73,6 +73,8 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
+    trim_zero_sectors()
+        In-place: Remove sectors where all data is below double precision.
     group
         Property returning the symmetry group of this tensor.
     sorted_keys
@@ -332,7 +334,7 @@ class Tensor:
         return self.data[self.key(i)]
 
     # ------------------------------------------------------------
-    #   Utility methods: rand_fill, insert_index
+    #   Utility methods: rand_fill, insert_index, trim_zeros
     # ------------------------------------------------------------
 
     @property
@@ -415,6 +417,66 @@ class Tensor:
             new_data[new_key] = np.expand_dims(arr, axis=position)
         
         self.data = new_data
+        self._invalidate_sorted_keys()
+
+    def trim_zero_sectors(self) -> None:
+        """Remove sectors where all data elements have absolute value below double precision.
+        
+        This operation modifies the tensor in-place by:
+        - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
+        - Updating each index to only include sectors that still have data in remaining blocks
+        
+        Notes
+        -----
+        Uses np.finfo(np.float64).eps as the threshold for numerical zero.
+        Sectors are only removed if no blocks remain that reference their charges.
+        """
+        # Define threshold as double precision machine epsilon
+        eps = np.finfo(np.float64).eps
+        
+        # Step 1: Identify and remove blocks with all near-zero values
+        blocks_to_remove = []
+        for key, arr in self.data.items():
+            if np.max(np.abs(arr)) < eps:
+                blocks_to_remove.append(key)
+        
+        for key in blocks_to_remove:
+            del self.data[key]
+        
+        # Step 2: Determine which charges are still present at each index position
+        n_indices = len(self.indices)
+        if n_indices == 0 or len(self.data) == 0:
+            # Scalar tensor or no data left
+            self._invalidate_sorted_keys()
+            return
+        
+        # Collect charges that appear in remaining blocks for each index position
+        charges_present = [set() for _ in range(n_indices)]
+        for key in self.data.keys():
+            for i, charge in enumerate(key):
+                charges_present[i].add(charge)
+        
+        # Step 3: Rebuild each index to only include sectors with present charges
+        new_indices = []
+        for i, idx in enumerate(self.indices):
+            present = charges_present[i]
+            # Filter sectors to keep only those with charges still in data
+            new_sectors = [s for s in idx.sectors if s.charge in present]
+            
+            if len(new_sectors) == 0:
+                # No sectors remain for this index - this shouldn't happen with valid data
+                # but handle gracefully by keeping the original index
+                new_indices.append(idx)
+            else:
+                # Create new index with filtered sectors
+                new_index = Index(
+                    direction=idx.direction,
+                    group=idx.group,
+                    sectors=tuple(new_sectors)
+                )
+                new_indices.append(new_index)
+        
+        self.indices = tuple(new_indices)
         self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------
