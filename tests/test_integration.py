@@ -50,8 +50,8 @@ def test_workflow_construct_contract_svd_reconstruct():
     assert_charge_neutral(Vh)
     
     # Reconstruct
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=(1, 0))
+    reconstructed = contract(U, S_Vh, axes=(1, 0))
     
     # Verify reconstruction
     diff_norm = (C - reconstructed).norm()
@@ -133,7 +133,7 @@ def test_workflow_svd_truncation_and_contraction():
     U, R = decomp(T, axis=0, mode="UR")
     
     # Reconstruct
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=(1, 0))
     
     # Should approximately recover original
     rel_error = (T - reconstructed).norm() / T.norm()
@@ -297,7 +297,7 @@ def test_workflow_z2_tensors():
     U, R = decomp(C, axis=0, mode="UR")
     
     # Reconstruct
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=(1, 0))
     
     # Verify
     rel_error = (C - reconstructed).norm() / C.norm()
