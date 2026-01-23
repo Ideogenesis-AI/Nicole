@@ -51,9 +51,7 @@ from .index import Index
 from .symmetry.base import AbelianGroup
 from .symmetry.abelian import U1Group
 from .symmetry.product import ProductGroup
-from .typing import Charge
-
-
+from .typing import Charge, Direction
 
 
 def _charge_components(charge: Charge) -> Tuple:
@@ -304,4 +302,77 @@ def tensor_summary(
 
     return "\n".join([info_line, data_line, *block_lines])
 
+
+def index_summary(index: Index) -> str:
+    """Create a formatted summary for an Index.
+    
+    Parameters
+    ----------
+    index:
+        Index to summarize
+        
+    Returns
+    -------
+    str
+        A formatted multi-line string with:
+        - First line: Index having '{group name}' with {direction}
+        - Following lines: Table of charge and dimension
+    """
+    # Get group name
+    group = index.group
+    if isinstance(group, ProductGroup):
+        group_name = group.name
+    elif isinstance(group, U1Group):
+        group_name = "U1"
+    elif isinstance(group, AbelianGroup):
+        group_name = group.name
+    else:
+        group_name = getattr(group, "name", "Unknown")
+    
+    # Get direction string
+    dir_str = "-" if index.direction == Direction.OUT else "+"
+    
+    # First line
+    header = f"\n  Index having '{group_name}' with {dir_str}\n"
+    
+    # If no sectors, return early
+    if not index.sectors:
+        return header + "\n  (no sectors)"
+    
+    # Build the table
+    table_lines = []
+    
+    # Determine charge width based on all charges
+    charge_strs = []
+    is_product_group = False
+    for sector in index.sectors:
+        charge = sector.charge
+        # Handle tuple charges (product groups)
+        if isinstance(charge, tuple):
+            charge_str = str(charge)
+            is_product_group = True
+        else:
+            charge_str = str(charge)
+        charge_strs.append(charge_str)
+    
+    # Calculate column widths
+    charge_width = max(len(s) for s in charge_strs)
+    charge_width = max(charge_width, len("Charge"))
+    
+    dim_strs = [str(sector.dim) for sector in index.sectors]
+    dim_width = max(len(s) for s in dim_strs)
+    dim_width = max(dim_width, len("Dims"))
+    
+    # Adjust indentation based on group type
+    # Product groups: 6 spaces, single groups: 4 spaces
+    indent = "      " if is_product_group else "    "
+    
+    # Header row
+    table_lines.append(f"      {'Charge':>{charge_width}}  {'Dims':>{dim_width}}")
+    
+    # Sector rows
+    for charge_str, dim_str in zip(charge_strs, dim_strs):
+        table_lines.append(f"{indent}{charge_str:>{charge_width}}  {dim_str:>{dim_width}}")
+    
+    return header + "\n" + "\n".join(table_lines)
 

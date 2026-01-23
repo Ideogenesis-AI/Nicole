@@ -92,6 +92,13 @@ class Index:
         """Total dimension of the index after summing over all sectors."""
         return sum(s.dim for s in self.sectors)
 
+    def __str__(self) -> str:
+        """Return a formatted multiline summary of the Index."""
+        from .display import index_summary
+        return index_summary(self)
+    
+    __repr__ = __str__
+
     def flip(self) -> Index:
         """Return a copy with direction flipped but raw charge sectors untouched."""
 
