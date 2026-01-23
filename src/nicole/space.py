@@ -590,6 +590,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sz_data,
         dtype=np.float64
     )
+    Op["Sz"].trim_zero_sectors()
     
     # Build Sp operator (spin raising: |↓⟩ → |↑⟩)
     # (0,1) = (0,-1) + q_aux → q_aux = (0, 2)
@@ -746,6 +747,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sz_data,
         dtype=np.float64
     )
+    Op["Sz"].trim_zero_sectors()
     
     # Build Sp operator (|↓⟩ → |↑⟩)
     # Following spherical tensor convention (consistent with Spin preset)

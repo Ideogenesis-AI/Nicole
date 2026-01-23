@@ -815,10 +815,10 @@ class TestBandOperatorStructure:
         """Test spin operator structure."""
         Spc, Op = load_space("Band", "U1, U1")
         
-        # Sz should be diagonal
+        # Sz should be diagonal with zero sectors trimmed
         Sz = Op["Sz"]
         assert len(Sz.indices) == 2
-        assert len(Sz.data) == 4  # All 4 sectors
+        assert len(Sz.data) == 2  # Only non-zero eigenvalues (|↑⟩ and |↓⟩)
         
         # Sp should have 1 block (|↓⟩ → |↑⟩)
         Sp = Op["Sp"]
@@ -910,7 +910,7 @@ class TestBandMatrixElements:
         assert np.isclose(F_dn.data[key2][0, 0, 0], -1.0)
     
     def test_sz_eigenvalues(self):
-        """Test Sz eigenvalues."""
+        """Test Sz eigenvalues (zero eigenvalues trimmed)."""
         Spc, Op = load_space("Band", "U1, U1")
         Sz = Op["Sz"]
         
@@ -920,11 +920,12 @@ class TestBandMatrixElements:
             if q_out == q_in:
                 eigenvalues[q_in] = block[0, 0]
         
-        # Check expected values
-        assert np.isclose(eigenvalues[(-1, 0)], 0.0)   # |0⟩
+        # Check expected non-zero values (zero eigenvalues have been trimmed)
         assert np.isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
         assert np.isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
-        assert np.isclose(eigenvalues[(1, 0)], 0.0)    # |↑↓⟩
+        # Zero eigenvalues for |0⟩ and |↑↓⟩ are trimmed
+        assert (-1, 0) not in eigenvalues  # |0⟩ with Sz=0 trimmed
+        assert (1, 0) not in eigenvalues   # |↑↓⟩ with Sz=0 trimmed
     
     def test_spin_ladder_operators(self):
         """Test spin ladder operator matrix elements."""
