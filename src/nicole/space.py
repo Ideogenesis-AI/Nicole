@@ -47,12 +47,13 @@ def load_space(
     -------
     Spc : Index
         Physical space index containing all sectors of the local Hilbert space
-    Op : dict[str, Tensor]
-        Dictionary of operators as charge-conserving Tensors.
-        For spin systems: {"Sp", "Sm", "Sz"}
+    Op : dict[str, Tensor | Index]
+        Dictionary of operators and indices.
+        For spin systems: {"Sp", "Sm", "Sz", "vac"}
         - Sz: 2-index tensor (OUT, IN) - charge neutral
         - Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
         - Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
+        - vac: Index representing trivial vacuum space with charge 0
     
     Raises
     ------
@@ -96,8 +97,8 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     -------
     Spc : Index
         Physical space index for spin
-    Op : dict[str, Tensor]
-        Spin operators {Sp, Sm, Sz}
+    Op : dict[str, Tensor | Index]
+        Spin operators and indices {Sp, Sm, Sz, vac}
     """
     if preserv != "U1":
         raise ValueError(f"Unsupported symmetry '{preserv}' for Spin. Currently only 'U1' is implemented.")
@@ -227,5 +228,13 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         data=Sm_data,
         dtype=np.float64
     )
+    
+    # Create vacuum index (trivial space with charge 0)
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
     
     return Spc, Op
