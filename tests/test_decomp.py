@@ -122,7 +122,7 @@ def test_svd_different_axis_positions():
         U, R = decomp(T, axis=axis, mode="UR")
         
         # Reconstruct using explicit pairs
-        reconstructed = contract(U, R, pairs=[(1, 0)])
+        reconstructed = contract(U, R, axes=([1], [0]))
         
         # Permute back to original order
         if axis == 0:
@@ -408,7 +408,7 @@ def test_svd_complex_dtype():
     assert np.issubdtype(R.dtype, np.complexfloating)
     
     # Reconstruct using explicit pairs
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
@@ -432,7 +432,7 @@ def test_decomp_ur_mode():
     assert len(R.indices) == 2
     
     # Reconstruct using explicit pairs (bond indices have tags _bond_L and _bond_R)
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
@@ -454,7 +454,7 @@ def test_decomp_lv_mode():
     assert len(V.indices) == 2
     
     # Reconstruct using explicit pairs (bond indices have tags _bond_L and _bond_R)
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
@@ -494,16 +494,16 @@ def test_decomp_modes_equivalent():
     
     # UR mode
     U_ur, R = decomp(T, axis=0, mode="UR")
-    recon_ur = contract(U_ur, R, pairs=[(1, 0)])
+    recon_ur = contract(U_ur, R, axes=([1], [0]))
     
     # SVD mode
     U_svd, S, Vh_svd = decomp(T, axis=0, mode="SVD")
-    S_Vh = contract(S, Vh_svd, pairs=[(1, 0)])
-    recon_svd = contract(U_svd, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh_svd, axes=([1], [0]))
+    recon_svd = contract(U_svd, S_Vh, axes=([1], [0]))
     
     # LV mode
     L, V_lv = decomp(T, axis=0, mode="LV")
-    recon_lv = contract(L, V_lv, pairs=[(1, 0)])
+    recon_lv = contract(L, V_lv, axes=([1], [0]))
     
     # All reconstructions should be equivalent
     diff_ur_svd = (recon_ur - recon_svd).norm()
@@ -562,7 +562,7 @@ def test_decomp_ur_multiindex():
     assert len(R.indices) == 3
     
     # Reconstruct using explicit pairs
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     
     # Permute back to original order (b, a, c) -> (a, b, c)
     reconstructed.permute([1, 0, 2])
@@ -588,7 +588,7 @@ def test_decomp_lv_multiindex():
     assert len(V.indices) == 3
     
     # Reconstruct using explicit pairs
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     
     # Permute back to original order (c, a, b) -> (a, b, c)
     reconstructed.permute([1, 2, 0])
@@ -741,7 +741,7 @@ def test_decomp_truncation_ur_mode():
     assert bond_index.dim <= 4
     
     # Verify reconstruction is approximate (not exact due to truncation)
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     
     # Error should be non-zero (truncation loses information)
@@ -829,7 +829,7 @@ def test_decomp_4index_tensor():
         U, R = decomp(T, axis=axis, mode="UR")
         
         # Reconstruct
-        reconstructed = contract(U, R, pairs=[(1, 0)])
+        reconstructed = contract(U, R, axes=([1], [0]))
         
         # Permute back to original order
         if axis == 0:
@@ -873,8 +873,8 @@ def test_decomp_5index_tensor():
     assert_charge_neutral(Vh)
     
     # Reconstruct
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     
     # Permute: (c, a, b, d, e) -> (a, b, c, d, e)
     reconstructed.permute([1, 2, 0, 3, 4])
@@ -905,7 +905,7 @@ def test_decomp_6index_tensor_with_truncation():
     assert bond_dim <= 5
     
     # Reconstruct (will be approximate due to truncation)
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     
     # Verify dimensions
     assert len(reconstructed.indices) == 6
@@ -933,7 +933,7 @@ def test_high_order_tensor_multiple_charges():
     assert len(bond_charges) > 1, "Should have multiple charge sectors"
     
     # Reconstruct
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
@@ -979,14 +979,14 @@ def test_high_order_tensor_all_modes():
     
     # Test all three modes give equivalent results
     U_ur, R = decomp(T, axis=1, mode="UR")
-    recon_ur = contract(U_ur, R, pairs=[(1, 0)])
+    recon_ur = contract(U_ur, R, axes=([1], [0]))
     
     U_svd, S, Vh_svd = decomp(T, axis=1, mode="SVD")
-    S_Vh = contract(S, Vh_svd, pairs=[(1, 0)])
-    recon_svd = contract(U_svd, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh_svd, axes=([1], [0]))
+    recon_svd = contract(U_svd, S_Vh, axes=([1], [0]))
     
     L, V_lv = decomp(T, axis=1, mode="LV")
-    recon_lv = contract(L, V_lv, pairs=[(1, 0)])
+    recon_lv = contract(L, V_lv, axes=([1], [0]))
     
     # All reconstructions should match (after permuting to same order)
     # Current order is (b, a, c, d), need (a, b, c, d)
@@ -1073,8 +1073,8 @@ def test_decomp_flow_svd_default():
     assert S.indices[1].direction == Direction.IN
     
     # Verify reconstruction
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1094,8 +1094,8 @@ def test_decomp_flow_svd_outward():
     assert S.indices[1].direction == Direction.OUT
     
     # Verify reconstruction
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1115,8 +1115,8 @@ def test_decomp_flow_svd_inward():
     assert S.indices[1].direction == Direction.IN
     
     # Verify reconstruction
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1146,8 +1146,8 @@ def test_decomp_flow_svd_with_in_index():
     for U, S, Vh in [(U_default, S_default, Vh_default), 
                       (U_out, S_out, Vh_out), 
                       (U_in, S_in, Vh_in)]:
-        S_Vh = contract(S, Vh, pairs=[(1, 0)])
-        reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+        S_Vh = contract(S, Vh, axes=([1], [0]))
+        reconstructed = contract(U, S_Vh, axes=([1], [0]))
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
 
@@ -1168,7 +1168,7 @@ def test_decomp_flow_ur_mode_default():
     assert R.indices[0].direction == Direction.IN
     
     # Verify reconstruction
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1192,8 +1192,8 @@ def test_decomp_flow_ur_mode_explicit():
     assert R_in.indices[0].direction == Direction.OUT
     
     # Both should reconstruct correctly
-    recon_out = contract(U_out, R_out, pairs=[(1, 0)])
-    recon_in = contract(U_in, R_in, pairs=[(1, 0)])
+    recon_out = contract(U_out, R_out, axes=([1], [0]))
+    recon_in = contract(U_in, R_in, axes=([1], [0]))
     
     assert (T - recon_out).norm() / T.norm() < 1e-12
     assert (T - recon_in).norm() / T.norm() < 1e-12
@@ -1213,7 +1213,7 @@ def test_decomp_flow_ur_mode_in_index():
     assert R.indices[0].direction == Direction.IN
     
     # Verify reconstruction
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1234,7 +1234,7 @@ def test_decomp_flow_lv_mode_default():
     assert V.indices[0].direction == Direction.OUT
     
     # Verify reconstruction
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1258,8 +1258,8 @@ def test_decomp_flow_lv_mode_explicit():
     assert V_out.indices[0].direction == Direction.IN
     
     # Both should reconstruct correctly
-    recon_in = contract(L_in, V_in, pairs=[(1, 0)])
-    recon_out = contract(L_out, V_out, pairs=[(1, 0)])
+    recon_in = contract(L_in, V_in, axes=([1], [0]))
+    recon_out = contract(L_out, V_out, axes=([1], [0]))
     
     assert (T - recon_in).norm() / T.norm() < 1e-12
     assert (T - recon_out).norm() / T.norm() < 1e-12
@@ -1279,7 +1279,7 @@ def test_decomp_flow_lv_mode_in_index():
     assert V.indices[0].direction == Direction.OUT
     
     # Verify reconstruction
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1300,8 +1300,8 @@ def test_decomp_flow_multiindex_svd():
         U, S, Vh = decomp(T, axis=0, mode="SVD", flow=flow)
         
         # Verify reconstruction
-        S_Vh = contract(S, Vh, pairs=[(1, 0)])
-        reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+        S_Vh = contract(S, Vh, axes=([1], [0]))
+        reconstructed = contract(U, S_Vh, axes=([1], [0]))
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
 
@@ -1320,7 +1320,7 @@ def test_decomp_flow_multiindex_ur_lv():
     # Test UR mode with different flows
     for flow in ["><", ">>", "<<"]:
         U, R = decomp(T, axis=1, mode="UR", flow=flow)
-        reconstructed = contract(U, R, pairs=[(1, 0)])
+        reconstructed = contract(U, R, axes=([1], [0]))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
         reconstructed.permute([1, 0, 2])
         rel_error = (T - reconstructed).norm() / T.norm()
@@ -1329,7 +1329,7 @@ def test_decomp_flow_multiindex_ur_lv():
     # Test LV mode with different flows
     for flow in ["><", ">>", "<<"]:
         L, V = decomp(T, axis=1, mode="LV", flow=flow)
-        reconstructed = contract(L, V, pairs=[(1, 0)])
+        reconstructed = contract(L, V, axes=([1], [0]))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
         reconstructed.permute([1, 0, 2])
         rel_error = (T - reconstructed).norm() / T.norm()
@@ -1388,8 +1388,8 @@ def test_decomp_itag_svd_single_string():
     assert S.itags[1] == "bond"
     
     # Verify reconstruction (need explicit pairs since both bonds have same tag)
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1411,8 +1411,8 @@ def test_decomp_itag_svd_tuple():
     assert S.itags[1] == "bond_vh"
     
     # Verify reconstruction with integer pairs
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
 
@@ -1431,7 +1431,7 @@ def test_decomp_itag_ur_mode():
     assert R.itags[0] == "k"
     
     # Verify reconstruction (explicit pairs needed since both have same tag)
-    reconstructed = contract(U, R, pairs=[(1, 0)])
+    reconstructed = contract(U, R, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
     
@@ -1441,7 +1441,7 @@ def test_decomp_itag_ur_mode():
     assert R2.itags[0] == "i"  # R uses left tag for bond
     
     # Verify reconstruction
-    reconstructed2 = contract(U2, R2, pairs=[(1, 0)])
+    reconstructed2 = contract(U2, R2, axes=([1], [0]))
     rel_error2 = (T - reconstructed2).norm() / T.norm()
     assert rel_error2 < 1e-12
 
@@ -1460,7 +1460,7 @@ def test_decomp_itag_lv_mode():
     assert V.itags[0] == "m"
     
     # Verify reconstruction (explicit pairs needed since both have same tag)
-    reconstructed = contract(L, V, pairs=[(1, 0)])
+    reconstructed = contract(L, V, axes=([1], [0]))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
     
@@ -1470,7 +1470,7 @@ def test_decomp_itag_lv_mode():
     assert V2.itags[0] == "q"
     
     # Verify reconstruction
-    reconstructed2 = contract(L2, V2, pairs=[(1, 0)])
+    reconstructed2 = contract(L2, V2, axes=([1], [0]))
     rel_error2 = (T - reconstructed2).norm() / T.norm()
     assert rel_error2 < 1e-12
 
@@ -1494,8 +1494,8 @@ def test_decomp_itag_multiindex():
     assert Vh.itags == ("right", "a", "c")  # Vh has (bond, *rest)
     
     # Verify reconstruction with integer pairs
-    S_Vh = contract(S, Vh, pairs=[(1, 0)])
-    reconstructed = contract(U, S_Vh, pairs=[(1, 0)])
+    S_Vh = contract(S, Vh, axes=([1], [0]))
+    reconstructed = contract(U, S_Vh, axes=([1], [0]))
     reconstructed.permute([1, 0, 2])  # Reorder (b, a, c) to (a, b, c)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
