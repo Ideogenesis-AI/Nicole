@@ -284,7 +284,7 @@ def tensor_summary(
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr:>7}"
                 )
             else:
                 # High-dimensional array — display dims and byte footprint.
