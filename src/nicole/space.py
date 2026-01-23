@@ -600,8 +600,9 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sp_data = {}
-    # |↓⟩ → |↑⟩ with coefficient 1
-    Sp_data[((0, 1), (0, -1), (0, 2))] = np.array([[[1.0]]], dtype=np.float64)
+    # |↓⟩ → |↑⟩ with spherical convention coefficient
+    coeff_Sp = -1.0 / np.sqrt(2.0)
+    Sp_data[((0, 1), (0, -1), (0, 2))] = np.array([[[coeff_Sp]]], dtype=np.float64)
     
     Op["Sp"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sp),
@@ -619,8 +620,9 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sm_data = {}
-    # |↑⟩ → |↓⟩ with coefficient 1
-    Sm_data[((0, -1), (0, 1), (0, -2))] = np.array([[[1.0]]], dtype=np.float64)
+    # |↑⟩ → |↓⟩ with spherical convention coefficient
+    coeff_Sm = +1.0 / np.sqrt(2.0)
+    Sm_data[((0, -1), (0, 1), (0, -2))] = np.array([[[coeff_Sm]]], dtype=np.float64)
     
     Op["Sm"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sm),
@@ -746,6 +748,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     # Build Sp operator (|↓⟩ → |↑⟩)
+    # Following spherical tensor convention (consistent with Spin preset)
+    # For spin-1/2: coefficient = -1/sqrt(2)
     # -(1,1) + (1,-1) + q_aux = 0 → q_aux = (0, 2)
     aux_Sp = Index(
         direction=Direction.OUT,
@@ -754,7 +758,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sp_data = {}
-    Sp_data[((1, 1), (1, -1), (0, 2))] = np.array([[[1.0]]], dtype=np.float64)
+    coeff_Sp = -1.0 / np.sqrt(2.0)
+    Sp_data[((1, 1), (1, -1), (0, 2))] = np.array([[[coeff_Sp]]], dtype=np.float64)
     
     Op["Sp"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sp),
@@ -764,6 +769,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     # Build Sm operator (|↑⟩ → |↓⟩)
+    # Following spherical tensor convention (consistent with Spin preset)
+    # For spin-1/2: coefficient = +1/sqrt(2)
     # -(1,-1) + (1,1) + q_aux = 0 → q_aux = (0, -2)
     aux_Sm = Index(
         direction=Direction.OUT,
@@ -772,7 +779,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sm_data = {}
-    Sm_data[((1, -1), (1, 1), (0, -2))] = np.array([[[1.0]]], dtype=np.float64)
+    coeff_Sm = +1.0 / np.sqrt(2.0)
+    Sm_data[((1, -1), (1, 1), (0, -2))] = np.array([[[coeff_Sm]]], dtype=np.float64)
     
     Op["Sm"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sm),

@@ -932,15 +932,17 @@ class TestBandMatrixElements:
         Sp = Op["Sp"]
         Sm = Op["Sm"]
         
-        # Sp|↓⟩ = |↑⟩: (0,-1) → (0,1)
+        # Sp|↓⟩ = |↑⟩: (0,-1) → (0,1) with spherical convention
+        # For spin-1/2: coefficient = -1/sqrt(2)
         key_p = ((0, 1), (0, -1), (0, 2))
         assert key_p in Sp.data
-        assert np.isclose(Sp.data[key_p][0, 0, 0], 1.0)
+        assert np.isclose(Sp.data[key_p][0, 0, 0], -1.0 / np.sqrt(2.0))
         
-        # Sm|↑⟩ = |↓⟩: (0,1) → (0,-1)
+        # Sm|↑⟩ = |↓⟩: (0,1) → (0,-1) with spherical convention
+        # For spin-1/2: coefficient = +1/sqrt(2)
         key_m = ((0, -1), (0, 1), (0, -2))
         assert key_m in Sm.data
-        assert np.isclose(Sm.data[key_m][0, 0, 0], 1.0)
+        assert np.isclose(Sm.data[key_m][0, 0, 0], +1.0 / np.sqrt(2.0))
 
 
 class TestBandErrorHandling:
