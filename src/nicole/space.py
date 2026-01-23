@@ -23,7 +23,7 @@ import numpy as np
 
 from .index import Index, Direction, Sector
 from .tensor import Tensor
-from .symmetry import U1Group
+from .symmetry import U1Group, Z2Group
 
 
 def load_space(
@@ -38,10 +38,11 @@ def load_space(
     stat : str
         Statistics type: "Spin" for bosonic spin systems, "Ferm" for fermionic systems
     preserv : str
-        Symmetry to preserve: "U1" for U(1) charge conservation
+        Symmetry to preserve: "U1" for U(1) charge conservation, "Z2" for Z2 parity
     option : dict, optional
         Additional options specific to the system:
         - For "Spin": {"J": float} where J is the total spin (half-integer)
+        - For "Ferm": No options required for spinless fermions
     
     Returns
     -------
@@ -53,6 +54,10 @@ def load_space(
         - Sz: 2-index tensor (OUT, IN) - charge neutral
         - Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
         - Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
+        - vac: Index representing trivial vacuum space with charge 0
+        For fermionic systems: {"F", "Z", "vac"}
+        - F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
+        - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral
         - vac: Index representing trivial vacuum space with charge 0
     
     Raises
@@ -67,20 +72,29 @@ def load_space(
     >>> Spc.dim  # 2 states: m_z = -1/2, +1/2
     2
     >>> list(Op.keys())
-    ['Sp', 'Sm', 'Sz']
+    ['Sp', 'Sm', 'Sz', 'vac']
     
     >>> # Create spin-1 system
     >>> Spc, Op = load_space("Spin", "U1", {"J": 1.0})
     >>> Spc.dim  # 3 states: m_z = -1, 0, +1
     3
+    
+    >>> # Create spinless fermion system with U(1) symmetry
+    >>> Spc, Op = load_space("Ferm", "U1")
+    >>> Spc.dim  # 2 states: |0⟩, |1⟩
+    2
+    >>> list(Op.keys())
+    ['F', 'Z', 'vac']
     """
     if option is None:
         option = {}
     
     if stat == "Spin":
         return _load_spin_space(preserv, option)
+    elif stat == "Ferm":
+        return _load_ferm_space(preserv, option)
     else:
-        raise ValueError(f"Unsupported statistics type '{stat}'. Currently only 'Spin' is implemented.")
+        raise ValueError(f"Unsupported quantum statistics '{stat}'. Supported types: 'Spin', 'Ferm'.")
 
 
 def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
@@ -230,6 +244,184 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     )
     
     # Create vacuum index (trivial space with charge 0)
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
+    
+    return Spc, Op
+
+
+def _load_ferm_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinless fermion space and operators.
+    
+    Parameters
+    ----------
+    preserv : str
+        Symmetry to preserve: "U1" or "Z2"
+    option : dict
+        Options (none required for spinless fermions)
+    
+    Returns
+    -------
+    Spc : Index
+        Physical space index for spinless fermion (2 states: empty and occupied)
+    Op : dict[str, Tensor | Index]
+        Fermionic operators and indices {F, Z, vac}
+        - F: annihilation operator (3-index tensor)
+        - Z: Jordan-Wigner string operator (2-index tensor)
+        - vac: vacuum index (trivial space)
+    """
+    if preserv == "U1":
+        return _load_ferm_u1(option)
+    elif preserv == "Z2":
+        return _load_ferm_z2(option)
+    else:
+        raise ValueError(f"Unsupported symmetry '{preserv}' for Ferm. Supported: 'U1', 'Z2'.")
+
+
+def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinless fermion space with U(1) symmetry.
+    
+    For spinless fermions:
+    - |0⟩: empty state, charge = 0
+    - |1⟩: occupied state, charge = 1
+    
+    Returns F (annihilation) and Z (Jordan-Wigner string) operators.
+    """
+    group = U1Group()
+    
+    # Create physical space: two sectors for |0⟩ and |1⟩
+    sectors = [
+        Sector(charge=0, dim=1),  # |0⟩: empty state
+        Sector(charge=1, dim=1),  # |1⟩: occupied state
+    ]
+    
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=tuple(sectors)
+    )
+    
+    Op = {}
+    
+    # Build F operator (annihilation operator)
+    # F|1⟩ = |0⟩, F|0⟩ = 0
+    # This is a 3-index tensor (IN, OUT, auxiliary)
+    # Charge conservation: -q_out + q_in + q_aux = 0
+    # For F: input charge 1 → output charge 0
+    # -0 + 1 + q_aux = 0 → q_aux = -1
+    
+    aux_F = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=-1, dim=1),)
+    )
+    
+    F_data = {}
+    # Matrix element: ⟨0|F|1⟩ = 1
+    # Block key: (charge_out, charge_in, charge_aux) = (0, 1, -1)
+    F_data[(0, 1, -1)] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["F"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_data,
+        dtype=np.float64
+    )
+    
+    # Build Z operator (Jordan-Wigner string / Z-string)
+    # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
+    # This is a diagonal 2-index tensor
+    Z_data = {}
+    Z_data[(0, 0)] = np.array([[1.0]], dtype=np.float64)   # ⟨0|Z|0⟩ = 1
+    Z_data[(1, 1)] = np.array([[-1.0]], dtype=np.float64)  # ⟨1|Z|1⟩ = -1
+    
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        dtype=np.float64
+    )
+    
+    # Create vacuum index (trivial space with charge 0)
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
+    
+    return Spc, Op
+
+
+def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinless fermion space with Z2 symmetry.
+    
+    For spinless fermions:
+    - |0⟩: empty state, parity = 0 (even)
+    - |1⟩: occupied state, parity = 1 (odd)
+    
+    Returns F (annihilation) and Z (Jordan-Wigner string) operators.
+    """
+    group = Z2Group()
+    
+    # Create physical space: two sectors for |0⟩ and |1⟩
+    sectors = [
+        Sector(charge=0, dim=1),  # |0⟩: empty state, even parity
+        Sector(charge=1, dim=1),  # |1⟩: occupied state, odd parity
+    ]
+    
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=tuple(sectors)
+    )
+    
+    Op = {}
+    
+    # Build F operator (annihilation operator)
+    # F|1⟩ = |0⟩, F|0⟩ = 0
+    # This is a 3-index tensor (IN, OUT, auxiliary)
+    # Charge conservation (mod 2): -q_out + q_in + q_aux = 0 (mod 2)
+    # For F: input parity 1 → output parity 0
+    # -0 + 1 + q_aux = 0 (mod 2) → q_aux = -1 (mod 2) = 1
+    
+    aux_F = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=1, dim=1),)
+    )
+    
+    F_data = {}
+    # Matrix element: ⟨0|F|1⟩ = 1
+    # Block key: (parity_out, parity_in, parity_aux) = (0, 1, 1)
+    F_data[(0, 1, 1)] = np.array([[[1.0]]], dtype=np.float64)
+    
+    Op["F"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_data,
+        dtype=np.float64
+    )
+    
+    # Build Z operator (Jordan-Wigner string / Z-string)
+    # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
+    # This is a diagonal 2-index tensor
+    Z_data = {}
+    Z_data[(0, 0)] = np.array([[1.0]], dtype=np.float64)   # ⟨0|Z|0⟩ = 1
+    Z_data[(1, 1)] = np.array([[-1.0]], dtype=np.float64)  # ⟨1|Z|1⟩ = -1
+    
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        dtype=np.float64
+    )
+    
+    # Create vacuum index (trivial space with parity 0)
     vac_index = Index(
         direction=Direction.IN,
         group=group,

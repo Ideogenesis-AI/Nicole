@@ -22,8 +22,8 @@ import numpy as np
 import pytest
 
 from nicole import load_space, contract
-from nicole.index import Direction
-from nicole.symmetry import U1Group
+from nicole.index import Direction, Index
+from nicole.symmetry import U1Group, Z2Group
 
 
 class TestLoadSpaceBasic:
@@ -333,8 +333,8 @@ class TestErrorHandling:
     
     def test_unsupported_stat(self):
         """Test error for unsupported statistics."""
-        with pytest.raises(ValueError, match="Unsupported statistics type"):
-            load_space("Ferm", "U1", {"J": 0.5})
+        with pytest.raises(ValueError, match="Unsupported quantum statistics"):
+            load_space("Boson", "U1", {})
     
     def test_unsupported_symmetry(self):
         """Test error for unsupported symmetry."""
@@ -414,3 +414,298 @@ class TestOperatorRelations:
             expected_dim = int(2 * J + 1)
             assert Spc.dim == expected_dim
             assert len(Spc.sectors) == expected_dim
+
+
+class TestFermionBasic:
+    """Test basic functionality of spinless fermion space."""
+    
+    def test_ferm_u1_space(self):
+        """Test spinless fermion space creation with U(1) symmetry."""
+        Spc, Op = load_space("Ferm", "U1")
+        
+        # Check space properties
+        assert Spc.direction == Direction.IN
+        assert isinstance(Spc.group, U1Group)
+        assert Spc.dim == 2
+        assert len(Spc.sectors) == 2
+        
+        # Check sectors: |0⟩ (charge 0) and |1⟩ (charge 1)
+        charges = [s.charge for s in Spc.sectors]
+        assert charges == [0, 1]
+        for sector in Spc.sectors:
+            assert sector.dim == 1
+        
+        # Check operators exist
+        assert set(Op.keys()) == {"F", "Z", "vac"}
+    
+    def test_ferm_z2_space(self):
+        """Test spinless fermion space creation with Z2 symmetry."""
+        Spc, Op = load_space("Ferm", "Z2")
+        
+        # Check space properties
+        assert Spc.direction == Direction.IN
+        assert isinstance(Spc.group, Z2Group)
+        assert Spc.dim == 2
+        assert len(Spc.sectors) == 2
+        
+        # Check sectors: |0⟩ (parity 0) and |1⟩ (parity 1)
+        parities = [s.charge for s in Spc.sectors]
+        assert parities == [0, 1]
+        for sector in Spc.sectors:
+            assert sector.dim == 1
+        
+        # Check operators exist
+        assert set(Op.keys()) == {"F", "Z", "vac"}
+    
+    def test_ferm_no_options_required(self):
+        """Test that no options are required for spinless fermions."""
+        Spc1, Op1 = load_space("Ferm", "U1")
+        Spc2, Op2 = load_space("Ferm", "U1", None)
+        Spc3, Op3 = load_space("Ferm", "U1", {})
+        
+        # All should produce identical results
+        assert Spc1.dim == Spc2.dim == Spc3.dim
+        assert len(Op1["F"].data) == len(Op2["F"].data) == len(Op3["F"].data)
+
+
+class TestFermionOperatorStructure:
+    """Test fermionic operator structure."""
+    
+    def test_f_structure_u1(self):
+        """Test F (annihilation) operator structure with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        F = Op["F"]
+        
+        # Should be 3-index tensor
+        assert len(F.indices) == 3
+        assert F.itags == ("_init_", "_init_", "_aux_")
+        
+        # Directions: (IN, OUT, OUT)
+        assert F.indices[0].direction == Direction.IN
+        assert F.indices[1].direction == Direction.OUT
+        assert F.indices[2].direction == Direction.OUT
+        
+        # Auxiliary index should have single sector with charge -1
+        aux_idx = F.indices[2]
+        assert len(aux_idx.sectors) == 1
+        assert aux_idx.sectors[0].charge == -1
+        assert aux_idx.sectors[0].dim == 1
+        
+        # Should have single block: |1⟩ → |0⟩
+        assert len(F.data) == 1
+        assert (0, 1, -1) in F.data
+    
+    def test_f_structure_z2(self):
+        """Test F (annihilation) operator structure with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        F = Op["F"]
+        
+        # Should be 3-index tensor
+        assert len(F.indices) == 3
+        assert F.itags == ("_init_", "_init_", "_aux_")
+        
+        # Auxiliary index should have single sector with parity 1
+        aux_idx = F.indices[2]
+        assert len(aux_idx.sectors) == 1
+        assert aux_idx.sectors[0].charge == 1
+        assert aux_idx.sectors[0].dim == 1
+        
+        # Should have single block: |1⟩ → |0⟩
+        assert len(F.data) == 1
+        assert (0, 1, 1) in F.data
+    
+    def test_z_structure_u1(self):
+        """Test Z operator structure with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        Z = Op["Z"]
+        
+        # Should be 2-index tensor
+        assert len(Z.indices) == 2
+        assert Z.itags == ("_init_", "_init_")
+        
+        # Directions: (IN, OUT)
+        assert Z.indices[0].direction == Direction.IN
+        assert Z.indices[1].direction == Direction.OUT
+        
+        # Should have diagonal blocks only
+        assert len(Z.data) == 2
+        for (q_out, q_in) in Z.data.keys():
+            assert q_out == q_in  # Diagonal
+    
+    def test_z_structure_z2(self):
+        """Test Z operator structure with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        Z = Op["Z"]
+        
+        # Should be 2-index tensor
+        assert len(Z.indices) == 2
+        
+        # Should have diagonal blocks only
+        assert len(Z.data) == 2
+        for (p_out, p_in) in Z.data.keys():
+            assert p_out == p_in  # Diagonal
+
+
+class TestFermionChargeConservation:
+    """Test charge conservation in fermionic operators."""
+    
+    def test_f_charge_conservation_u1(self):
+        """Test F charge conservation with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        F = Op["F"]
+        
+        # Charge conservation: -q_out + q_in + q_aux = 0
+        for (q_out, q_in, q_aux), block in F.data.items():
+            assert -q_out + q_in + q_aux == 0
+            # F should annihilate: q_out = q_in - 1
+            assert q_out == q_in - 1
+            assert q_aux == -1
+    
+    def test_f_charge_conservation_z2(self):
+        """Test F charge conservation with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        F = Op["F"]
+        
+        # Charge conservation (mod 2): -q_out + q_in + q_aux = 0 (mod 2)
+        for (q_out, q_in, q_aux), block in F.data.items():
+            assert (-q_out + q_in + q_aux) % 2 == 0
+            # F should annihilate: even → odd (0 → 1)
+            assert q_in == 1 and q_out == 0
+            assert q_aux == 1
+    
+    def test_z_charge_conservation_u1(self):
+        """Test Z preserves charge with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        Z = Op["Z"]
+        
+        # Charge conservation: -q_out + q_in = 0
+        for (q_out, q_in), block in Z.data.items():
+            assert -q_out + q_in == 0
+            assert q_out == q_in
+    
+    def test_z_charge_conservation_z2(self):
+        """Test Z preserves parity with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        Z = Op["Z"]
+        
+        # Parity conservation: -p_out + p_in = 0 (mod 2)
+        for (p_out, p_in), block in Z.data.items():
+            assert (-p_out + p_in) % 2 == 0
+            assert p_out == p_in
+
+
+class TestFermionMatrixElements:
+    """Test fermionic operator matrix elements."""
+    
+    def test_f_matrix_elements_u1(self):
+        """Test F matrix elements with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        F = Op["F"]
+        
+        # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
+        key = (0, 1, -1)
+        assert key in F.data
+        assert np.isclose(F.data[key][0, 0, 0], 1.0)
+    
+    def test_f_matrix_elements_z2(self):
+        """Test F matrix elements with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        F = Op["F"]
+        
+        # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
+        key = (0, 1, 1)
+        assert key in F.data
+        assert np.isclose(F.data[key][0, 0, 0], 1.0)
+    
+    def test_z_matrix_elements_u1(self):
+        """Test Z matrix elements with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        Z = Op["Z"]
+        
+        # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1
+        assert (0, 0) in Z.data
+        assert np.isclose(Z.data[(0, 0)][0, 0], 1.0)
+        
+        # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1
+        assert (1, 1) in Z.data
+        assert np.isclose(Z.data[(1, 1)][0, 0], -1.0)
+    
+    def test_z_matrix_elements_z2(self):
+        """Test Z matrix elements with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        Z = Op["Z"]
+        
+        # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1
+        assert (0, 0) in Z.data
+        assert np.isclose(Z.data[(0, 0)][0, 0], 1.0)
+        
+        # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1
+        assert (1, 1) in Z.data
+        assert np.isclose(Z.data[(1, 1)][0, 0], -1.0)
+    
+    def test_z_eigenvalues(self):
+        """Test Z has eigenvalues +1 and -1."""
+        for preserv in ["U1", "Z2"]:
+            Spc, Op = load_space("Ferm", preserv)
+            Z = Op["Z"]
+            
+            eigenvalues = [Z.data[key][0, 0] for key in sorted(Z.data.keys())]
+            assert np.allclose(eigenvalues, [1.0, -1.0])
+
+
+class TestFermionErrorHandling:
+    """Test error handling for fermionic systems."""
+    
+    def test_unsupported_symmetry(self):
+        """Test error for unsupported symmetry."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Ferm", "SU2")
+    
+    def test_ferm_z2_and_u1_are_different(self):
+        """Test that Z2 and U1 produce different auxiliary charges."""
+        Spc_u1, Op_u1 = load_space("Ferm", "U1")
+        Spc_z2, Op_z2 = load_space("Ferm", "Z2")
+        
+        # Both have same dimension
+        assert Spc_u1.dim == Spc_z2.dim == 2
+        
+        # But auxiliary indices have different charges
+        aux_u1 = Op_u1["F"].indices[2]
+        aux_z2 = Op_z2["F"].indices[2]
+        
+        assert aux_u1.sectors[0].charge == -1  # U1
+        assert aux_z2.sectors[0].charge == 1   # Z2
+
+
+class TestFermionVacuumIndex:
+    """Test vacuum index for fermionic systems."""
+    
+    def test_vacuum_index_u1(self):
+        """Test vacuum index structure with U(1)."""
+        Spc, Op = load_space("Ferm", "U1")
+        vac = Op["vac"]
+        
+        # Should be an Index, not a Tensor
+        assert isinstance(vac, Index)
+        assert vac.direction == Direction.IN
+        assert isinstance(vac.group, U1Group)
+        
+        # Should have single sector with charge 0
+        assert len(vac.sectors) == 1
+        assert vac.sectors[0].charge == 0
+        assert vac.sectors[0].dim == 1
+    
+    def test_vacuum_index_z2(self):
+        """Test vacuum index structure with Z2."""
+        Spc, Op = load_space("Ferm", "Z2")
+        vac = Op["vac"]
+        
+        # Should be an Index
+        assert isinstance(vac, Index)
+        assert vac.direction == Direction.IN
+        assert isinstance(vac.group, Z2Group)
+        
+        # Should have single sector with parity 0
+        assert len(vac.sectors) == 1
+        assert vac.sectors[0].charge == 0
+        assert vac.sectors[0].dim == 1
