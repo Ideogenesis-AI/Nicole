@@ -439,15 +439,15 @@ def test_contract_excl_exclude_from_A():
     A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=301, itags=["a", "b", "c"])
     B = Tensor.random([idx_b_in, idx_c_in, idx_d], seed=302, itags=["b", "c", "d"])
     
-    # Exclude A's axis 0 ("a"), so only "b" and "c" should be contracted
-    result = contract(A, B, excl=((0,), ()))
+    # Exclude A's axis 2 ("c"), so only "b" should be contracted
+    result = contract(A, B, excl=((2,), ()))
     
-    # Result should have: a (from A), d (from B)
-    assert list(result.itags) == ["a", "d"]
+    # Result should have: a, c (from A), c, d (from B) - "c" appears twice
+    assert list(result.itags) == ["a", "c", "c", "d"]
     assert_charge_neutral(result)
     
     # Verify equivalence with manual axes
-    manual_result = contract(A, B, axes=([1, 2], [0, 1]))
+    manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
     for key in result.data:
         np.testing.assert_allclose(result.data[key], manual_result.data[key])
@@ -467,15 +467,15 @@ def test_contract_excl_exclude_from_B():
     A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=303, itags=["a", "b", "c"])
     B = Tensor.random([idx_b_in, idx_c_in, idx_d], seed=304, itags=["b", "c", "d"])
     
-    # Exclude B's axis 2 ("d"), so only "b" and "c" should be contracted
-    result = contract(A, B, excl=((), (2,)))
+    # Exclude B's axis 1 ("c"), so only "b" should be contracted
+    result = contract(A, B, excl=((), (1,)))
     
-    # Result should have: a (from A), d (from B)
-    assert list(result.itags) == ["a", "d"]
+    # Result should have: a, c (from A), c, d (from B) - "c" appears twice
+    assert list(result.itags) == ["a", "c", "c", "d"]
     assert_charge_neutral(result)
     
     # Verify equivalence with manual axes
-    manual_result = contract(A, B, axes=([1, 2], [0, 1]))
+    manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
     for key in result.data:
         np.testing.assert_allclose(result.data[key], manual_result.data[key])
@@ -484,26 +484,28 @@ def test_contract_excl_exclude_from_B():
 def test_contract_excl_exclude_from_both():
     """Test excl parameter excluding axes from both tensors."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    # Create tensors with 3 matching pairs: a, b, c
+    idx_a_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1)))
     idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 1)))
     
+    idx_a_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
     idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
     
-    A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=305, itags=["a", "b", "c"])
-    B = Tensor.random([idx_b_in, idx_c_in, idx_d], seed=306, itags=["b", "c", "d"])
+    A = Tensor.random([idx_a_out, idx_b_out, idx_c_out], seed=305, itags=["a", "b", "c"])
+    B = Tensor.random([idx_a_in, idx_b_in, idx_c_in], seed=306, itags=["a", "b", "c"])
     
-    # Exclude A's axis 0 ("a") and B's axis 2 ("d"), should still contract "b" and "c"
+    # Exclude A's axis 0 ("a") and B's axis 2 ("c"), so only "b" will contract
     result = contract(A, B, excl=((0,), (2,)))
     
-    # Result should have: a (from A), d (from B) - both b and c contracted
-    assert list(result.itags) == ["a", "d"]
+    # Result should have: a (from A), c (from A), a (from B), c (from B)
+    # Order: ["a", "c", "a", "c"] - only b contracted
+    assert list(result.itags) == ["a", "c", "a", "c"]
     assert_charge_neutral(result)
     
-    # Verify both pairs were contracted (same as automatic mode without a and d)
-    manual_result = contract(A, B, axes=([1, 2], [0, 1]))
+    # Verify equivalence with manual axes
+    manual_result = contract(A, B, axes=(1, 1))
     assert result.itags == manual_result.itags
 
 
@@ -641,11 +643,11 @@ def test_contract_excl_with_permutation():
     A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=315, itags=["a", "b", "c"])
     B = Tensor.random([idx_b_in, idx_c_in, idx_d], seed=316, itags=["b", "c", "d"])
     
-    # Exclude A's axis 0, contract b and c, then permute result
-    result = contract(A, B, excl=((0,), ()), perm=[1, 0])
+    # Exclude A's axis 1 ("b"), so only "c" gets contracted, then permute result
+    result = contract(A, B, excl=((1,), ()), perm=[1, 0, 2, 3])
     
-    # Result before perm: ["a", "d"], after perm: ["d", "a"]
-    assert list(result.itags) == ["d", "a"]
+    # Result before perm: ["a", "b", "b", "d"], after perm (swap first two): ["b", "a", "b", "d"]
+    assert list(result.itags) == ["b", "a", "b", "d"]
     assert_charge_neutral(result)
 
 
