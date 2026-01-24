@@ -572,8 +572,8 @@ def inv(tensor: Tensor) -> Tensor:
     Parameters
     ----------
     tensor : Tensor
-        Input diagonal matrix tensor with exactly 2 indices. Must have opposite
-        index directions for proper charge conservation. If labeled "Diagonal",
+        Input diagonal matrix tensor with exactly 2 indices. If both indices have
+        the same direction, they will be flipped automatically. If labeled "Diagonal",
         the diagonal structure check is skipped.
     
     Returns
@@ -584,8 +584,8 @@ def inv(tensor: Tensor) -> Tensor:
     Raises
     ------
     ValueError
-        If tensor does not have exactly 2 indices, or if indices have the same
-        direction, or if tensor is not diagonal (when label != "Diagonal").
+        If tensor does not have exactly 2 indices, or if tensor is not diagonal
+        (when label != "Diagonal").
     ZeroDivisionError
         If any diagonal element is zero (within machine epsilon).
     
@@ -634,13 +634,6 @@ def inv(tensor: Tensor) -> Tensor:
             f"inv requires a tensor with exactly 2 indices, got {len(tensor.indices)}"
         )
     
-    # Validate opposite directions for charge conservation
-    if tensor.indices[0].direction == tensor.indices[1].direction:
-        raise ValueError(
-            f"inv requires opposite index directions for charge conservation, "
-            f"got both {tensor.indices[0].direction}"
-        )
-    
     # Check diagonal structure (skip if labeled "Diagonal")
     eps = np.finfo(np.float64).eps
     if tensor.label != "Diagonal":
@@ -677,9 +670,15 @@ def inv(tensor: Tensor) -> Tensor:
         # Create inverted diagonal matrix
         inv_blocks[key] = np.diag(inv_diag)
     
-    # Return inverted tensor with same structure
+    # Determine result indices: flip both if they have same direction
+    if tensor.indices[0].direction == tensor.indices[1].direction:
+        result_indices = (tensor.indices[0].flip(), tensor.indices[1].flip())
+    else:
+        result_indices = tensor.indices
+    
+    # Create inverted tensor with flipped indices if necessary
     return Tensor(
-        indices=tensor.indices,
+        indices=result_indices,
         itags=tensor.itags,
         data=inv_blocks,
         dtype=tensor.dtype,

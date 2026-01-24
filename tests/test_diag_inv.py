@@ -616,21 +616,113 @@ def test_inv_error_not_two_indices():
         inv(T)
 
 
-def test_inv_error_same_direction():
-    """Test inv raises error if indices have same direction."""
+def test_inv_same_direction_flips():
+    """Test inv automatically flips indices when they have same direction."""
     group = U1Group()
     idx = Index(Direction.OUT, group, (Sector(0, 2),))
     
-    # Both indices have same direction (violates charge conservation)
+    # Both indices have same direction (both OUT)
     T = Tensor(
         indices=(idx, idx),  # Both OUT
         itags=("i", "j"),
-        data={(0, 0): np.diag([1.0, 2.0])},
+        data={(0, 0): np.diag([2.0, 4.0])},
         label="Diagonal"
     )
     
-    with pytest.raises(ValueError, match="opposite index directions"):
-        inv(T)
+    # Should automatically flip both indices
+    T_inv = inv(T)
+    
+    # Check that directions were flipped to opposite
+    assert T_inv.indices[0].direction == Direction.IN
+    assert T_inv.indices[1].direction == Direction.IN
+    
+    # Verify inversion is correct
+    np.testing.assert_allclose(T_inv.data[(0, 0)], np.diag([0.5, 0.25]))
+
+
+def test_inv_same_direction_in_gives_identity():
+    """Test inv(D) @ D = I when both indices are IN."""
+    from nicole import contract
+    
+    group = U1Group()
+    idx = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 1)))
+    
+    # Create diagonal tensor with both IN (requires flip to construct)
+    D = Tensor(
+        indices=(idx.flip(), idx),
+        itags=("i", "j"),
+        data={(0, 0): np.diag([2.0, 4.0]), (1, 1): np.array([[3.0]])},
+        label="Diagonal"
+    )
+    # Flip to make both IN
+    D.flip(0)
+    
+    # Verify both indices are IN
+    assert D.indices[0].direction == Direction.IN
+    assert D.indices[1].direction == Direction.IN
+    
+    # Invert - should flip to opposite directions
+    D_inv = inv(D)
+    
+    # Verify inverted has opposite directions
+    assert D_inv.indices[0].direction == Direction.OUT
+    assert D_inv.indices[1].direction == Direction.OUT
+    
+    # Contract D_inv with D should give identity
+    # D_inv has itags ('i', 'j') with directions (OUT, OUT)
+    # D has itags ('i', 'j') with directions (IN, IN)
+    # Contract axis 1 of D_inv ('j', OUT) with axis 1 of D ('j', IN)
+    result = contract(D_inv, D, axes=(1, 1))
+    
+    # Result should be identity matrix for each sector
+    # Verify all blocks are identity matrices
+    for key, block in result.data.items():
+        assert block.ndim == 2
+        assert block.shape[0] == block.shape[1]
+        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
+
+
+def test_inv_same_direction_out_gives_identity():
+    """Test D @ inv(D) = I when both indices are OUT."""
+    from nicole import contract
+    
+    group = U1Group()
+    idx = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 1)))
+    
+    # Create diagonal tensor with both OUT (requires valid construction)
+    # Start with valid opposite directions, then flip one
+    D = Tensor(
+        indices=(idx.flip(), idx),
+        itags=("i", "j"),
+        data={(0, 0): np.diag([2.0, 4.0]), (1, 1): np.array([[3.0]])},
+        label="Diagonal"
+    )
+    # Flip second index to make both OUT
+    D.flip(1)
+    
+    # Verify both indices are OUT
+    assert D.indices[0].direction == Direction.OUT
+    assert D.indices[1].direction == Direction.OUT
+    
+    # Invert - should flip to opposite directions
+    D_inv = inv(D)
+    
+    # Verify inverted has opposite directions
+    assert D_inv.indices[0].direction == Direction.IN
+    assert D_inv.indices[1].direction == Direction.IN
+    
+    # Contract D with D_inv should give identity
+    # D has itags ('i', 'j') with directions (OUT, OUT)
+    # D_inv has itags ('i', 'j') with directions (IN, IN)
+    # Contract axis 1 of D ('j', OUT) with axis 1 of D_inv ('j', IN)
+    result = contract(D, D_inv, axes=(1, 1))
+    
+    # Result should be identity matrix for each sector
+    # Verify all blocks are identity matrices
+    for key, block in result.data.items():
+        assert block.ndim == 2
+        assert block.shape[0] == block.shape[1]
+        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
 
 
 def test_inv_error_zero_element():
