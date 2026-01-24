@@ -41,7 +41,7 @@ def test_svd_basic_reconstruction():
     original_norm = T.norm()
 
     # Perform SVD separating axis 0 from the rest
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
 
     # Check that all tensors are charge neutral
     assert_charge_neutral(U)
@@ -69,7 +69,7 @@ def test_svd_integer_axis():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
     
     assert len(U.indices) == 2
     assert len(S.indices) == 2
@@ -86,7 +86,7 @@ def test_svd_string_axis():
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
 
     # Perform SVD by axis name
-    U, S, Vh = decomp(T, axis="b", mode="SVD")
+    U, S, Vh = decomp(T, axes="b", mode="SVD")
 
     # Check structure
     assert len(U.indices) == 2
@@ -119,7 +119,7 @@ def test_svd_different_axis_positions():
 
     # Test SVD on each axis (using UR mode for efficiency)
     for axis in [0, 1, 2]:
-        U, R = decomp(T, axis=axis, mode="UR")
+        U, R = decomp(T, axes=axis, mode="UR")
         
         # Reconstruct using explicit pairs
         reconstructed = contract(U, R, axes=(1, 0))
@@ -155,7 +155,7 @@ def test_svd_multiple_blocks_same_charge():
     T = Tensor.random(indices=(idx1, idx2, idx3), itags=["a", "b", "c"], seed=42)
 
     # Perform SVD using decomp
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
 
     # Verify that we have blocks for multiple charges
     assert len(U.data) >= 2, "Should have blocks for multiple q_left charges"
@@ -200,7 +200,7 @@ def test_svd_index_directions():
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
 
     # Test with default flow "><"
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
 
     # With corrected logic, default "><" gives both S indices IN
     assert S.indices[0].direction == Direction.IN, "S first index should be IN for ><"
@@ -223,7 +223,7 @@ def test_svd_bond_index_structure():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=123)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
     
     bond_index = U.indices[1]
     
@@ -276,7 +276,7 @@ def test_svd_bond_dimensions():
 
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=444)
 
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
 
     # Bond dimension should be min(3, 5) = 3
     bond_index = U.indices[1]
@@ -296,7 +296,7 @@ def test_svd_s_diagonal():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=3)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
     
     # Check that S blocks are diagonal
     for key, block in S.data.items():
@@ -319,7 +319,7 @@ def test_svd_preserves_charge_conservation():
     assert_charge_neutral(T)
 
     # Perform SVD
-    U, S, Vh = decomp(T, axis=1, mode="SVD")
+    U, S, Vh = decomp(T, axes=1, mode="SVD")
 
     # All output tensors should be charge neutral
     assert_charge_neutral(U)
@@ -337,7 +337,7 @@ def test_svd_charge_conservation_all_axes():
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=4)
     
     for axis in [0, 1, 2]:
-        U, S, Vh = decomp(T, axis=axis, mode="SVD")
+        U, S, Vh = decomp(T, axes=axis, mode="SVD")
         
         assert_charge_neutral(U)
         assert_charge_neutral(S)
@@ -401,7 +401,7 @@ def test_svd_complex_dtype():
     T = Tensor.random([idx1, idx2], dtype=np.complex128, itags=["a", "b"], seed=5)
     
     # Use UR mode for efficient reconstruction
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     
     # U and R should be complex
     assert np.issubdtype(U.dtype, np.complexfloating)
@@ -425,7 +425,7 @@ def test_decomp_ur_mode():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     
     # Check structure
     assert len(U.indices) == 2
@@ -447,7 +447,7 @@ def test_decomp_lv_mode():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
-    L, V = decomp(T, axis=0, mode="LV")
+    L, V = decomp(T, axes=0, mode="LV")
     
     # Check structure
     assert len(L.indices) == 2
@@ -469,7 +469,7 @@ def test_decomp_svd_mode():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
     
     # Check that S is a proper diagonal tensor
     assert isinstance(S, Tensor)
@@ -493,16 +493,16 @@ def test_decomp_modes_equivalent():
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=99)
     
     # UR mode
-    U_ur, R = decomp(T, axis=0, mode="UR")
+    U_ur, R = decomp(T, axes=0, mode="UR")
     recon_ur = contract(U_ur, R, axes=(1, 0))
     
     # SVD mode
-    U_svd, S, Vh_svd = decomp(T, axis=0, mode="SVD")
+    U_svd, S, Vh_svd = decomp(T, axes=0, mode="SVD")
     S_Vh = contract(S, Vh_svd, axes=(1, 0))
     recon_svd = contract(U_svd, S_Vh, axes=(1, 0))
     
     # LV mode
-    L, V_lv = decomp(T, axis=0, mode="LV")
+    L, V_lv = decomp(T, axes=0, mode="LV")
     recon_lv = contract(L, V_lv, axes=(1, 0))
     
     # All reconstructions should be equivalent
@@ -522,7 +522,7 @@ def test_decomp_invalid_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
     
     with pytest.raises(ValueError, match="Invalid mode"):
-        decomp(T, axis=0, mode="invalid")
+        decomp(T, axes=0, mode="invalid")
 
 
 def test_svd_returns_dict():
@@ -555,7 +555,7 @@ def test_decomp_ur_multiindex():
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
     
-    U, R = decomp(T, axis=1, mode="UR")
+    U, R = decomp(T, axes=1, mode="UR")
     
     # Check structure: U should have 2 indices, R should have 3 indices
     assert len(U.indices) == 2
@@ -581,7 +581,7 @@ def test_decomp_lv_multiindex():
     
     T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
     
-    L, V = decomp(T, axis=2, mode="LV")
+    L, V = decomp(T, axes=2, mode="LV")
     
     # Check structure: L should have 2 indices, V should have 3 indices
     assert len(L.indices) == 2
@@ -607,13 +607,13 @@ def test_decomp_mode_case_insensitive():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=789)
     
     # Test lowercase
-    U1, R1 = decomp(T, axis=0, mode="ur")
+    U1, R1 = decomp(T, axes=0, mode="ur")
     
     # Test uppercase
-    U2, R2 = decomp(T, axis=0, mode="UR")
+    U2, R2 = decomp(T, axes=0, mode="UR")
     
     # Test mixed case
-    U3, R3 = decomp(T, axis=0, mode="Ur")
+    U3, R3 = decomp(T, axes=0, mode="Ur")
     
     # All should give same results
     assert (U1 - U2).norm() < 1e-14
@@ -633,7 +633,7 @@ def test_decomp_preserves_charge_neutrality():
     
     # Test all modes
     for mode in ["UR", "SVD", "LV"]:
-        result = decomp(T, axis=0, mode=mode)
+        result = decomp(T, axes=0, mode=mode)
         
         # Check all output tensors are charge neutral
         for tensor in result:
@@ -648,7 +648,7 @@ def test_decomp_ur_efficiency():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=111)
     
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     
     # R should have singular values multiplied in
     # R blocks should not be square (they're rank x dim_right)
@@ -669,7 +669,7 @@ def test_decomp_lv_efficiency():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=222)
     
-    L, V = decomp(T, axis=0, mode="LV")
+    L, V = decomp(T, axes=0, mode="LV")
     
     # L should have singular values multiplied in
     # L blocks should not be square (they're dim_left x rank)
@@ -734,7 +734,7 @@ def test_decomp_truncation_ur_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=300)
     
     # Decomp with nkeep truncation
-    U, R = decomp(T, axis=0, mode="UR", trunc=("nkeep", 4))
+    U, R = decomp(T, axes=0, mode="UR", trunc=("nkeep", 4))
     
     # Check bond dimension
     bond_index = U.indices[1]
@@ -759,7 +759,7 @@ def test_decomp_truncation_svd_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=400)
     
     # Decomp with nkeep truncation
-    U, S, Vh = decomp(T, axis=0, mode="SVD", trunc=("nkeep", 3))
+    U, S, Vh = decomp(T, axes=0, mode="SVD", trunc=("nkeep", 3))
     
     # Check that total singular values is at most 3
     total_svs = sum(block.shape[0] for block in S.data.values())
@@ -826,7 +826,7 @@ def test_decomp_4index_tensor():
     
     # Test decomposition on different axes
     for axis in [0, 1, 2, 3]:
-        U, R = decomp(T, axis=axis, mode="UR")
+        U, R = decomp(T, axes=axis, mode="UR")
         
         # Reconstruct
         reconstructed = contract(U, R, axes=(1, 0))
@@ -860,7 +860,7 @@ def test_decomp_5index_tensor():
     T = Tensor.random(indices, itags=["a", "b", "c", "d", "e"], seed=900)
     
     # Test SVD mode on middle axis
-    U, S, Vh = decomp(T, axis=2, mode="SVD")
+    U, S, Vh = decomp(T, axes=2, mode="SVD")
     
     # Check structure
     assert len(U.indices) == 2  # (c, bond)
@@ -898,7 +898,7 @@ def test_decomp_6index_tensor_with_truncation():
     T = Tensor.random(indices, itags=["a", "b", "c", "d", "e", "f"], seed=1000)
     
     # Decompose with truncation (separate first index from rest)
-    U, R = decomp(T, axis=0, mode="UR", trunc=("nkeep", 5))
+    U, R = decomp(T, axes=0, mode="UR", trunc=("nkeep", 5))
     
     # Check that truncation worked
     bond_dim = U.indices[1].dim
@@ -926,7 +926,7 @@ def test_high_order_tensor_multiple_charges():
     T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1100)
     
     # Test LV mode
-    L, V = decomp(T, axis=0, mode="LV")
+    L, V = decomp(T, axes=0, mode="LV")
     
     # Check that we have multiple charge sectors
     bond_charges = set(L.indices[1].charges())
@@ -978,14 +978,14 @@ def test_high_order_tensor_all_modes():
     T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1300)
     
     # Test all three modes give equivalent results
-    U_ur, R = decomp(T, axis=1, mode="UR")
+    U_ur, R = decomp(T, axes=1, mode="UR")
     recon_ur = contract(U_ur, R, axes=(1, 0))
     
-    U_svd, S, Vh_svd = decomp(T, axis=1, mode="SVD")
+    U_svd, S, Vh_svd = decomp(T, axes=1, mode="SVD")
     S_Vh = contract(S, Vh_svd, axes=(1, 0))
     recon_svd = contract(U_svd, S_Vh, axes=(1, 0))
     
-    L, V_lv = decomp(T, axis=1, mode="LV")
+    L, V_lv = decomp(T, axes=1, mode="LV")
     recon_lv = contract(L, V_lv, axes=(1, 0))
     
     # All reconstructions should match (after permuting to same order)
@@ -1048,7 +1048,7 @@ def test_high_order_tensor_thresh_truncation():
         assert np.all(s_array >= threshold)
     
     # Verify we can still reconstruct (approximately)
-    U_full = decomp(T, axis=0, mode="UR", trunc=("thresh", threshold))[0]
+    U_full = decomp(T, axes=0, mode="UR", trunc=("thresh", threshold))[0]
     assert len(U_full.indices) == 2
     # Left index should be unchanged (sum of all sector dimensions)
     expected_left_dim = sum(s.dim for s in indices[0].sectors)
@@ -1066,7 +1066,7 @@ def test_decomp_flow_svd_default():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
     # Default flow should be "><" (both arrows incoming)
-    U, S, Vh = decomp(T, axis=0, mode="SVD")
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
 
     # Default "><" flow produces S with (IN, IN)
     assert S.indices[0].direction == Direction.IN
@@ -1087,7 +1087,7 @@ def test_decomp_flow_svd_outward():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=43)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD", flow=">>")
+    U, S, Vh = decomp(T, axes=0, mode="SVD", flow=">>")
     
     # ">>" flow produces S with (IN, OUT)
     assert S.indices[0].direction == Direction.IN
@@ -1108,7 +1108,7 @@ def test_decomp_flow_svd_inward():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=44)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD", flow="<<")
+    U, S, Vh = decomp(T, axes=0, mode="SVD", flow="<<")
     
     # "<<" flow produces S with (OUT, IN)
     assert S.indices[0].direction == Direction.OUT
@@ -1130,15 +1130,15 @@ def test_decomp_flow_svd_with_in_index():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=45)
     
     # Test all three flows - same results as OUT left_index
-    U_default, S_default, Vh_default = decomp(T, axis=0, mode="SVD")
+    U_default, S_default, Vh_default = decomp(T, axes=0, mode="SVD")
     assert S_default.indices[0].direction == Direction.IN
     assert S_default.indices[1].direction == Direction.IN
     
-    U_out, S_out, Vh_out = decomp(T, axis=0, mode="SVD", flow=">>")
+    U_out, S_out, Vh_out = decomp(T, axes=0, mode="SVD", flow=">>")
     assert S_out.indices[0].direction == Direction.IN
     assert S_out.indices[1].direction == Direction.OUT
     
-    U_in, S_in, Vh_in = decomp(T, axis=0, mode="SVD", flow="<<")
+    U_in, S_in, Vh_in = decomp(T, axes=0, mode="SVD", flow="<<")
     assert S_in.indices[0].direction == Direction.OUT
     assert S_in.indices[1].direction == Direction.IN
     
@@ -1161,7 +1161,7 @@ def test_decomp_flow_ur_mode_default():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=46)
     
     # Default flow "><" should normalize to ">>" for UR mode
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     
     # UR mode with "><" and ">>" both produce (OUT, IN) bonds
     assert U.indices[1].direction == Direction.OUT
@@ -1182,12 +1182,12 @@ def test_decomp_flow_ur_mode_explicit():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=47)
     
     # Test with ">>" and "><" flow (both normalize to >> for UR mode)
-    U_out, R_out = decomp(T, axis=0, mode="UR", flow=">>")
+    U_out, R_out = decomp(T, axes=0, mode="UR", flow=">>")
     assert U_out.indices[1].direction == Direction.OUT
     assert R_out.indices[0].direction == Direction.IN
     
     # Test with "<<" flow (different from >>)
-    U_in, R_in = decomp(T, axis=0, mode="UR", flow="<<")
+    U_in, R_in = decomp(T, axes=0, mode="UR", flow="<<")
     assert U_in.indices[1].direction == Direction.IN
     assert R_in.indices[0].direction == Direction.OUT
     
@@ -1208,7 +1208,7 @@ def test_decomp_flow_ur_mode_in_index():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=48)
     
     # Default flow "><" normalizes to ">>" for UR mode
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     assert U.indices[1].direction == Direction.OUT
     assert R.indices[0].direction == Direction.IN
     
@@ -1227,7 +1227,7 @@ def test_decomp_flow_lv_mode_default():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=49)
     
     # Default flow "><" normalizes to "<<" for LV mode
-    L, V = decomp(T, axis=0, mode="LV")
+    L, V = decomp(T, axes=0, mode="LV")
     
     # LV mode with "><" and "<<" both produce (IN, OUT) bonds
     assert L.indices[1].direction == Direction.IN
@@ -1248,12 +1248,12 @@ def test_decomp_flow_lv_mode_explicit():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=50)
     
     # Test with "<<" and "><" flow (both normalize to << for LV mode)
-    L_in, V_in = decomp(T, axis=0, mode="LV", flow="<<")
+    L_in, V_in = decomp(T, axes=0, mode="LV", flow="<<")
     assert L_in.indices[1].direction == Direction.IN
     assert V_in.indices[0].direction == Direction.OUT
     
     # Test with ">>" flow (different from <<)
-    L_out, V_out = decomp(T, axis=0, mode="LV", flow=">>")
+    L_out, V_out = decomp(T, axes=0, mode="LV", flow=">>")
     assert L_out.indices[1].direction == Direction.OUT
     assert V_out.indices[0].direction == Direction.IN
     
@@ -1274,7 +1274,7 @@ def test_decomp_flow_lv_mode_in_index():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=51)
     
     # Default flow "><" normalizes to "<<"
-    L, V = decomp(T, axis=0, mode="LV")
+    L, V = decomp(T, axes=0, mode="LV")
     assert L.indices[1].direction == Direction.IN
     assert V.indices[0].direction == Direction.OUT
     
@@ -1297,7 +1297,7 @@ def test_decomp_flow_multiindex_svd():
     
     # Test all three flows
     for flow in ["><", ">>", "<<"]:
-        U, S, Vh = decomp(T, axis=0, mode="SVD", flow=flow)
+        U, S, Vh = decomp(T, axes=0, mode="SVD", flow=flow)
         
         # Verify reconstruction
         S_Vh = contract(S, Vh, axes=(1, 0))
@@ -1319,7 +1319,7 @@ def test_decomp_flow_multiindex_ur_lv():
     
     # Test UR mode with different flows
     for flow in ["><", ">>", "<<"]:
-        U, R = decomp(T, axis=1, mode="UR", flow=flow)
+        U, R = decomp(T, axes=1, mode="UR", flow=flow)
         reconstructed = contract(U, R, axes=(1, 0))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
         reconstructed.permute([1, 0, 2])
@@ -1328,7 +1328,7 @@ def test_decomp_flow_multiindex_ur_lv():
     
     # Test LV mode with different flows
     for flow in ["><", ">>", "<<"]:
-        L, V = decomp(T, axis=1, mode="LV", flow=flow)
+        L, V = decomp(T, axes=1, mode="LV", flow=flow)
         reconstructed = contract(L, V, axes=(1, 0))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
         reconstructed.permute([1, 0, 2])
@@ -1345,10 +1345,10 @@ def test_decomp_flow_invalid():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=54)
     
     with pytest.raises(ValueError, match="Invalid flow"):
-        decomp(T, axis=0, mode="SVD", flow="<>")
+        decomp(T, axes=0, mode="SVD", flow="<>")
     
     with pytest.raises(ValueError, match="Invalid flow"):
-        decomp(T, axis=0, mode="UR", flow="->")
+        decomp(T, axes=0, mode="UR", flow="->")
 
 
 def test_decomp_flow_charge_conservation():
@@ -1362,7 +1362,7 @@ def test_decomp_flow_charge_conservation():
     # Test all modes and flows preserve charge neutrality
     for mode in ["SVD", "UR", "LV"]:
         for flow in ["><", ">>", "<<"]:
-            result = decomp(T, axis=0, mode=mode, flow=flow)
+            result = decomp(T, axes=0, mode=mode, flow=flow)
             
             # Check charge neutrality of all output tensors
             for tensor in result:
@@ -1379,7 +1379,7 @@ def test_decomp_itag_svd_single_string():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=56)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD", itag="bond")
+    U, S, Vh = decomp(T, axes=0, mode="SVD", itag="bond")
     
     # Both U and Vh should have "bond" as their bond tag
     assert U.itags[1] == "bond"
@@ -1402,7 +1402,7 @@ def test_decomp_itag_svd_tuple():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=57)
     
-    U, S, Vh = decomp(T, axis=0, mode="SVD", itag=("bond_u", "bond_vh"))
+    U, S, Vh = decomp(T, axes=0, mode="SVD", itag=("bond_u", "bond_vh"))
     
     # U should have "bond_u", Vh should have "bond_vh"
     assert U.itags[1] == "bond_u"
@@ -1426,7 +1426,7 @@ def test_decomp_itag_ur_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=58)
     
     # Test with single string itag
-    U, R = decomp(T, axis=0, mode="UR", itag="k")
+    U, R = decomp(T, axes=0, mode="UR", itag="k")
     assert U.itags[1] == "k"
     assert R.itags[0] == "k"
     
@@ -1436,7 +1436,7 @@ def test_decomp_itag_ur_mode():
     assert rel_error < 1e-12
     
     # Test with tuple itag
-    U2, R2 = decomp(T, axis=0, mode="UR", itag=("i", "j"))
+    U2, R2 = decomp(T, axes=0, mode="UR", itag=("i", "j"))
     assert U2.itags[1] == "i"
     assert R2.itags[0] == "i"  # R uses left tag for bond
     
@@ -1455,7 +1455,7 @@ def test_decomp_itag_lv_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=59)
     
     # Test with single string itag
-    L, V = decomp(T, axis=0, mode="LV", itag="m")
+    L, V = decomp(T, axes=0, mode="LV", itag="m")
     assert L.itags[1] == "m"
     assert V.itags[0] == "m"
     
@@ -1465,7 +1465,7 @@ def test_decomp_itag_lv_mode():
     assert rel_error < 1e-12
     
     # Test with tuple itag
-    L2, V2 = decomp(T, axis=0, mode="LV", itag=("p", "q"))
+    L2, V2 = decomp(T, axes=0, mode="LV", itag=("p", "q"))
     assert L2.itags[1] == "q"  # L uses right tag for bond
     assert V2.itags[0] == "q"
     
@@ -1488,7 +1488,7 @@ def test_decomp_itag_multiindex():
     
     # Test SVD mode with custom tags
     # Decomposing on axis 1 ("b") separates "b" from "a" and "c"
-    U, S, Vh = decomp(T, axis=1, mode="SVD", itag=("left", "right"))
+    U, S, Vh = decomp(T, axes=1, mode="SVD", itag=("left", "right"))
     assert U.itags == ("b", "left")  # U has (separated_index, bond)
     assert S.itags == ("left", "right")
     assert Vh.itags == ("right", "a", "c")  # Vh has (bond, *rest)
@@ -1511,11 +1511,11 @@ def test_decomp_itag_invalid():
     
     # Invalid itag: tuple with wrong length
     with pytest.raises(ValueError, match="itag must be"):
-        decomp(T, axis=0, mode="SVD", itag=("a", "b", "c"))
+        decomp(T, axes=0, mode="SVD", itag=("a", "b", "c"))
     
     # Invalid itag: wrong type
     with pytest.raises(ValueError, match="itag must be"):
-        decomp(T, axis=0, mode="SVD", itag=123)
+        decomp(T, axes=0, mode="SVD", itag=123)
 
 
 # Eigenvalue decomposition tests
@@ -1794,7 +1794,7 @@ def test_decomp_multi_axis_svd():
     T = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=['a', 'b', 'c', 'd'])
     
     # Decompose on multiple axes
-    U, S, Vh = decomp(T, axis=['a', 'b', 'c'], mode='SVD')
+    U, S, Vh = decomp(T, axes=['a', 'b', 'c'], mode='SVD')
     
     # U should have the 3 original axes plus bond
     assert len(U.indices) == 4
@@ -1823,7 +1823,7 @@ def test_decomp_multi_axis_ur():
     T = Tensor.random([idx1, idx2, idx3], seed=1, itags=['a', 'b', 'c'])
     
     # Decompose first two axes
-    U, R = decomp(T, axis=[0, 1], mode='UR')
+    U, R = decomp(T, axes=[0, 1], mode='UR')
     
     # U should have 2 original axes plus bond
     assert len(U.indices) == 3
@@ -1849,7 +1849,7 @@ def test_decomp_multi_axis_lv():
     T = Tensor.random([idx1, idx2, idx3, idx4], seed=2, itags=['a', 'b', 'c', 'd'])
     
     # Decompose on 3 axes
-    L, V = decomp(T, axis=['a', 'b', 'c'], mode='LV')
+    L, V = decomp(T, axes=['a', 'b', 'c'], mode='LV')
     
     # L should have 3 original axes plus bond
     assert len(L.indices) == 4
@@ -1868,7 +1868,7 @@ def test_decomp_multi_axis_by_positions():
     T = Tensor.random([idx, idx.flip(), idx, idx.flip()], seed=3, itags=['a', 'b', 'c', 'd'])
     
     # Decompose using positions
-    U, S, Vh = decomp(T, axis=[0, 2], mode='SVD')
+    U, S, Vh = decomp(T, axes=[0, 2], mode='SVD')
     
     # U should have positions 0, 2 plus bond
     assert len(U.indices) == 3
@@ -1889,7 +1889,7 @@ def test_decomp_multi_axis_reconstruction():
     T = Tensor.random([idx1, idx2, idx3], seed=123, itags=['a', 'b', 'c'])
     
     # Decompose
-    U, R = decomp(T, axis=['a', 'b'], mode='UR')
+    U, R = decomp(T, axes=['a', 'b'], mode='UR')
     
     # Reconstruct
     reconstructed = contract(U, R)
@@ -1917,7 +1917,7 @@ def test_decomp_multi_axis_too_few_raises():
     T = Tensor.random([idx, idx.flip()], seed=1, itags=['a', 'b'])
     
     with pytest.raises(ValueError, match="at least 2 axes"):
-        decomp(T, axis=['a'], mode='SVD')
+        decomp(T, axes=['a'], mode='SVD')
 
 
 def test_decomp_single_axis_unchanged():
@@ -1929,12 +1929,12 @@ def test_decomp_single_axis_unchanged():
     T = Tensor.random([idx1, idx2], seed=50, itags=['a', 'b'])
     
     # Single axis by tag
-    U1, S1, Vh1 = decomp(T, axis='a', mode='SVD')
+    U1, S1, Vh1 = decomp(T, axes='a', mode='SVD')
     assert len(U1.indices) == 2
     assert 'a' in U1.itags
     
     # Single axis by position
-    U2, S2, Vh2 = decomp(T, axis=0, mode='SVD')
+    U2, S2, Vh2 = decomp(T, axes=0, mode='SVD')
     assert len(U2.indices) == 2
     assert 'a' in U2.itags
 
@@ -1948,7 +1948,7 @@ def test_decomp_multi_axis_with_flow():
     
     # Test different flows
     for flow in ["><", ">>", "<<"]:
-        U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', flow=flow)
+        U, S, Vh = decomp(T, axes=[0, 1], mode='SVD', flow=flow)
         assert len(U.indices) == 3
         assert len(S.indices) == 2
         assert len(Vh.indices) == 3
@@ -1962,7 +1962,7 @@ def test_decomp_multi_axis_with_itag():
     T = Tensor.random([idx, idx.flip(), idx], seed=5, itags=['a', 'b', 'c'])
     
     # Custom bond tag
-    U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', itag='custom_bond')
+    U, S, Vh = decomp(T, axes=[0, 1], mode='SVD', itag='custom_bond')
     
     assert 'custom_bond' in U.itags
     assert 'custom_bond' in S.itags
@@ -1977,7 +1977,7 @@ def test_decomp_multi_axis_with_truncation():
     T = Tensor.random([idx, idx.flip(), idx], seed=6, itags=['a', 'b', 'c'])
     
     # Decompose with truncation
-    U, S, Vh = decomp(T, axis=[0, 1], mode='SVD', trunc=('nkeep', 2))
+    U, S, Vh = decomp(T, axes=[0, 1], mode='SVD', trunc=('nkeep', 2))
     
     # Should still have correct structure
     assert len(U.indices) == 3

@@ -44,7 +44,7 @@ def test_workflow_construct_contract_svd_reconstruct():
     assert_charge_neutral(C)
     
     # SVD using decomp
-    U, S, Vh = decomp(C, axis=0, mode="SVD")
+    U, S, Vh = decomp(C, axes=0, mode="SVD")
     assert_charge_neutral(U)
     assert_charge_neutral(S)
     assert_charge_neutral(Vh)
@@ -130,7 +130,7 @@ def test_workflow_svd_truncation_and_contraction():
     T = Tensor.random([idx1, idx2], seed=1, itags=["a", "b"])
     
     # SVD using decomp (UR mode for efficiency)
-    U, R = decomp(T, axis=0, mode="UR")
+    U, R = decomp(T, axes=0, mode="UR")
     
     # Reconstruct
     reconstructed = contract(U, R, axes=(1, 0))
@@ -294,7 +294,7 @@ def test_workflow_z2_tensors():
     C = contract(A, B)
     
     # SVD using decomp (UR mode for efficiency)
-    U, R = decomp(C, axis=0, mode="UR")
+    U, R = decomp(C, axes=0, mode="UR")
     
     # Reconstruct
     reconstructed = contract(U, R, axes=(1, 0))

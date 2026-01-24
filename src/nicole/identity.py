@@ -296,7 +296,9 @@ def isometry_n(
         # Contract the new isometry with accumulated result
         # The fused index from result will contract with the first index of new_iso
         # They should have matching tags and opposite directions
-        result = contract(result, new_iso)
+        # Contract: last index of result with first index of new_iso (0)
+        result_last_idx = len(result.indices) - 1
+        result = contract(result, new_iso, axes=(result_last_idx, 0))
     
     # After all fusions, result has n indices (in sorted order) + 1 fused index
     # The indices are at positions 0, 1, ..., n-1, and the fused index is at position n

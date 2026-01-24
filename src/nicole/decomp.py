@@ -448,7 +448,7 @@ def eig(
 
 def decomp(
     T: Tensor,
-    axis: Union[int, str, Sequence[Union[int, str]]],
+    axes: Union[int, str, Sequence[Union[int, str]]],
     mode: str = "SVD",
     flow: str = "><",
     itag: Optional[Union[str, Tuple[str, str]]] = None,
@@ -460,7 +460,7 @@ def decomp(
     ----------
     T:
         Tensor to be decomposed.
-    axis:
+    axes:
         Index or indices to separate from all others. Can be:
         - Single integer position or string tag
         - Sequence of integer positions or string tags (merges multiple axes first)
@@ -509,13 +509,13 @@ def decomp(
     >>> T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
     >>> 
     >>> # UR mode: Get U and R=S*Vh (most efficient for reconstruction)
-    >>> U, R = decomp(T, axis=0, mode="UR")
+    >>> U, R = decomp(T, axes=0, mode="UR")
     >>> 
     >>> # SVD mode: Get full SVD with diagonal S
-    >>> U, S, Vh = decomp(T, axis=0, mode="SVD")
+    >>> U, S, Vh = decomp(T, axes=0, mode="SVD")
     >>> 
     >>> # LV mode: Get L=U*S and V
-    >>> L, V = decomp(T, axis=0, mode="LV")
+    >>> L, V = decomp(T, axes=0, mode="LV")
     
     Notes
     -----
@@ -529,23 +529,23 @@ def decomp(
     from .operators import merge_axes
     from .contract import contract
     
-    # Check if axis is a sequence (multiple axes)
-    is_multi_axis = isinstance(axis, (list, tuple))
+    # Check if axes is a sequence (multiple axes)
+    is_multi_axis = isinstance(axes, (list, tuple))
     
     if is_multi_axis:
         # Multiple axes: merge, decompose, unmerge
-        axes = axis
-        if len(axes) < 2:
+        axes_list = axes
+        if len(axes_list) < 2:
             raise ValueError("When providing a sequence of axes, must specify at least 2 axes")
         
         # Merge the specified axes
-        merged_T, iso_conj = merge_axes(T, axes, merged_tag="_decomp_merged_")
+        merged_T, iso_conj = merge_axes(T, axes_list, merged_tag="_decomp_merged_")
         
         # The merged index is now at position 0 (merge_axes places it first)
         # Decompose on the merged axis
         result = decomp(
             merged_T,
-            axis=0,  # Merged index is at position 0
+            axes=0,  # Merged index is at position 0
             mode=mode,
             flow=flow,
             itag=itag,
@@ -556,13 +556,17 @@ def decomp(
         if mode == "SVD":
             U, S, Vh = result
             # Unmerge U by contracting with conjugate isometry
-            U_unmerged = contract(U, iso_conj)
+            # The merged index is at position 0 of U, and at last position of iso_conj
+            iso_conj_last_idx = len(iso_conj.indices) - 1
+            U_unmerged = contract(iso_conj, U, axes=(iso_conj_last_idx, 0))
             return U_unmerged, S, Vh
         else:  # mode == "UR" or "LV"
             first, second = result
             # For UR mode, first is U; for LV mode, first is L
             # Both have the merged index at position 0
-            first_unmerged = contract(first, iso_conj)
+            # The merged index is at position 0 of first, and at last position of iso_conj
+            iso_conj_last_idx = len(iso_conj.indices) - 1
+            first_unmerged = contract(iso_conj, first, axes=(iso_conj_last_idx, 0))
             return first_unmerged, second
     
     # Single axis: original behavior
@@ -587,19 +591,19 @@ def decomp(
     else:
         raise ValueError("itag must be None, a string, or a tuple of two strings")
     
-    # Parse axis to get left_index (do this once to avoid duplication in svd)
-    if isinstance(axis, str):
-        matching_axes = [i for i, tag in enumerate(T.itags) if tag == axis]
+    # Parse axes to get left_index (do this once to avoid duplication in svd)
+    if isinstance(axes, str):
+        matching_axes = [i for i, tag in enumerate(T.itags) if tag == axes]
         if len(matching_axes) == 0:
-            raise ValueError(f"itag '{axis}' not found in tensor")
+            raise ValueError(f"itag '{axes}' not found in tensor")
         elif len(matching_axes) > 1:
             raise ValueError(
-                f"Ambiguous axis specification: itag '{axis}' appears at "
+                f"Ambiguous axis specification: itag '{axes}' appears at "
                 f"multiple positions {matching_axes}. Please use integer axis instead."
             )
         axis_idx = matching_axes[0]
     else:
-        axis_idx = axis
+        axis_idx = axes
     
     # Determine natural flow from svd based on left_index direction
     left_index = T.indices[axis_idx]

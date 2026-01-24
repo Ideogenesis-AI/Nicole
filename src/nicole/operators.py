@@ -492,7 +492,7 @@ def diag(
     >>> import numpy as np
     >>> # Perform SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
-    >>> U, S_blocks, Vh = decomp(T, axis=0, mode="UR")  # Get S as dict
+    >>> U, S_blocks, Vh = decomp(T, axes=0, mode="UR")  # Get S as dict
     >>> 
     >>> # Convert S_blocks to diagonal matrix
     >>> from nicole import diag
@@ -809,7 +809,9 @@ def merge_axes(
     # Contract isometry with tensor to merge axes
     # The isometry indices are opposite to tensor indices, so they'll contract
     # Order: iso first, tensor second -> merged index comes first
-    merged = contract(iso, tensor)
+    # Contract: first N indices of iso with the sorted_positions axes of tensor
+    iso_axes = list(range(len(sorted_positions)))
+    merged = contract(iso, tensor, axes=(iso_axes, sorted_positions))
 
     # Create conjugate of isometry for potential unfusing
     # This flips all directions and conjugates data
