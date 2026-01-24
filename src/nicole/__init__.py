@@ -23,7 +23,7 @@ from .decomp import decomp
 from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
 from .operators import conj, permute, transpose
-from .operators import oplus, diag
+from .operators import oplus, diag, inv
 from .operators import getsub, merge_axes
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.product import ProductGroup
@@ -42,17 +42,18 @@ __all__ = [
     "contract",
     "trace",
     "partial_trace",
+    "permute",
+    "transpose",
+    "conj",
+    "diag",
+    "inv",
+    "oplus",
     "decomp",
     "identity",
     "isometry",
     "isometry_n",
-    "conj",
-    "diag",
     "getsub",
     "merge_axes",
-    "oplus",
-    "permute",
-    "transpose",
 ]
 
 

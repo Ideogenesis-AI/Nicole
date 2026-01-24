@@ -562,6 +562,131 @@ def diag(
     )
 
 
+def inv(tensor: Tensor) -> Tensor:
+    """Invert a diagonal matrix tensor.
+    
+    Takes a diagonal matrix tensor and returns its inverse by inverting each
+    diagonal element. For charge conservation, the input tensor must have
+    opposite index directions.
+    
+    Parameters
+    ----------
+    tensor : Tensor
+        Input diagonal matrix tensor with exactly 2 indices. Must have opposite
+        index directions for proper charge conservation. If labeled "Diagonal",
+        the diagonal structure check is skipped.
+    
+    Returns
+    -------
+    Tensor
+        Inverted diagonal matrix with the same structure as input.
+    
+    Raises
+    ------
+    ValueError
+        If tensor does not have exactly 2 indices, or if indices have the same
+        direction, or if tensor is not diagonal (when label != "Diagonal").
+    ZeroDivisionError
+        If any diagonal element is zero (within machine epsilon).
+    
+    Examples
+    --------
+    >>> from nicole import Tensor, Index, Sector, Direction, U1Group, diag
+    >>> from nicole.decomp import svd
+    >>> import numpy as np
+    >>> # Create a diagonal tensor from SVD
+    >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
+    >>> U, S_blocks, Vh = svd(T, axis=0)
+    >>> S_diag = diag(S_blocks, U.indices[1])
+    >>> 
+    >>> # Invert the diagonal matrix
+    >>> S_inv = inv(S_diag)
+    >>> 
+    >>> # Verify: S @ S_inv should give identity
+    >>> from nicole import contract
+    >>> result = contract(S_diag, S_inv)
+    
+    >>> # Manual diagonal tensor
+    >>> idx = Index(Direction.IN, U1Group(), (Sector(0, 2),))
+    >>> D = Tensor(
+    ...     indices=(idx.flip(), idx),
+    ...     itags=("i", "j"),
+    ...     data={(0, 0): np.diag([2.0, 4.0])},
+    ...     label="Diagonal"
+    ... )
+    >>> D_inv = inv(D)
+    >>> D_inv.data[(0, 0)]
+    array([[0.5 , 0.  ],
+           [0.  , 0.25]])
+    
+    Notes
+    -----
+    The function inverts each diagonal matrix block independently by computing
+    1/x for each diagonal element. Off-diagonal elements are assumed to be zero
+    (only checked if label != "Diagonal").
+    
+    For numerical stability, elements with absolute value below machine epsilon
+    for float64 will raise ZeroDivisionError.
+    """
+    # Validate tensor has exactly 2 indices
+    if len(tensor.indices) != 2:
+        raise ValueError(
+            f"inv requires a tensor with exactly 2 indices, got {len(tensor.indices)}"
+        )
+    
+    # Validate opposite directions for charge conservation
+    if tensor.indices[0].direction == tensor.indices[1].direction:
+        raise ValueError(
+            f"inv requires opposite index directions for charge conservation, "
+            f"got both {tensor.indices[0].direction}"
+        )
+    
+    # Check diagonal structure (skip if labeled "Diagonal")
+    eps = np.finfo(np.float64).eps
+    if tensor.label != "Diagonal":
+        for key, block in tensor.data.items():
+            if block.ndim != 2 or block.shape[0] != block.shape[1]:
+                raise ValueError(
+                    f"inv requires square matrix blocks, but block {key} has shape {block.shape}"
+                )
+            # Check off-diagonal elements are zero
+            off_diag = block - np.diag(np.diag(block))
+            if np.max(np.abs(off_diag)) > eps:
+                raise ValueError(
+                    f"inv requires diagonal matrices, but block {key} has non-zero "
+                    f"off-diagonal elements (max: {np.max(np.abs(off_diag))})"
+                )
+    
+    # Invert each diagonal block
+    inv_blocks: Dict[BlockKey, np.ndarray] = {}
+    for key, block in tensor.data.items():
+        # Extract diagonal elements
+        diag_elements = np.diag(block)
+        
+        # Check for zeros
+        if np.any(np.abs(diag_elements) < eps):
+            zero_indices = np.where(np.abs(diag_elements) < eps)[0]
+            raise ZeroDivisionError(
+                f"Cannot invert diagonal matrix: block {key} has zero elements "
+                f"at diagonal positions {zero_indices.tolist()}"
+            )
+        
+        # Invert diagonal elements
+        inv_diag = 1.0 / diag_elements
+        
+        # Create inverted diagonal matrix
+        inv_blocks[key] = np.diag(inv_diag)
+    
+    # Return inverted tensor with same structure
+    return Tensor(
+        indices=tensor.indices,
+        itags=tensor.itags,
+        data=inv_blocks,
+        dtype=tensor.dtype,
+        label=tensor.label
+    )
+
+
 def merge_axes(
     tensor: Tensor,
     axes: Sequence[Union[int, str]],
