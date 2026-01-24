@@ -1983,3 +1983,99 @@ def test_decomp_multi_axis_with_truncation():
     assert len(U.indices) == 3
     assert 'a' in U.itags and 'b' in U.itags
 
+
+def test_decomp_multi_axis_duplicate_itags():
+    """Test multi-axis decomposition with duplicate itags using integer positions."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, (Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, (Sector(0, 2),))
+    idx3 = Index(Direction.OUT, group, (Sector(0, 3),))
+    
+    # Create tensor with duplicate itags
+    T = Tensor.random([idx1, idx2, idx3], itags=['x', 'x', 'y'], seed=100)
+    
+    # Decompose using integer positions (avoids itag ambiguity)
+    # This tests that explicit axes work even with duplicate itags
+    U, S, Vh = decomp(T, axes=[0, 1], mode='SVD')
+    
+    # Check structure
+    assert len(U.indices) == 3  # 2 merged axes + bond
+    assert len(S.indices) == 2  # bond indices
+    assert len(Vh.indices) == 2  # 1 remaining axis + bond
+    
+    # Check that U has the two original axes (with their duplicate itags)
+    assert U.itags[0] == 'x'  # First merged axis
+    assert U.itags[1] == 'x'  # Second merged axis
+    assert U.itags[2] == '_bond_L'  # Bond index
+    
+    # Check that Vh has the remaining axis
+    assert 'y' in Vh.itags
+    
+    # Verify reconstruction
+    S_Vh = contract(S, Vh, axes=(1, 0))
+    reconstructed = contract(U, S_Vh, axes=(2, 0))
+    
+    # Check that all blocks match
+    for key in T.data:
+        np.testing.assert_allclose(reconstructed.data[key], T.data[key], atol=1e-10)
+
+
+def test_decomp_multi_axis_preserves_index_order():
+    """Test that multi-axis decomposition preserves the original index ordering."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, (Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, (Sector(0, 2),))
+    idx3 = Index(Direction.OUT, group, (Sector(0, 3),))
+    idx4 = Index(Direction.IN, group, (Sector(0, 2),))
+    
+    # Create a 4-index tensor
+    T = Tensor.random([idx1, idx2, idx3, idx4], itags=['a', 'b', 'c', 'd'], seed=200)
+    
+    # Test 1: Merge axes [0, 2] (non-adjacent)
+    U1, S1, Vh1 = decomp(T, axes=[0, 2], mode='SVD')
+    
+    # U should have indices in order: original axis 0, original axis 2, bond
+    assert U1.itags[0] == 'a'  # Original axis 0
+    assert U1.itags[1] == 'c'  # Original axis 2
+    assert U1.itags[2] == '_bond_L'  # Bond
+    
+    # Vh should have remaining indices in order: original axes 1, 3, bond
+    assert Vh1.itags[0] == '_bond_R'  # Bond
+    assert Vh1.itags[1] == 'b'  # Original axis 1
+    assert Vh1.itags[2] == 'd'  # Original axis 3
+    
+    # Test 2: Merge axes [1, 3] (non-adjacent)
+    U2, R2 = decomp(T, axes=[1, 3], mode='UR')
+    
+    # U should preserve order of merged axes
+    assert U2.itags[0] == 'b'  # Original axis 1
+    assert U2.itags[1] == 'd'  # Original axis 3
+    assert U2.itags[2] == '_bond_L'  # Bond
+    
+    # R should have remaining axes in order
+    # UR mode uses '_bond_L' for both U and R
+    assert R2.itags[0] == '_bond_L'  # Bond
+    assert R2.itags[1] == 'a'  # Original axis 0
+    assert R2.itags[2] == 'c'  # Original axis 2
+    
+    # Test 3: Merge three axes [0, 1, 3]
+    L3, V3 = decomp(T, axes=[0, 1, 3], mode='LV')
+    
+    # L should preserve order of merged axes: 0, 1, 3
+    assert L3.itags[0] == 'a'  # Original axis 0
+    assert L3.itags[1] == 'b'  # Original axis 1
+    assert L3.itags[2] == 'd'  # Original axis 3
+    assert L3.itags[3] == '_bond_R'  # Bond (LV mode uses _bond_R)
+    
+    # V should have remaining axis
+    # LV mode uses '_bond_R' for both L and V
+    assert V3.itags[0] == '_bond_R'  # Bond
+    assert V3.itags[1] == 'c'  # Original axis 2
+    
+    # Verify reconstruction for Test 1
+    S1_Vh1 = contract(S1, Vh1, axes=(1, 0))
+    recon1 = contract(U1, S1_Vh1, axes=(2, 0))
+    # recon1 has itags ('a', 'c', 'b', 'd'), need to permute to ('a', 'b', 'c', 'd')
+    recon1.permute([0, 2, 1, 3])
+    for key in T.data:
+        np.testing.assert_allclose(recon1.data[key], T.data[key], atol=1e-10)
