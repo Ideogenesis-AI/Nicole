@@ -44,6 +44,7 @@ from typing import Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
@@ -444,6 +445,120 @@ def oplus(
         data=out_data,
         dtype=np.result_type(A.dtype, B.dtype),
         label=A.label
+    )
+
+
+def diag(
+    S_blocks: Dict[BlockKey, np.ndarray],
+    bond_index: Index,
+    itags: Optional[Tuple[str, str]] = None,
+    dtype: Optional[np.dtype] = None
+) -> Tensor:
+    """Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
+    
+    Takes a dictionary of 1D arrays (such as singular values from SVD or eigenvalues
+    from eig) and creates a diagonal matrix tensor where each 1D array becomes a
+    diagonal matrix block.
+    
+    Parameters
+    ----------
+    S_blocks : dict[BlockKey, np.ndarray]
+        Dictionary mapping block keys to 1D arrays. Each array contains the diagonal
+        elements for that block. Typically from the S output of svd() or D from eig().
+    bond_index : Index
+        The bond index defining the sectors and dimensions. Both output indices will
+        be based on this index (one normal, one flipped).
+    itags : tuple of two str, optional
+        Custom itags for the two output indices. If None, uses ("_bond_L", "_bond_R").
+        Default: None.
+    dtype : np.dtype, optional
+        Data type for the output tensor. If None, inferred from input arrays.
+        Default: None.
+    
+    Returns
+    -------
+    Tensor
+        Diagonal matrix tensor with two indices (bond_index.flip(), bond_index).
+        Label is set to "Diagonal".
+    
+    Raises
+    ------
+    ValueError
+        If any data block is not 1-dimensional.
+    
+    Examples
+    --------
+    >>> from nicole import Tensor, Index, Sector, Direction, U1Group, decomp
+    >>> import numpy as np
+    >>> # Perform SVD
+    >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
+    >>> U, S_blocks, Vh = decomp(T, axis=0, mode="UR")  # Get S as dict
+    >>> 
+    >>> # Convert S_blocks to diagonal matrix
+    >>> from nicole import diag
+    >>> S_diag = diag(S_blocks, U.indices[1], itags=("left", "right"))
+    >>> S_diag.itags
+    ('left', 'right')
+    >>> S_diag.label
+    'Diagonal'
+    
+    >>> # Can now use S_diag in contractions
+    >>> result = contract(U, S_diag)  # Equivalent to U @ S
+    
+    Notes
+    -----
+    This function is useful for converting the singular values dict S from svd() or
+    eigenvalues dict D from eig() into full diagonal matrix form for explicit matrix
+    operations like contraction.
+    
+    The output tensor will have:
+    - Two indices: (bond_index.flip(), bond_index)
+    - Block keys (q, q) for each charge q in S_blocks
+    - Diagonal matrices as data blocks
+    - Label "Diagonal" (overriding default "Tensor")
+    """
+    # Validate all blocks are 1D
+    for key, arr in S_blocks.items():
+        if arr.ndim != 1:
+            raise ValueError(
+                f"diag requires all data blocks to be 1-dimensional, "
+                f"but block {key} has shape {arr.shape}"
+            )
+    
+    # Determine output itags
+    if itags is None:
+        out_itags = ("_bond_L", "_bond_R")
+    else:
+        if not isinstance(itags, tuple) or len(itags) != 2:
+            length = len(itags) if isinstance(itags, (tuple, list)) else 'N/A'
+            raise ValueError(
+                f"itags must be a tuple of two strings, got {type(itags)} with length {length}"
+            )
+        out_itags = itags
+    
+    # Determine dtype
+    if dtype is None:
+        # Infer from first block
+        if S_blocks:
+            sample_arr = next(iter(S_blocks.values()))
+            dtype = sample_arr.dtype
+        else:
+            dtype = np.float64
+    
+    # Convert each 1D block to diagonal matrix
+    diag_blocks: Dict[BlockKey, np.ndarray] = {}
+    for key, vec_array in S_blocks.items():
+        # Create diagonal matrix from 1D array
+        diag_matrix = np.diag(vec_array)
+        diag_blocks[key] = diag_matrix
+    
+    # Create output tensor with two indices
+    return Tensor(
+        indices=(bond_index.flip(), bond_index),
+        itags=out_itags,
+        data=diag_blocks,
+        dtype=dtype,
+        label="Diagonal"
     )
 
 
