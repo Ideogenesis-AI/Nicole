@@ -627,7 +627,8 @@ def decomp(
             indices=(bond_index.flip(), bond_index),
             itags=(bond_tag_left, bond_tag_right),
             data=S_diag_blocks,
-            dtype=np.result_type(T.dtype, float)
+            dtype=np.result_type(T.dtype, float),
+            label="Diagonal"
         )
         
         # Apply tensor flip to convert from natural_flow to desired flow
