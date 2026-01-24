@@ -22,13 +22,14 @@ This package contains comprehensive unit tests and integration tests for all
 components of the Nicole library, including:
 
   - Tensor construction and manipulation
-  - Symmetry group operations (U(1), Z(2), etc.)
+  - Symmetry group operations (U(1), Z(2), product groups)
   - Index and sector management
   - Tensor contractions and traces
-  - Decompositions (SVD, etc.)
+  - Decompositions (SVD, eigendecomposition)
+  - Diagonal matrix operations (creation and inversion)
   - Block structure and charge conservation
   - Identity and isometry tensors
-  - Arithmetic operations
+  - Arithmetic operations (addition, subtraction, direct sum)
 
 Test Organization
 -----------------
@@ -36,13 +37,17 @@ Test Organization
   - test_blocks.py: Block schema and charge validation
   - test_construction.py: Tensor creation and initialization
   - test_contract.py: Tensor contractions and traces
-  - test_decomp.py: SVD and other decompositions
+  - test_copy_access.py: Tensor copying and element access
+  - test_decomp.py: SVD, eigendecomposition, and other decompositions
+  - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
   - test_display.py: Tensor display and formatting
-  - test_groups.py: Symmetry group operations
+  - test_group_elem.py: Elementary symmetry group operations
+  - test_group_prod.py: Product group operations
   - test_identity.py: Identity and isometry tensor construction
   - test_index.py: Index operations and fusion
   - test_integration.py: End-to-end workflow tests
-  - test_manipulation.py: Permutation, transposition, conjugation
+  - test_manipulation.py: Permutation, transposition, conjugation, merging
+  - test_oplus.py: Direct sum operations
   - test_types.py: Type definitions and enumerations
   - utils.py: Shared test utilities and helpers
 
