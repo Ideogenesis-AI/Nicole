@@ -370,16 +370,20 @@ def test_diag_preserves_charge_conservation():
 
 def test_inv_basic_u1():
     """Test basic inv functionality with U1Group."""
+    from nicole import contract
+    
     group = U1Group()
-    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 2)))
+    bond_index = Index(Direction.IN, group, (Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
     
     # Create a diagonal tensor
     D = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
+            (-1, -1): np.diag([1.0, 2.0]),
             (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.diag([5.0, 10.0])
+            (1, 1): np.diag([5.0, 10.0]),
+            (2, 2): np.array([[3.0]])
         },
         label="Diagonal"
     )
@@ -390,18 +394,27 @@ def test_inv_basic_u1():
     # Check basic properties
     assert len(D_inv.indices) == 2
     assert D_inv.label == "Diagonal"
-    assert D_inv.itags == ("i", "j")
-    assert D_inv.indices[0].direction == Direction.OUT
-    assert D_inv.indices[1].direction == Direction.IN
+    assert D_inv.itags == ("j", "i")  # Swapped (transposed)
+    assert D_inv.indices[0].direction == Direction.OUT  # Flipped from IN
+    assert D_inv.indices[1].direction == Direction.IN  # Flipped from OUT
     
-    # Check inverted values
+    # Check inverted values (keys remain same for diagonal blocks)
+    np.testing.assert_allclose(D_inv.data[(-1, -1)], np.diag([1.0, 0.5]))
     np.testing.assert_allclose(D_inv.data[(0, 0)], np.diag([0.5, 0.25]))
     np.testing.assert_allclose(D_inv.data[(1, 1)], np.diag([0.2, 0.1]))
+    np.testing.assert_allclose(D_inv.data[(2, 2)], np.array([[1.0/3.0]]))
     
-    # Verify D * D_inv = I
+    # Verify D * D_inv = I (element-wise check)
     for key in D.data.keys():
         product = np.diag(D.data[key]) * np.diag(D_inv.data[key])
         np.testing.assert_allclose(product, 1.0)
+    
+    # Verify D @ D_inv = I (tensor contraction check)
+    result = contract(D, D_inv, axes=(1, 0))
+    for key, block in result.data.items():
+        assert block.ndim == 2
+        assert block.shape[0] == block.shape[1]
+        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
 
 
 def test_inv_with_diag_output():
@@ -645,13 +658,17 @@ def test_inv_same_direction_in_gives_identity():
     from nicole import contract
     
     group = U1Group()
-    idx = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 1)))
+    idx = Index(Direction.IN, group, (Sector(-1, 2), Sector(0, 2), Sector(1, 1)))
     
     # Create diagonal tensor with both IN (requires flip to construct)
     D = Tensor(
         indices=(idx.flip(), idx),
         itags=("i", "j"),
-        data={(0, 0): np.diag([2.0, 4.0]), (1, 1): np.array([[3.0]])},
+        data={
+            (-1, -1): np.diag([1.5, 2.5]),
+            (0, 0): np.diag([2.0, 4.0]),
+            (1, 1): np.array([[3.0]])
+        },
         label="Diagonal"
     )
     # Flip to make both IN
@@ -669,10 +686,10 @@ def test_inv_same_direction_in_gives_identity():
     assert D_inv.indices[1].direction == Direction.OUT
     
     # Contract D_inv with D should give identity
-    # D_inv has itags ('i', 'j') with directions (OUT, OUT)
+    # D_inv has itags ('j', 'i') with directions (OUT, OUT) - transposed from same-dir input
     # D has itags ('i', 'j') with directions (IN, IN)
-    # Contract axis 1 of D_inv ('j', OUT) with axis 1 of D ('j', IN)
-    result = contract(D_inv, D, axes=(1, 1))
+    # Contract axis 1 of D_inv ('i', OUT) with axis 0 of D ('i', IN)
+    result = contract(D_inv, D, axes=(1, 0))
     
     # Result should be identity matrix for each sector
     # Verify all blocks are identity matrices
@@ -687,14 +704,19 @@ def test_inv_same_direction_out_gives_identity():
     from nicole import contract
     
     group = U1Group()
-    idx = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 1)))
+    idx = Index(Direction.IN, group, (Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 1)))
     
     # Create diagonal tensor with both OUT (requires valid construction)
     # Start with valid opposite directions, then flip one
     D = Tensor(
         indices=(idx.flip(), idx),
         itags=("i", "j"),
-        data={(0, 0): np.diag([2.0, 4.0]), (1, 1): np.array([[3.0]])},
+        data={
+            (-2, -2): np.array([[5.0]]),
+            (-1, -1): np.diag([1.5, 2.5]),
+            (0, 0): np.diag([2.0, 4.0]),
+            (1, 1): np.array([[3.0]])
+        },
         label="Diagonal"
     )
     # Flip second index to make both OUT
@@ -713,9 +735,9 @@ def test_inv_same_direction_out_gives_identity():
     
     # Contract D with D_inv should give identity
     # D has itags ('i', 'j') with directions (OUT, OUT)
-    # D_inv has itags ('i', 'j') with directions (IN, IN)
-    # Contract axis 1 of D ('j', OUT) with axis 1 of D_inv ('j', IN)
-    result = contract(D, D_inv, axes=(1, 1))
+    # D_inv has itags ('j', 'i') with directions (IN, IN) - transposed from same-dir input
+    # Contract axis 1 of D ('j', OUT) with axis 0 of D_inv ('j', IN)
+    result = contract(D, D_inv, axes=(1, 0))
     
     # Result should be identity matrix for each sector
     # Verify all blocks are identity matrices
@@ -776,13 +798,14 @@ def test_inv_preserves_structure():
     
     D_inv = inv(D)
     
-    # Check structure preservation
-    assert D_inv.itags == D.itags
+    # Check structure preservation (always transposed)
+    assert D_inv.itags == (D.itags[1], D.itags[0])  # Swapped
     assert D_inv.dtype == D.dtype
     assert D_inv.label == D.label
     assert len(D_inv.indices) == len(D.indices)
-    assert D_inv.indices[0].direction == D.indices[0].direction
-    assert D_inv.indices[1].direction == D.indices[1].direction
+    # Indices are swapped and flipped
+    assert D_inv.indices[0].direction == D.indices[1].direction.reverse()
+    assert D_inv.indices[1].direction == D.indices[0].direction.reverse()
 
 
 def test_inv_double_inversion():

@@ -650,8 +650,9 @@ def inv(tensor: Tensor) -> Tensor:
                     f"off-diagonal elements (max: {np.max(np.abs(off_diag))})"
                 )
     
-    # Invert each diagonal block
+    # Invert each diagonal block and transpose by swapping block keys
     inv_blocks: Dict[BlockKey, np.ndarray] = {}
+    
     for key, block in tensor.data.items():
         # Extract diagonal elements
         diag_elements = np.diag(block)
@@ -667,19 +668,18 @@ def inv(tensor: Tensor) -> Tensor:
         # Invert diagonal elements
         inv_diag = 1.0 / diag_elements
         
-        # Create inverted diagonal matrix
-        inv_blocks[key] = np.diag(inv_diag)
+        # Swap block keys for transpose
+        swapped_key = (key[1], key[0])
+        inv_blocks[swapped_key] = np.diag(inv_diag)
     
-    # Determine result indices: flip both if they have same direction
-    if tensor.indices[0].direction == tensor.indices[1].direction:
-        result_indices = (tensor.indices[0].flip(), tensor.indices[1].flip())
-    else:
-        result_indices = tensor.indices
+    # Always swap and flip indices (transpose)
+    result_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())
+    result_itags = (tensor.itags[1], tensor.itags[0])
     
-    # Create inverted tensor with flipped indices if necessary
+    # Create inverted tensor
     return Tensor(
         indices=result_indices,
-        itags=tensor.itags,
+        itags=result_itags,
         data=inv_blocks,
         dtype=tensor.dtype,
         label=tensor.label
