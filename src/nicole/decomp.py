@@ -61,7 +61,7 @@ def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
 def svd(
     T: Tensor, 
     axis: int | str,
-    trunc: Optional[Tuple[str, Union[int, float]]] = None
+    trunc: Optional[Dict[str, Union[int, float]]] = None
 ) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
 
@@ -73,9 +73,10 @@ def svd(
         Axis to separate from all others. Can be an integer axis or itag.
         This axis forms the left partition, all others form the right partition.
     trunc:
-        Truncation specification as a tuple (mode, value). If None, no truncation.
-        - ("nkeep", n): Keep at most n singular values globally (largest across all blocks)
-        - ("thresh", t): Keep singular values >= t per block
+        Truncation specification as a dict. If None, no truncation. Supported keys:
+        - "nkeep": Keep at most n singular values globally (largest across all blocks)
+        - "thresh": Keep singular values >= t per block
+        Both can be specified together: thresh is applied first, then nkeep.
 
     Returns
     -------
@@ -88,7 +89,7 @@ def svd(
     Raises
     ------
     ValueError
-        If trunc mode is not "nkeep" or "thresh".
+        If trunc format is invalid or contains unsupported modes.
     
     Notes
     -----
@@ -98,13 +99,32 @@ def svd(
     For "nkeep" mode, truncation is applied globally: the top n singular values across
     all blocks are retained. For "thresh" mode, truncation is applied per block: each
     block independently keeps singular values >= threshold.
+    
+    When both modes are specified, "thresh" is applied first (per-block filtering),
+    then "nkeep" is applied globally to the remaining singular values.
+    
+    Examples
+    --------
+    >>> # No truncation
+    >>> U, S_blocks, Vh = svd(T, axis=0)
+    >>> 
+    >>> # Keep top 10 singular values
+    >>> U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 10})
+    >>> 
+    >>> # Keep singular values >= 0.01
+    >>> U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": 0.01})
+    >>> 
+    >>> # Apply both: first thresh, then nkeep
+    >>> U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": 0.01, "nkeep": 10})
     """
-    # Validate trunc parameter if provided
+    # Validate trunc parameter
     if trunc is not None:
-        if not isinstance(trunc, tuple) or len(trunc) != 2:  # type: ignore[redundant-expr]
-            raise ValueError("trunc must be a tuple (mode, value)")
-        if trunc[0] not in ("nkeep", "thresh"):  # type: ignore[redundant-expr]
-            raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
+        if not isinstance(trunc, dict):
+            raise ValueError("trunc must be a dict with keys 'nkeep' and/or 'thresh'")
+        
+        unsupported = set(trunc.keys()) - {"nkeep", "thresh"}
+        if unsupported:
+            raise ValueError(f"Invalid truncation mode(s): {unsupported}. Must be 'nkeep' or 'thresh'")
     
     # Parse itags to integer axes
     if isinstance(axis, str):
@@ -170,9 +190,8 @@ def svd(
         U, s, Vh = np.linalg.svd(concatenated_mat, full_matrices=False)
         
         # Apply per-block truncation for thresh mode
-        if trunc is not None and trunc[0] == "thresh":
-            threshold = trunc[1]
-            keep_mask = s >= threshold
+        if trunc is not None and "thresh" in trunc:
+            keep_mask = s >= trunc["thresh"]
             U = U[:, keep_mask]
             s = s[keep_mask]
             Vh = Vh[keep_mask, :]
@@ -198,9 +217,7 @@ def svd(
         bond_charge_dims[q_left] = len(s)
     
     # Apply global truncation for nkeep mode
-    if trunc is not None and trunc[0] == "nkeep":
-        nkeep = trunc[1]
-        
+    if trunc is not None and "nkeep" in trunc:
         # Collect all singular values with their charges
         all_singular_values = []
         for q_left, (U, s, Vh_dict) in svd_results.items():
@@ -209,7 +226,7 @@ def svd(
         
         # Keep top nkeep singular values
         all_singular_values.sort(key=lambda x: x[0], reverse=True)
-        keep_set = set((q, idx) for _, q, idx in all_singular_values[:nkeep])
+        keep_set = set((q, idx) for _, q, idx in all_singular_values[:trunc["nkeep"]])
         
         # Apply truncation to each block
         new_svd_results = {}
@@ -286,7 +303,7 @@ def svd(
 def eig(
     T: Tensor,
     itag: Optional[str] = None,
-    trunc: Optional[Tuple[str, Union[int, float]]] = None
+    trunc: Optional[Dict[str, Union[int, float]]] = None
 ) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]:
     """Perform eigenvalue decomposition of a square matrix tensor.
 
@@ -298,9 +315,10 @@ def eig(
     itag:
         Index tag for the bond dimension. If None, uses default tag "_bond_eig".
     trunc:
-        Truncation specification as a tuple (mode, value). If None, no truncation.
-        - ("nkeep", n): Keep at most n eigenvalues globally (largest by magnitude)
-        - ("thresh", t): Keep eigenvalues with |eigenvalue| >= t per block
+        Truncation specification as a dict. If None, no truncation. Supported keys:
+        - "nkeep": Keep at most n eigenvalues globally (largest by magnitude)
+        - "thresh": Keep eigenvalues with |eigenvalue| >= t per block
+        Both can be specified together: thresh is applied first, then nkeep.
 
     Returns
     -------
@@ -315,7 +333,7 @@ def eig(
     ------
     ValueError
         If T is not a square matrix, or if indices are not compatible,
-        or if trunc mode is not "nkeep" or "thresh".
+        or if trunc format is invalid or contains unsupported modes.
     
     Notes
     -----
@@ -326,8 +344,25 @@ def eig(
     magnitude across all blocks are retained. For "thresh" mode, truncation is
     applied per block: each block independently keeps eigenvalues with |λ| >= threshold.
     
+    When both modes are specified, "thresh" is applied first (per-block filtering),
+    then "nkeep" is applied globally to the remaining eigenvalues.
+    
     The eigenvectors are stored in columns of U, normalized such that U is unitary
     (or as close as the eigendecomposition provides).
+    
+    Examples
+    --------
+    >>> # No truncation
+    >>> U, D_blocks = eig(T)
+    >>> 
+    >>> # Keep top 5 eigenvalues
+    >>> U, D_blocks = eig(T, trunc={"nkeep": 5})
+    >>> 
+    >>> # Keep eigenvalues with |λ| >= 0.1
+    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1})
+    >>> 
+    >>> # Apply both: first thresh, then nkeep
+    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1, "nkeep": 5})
     """
     # Validate input tensor
     if len(T.indices) != 2:
@@ -342,12 +377,14 @@ def eig(
             f"Got both {row_index.direction}"
         )
     
-    # Validate trunc parameter if provided
+    # Validate trunc parameter
     if trunc is not None:
-        if not isinstance(trunc, tuple) or len(trunc) != 2:  # type: ignore[redundant-expr]
-            raise ValueError("trunc must be a tuple (mode, value)")
-        if trunc[0] not in ("nkeep", "thresh"):  # type: ignore[redundant-expr]
-            raise ValueError(f"Invalid truncation mode '{trunc[0]}'. Must be 'nkeep' or 'thresh'")
+        if not isinstance(trunc, dict):
+            raise ValueError("trunc must be a dict with keys 'nkeep' and/or 'thresh'")
+        
+        unsupported = set(trunc.keys()) - {"nkeep", "thresh"}
+        if unsupported:
+            raise ValueError(f"Invalid truncation mode(s): {unsupported}. Must be 'nkeep' or 'thresh'")
     
     # Set bond tag
     bond_tag = itag if itag is not None else "_bond_eig"
@@ -367,9 +404,8 @@ def eig(
         eigenvalues, eigenvectors = np.linalg.eig(arr)
         
         # Apply per-block truncation for thresh mode
-        if trunc is not None and trunc[0] == "thresh":
-            threshold = trunc[1]
-            keep_mask = np.abs(eigenvalues) >= threshold
+        if trunc is not None and "thresh" in trunc:
+            keep_mask = np.abs(eigenvalues) >= trunc["thresh"]
             eigenvalues = eigenvalues[keep_mask]
             eigenvectors = eigenvectors[:, keep_mask]
         
@@ -382,9 +418,7 @@ def eig(
         bond_charge_dims[q_row] = len(eigenvalues)
     
     # Apply global truncation for nkeep mode
-    if trunc is not None and trunc[0] == "nkeep":
-        nkeep = trunc[1]
-        
+    if trunc is not None and "nkeep" in trunc:
         # Collect all eigenvalues with their charges
         all_eigenvalues = []
         for q, (eigvecs, eigvals) in eig_results.items():
@@ -393,7 +427,7 @@ def eig(
         
         # Keep top nkeep eigenvalues by magnitude
         all_eigenvalues.sort(key=lambda x: x[0], reverse=True)
-        keep_set = set((q, idx) for _, q, idx in all_eigenvalues[:nkeep])
+        keep_set = set((q, idx) for _, q, idx in all_eigenvalues[:trunc["nkeep"]])
         
         # Apply truncation to each block
         new_eig_results = {}
@@ -452,7 +486,7 @@ def decomp(
     mode: str = "SVD",
     flow: str = "><",
     itag: Optional[Union[str, Tuple[str, str]]] = None,
-    trunc: Optional[Tuple[str, Union[int, float]]] = None
+    trunc: Optional[Dict[str, Union[int, float]]] = None
 ) -> Union[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor, Tensor]]:
     """Perform tensor decomposition with flexible output modes.
     
@@ -482,9 +516,10 @@ def decomp(
         - str: Use same tag for both left and right bonds
         - tuple[str, str]: Use (left_tag, right_tag) for left and right bonds respectively
     trunc:
-        Truncation specification as a tuple (mode, value). If None, no truncation.
-        - ("nkeep", n): Keep at most n singular values globally
-        - ("thresh", t): Keep singular values >= t per block
+        Truncation specification as a dict. If None, no truncation. Supported keys:
+        - "nkeep": Keep at most n singular values globally
+        - "thresh": Keep singular values >= t per block
+        Both can be specified together: thresh is applied first, then nkeep.
     
     Returns
     -------

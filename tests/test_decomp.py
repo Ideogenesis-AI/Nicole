@@ -693,7 +693,7 @@ def test_svd_truncation_nkeep():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=100)
     
     # Perform SVD with nkeep to keep at most 5 singular values globally
-    U, S_blocks, Vh = svd(T, axis=0, trunc=("nkeep", 5))
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 5})
     
     # Check that total number of kept singular values is at most 5
     total_kept = sum(len(s_array) for s_array in S_blocks.values())
@@ -714,7 +714,7 @@ def test_svd_truncation_thresh():
     
     # Perform SVD with threshold truncation (use higher threshold to ensure truncation)
     threshold = 0.5
-    U, S_blocks, Vh = svd(T, axis=0, trunc=("thresh", threshold))
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
     
     # Check that all kept singular values are >= threshold
     for key, s_array in S_blocks.items():
@@ -734,7 +734,7 @@ def test_decomp_truncation_ur_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=300)
     
     # Decomp with nkeep truncation
-    U, R = decomp(T, axes=0, mode="UR", trunc=("nkeep", 4))
+    U, R = decomp(T, axes=0, mode="UR", trunc={"nkeep": 4})
     
     # Check bond dimension
     bond_index = U.indices[1]
@@ -759,7 +759,7 @@ def test_decomp_truncation_svd_mode():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=400)
     
     # Decomp with nkeep truncation
-    U, S, Vh = decomp(T, axes=0, mode="SVD", trunc=("nkeep", 3))
+    U, S, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 3})
     
     # Check that total singular values is at most 3
     total_svs = sum(block.shape[0] for block in S.data.values())
@@ -791,7 +791,7 @@ def test_svd_truncation_multiblock():
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
     
     # Truncate to 3 singular values globally (across all blocks)
-    U, S_blocks, Vh = svd(T, axis=0, trunc=("nkeep", 3))
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 3})
     
     # Total should be at most 3 singular values across all blocks
     total_kept = sum(len(s_array) for s_array in S_blocks.values())
@@ -806,9 +806,38 @@ def test_svd_truncation_invalid_mode():
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=700)
     
-    # Should raise error for invalid mode
+    # Invalid truncation format (not a dict)
+    with pytest.raises(ValueError, match="trunc must be a dict"):
+        svd(T, axis=0, trunc=("nkeep", 3))
+    
+    # Invalid truncation mode key
     with pytest.raises(ValueError, match="Invalid truncation mode"):
-        svd(T, axis=0, trunc=("invalid", 3))
+        svd(T, axis=0, trunc={"invalid_mode": 3})
+
+
+def test_svd_truncation_combined_thresh_nkeep():
+    """Test SVD with both thresh and nkeep truncation modes."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5), Sector(1, 4)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 6), Sector(1, 5)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=999)
+    
+    # Apply both truncations: first thresh, then nkeep
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": 0.5, "nkeep": 3})
+    
+    # Count total singular values
+    total_sv = sum(len(s) for s in S_blocks.values())
+    
+    # Should have at most 3 singular values (nkeep limit)
+    assert total_sv <= 3
+    
+    # All singular values should be >= 0.5 (thresh limit)
+    for s_array in S_blocks.values():
+        assert np.all(s_array >= 0.5)
+    
+    # Verify we got exactly 3 (both constraints satisfied)
+    assert total_sv == 3
 
 
 # High-order tensor tests
@@ -898,7 +927,7 @@ def test_decomp_6index_tensor_with_truncation():
     T = Tensor.random(indices, itags=["a", "b", "c", "d", "e", "f"], seed=1000)
     
     # Decompose with truncation (separate first index from rest)
-    U, R = decomp(T, axes=0, mode="UR", trunc=("nkeep", 5))
+    U, R = decomp(T, axes=0, mode="UR", trunc={"nkeep": 5})
     
     # Check that truncation worked
     bond_dim = U.indices[1].dim
@@ -1041,14 +1070,14 @@ def test_high_order_tensor_thresh_truncation():
     
     # Apply threshold truncation
     threshold = 1.0
-    U, S_blocks, Vh = svd(T, axis=0, trunc=("thresh", threshold))
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
     
     # All kept singular values should be >= threshold
     for key, s_array in S_blocks.items():
         assert np.all(s_array >= threshold)
     
     # Verify we can still reconstruct (approximately)
-    U_full = decomp(T, axes=0, mode="UR", trunc=("thresh", threshold))[0]
+    U_full = decomp(T, axes=0, mode="UR", trunc={"thresh": threshold})[0]
     assert len(U_full.indices) == 2
     # Left index should be unchanged (sum of all sector dimensions)
     expected_left_dim = sum(s.dim for s in indices[0].sectors)
@@ -1626,7 +1655,7 @@ def test_eig_truncation_nkeep():
     )
     
     # Keep only top 3 eigenvalues
-    U, D = eig(T, trunc=("nkeep", 3))
+    U, D = eig(T, trunc={"nkeep": 3})
     
     # Count total eigenvalues
     total_eigvals = sum(len(eigvals) for eigvals in D.values())
@@ -1671,11 +1700,43 @@ def test_eig_truncation_thresh():
     )
     
     # Keep eigenvalues with |λ| >= 1.0
-    U, D = eig(T, trunc=("thresh", 1.0))
+    U, D = eig(T, trunc={"thresh": 1.0})
     
     # Verify all kept eigenvalues satisfy threshold
     for eigvals in D.values():
         assert np.all(np.abs(eigvals) >= 1.0)
+
+
+def test_eig_truncation_combined_thresh_nkeep():
+    """Test eigenvalue decomposition with both thresh and nkeep truncation."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    
+    # Create symmetric tensor
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=888)
+    T_data_sym = {}
+    for key, arr in T.data.items():
+        T_data_sym[key] = (arr + arr.T.conj()) / 2
+    T = Tensor(
+        indices=(idx_out, idx_in),
+        itags=("i", "j"),
+        data=T_data_sym,
+        dtype=T.dtype
+    )
+    
+    # Apply both truncations: first thresh >= 0.8, then nkeep top 4
+    U, D = eig(T, trunc={"thresh": 0.8, "nkeep": 4})
+    
+    # Count total eigenvalues
+    total_eig = sum(len(eigvals) for eigvals in D.values())
+    
+    # Should have at most 4 eigenvalues (nkeep limit)
+    assert total_eig <= 4
+    
+    # All eigenvalues should have |λ| >= 0.8 (thresh limit)
+    for eigvals in D.values():
+        assert np.all(np.abs(eigvals) >= 0.8)
 
 
 def test_eig_non_square_error():
@@ -1977,7 +2038,7 @@ def test_decomp_multi_axis_with_truncation():
     T = Tensor.random([idx, idx.flip(), idx], seed=6, itags=['a', 'b', 'c'])
     
     # Decompose with truncation
-    U, S, Vh = decomp(T, axes=[0, 1], mode='SVD', trunc=('nkeep', 2))
+    U, S, Vh = decomp(T, axes=[0, 1], mode='SVD', trunc={"nkeep": 2})
     
     # Should still have correct structure
     assert len(U.indices) == 3
@@ -2079,3 +2140,54 @@ def test_decomp_multi_axis_preserves_index_order():
     recon1.permute([0, 2, 1, 3])
     for key in T.data:
         np.testing.assert_allclose(recon1.data[key], T.data[key], atol=1e-10)
+
+
+def test_decomp_truncation_combined_thresh_nkeep():
+    """Test decomp with both thresh and nkeep truncation modes (SVD)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 5), Sector(1, 4)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 4), Sector(0, 6), Sector(1, 5)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=777)
+    
+    # Apply both: first filter singular values >= 0.5, then keep top 5
+    U, S, Vh = decomp(T, axes=0, mode='SVD', trunc={"thresh": 0.5, "nkeep": 5})
+    
+    # Extract singular values from diagonal S tensor
+    all_sv = []
+    for key, block in S.data.items():
+        sv = np.diag(block)
+        all_sv.extend(sv)
+    
+    # Should have at most 5 values (nkeep)
+    assert len(all_sv) <= 5
+    
+    # All should be >= 0.5 (thresh)
+    assert np.all(np.array(all_sv) >= 0.5)
+    
+    # Verify reconstruction still works
+    S_Vh = contract(S, Vh, axes=(1, 0))
+    reconstructed = contract(U, S_Vh, axes=(1, 0))
+    
+    # Check dimensions match
+    assert len(reconstructed.indices) == len(T.indices)
+
+
+def test_decomp_truncation_combined_ur_mode():
+    """Test decomp UR mode with both thresh and nkeep truncation."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=888)
+    
+    # Apply both truncations in UR mode
+    U, R = decomp(T, axes=0, mode='UR', trunc={"thresh": 0.3, "nkeep": 6})
+    
+    # Check that bond dimension is at most 6
+    bond_dim = sum(sector.dim for sector in U.indices[1].sectors)
+    assert bond_dim <= 6
+    
+    # Verify reconstruction works
+    reconstructed = contract(U, R, axes=(1, 0))
+    assert len(reconstructed.indices) == len(T.indices)
