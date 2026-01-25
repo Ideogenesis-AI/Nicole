@@ -277,9 +277,12 @@ class Tensor:
     __repr__ = __str__
 
     def show(self, block_indices: Sequence[int]) -> None:
-        """Display selected blocks without max_line limits.
-        """
+        """Display selected blocks without max_line limits."""
         from .display import tensor_summary
+        
+        # Convert single integer to list
+        if isinstance(block_indices, int):
+            block_indices = [block_indices]
         # Convert block indices to their corresponding keys
         selected_keys = [self.key(i) for i in block_indices]
         
