@@ -24,7 +24,7 @@ from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
 from .operators import conj, permute, transpose
 from .operators import oplus, diag, inv
-from .operators import getsub, merge_axes
+from .operators import subsector, merge_axes
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
@@ -52,7 +52,7 @@ __all__ = [
     "identity",
     "isometry",
     "isometry_n",
-    "getsub",
+    "subsector",
     "merge_axes",
 ]
 

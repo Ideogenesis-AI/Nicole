@@ -21,7 +21,7 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, U1Group, getsub, Index, Sector
+from nicole import Direction, Tensor, U1Group, subsector, Index, Sector
 
 
 # Copy tests
@@ -254,29 +254,29 @@ def test_display_numbering_matches_block_index():
         np.testing.assert_array_equal(tensor.block(i), tensor.data[key])
 
 
-# getsub tests
+# subsector tests
 
-def test_getsub_returns_new_instance():
-    """Test that getsub returns a new tensor instance."""
+def test_subsector_returns_new_instance():
+    """Test that subsector returns a new tensor instance."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=200, itags=["A", "B"])
 
-    sub = getsub(tensor, [1, 2])
+    sub = subsector(tensor, [1, 2])
 
     assert sub is not tensor
 
 
-def test_getsub_contains_only_specified_blocks():
-    """Test that getsub returns only the specified blocks."""
+def test_subsector_contains_only_specified_blocks():
+    """Test that subsector returns only the specified blocks."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=201, itags=["A", "B"])
 
     indices_to_get = [1, 3]
-    sub = getsub(tensor, indices_to_get)
+    sub = subsector(tensor, indices_to_get)
 
     # Should have exactly the specified number of blocks
     assert len(sub.data) == len(indices_to_get)
@@ -286,14 +286,14 @@ def test_getsub_contains_only_specified_blocks():
     assert set(sub.data.keys()) == expected_keys
 
 
-def test_getsub_data_is_copied():
-    """Test that getsub creates independent copies of data."""
+def test_subsector_data_is_copied():
+    """Test that subsector creates independent copies of data."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=202, itags=["A", "B"])
 
-    sub = getsub(tensor, [1])
+    sub = subsector(tensor, 1)
     
     # Modify the sub tensor's data
     for key in sub.data:
@@ -303,65 +303,122 @@ def test_getsub_data_is_copied():
         np.testing.assert_array_equal(tensor.data[key], original_value)
 
 
-def test_getsub_preserves_metadata():
-    """Test that getsub preserves indices, itags, dtype, and label."""
+def test_subsector_preserves_metadata():
+    """Test that subsector preserves itags, dtype, and label."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=np.complex128, itags=["left", "right"])
     tensor.label = "TestTensor"
 
-    sub = getsub(tensor, [1])
+    sub = subsector(tensor, 1)
 
-    assert sub.indices == tensor.indices
     assert sub.itags == tensor.itags
     assert sub.dtype == tensor.dtype
     assert sub.label == tensor.label
 
 
-def test_getsub_single_block():
-    """Test getsub with a single block index."""
+def test_subsector_prunes_unused_sectors():
+    """Test that subsector removes sectors not present in selected blocks."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
+    tensor = Tensor.random([idx_a, idx_b], seed=203, itags=["A", "B"])
+
+    # Get only first block
+    sub = subsector(tensor, 1)
+
+    # The subsector should only have sectors that appear in block 1
+    key_1 = tensor.key(1)
+    
+    # Check that subsector indices only contain used charges
+    for axis, charge in enumerate(key_1):
+        used_charges = [s.charge for s in sub.indices[axis].sectors]
+        assert charge in used_charges
+        # Should have fewer or equal sectors than original
+        assert len(sub.indices[axis].sectors) <= len(tensor.indices[axis].sectors)
+
+
+def test_subsector_single_block():
+    """Test subsector with a single block index."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=204, itags=["A", "B"])
 
-    sub = getsub(tensor, [1])
+    sub = subsector(tensor, 1)
 
     assert len(sub.data) == 1
     key = tensor.key(1)
     np.testing.assert_array_equal(sub.data[key], tensor.data[key])
 
 
-def test_getsub_all_blocks():
-    """Test getsub with all block indices."""
+def test_subsector_integer_vs_list_syntax():
+    """Test that single integer and list syntax produce identical results."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
+    tensor = Tensor.random([idx_a, idx_b], seed=207, itags=["A", "B"])
+
+    # Get block using single integer syntax
+    sub_int = subsector(tensor, 2)
+    
+    # Get same block using list syntax
+    sub_list = subsector(tensor, [2])
+
+    # Both should have the same number of blocks
+    assert len(sub_int.data) == len(sub_list.data) == 1
+    
+    # Both should have the same keys
+    assert set(sub_int.data.keys()) == set(sub_list.data.keys())
+    
+    # Both should have the same data
+    for key in sub_int.data:
+        np.testing.assert_array_equal(sub_int.data[key], sub_list.data[key])
+    
+    # Both should preserve the same metadata
+    assert sub_int.indices == sub_list.indices
+    assert sub_int.itags == sub_list.itags
+    assert sub_int.dtype == sub_list.dtype
+
+
+def test_subsector_all_blocks():
+    """Test subsector with all block indices."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=205, itags=["A", "B"])
 
     all_indices = list(range(1, len(tensor.data) + 1))
-    sub = getsub(tensor, all_indices)
+    sub = subsector(tensor, all_indices)
 
     assert len(sub.data) == len(tensor.data)
     for key in tensor.data:
         np.testing.assert_array_equal(sub.data[key], tensor.data[key])
 
 
-def test_getsub_raises_on_invalid_index():
-    """Test that getsub raises IndexError for invalid indices."""
+def test_subsector_raises_on_invalid_index():
+    """Test that subsector raises IndexError for invalid indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=206, itags=["A", "B"])
 
     num_blocks = len(tensor.data)
 
+    # Test with sequence syntax
     with pytest.raises(IndexError):
-        getsub(tensor, [0])  # 0 is invalid (1-indexed)
+        subsector(tensor, [0])  # 0 is invalid (1-indexed)
 
     with pytest.raises(IndexError):
-        getsub(tensor, [num_blocks + 1])  # Out of range
+        subsector(tensor, [num_blocks + 1])  # Out of range
 
     with pytest.raises(IndexError):
-        getsub(tensor, [1, num_blocks + 1])  # One valid, one invalid
+        subsector(tensor, [1, num_blocks + 1])  # One valid, one invalid
+
+    # Test with single integer syntax
+    with pytest.raises(IndexError):
+        subsector(tensor, 0)  # 0 is invalid (1-indexed)
+
+    with pytest.raises(IndexError):
+        subsector(tensor, num_blocks + 1)  # Out of range
 

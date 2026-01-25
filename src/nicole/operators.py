@@ -147,22 +147,23 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     return permute(tensor, order)
 
 
-def getsub(tensor: Tensor, block_indices: Sequence[int]) -> Tensor:
-    """Return a new tensor containing only the specified blocks.
+def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tensor:
+    """Return a new tensor containing only the specified blocks with pruned sectors.
     
     Parameters
     ----------
     tensor:
         The input tensor to extract blocks from.
     block_indices:
-        Sequence of block indices (1-indexed, matching display numbering)
-        specifying which blocks to include in the new tensor.
+        Block index or sequence of block indices (1-indexed, matching display numbering)
+        specifying which blocks to include in the new tensor. Can be a single integer
+        or a sequence of integers.
     
     Returns
     -------
     Tensor
-        A new tensor instance containing only the specified blocks,
-        with all other attributes (indices, itags, dtype, label) preserved.
+        A new tensor instance containing only the specified blocks with unused sectors
+        removed from the indices. Other attributes (itags, dtype, label) are preserved.
     
     Raises
     ------
@@ -171,10 +172,15 @@ def getsub(tensor: Tensor, block_indices: Sequence[int]) -> Tensor:
     
     Examples
     --------
-    >>> from nicole import getsub, Tensor
+    >>> from nicole import subsector, Tensor
     >>> # Assuming t has 5 blocks numbered 1-5 in display
-    >>> t_sub = getsub(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
+    >>> t_sub = subsector(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
+    >>> t_single = subsector(t, 2)  # Extract just block 2
     """
+    # Convert single integer to sequence
+    if isinstance(block_indices, int):
+        block_indices = [block_indices]
+    
     num_blocks = len(tensor.data)
     for i in block_indices:
         if i < 1 or i > num_blocks:
@@ -182,8 +188,11 @@ def getsub(tensor: Tensor, block_indices: Sequence[int]) -> Tensor:
     
     new_data = {tensor.key(i): tensor.block(i).copy() for i in block_indices}
     
+    # Prune unused sectors from indices
+    pruned_indices = Tensor._prune_unused_sectors(tensor.indices, new_data)
+    
     return Tensor(
-        indices=tensor.indices,
+        indices=pruned_indices,
         itags=tensor.itags,
         data=new_data,
         dtype=tensor.dtype,
