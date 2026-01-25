@@ -349,6 +349,52 @@ def test_retag_mode3_selective_update():
         np.testing.assert_allclose(tensor.data[key], original_data[key])
 
 
+def test_retag_single_int_and_str():
+    """Test retag with single int and single str (mode 3 simplified)."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
+    ]
+    itags = ["x", "y", "z"]
+    
+    tensor = Tensor.random(indices, seed=15, itags=itags)
+    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    
+    # Test single int with single str
+    result = tensor.retag(1, "middle")
+    
+    assert result is None
+    assert list(tensor.itags) == ["x", "middle", "z"]
+    for key in original_data:
+        np.testing.assert_allclose(tensor.data[key], original_data[key])
+    
+    # Test that it works with another index
+    tensor.retag(0, "left")
+    assert list(tensor.itags) == ["left", "middle", "z"]
+
+
+def test_retag_mixed_single_and_sequence():
+    """Test retag with int and sequence of strings."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
+    ]
+    
+    tensor = Tensor.random(indices, seed=16, itags=["a", "b", "c"])
+    
+    # Single int with sequence of strings should raise ValueError
+    with pytest.raises(ValueError):
+        tensor.retag(0, ["x", "y"])
+    
+    # Sequence of ints with single string should raise ValueError  
+    with pytest.raises(ValueError):
+        tensor.retag([0, 1], "x")
+
+
 def test_retag_mapping_unmapped_tags_preserved():
     """Test that unmapped tags are preserved in mode 1."""
     group = U1Group()

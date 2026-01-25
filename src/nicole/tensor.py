@@ -694,8 +694,8 @@ class Tensor:
     #   itag manipulations: multiple modes of retagging
     # ------------------------------------------------------------
 
-    def retag(self, mapping_or_axes: Union[Mapping[str, str], Sequence[str], Sequence[int]], 
-              new_tags: Optional[Sequence[str]] = None) -> None:
+    def retag(self, mapping_or_axes: Union[Mapping[str, str], Sequence[str], int, Sequence[int]], 
+              new_tags: Optional[Union[str, Sequence[str]]] = None) -> None:
         """Retag indices using one of three modes.
         
         Parameters
@@ -704,10 +704,10 @@ class Tensor:
             Can be one of:
             - Mapping[str, str]: Dictionary mapping old tags to new tags
             - Sequence[str]: Complete list of new tags (must match number of indices)
-            - Sequence[int]: List of index positions (axes) to update (requires new_tags)
+            - Sequence[int] or int: Index position(s) to update (requires new_tags)
         new_tags:
-            New tags to use when mapping_or_axes is a sequence of integers.
-            Must have the same length as mapping_or_axes.
+            New tag(s) to use when mapping_or_axes is an integer or sequence of integers.
+            Can be a single string or sequence of strings. Must match the length of mapping_or_axes.
         
         Examples
         --------
@@ -719,16 +719,30 @@ class Tensor:
         
         # Mode 3: Selective update by position
         tensor.retag([0, 2], ["left", "right"])
+        tensor.retag(0, "left")  # Single index and tag
         """
+        # Parse and normalize input arguments depending on the mode
         if isinstance(mapping_or_axes, Mapping):
             # Mode 1: Mapping dictionary
             self.itags = tuple(mapping_or_axes.get(tag, tag) for tag in self.itags)
         elif new_tags is not None:
             # Mode 3: Update specific indices
-            if not isinstance(mapping_or_axes, Sequence):
-                raise TypeError("When new_tags is provided, first argument must be a sequence of integers")
-            axes = list(mapping_or_axes)
-            if len(axes) != len(new_tags):
+            # Convert single int to list
+            if isinstance(mapping_or_axes, int):
+                axes = [mapping_or_axes]
+            elif isinstance(mapping_or_axes, Sequence):
+                axes = list(mapping_or_axes)
+            else: # mapping_or_axes is not a sequence of integers
+                raise TypeError("When new_tags is provided, first argument must be an integer "
+                    "or sequence of integers")
+            
+            # Convert single str to list
+            if isinstance(new_tags, str):
+                tags = [new_tags]
+            else:
+                tags = list(new_tags)
+            
+            if len(axes) != len(tags):
                 raise ValueError("Number of axes must match number of new tags")
             if not all(isinstance(i, int) for i in axes):
                 raise TypeError("Index positions (axes) must be integers")
@@ -737,7 +751,7 @@ class Tensor:
             
             # Convert to list for mutation, then back to tuple
             new_itags = list(self.itags)
-            for idx, tag in zip(axes, new_tags):
+            for idx, tag in zip(axes, tags):
                 new_itags[idx] = tag
             self.itags = tuple(new_itags)
         else:
