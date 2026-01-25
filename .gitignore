@@ -4,6 +4,29 @@
 
 refs/
 
+
+
+# ------------------------------------------------------- #
+#       .gitignore for Cursor and VS Code Editors         #
+# ------------------------------------------------------- #
+
+.cursor/
+.cursorignore
+.cursorindexingignore
+
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+!*.code-workspace
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+
+
 # ------------------------------------------------------- #
 #                .gitignore for Python                    #
 # ------------------------------------------------------- #
