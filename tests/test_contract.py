@@ -21,7 +21,7 @@
 import numpy as np
 import pytest
 
-from nicole import Direction, Tensor, contract, identity, partial_trace, trace, U1Group, Z2Group, permute, Index, Sector
+from nicole import Direction, Tensor, contract, identity, trace, U1Group, Z2Group, permute, Index, Sector
 from nicole.symmetry.product import ProductGroup
 from .utils import assert_charge_neutral
 
@@ -653,16 +653,93 @@ def test_contract_excl_with_permutation():
 
 # Trace tests
 
-def test_trace_integer_pairs():
-    """Test trace with integer index pairs."""
+def test_trace_automatic():
+    """Test trace with automatic pairing and verify numeric correctness."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Automatic mode: should trace both pairs
+    traced = trace(tensor)
+    assert len(traced.indices) == 0
+    assert traced.is_scalar()
+    
+    # Verify by contracting with identity tensors (sequential)
+    # For identical tags, automatic contraction works correctly
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_both = contract(contracted_x, id_y)
+    
+    # Automatic trace should match identity contraction
+    np.testing.assert_allclose(traced.item(), contracted_both.item())
+
+
+def test_trace_explicit_multi_pair():
+    """Test explicit multi-pair trace and verify order independence."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
+    
+    # Multi-pair trace with explicit axes
+    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
+    assert traced_multi.is_scalar()
+    
+    # Sequential trace in order: first (0,1), then (0,1) [indices shift after first trace]
+    traced_seq1 = trace(trace(tensor, axes=(0, 1)), axes=(0, 1))
+    assert traced_seq1.is_scalar()
+    
+    # Sequential trace in different order: first (2,3), then (0,1) [indices shift after first trace]
+    traced_seq2 = trace(trace(tensor, axes=(2, 3)), axes=(0, 1))
+    assert traced_seq2.is_scalar()
+    
+    # All three methods should give identical results
+    np.testing.assert_allclose(traced_multi.item(), traced_seq1.item())
+    np.testing.assert_allclose(traced_multi.item(), traced_seq2.item())
+
+
+def test_trace_manual_single_pair():
+    """Test trace with manually specified single pair."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
+    ))
 
     tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
-    traced = trace(tensor, pairs=[(0, 1)])
+    # Manual mode: trace only axes (0, 1)
+    traced = trace(tensor, axes=(0, 1))
     assert traced.indices == (idx_c, idx_d)
 
     manual = {}
@@ -680,105 +757,133 @@ def test_trace_integer_pairs():
         np.testing.assert_allclose(traced.data[key], expected)
 
 
-def test_trace_string_pairs():
-    """Test trace with string index pairs."""
+def test_trace_exclusion_by_index():
+    """Test trace with exclusion by integer index."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
     idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
-    traced = trace(tensor, pairs=[("a", "b")])
-    assert traced.indices == (idx_c, idx_d)
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude first pair (0, 1), should trace only second pair (2, 3)
+    traced = trace(tensor, excl=[0, 1])
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
 
 
-def test_trace_multiple_pairs():
-    """Test trace with multiple pairs."""
+def test_trace_manual_multiple_pairs():
+    """Test trace with multiple manually specified pairs and identity verification."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
-    traced = trace(tensor, pairs=[("a", "b"), ("c", "d")])
+    # Use matching itags for identity verification
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
+    traced = trace(tensor, axes=[(0, 1), (2, 3)])
     
     # Result should be scalar (all indices traced)
     assert len(traced.indices) == 0
     assert traced.is_scalar()
-
-
-# Partial trace tests
-
-def test_partial_trace_integer_axes():
-    """Test partial_trace with integer axes."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
     
-    pt = partial_trace(tensor, axes=[0, 1])
-    assert pt.indices == (idx_c, idx_d)
-
-
-def test_partial_trace_string_axes():
-    """Test partial_trace with string axes."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
-    traced = trace(tensor, pairs=[("a", "b")])
+    # Verify with identity contraction (sequential)
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_all = contract(contracted_x, id_y)
     
-    # Partial trace should match explicit trace call
-    pt = partial_trace(tensor, axes=["a", "b"])
-    assert set(pt.data.keys()) == set(traced.data.keys())
-    for key in pt.data:
-        np.testing.assert_allclose(pt.data[key], traced.data[key])
+    # Both methods should give the same result
+    np.testing.assert_allclose(traced.item(), contracted_all.item())
 
 
-def test_partial_trace_multiple_pairs():
-    """Test partial_trace with multiple pairs."""
+def test_trace_exclusion_by_tag():
+    """Test trace with exclusion by itag name and verify numeric correctness."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
 
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
-    first = partial_trace(tensor, axes=["a", "b"])
-
-    manual_matrices = {}
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude "x" tags, should trace only "y" pair
+    traced = trace(tensor, excl="x")
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
+    
+    # Verify numeric correctness: only y pair should be traced
+    manual = {}
     for (qa, qb, qc, qd), block in tensor.data.items():
-        if qa == qb and qc == qd:
-            inner = np.trace(block, axis1=0, axis2=1)
-            manual_matrices[(qc, qd)] = manual_matrices.get((qc, qd), 0) + inner
-
-    assert set(first.data.keys()) == set(manual_matrices.keys())
-    for key, expected in manual_matrices.items():
-        np.testing.assert_allclose(first.data[key], expected)
-
-    total_manual = 0.0
-    total_from_tensor = 0.0
-    for (qc, qd), matrix in manual_matrices.items():
         if qc == qd:
-            total_manual += np.trace(matrix)
-            total_from_tensor += np.trace(first.data[(qc, qd)])
-    assert np.isclose(total_manual, total_from_tensor)
+            # Trace over y pair (axes 2, 3 -> axes 2, 3 in block)
+            diag = np.trace(block, axis1=2, axis2=3)
+            key = (qa, qb)
+            if key in manual:
+                manual[key] += diag
+            else:
+                manual[key] = diag
+    
+    assert set(traced.data.keys()) == set(manual.keys())
+    for key, expected in manual.items():
+        np.testing.assert_allclose(traced.data[key], expected)
+
+
+def test_trace_exclusion_single_int():
+    """Test trace with single integer exclusion."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude axis 0, so pair (0,1) cannot form, only (2,3) should be traced
+    traced = trace(tensor, excl=0)
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
+
+
+def test_trace_exclusion_multiple():
+    """Test trace with multiple exclusions."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e, idx_f], 
+                           seed=601, itags=["x", "x", "y", "y", "z", "z"])
+    # Exclude pairs x and y, should trace only z pair
+    traced = trace(tensor, excl=[0, 1, 2, 3])
+    assert len(traced.indices) == 4
+    assert traced.indices == (idx_a, idx_b, idx_c, idx_d)
 
 
 def test_contract_trace_consistency_high_order():
-    """Test consistency: direct 3-index contraction vs 2-index contraction + partial trace.
+    """Test consistency: direct 3-index contraction vs 2-index contraction + trace.
     
     Two 5-index tensors contracted on 3 indices can be computed in two ways:
     1. Direct 3-index contraction: contract all 3 pairs at once
-    2. Sequential: contract 2 pairs first, then partial trace the remaining pair
+    2. Sequential: contract 2 pairs first, then trace the remaining pair
     
     Both approaches should give identical results.
     """
@@ -810,7 +915,7 @@ def test_contract_trace_consistency_high_order():
     assert set(direct_result.itags) == {"a", "e", "f", "g"}
     assert_charge_neutral(direct_result)
     
-    # Method 2: Contract 2 indices first, then partial trace the third
+    # Method 2: Contract 2 indices first, then trace the third
     # First contract only b and c (using manual axes to avoid contracting d)
     # A indices: 0=a, 1=b, 2=c, 3=d, 4=e
     # B indices: 0=b, 1=c, 2=d, 3=f, 4=g
@@ -822,12 +927,8 @@ def test_contract_trace_consistency_high_order():
     # Result should have: a, d_out, e, d_in, f, g
     # where d_out and d_in have matching tags "d" but weren't contracted
     
-    # Now trace over the remaining d pair
-    # Find which axes correspond to the two "d" indices
-    d_axes = [i for i, tag in enumerate(partial_result.itags) if tag == "d"]
-    assert len(d_axes) == 2, f"Expected 2 'd' indices, got {len(d_axes)}"
-    
-    traced_result = partial_trace(partial_result, axes=d_axes)
+    # Now trace over the remaining d pair using automatic detection
+    traced_result = trace(partial_result)
     
     assert set(traced_result.itags) == {"a", "e", "f", "g"}
     assert_charge_neutral(traced_result)
@@ -851,14 +952,14 @@ def test_contract_trace_consistency_high_order():
     assert abs(direct_result.norm() - traced_result.norm()) < 1e-10
 
 
-def test_partial_trace_odd_axes_raises():
-    """Test that partial_trace with odd number of axes raises error."""
+def test_trace_raises_with_both_axes_and_excl():
+    """Test that trace raises error when both axes and excl are specified."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
     
-    with pytest.raises(ValueError, match="even number of axes"):
-        partial_trace(tensor, axes=[0, 1, 2])
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        trace(tensor, axes=(0, 1), excl=0)
 
 
 # ProductGroup integration tests for contraction
@@ -917,40 +1018,56 @@ def test_contract_product_group_manual_pairs():
 
 
 def test_trace_product_group():
-    """Test trace operation with ProductGroup."""
+    """Test trace operation with ProductGroup and verify numeric correctness."""
     group = ProductGroup([U1Group(), Z2Group()])
     
     left = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 2),
-        Sector((1, 1), 1),
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
     ))
     right = Index(Direction.IN, group, sectors=(
-        Sector((0, 0), 2),
-        Sector((1, 1), 1),
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
     ))
     
-    T = Tensor.random([left, right], seed=99, itags=["i", "j"])
+    T = Tensor.random([left, right], seed=99, itags=["x", "x"])
     
-    # Trace over both indices
-    result = trace(T, pairs=[(0, 1)])
+    # Trace over both indices (automatic mode)
+    result = trace(T)
     
     assert result.is_scalar()
     assert len(result.indices) == 0
     assert_charge_neutral(result)
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (ql, qr), block in T.data.items():
+        if ql == qr:
+            manual_scalar += np.trace(block)
+    
+    np.testing.assert_allclose(result.item(), manual_scalar)
 
 
 # Scalar result tests
 
 def test_trace_produces_scalar():
-    """Test that tracing all indices produces a scalar (0D tensor)."""
+    """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
     
-    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["a", "b"])
+    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["x", "x"])
     
-    # Trace all indices
-    scalar = trace(tensor, pairs=[(0, 1)])
+    # Trace all indices (automatic mode)
+    scalar = trace(tensor)
     
     assert scalar.is_scalar()
     assert len(scalar.indices) == 0
@@ -960,6 +1077,14 @@ def test_trace_produces_scalar():
     # Verify it's a valid scalar value
     value = scalar.item()
     assert isinstance(value, (int, float, complex))
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (qa, qb), block in tensor.data.items():
+        if qa == qb:
+            manual_scalar += np.trace(block)
+    
+    np.testing.assert_allclose(value, manual_scalar)
 
 
 def test_contract_produces_scalar():
@@ -981,21 +1106,55 @@ def test_contract_produces_scalar():
 
 
 def test_trace_multiple_pairs_produces_scalar():
-    """Test that tracing multiple pairs can produce a scalar."""
+    """Test that tracing multiple pairs can produce a scalar with numeric verification."""
     group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
     
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
     
-    # Trace all pairs
-    scalar = trace(tensor, pairs=[("a", "b"), ("c", "d")])
+    # Trace all pairs (automatic mode)
+    scalar = trace(tensor)
     
     assert scalar.is_scalar()
     assert len(scalar.indices) == 0
-    assert scalar.item() is not None
+    
+    # Verify by contracting with identity tensors (sequential)
+    # For identical tags, automatic contraction works correctly
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_both = contract(contracted_x, id_y)
+    
+    # Also verify with multi-pair trace
+    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
+    
+    # All three methods should match: automatic trace, identity contraction, and multi-pair trace
+    np.testing.assert_allclose(scalar.item(), traced_multi.item())
+    np.testing.assert_allclose(scalar.item(), contracted_both.item())
+
+
+def test_trace_ambiguous_raises():
+    """Test that ambiguous automatic pairing raises an error."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # Create tensor with 3 indices with same tag "x": 2 OUT, 1 IN
+    # This is ambiguous: which OUT should pair with the IN?
+    tensor = Tensor.random([idx, idx, idx.flip()], seed=42, itags=["x", "x", "x"])
+    
+    with pytest.raises(ValueError, match="Ambiguous automatic trace"):
+        trace(tensor)
 
 
 def test_scalar_result_operations():
@@ -1022,16 +1181,16 @@ def test_scalar_result_operations():
     assert s_scaled.is_scalar()
 
 
-def test_partial_trace_produces_scalar():
-    """Test partial_trace with all indices produces scalar."""
+def test_trace_manual_pair_syntax():
+    """Test trace with single pair using tuple syntax."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
     
-    # Partial trace over all indices
-    scalar = partial_trace(tensor, axes=[0, 1])
+    # Trace using single pair tuple syntax
+    scalar = trace(tensor, axes=(0, 1))
     
     assert scalar.is_scalar()
     assert len(scalar.indices) == 0

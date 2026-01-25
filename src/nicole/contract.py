@@ -372,7 +372,81 @@ def contract(
     return result
 
 
-def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]]) -> Tensor:
+def _detect_trace_pairs(T: Tensor, excl: set[int] = None) -> list[tuple[int, int]]:
+    """Detect trace pairs automatically within a tensor with optional exclusions.
+    
+    Parameters
+    ----------
+    T:
+        Input tensor.
+    excl:
+        Set of axes to exclude from tracing.
+    
+    Returns
+    -------
+    list[tuple[int, int]]
+        List of axis pairs to trace.
+    
+    Raises
+    ------
+    ValueError
+        If ambiguous pairing is detected or no valid pairs found.
+    """
+    if excl is None:
+        excl = set()
+    
+    # Check for ambiguity: each index should match at most one other index
+    for i, tag_i in enumerate(T.itags):
+        if i in excl:
+            continue
+        matches = []
+        for j, tag_j in enumerate(T.itags):
+            if j == i or j in excl:
+                continue
+            if tag_i == tag_j and T.indices[i].direction != T.indices[j].direction:
+                matches.append(j)
+        if len(matches) > 1:
+            raise ValueError(
+                f"Ambiguous automatic trace: index {i} (itag '{tag_i}') "
+                f"matches {len(matches)} other indices with opposite direction. "
+                "Please specify axes explicitly."
+            )
+    
+    # Build unique pairing
+    pairs = []
+    used = set()
+    for i, tag_i in enumerate(T.itags):
+        if i in excl or i in used:
+            continue
+        for j, tag_j in enumerate(T.itags):
+            if j <= i or j in used or j in excl:
+                continue
+            if tag_i == tag_j and T.indices[i].direction != T.indices[j].direction:
+                pairs.append((i, j))
+                used.add(i)
+                used.add(j)
+                break
+    
+    if not pairs:
+        if excl:
+            raise ValueError(
+                "No valid trace pairs found after applying exclusions. "
+                "Indices must have matching itags and opposite directions."
+            )
+        else:
+            raise ValueError(
+                "No valid trace pairs found. Indices must have matching itags "
+                "and opposite directions."
+            )
+    
+    return pairs
+
+
+def trace(
+    T: Tensor,
+    axes: Optional[Tuple[int, int] | Sequence[Tuple[int, int]]] = None,
+    excl: Optional[int | str | Sequence[int] | Sequence[str]] = None,
+) -> Tensor:
     """Trace over pairs of indices on a single tensor while preserving symmetry.
 
     This function performs a partial trace by summing over diagonal elements of
@@ -383,10 +457,17 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
     ----------
     T:
         Tensor to be traced.
-    pairs:
-        Sequence of index pairs to trace over. Each pair (a, b) specifies two indices
-        of the tensor to trace. Entries can be integer axis positions or string itag names.
-        All indices in pairs must have opposite directions and matching charges.
+    axes:
+        Optional specification of axes to trace. Can be either:
+        - Single pair: (axis_a, axis_b) for tracing one pair
+        - Multiple pairs: [(a1, b1), (a2, b2), ...] for tracing multiple pairs
+        Must use integer indices only. Validates that each pair has matching itags
+        and opposite directions. Mutually exclusive with `excl`.
+    excl:
+        Optional specification of axes to exclude from automatic tracing.
+        Can be a single int/str or sequence of ints/strs. When specified, automatically
+        traces all indices with matching itags and opposite directions, except those
+        in the exclusion list. Mutually exclusive with `axes`.
 
     Returns
     -------
@@ -399,132 +480,160 @@ def trace(T: Tensor, pairs: Sequence[Tuple[int, int]] | Sequence[Tuple[str, str]
     NotImplementedError
         If the tensor uses non-Abelian symmetry groups.
     ValueError
-        If paired indices have the same direction, mismatched charges, or
-        incompatible dimensions.
+        If both axes and excl are specified, or if paired indices have the same direction,
+        mismatched charges, incompatible dimensions, or if no valid pairs are found,
+        or if automatic detection encounters ambiguous pairing.
 
     Notes
     -----
     The trace operation sums over matching diagonal entries: Tr(A) = Σᵢ Aᵢᵢ.
-    For multiple pairs, traces are performed sequentially. The order of pairs
-    does not affect the final result for commuting traces.
+    
+    For multiple pairs, traces are performed sequentially to ensure consistency:
+    `trace(T, [(a,b), (c,d)])` is equivalent to `trace(trace(T, (a,b)), (c,d))`.
+    This guarantees that the result does not depend on whether pairs are traced
+    simultaneously or one at a time. The order of pairs does not affect the
+    final result for commuting traces.
 
     Examples
     --------
-    >>> # Trace over indices at position 0 and 1 of a 3-index tensor
-    >>> result = trace(T, pairs=[(0, 1)])
-    >>> 
-    >>> # Trace over multiple pairs using itag names
-    >>> result = trace(T, pairs=[("left", "right"), ("top", "bottom")])
+    **Automatic tracing** (recommended for most cases):
+
+    >>> # Tensors with matching itags and opposite directions
+    >>> T = Tensor.random([idx_a, idx_a_flip, idx_b], itags=["left", "left", "mid"])
+    >>> result = trace(T)  # Automatically traces "left" pair
+
+    **Manual tracing with axes parameter:**
+
+    >>> # Single pair: concise syntax
+    >>> result = trace(T, axes=(0, 1))
+
+    >>> # Single pair: also works with sequence syntax
+    >>> result = trace(T, axes=[(0, 1)])
+
+    >>> # Multiple pairs
+    >>> result = trace(T, axes=[(0, 1), (2, 3)])
+
+    **Using excl parameter for automatic tracing with exclusions:**
+
+    >>> # Trace all matching pairs except axis 0
+    >>> result = trace(T, excl=0)
+
+    >>> # Trace all matching pairs except "left" indices
+    >>> result = trace(T, excl="left")
+
+    >>> # Exclude multiple axes
+    >>> result = trace(T, excl=[0, 2])
     """
-    if pairs and isinstance(pairs[0][0], str):  # type: ignore[index]
-        name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
-        axes = [(name_to_axis[a], name_to_axis[b]) for a, b in pairs]  # type: ignore[arg-type]
+    # Validate mutually exclusive parameters
+    if axes is not None and excl is not None:
+        raise ValueError("Cannot specify both 'axes' and 'excl' parameters")
+    
+    # Parse axes parameter
+    if axes is not None:
+        # Check if single pair (int, int) or multiple pairs
+        if isinstance(axes, tuple) and len(axes) == 2 and isinstance(axes[0], int):
+            pairs = [axes]
+        else:
+            pairs = list(axes)  # type: ignore[arg-type]
     else:
-        axes = pairs  # type: ignore[assignment]
-    contracted = set(i for p in axes for i in p)
+        # Automatic mode: detect pairs, possibly with exclusions
+        excl_set = set()
+        if excl is not None:
+            # Parse exclusions
+            if isinstance(excl, (int, str)):
+                excl_items = [excl]
+            else:
+                excl_items = list(excl)
+            
+            # Convert string tags to indices
+            for item in excl_items:
+                if isinstance(item, str):
+                    if item not in T.itags:
+                        raise ValueError(f"Exclusion itag '{item}' not found in tensor")
+                    # Find all indices with this tag
+                    for i, tag in enumerate(T.itags):
+                        if tag == item:
+                            excl_set.add(i)
+                else:
+                    if item < 0 or item >= len(T.itags):
+                        raise IndexError(f"Exclusion axis {item} out of range")
+                    excl_set.add(item)
+        
+        pairs = _detect_trace_pairs(T, excl_set)
+    
+    # Base case: no pairs to trace
+    if not pairs:
+        return T
+    
+    # Recursive case: trace first pair, then recursively trace remaining pairs
+    # This ensures consistency: trace(T, [pair1, pair2]) == trace(trace(T, pair1), pair2)
+    if len(pairs) > 1:
+        # Trace the first pair
+        first_pair = pairs[0]
+        a, b = first_pair
+        traced_first = trace(T, axes=first_pair)
+        
+        # Adjust indices in remaining pairs after removing axes a and b
+        # Axes are removed in order, so we need to account for both removals
+        adjusted_pairs = []
+        for pair in pairs[1:]:
+            i, j = pair
+            # Adjust for removal of axis a
+            if i > a:
+                i -= 1
+            if j > a:
+                j -= 1
+            # Adjust for removal of axis b (note: b might have shifted after removing a)
+            b_adjusted = b if b < a else b - 1
+            if i > b_adjusted:
+                i -= 1
+            if j > b_adjusted:
+                j -= 1
+            adjusted_pairs.append((i, j))
+        
+        # Recursively trace the remaining pairs
+        return trace(traced_first, axes=adjusted_pairs)
+    
+    # Base case: single pair to trace
+    a, b = pairs[0]
+    
+    contracted = {a, b}
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
     out_itags = tuple(T.itags[i] for i in keep_axes)
     out_blocks: Dict[BlockKey, np.ndarray] = {}
+    
     for key, arr in T.data.items():
-        ok = True
-        for a, b in axes:
-            group = T.indices[a].group
-            if not isinstance(group, (AbelianGroup, ProductGroup)):
-                raise NotImplementedError("Only Abelian/Product trace supported")
-            qa = key[a]
-            qb = key[b]
-            if T.indices[a].direction == T.indices[b].direction:
-                ok = False
-                break
-            if not group.equal(qa, qb):
-                ok = False
-                break
-            if arr.shape[a] != arr.shape[b]:
-                ok = False
-                break
-        if not ok:
+        group = T.indices[a].group
+        if not isinstance(group, (AbelianGroup, ProductGroup)):
+            raise NotImplementedError("Only Abelian/Product trace supported")
+        qa = key[a]
+        qb = key[b]
+        
+        # Check constraints for this pair
+        if T.indices[a].direction == T.indices[b].direction:
             continue
-        # Move traced axes to the end for convenient reshaping.
-        axes_order = keep_axes + [a for p in axes for a in p]
-        permuted = np.transpose(arr, axes=axes_order)
-        keep_shape = [arr.shape[i] for i in keep_axes]
-        traced_shapes = [arr.shape[a] for a, _ in axes]
-        reshaped = permuted.reshape((*keep_shape, *traced_shapes, *traced_shapes))
-        # Trace each pair sequentially; after each trace, dimensions are reduced by 2
-        for k in range(len(axes)):
-            # After k traces, we've removed 2*k dimensions
-            # So the next pair starts at len(keep_shape)
-            reshaped = np.trace(reshaped, axis1=len(keep_shape), axis2=len(keep_shape) + len(axes) - k)
-        # Ensure reshaped is a proper ndarray (not a scalar)
-        if not isinstance(reshaped, np.ndarray):
-            reshaped = np.array(reshaped)
+        if not group.equal(qa, qb):
+            continue
+        if arr.shape[a] != arr.shape[b]:
+            continue
+        
+        # Trace this pair
+        diag = np.trace(arr, axis1=a, axis2=b)
+        
+        # Ensure diag is a proper ndarray (not a scalar)
+        if not isinstance(diag, np.ndarray):
+            diag = np.array(diag)
+        
         out_key = tuple(key[i] for i in keep_axes)
         if out_key in out_blocks:
-            result = out_blocks[out_key] + reshaped
-            # Ensure result is also an ndarray
-            if not isinstance(result, np.ndarray):
-                result = np.array(result)
-            out_blocks[out_key] = result
+            result_block = out_blocks[out_key] + diag
+            if not isinstance(result_block, np.ndarray):
+                result_block = np.array(result_block)
+            out_blocks[out_key] = result_block
         else:
-            out_blocks[out_key] = reshaped
-
+            out_blocks[out_key] = diag
+    
     return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
-
-
-def partial_trace(T: Tensor, axes: Sequence[int] | Sequence[str]) -> Tensor:
-    """Trace over a subset of indices specified as a flat sequential list.
-
-    This is a convenience wrapper around `trace` that accepts a flat list of axes
-    and automatically pairs them sequentially: [a₀, a₁, a₂, a₃, ...] becomes
-    pairs [(a₀, a₁), (a₂, a₃), ...].
-
-    Parameters
-    ----------
-    T:
-        Tensor to be traced.
-    axes:
-        Flat sequence of axes to trace over. Must have even length. Axes
-        are paired sequentially: first with second, third with fourth, etc.
-        Can be integer axis positions or string itag names.
-
-    Returns
-    -------
-    Tensor
-        Tensor with the specified indices traced out. Remaining indices retain
-        their original order.
-
-    Raises
-    ------
-    ValueError
-        If the number of axes is odd (cannot form complete pairs).
-    NotImplementedError
-        If the tensor uses non-Abelian symmetry groups.
-
-    Examples
-    --------
-    >>> # Trace indices at position 0 with 1, and 2 with 3
-    >>> result = partial_trace(T, axes=[0, 1, 2, 3])
-    >>> # Equivalent to: trace(T, pairs=[(0, 1), (2, 3)])
-    >>>
-    >>> # Using itag names
-    >>> result = partial_trace(T, axes=["left", "right", "top", "bottom"])
-    >>> # Equivalent to: trace(T, pairs=[("left", "right"), ("top", "bottom")])
-
-    Notes
-    -----
-    This function is particularly useful when you have a natural sequential
-    ordering of index pairs, such as tracing out entangled pairs in a quantum
-    system or reducing tensor products in a systematic way.
-    """
-    if axes and isinstance(axes[0], str):  # type: ignore[index]
-        name_to_axis = {tag: i for i, tag in enumerate(T.itags)}
-        iaxes = [name_to_axis[a] for a in axes]  # type: ignore[arg-type]
-    else:
-        iaxes = list(axes)  # type: ignore[assignment]
-    if len(iaxes) % 2 != 0:
-        raise ValueError("Partial trace requires an even number of axes (paired)")
-    pairs = [(iaxes[i], iaxes[i + 1]) for i in range(0, len(iaxes), 2)]
-    return trace(T, pairs)
 
 
