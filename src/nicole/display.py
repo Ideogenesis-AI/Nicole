@@ -116,11 +116,10 @@ def _format_single_value(arr: np.ndarray) -> str:
 
 
 def _format_count_list(counts: Sequence[int]) -> str:
-    """Right-align elements of a count list joined by 'x' symbols."""
+    """Format elements of a count list joined by 'x' symbols."""
     if not counts:
         return "0"
-    width = max(len(str(count)) for count in counts)
-    return " x ".join(f"{count:>{width}}" for count in counts)
+    return " x ".join(str(count) for count in counts)
 
 
 def tensor_summary(
@@ -220,18 +219,20 @@ def tensor_summary(
     # Data line: dtype, total bytes, multiplet counts, state counts, norm
     # -------------------------------------------------------------------
     dtype_name = np.dtype(dtype).name
-    multiplet_counts_list = [len(idx.sectors) for idx in indices]
+    multiplet_counts_list = [idx.dim for idx in indices]
     multiplet_counts = _format_count_list(multiplet_counts_list)
     state_counts_list = []
-    for idx, multiplet_count in zip(indices, multiplet_counts_list):
+    for idx in indices:
         if isinstance(idx.group, AbelianGroup):
-            state_counts_list.append(multiplet_count)
+            state_counts_list.append(idx.dim)
         else:
-            state_counts_list.append(sum(sector.dim for sector in idx.sectors))
+            # TODO: For non-Abelian groups, this should be sector.dim x degeneracy
+            # when degeneracy is implemented. For now, use the same as Abelian.
+            state_counts_list.append(idx.dim)
     state_counts = _format_count_list(state_counts_list)
     data_line = (
         f"  data:  {order}-D {dtype_name} ({_format_bytes(total_bytes)})    "
-        f"{multiplet_counts} => {state_counts} @ norm = {norm:.6g}\n"
+        f"{multiplet_counts} => {state_counts}  @ norm = {norm:.6g}\n"
     )
 
     # -------------------------------------------------------------------
