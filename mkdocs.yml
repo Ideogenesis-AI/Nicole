@@ -9,7 +9,7 @@ copyright: Copyright &copy; 2025-2026 Changkai Zhang
 
 theme:
   name: material
-  logo: images/nicole.png
+  logo: images/nicole-font-awesome.png
   favicon: images/nicole.png
   palette:
     - media: "(prefers-color-scheme)"
