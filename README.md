@@ -6,7 +6,7 @@
 
 Nicole is a Python library for symmetry-aware tensor computations, specifically designed for quantum many-body physics and tensor network algorithms. It provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations.
 
-With the assistance of various AI coding agent, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on NumPy, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
+With the assistance of various AI coding agents, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on NumPy, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
 
 
 ## Key Features
