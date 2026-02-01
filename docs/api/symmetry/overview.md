@@ -25,10 +25,9 @@ Charges are quantum numbers that label symmetry sectors:
 All symmetry groups support:
 
 - **`neutral`**: Identity element (0 for U1 and Z2)
-- **`inverse(q)`**: Inverse element
+- **`dual(q)`**: Dual/contragredient representation of a charge
 - **`fuse(*qs)`**: Combine charges (addition for U1, XOR for Z2)
 - **`equal(a, b)`**: Test equality
-- **`dual(q)`**: Dual/contragredient charge
 
 ### Charge Conservation
 

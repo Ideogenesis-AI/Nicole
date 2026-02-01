@@ -9,7 +9,7 @@ Z(2) symmetry group with binary charges.
       members:
         - name
         - neutral
-        - inverse
+        - dual
         - fuse
         - equal
         - validate_charge
@@ -21,7 +21,7 @@ Represents discrete Z(2) symmetry. Charges are 0 or 1, representing binary quant
 ### Charge Operations
 
 - **Fusion**: XOR (`q1 ⊕ q2`)
-- **Inverse**: Self-inverse (0→0, 1→1)
+- **Dual**: Self-dual (0→0, 1→1)
 - **Identity**: 0
 
 ## Physical Applications

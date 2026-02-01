@@ -37,9 +37,9 @@ print(f"{charge1} ⊕ {charge2} = {fused}")  # (3, 1)
 # Because: (2+1, 1⊕0) = (3, 1)
 print()
 
-# Inverse (component-wise)
-inv = group.inverse((5, 1))
-print(f"Inverse of (5, 1): {inv}")  # (-5, 1)
+# Dual (component-wise)
+dual_charge = group.dual((5, 1))
+print(f"Dual of (5, 1): {dual_charge}")  # (-5, 1)
 ```
 
 ## Creating Tensors with ProductGroup
