@@ -24,7 +24,7 @@ import pytest
 from nicole import Direction, Tensor, identity, isometry, isometry_n, U1Group, Z2Group, contract, permute
 from nicole import Index, Sector
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_charge_neutral
+from ..utils import assert_charge_neutral
 
 
 # Identity tensor tests

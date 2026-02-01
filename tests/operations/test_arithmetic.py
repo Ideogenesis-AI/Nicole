@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_blocks_equal
+from ..utils import assert_blocks_equal
 
 
 # Addition tests

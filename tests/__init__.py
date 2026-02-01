@@ -19,49 +19,64 @@
 """Test suite for the Nicole (TN) symmetry-aware tensor network library.
 
 This package contains comprehensive unit tests and integration tests for all
-components of the Nicole library, including:
-
-  - Tensor construction and manipulation
-  - Symmetry group operations (U(1), Z(2), product groups)
-  - Index and sector management
-  - Tensor contractions and traces
-  - Decompositions (SVD, eigendecomposition)
-  - Diagonal matrix operations (creation and inversion)
-  - Block structure and charge conservation
-  - Identity and isometry tensors
-  - Arithmetic operations (addition, subtraction, direct sum)
+components of the Nicole library, organized into thematic subdirectories.
 
 Test Organization
 -----------------
-  - test_arithmetic.py: Tensor addition, subtraction, scaling
-  - test_blocks.py: Block schema and charge validation
-  - test_construction.py: Tensor creation and initialization
-  - test_contract.py: Tensor contractions and traces
-  - test_copy_access.py: Tensor copying and element access
-  - test_decomp.py: SVD, eigendecomposition, and other decompositions
-  - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
-  - test_display.py: Tensor display and formatting
-  - test_group_elem.py: Elementary symmetry group operations
-  - test_group_prod.py: Product group operations
-  - test_identity.py: Identity and isometry tensor construction
-  - test_index.py: Index operations and fusion
-  - test_integration.py: End-to-end workflow tests
-  - test_manipulation.py: Permutation, transposition, conjugation, merging
-  - test_oplus.py: Direct sum operations
-  - test_types.py: Type definitions and enumerations
-  - utils.py: Shared test utilities and helpers
+The tests are organized into four main categories:
+
+primary/
+    Core data structures and tensor construction:
+    - test_index.py: Index operations, fusion, and validation
+    - test_space.py: Space operations and charge structure
+    - test_blocks.py: Block schema and charge conservation
+    - test_construction.py: Tensor creation and initialization
+    - test_identity.py: Identity and isometry tensor construction
+
+operations/
+    Tensor operations and transformations:
+    - test_arithmetic.py: Addition, subtraction, multiplication, division
+    - test_contract.py: Tensor contractions and traces
+    - test_decomp.py: SVD, eigendecomposition, and other decompositions
+    - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
+    - test_manipulation.py: Permutation, transposition, conjugation, merging
+    - test_oplus.py: Direct sum operations
+
+symmetry/
+    Symmetry group operations:
+    - test_group_elem.py: Elementary symmetry group operations (U1, Z2)
+    - test_group_prod.py: Product group operations and multi-symmetry
+
+support/
+    Utilities and secondary features:
+    - test_copy_access.py: Tensor copying and element access
+    - test_display.py: Tensor display and formatting
+    - test_types.py: Type definitions and enumerations
+
+Root level:
+    - test_integration.py: End-to-end workflow tests
+    - utils.py: Shared test utilities and helpers
 
 Running Tests
 -------------
 Execute all tests:
     $ pytest tests/
 
+Run tests in a specific category:
+    $ pytest tests/primary/
+    $ pytest tests/operations/
+    $ pytest tests/symmetry/
+    $ pytest tests/support/
+
 Run specific test file:
-    $ pytest tests/test_contract.py
+    $ pytest tests/operations/test_contract.py
 
 Run with verbose output:
     $ pytest tests/ -v
 
 Run tests matching a pattern:
     $ pytest tests/ -k "svd"
+
+Run a specific test function:
+    $ pytest tests/operations/test_decomp.py::test_svd_basic
 """

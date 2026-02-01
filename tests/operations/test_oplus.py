@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, contract, oplus
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_charge_neutral
+from ..utils import assert_charge_neutral
 
 
 # ============================================================================

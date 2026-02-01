@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Tensor, contract, identity, trace, U1Group, Z2Group, permute, Index, Sector
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_charge_neutral
+from ..utils import assert_charge_neutral
 
 
 # Basic contraction tests
