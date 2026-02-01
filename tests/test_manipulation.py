@@ -466,8 +466,8 @@ def test_flip_single_index():
     original_charges_1 = tensor.indices[1].charges()
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     
-    # Flip first index
-    tensor.flip(0)
+    # Invert first index
+    tensor.invert(0)
     
     # Verify direction changed for index 0
     assert tensor.indices[0].direction == original_direction_0.reverse()
@@ -494,8 +494,8 @@ def test_flip_multiple_indices():
     original_charges = [idx.charges() for idx in tensor.indices]
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     
-    # Flip indices 0 and 2
-    tensor.flip([0, 2])
+    # Invert indices 0 and 2
+    tensor.invert([0, 2])
     
     # Verify directions changed for indices 0 and 2
     assert tensor.indices[0].direction == original_directions[0].reverse()
@@ -510,8 +510,8 @@ def test_flip_multiple_indices():
         np.testing.assert_allclose(tensor.data[key], original_data[key])
 
 
-def test_flip_uses_dual():
-    """Test that tensor.flip() uses Index.dual() to maintain charge conservation."""
+def test_invert_uses_dual():
+    """Test that tensor.invert() uses Index.dual() to maintain charge conservation."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(-1, 2)))
     
@@ -521,18 +521,18 @@ def test_flip_uses_dual():
     original_charges = tensor.indices[0].charges()
     original_direction = tensor.indices[0].direction
     
-    # Flip the tensor index
-    tensor.flip(0)
+    # Invert the tensor index
+    tensor.invert(0)
     
-    # Tensor.flip() should use Index.dual() internally
+    # Tensor.invert() should use Index.dual() internally
     # This means both direction is reversed AND charges are conjugated
     assert tensor.indices[0].direction == original_direction.reverse()
     assert tensor.indices[0].charges() == tuple(group.dual(c) for c in original_charges)
     assert tensor.indices[0].charges() == (0, -1, 1)  # For U1, dual(q) = -q
 
 
-def test_flip_updates_block_keys():
-    """Test that flip updates block keys to reflect conjugated charges."""
+def test_invert_updates_block_keys():
+    """Test that invert updates block keys to reflect conjugated charges."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
@@ -543,8 +543,8 @@ def test_flip_updates_block_keys():
     # Store data arrays by their original keys
     original_data_by_key = {k: v.copy() for k, v in tensor.data.items()}
     
-    # Flip first index
-    tensor.flip(0)
+    # Invert first index
+    tensor.invert(0)
     
     # Block keys should be updated: charge at position 0 should be conjugated
     # For U1: dual(0) = 0, dual(1) = -1
@@ -562,8 +562,8 @@ def test_flip_updates_block_keys():
         np.testing.assert_allclose(tensor.data[new_key], old_arr)
 
 
-def test_flip_multiple_indices_updates_keys():
-    """Test that flipping multiple indices updates all relevant positions in block keys."""
+def test_invert_multiple_indices_updates_keys():
+    """Test that inverting multiple indices updates all relevant positions in block keys."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
@@ -572,8 +572,8 @@ def test_flip_multiple_indices_updates_keys():
     tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
     original_keys = set(tensor.data.keys())
     
-    # Flip indices 0 and 2
-    tensor.flip([0, 2])
+    # Invert indices 0 and 2
+    tensor.invert([0, 2])
     
     # Block keys should be updated at positions 0 and 2
     expected_keys = set()
@@ -584,8 +584,8 @@ def test_flip_multiple_indices_updates_keys():
     assert set(tensor.data.keys()) == expected_keys
 
 
-def test_flip_all_indices():
-    """Test flipping all indices."""
+def test_invert_all_indices():
+    """Test inverting all indices."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
@@ -593,23 +593,23 @@ def test_flip_all_indices():
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_directions = [idx.direction for idx in tensor.indices]
     
-    # Flip all indices
-    tensor.flip([0, 1])
+    # Invert all indices
+    tensor.invert([0, 1])
     
     # All directions should be reversed
     for i, orig_dir in enumerate(original_directions):
         assert tensor.indices[i].direction == orig_dir.reverse()
 
 
-def test_flip_inplace_modification():
-    """Test that flip modifies tensor in-place."""
+def test_invert_inplace_modification():
+    """Test that invert modifies tensor in-place."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
     original_id = id(tensor)
     
-    result = tensor.flip(0)
+    result = tensor.invert(0)
     
     # Should return None (in-place operation)
     assert result is None
@@ -617,8 +617,8 @@ def test_flip_inplace_modification():
     assert id(tensor) == original_id
 
 
-def test_flip_preserves_data():
-    """Test that flip preserves all tensor data."""
+def test_invert_preserves_data():
+    """Test that invert preserves all tensor data."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
@@ -628,7 +628,7 @@ def test_flip_preserves_data():
     original_keys = set(tensor.data.keys())
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     
-    tensor.flip([0, 1])
+    tensor.invert([0, 1])
     
     # Verify norm preserved
     assert np.isclose(tensor.norm(), original_norm)
@@ -639,21 +639,21 @@ def test_flip_preserves_data():
         np.testing.assert_allclose(tensor.data[key], original_data[key])
 
 
-def test_flip_preserves_itags():
-    """Test that flip preserves index tags."""
+def test_invert_preserves_itags():
+    """Test that invert preserves index tags."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip(), idx], seed=42, itags=["x", "y", "z"])
     original_itags = list(tensor.itags)
     
-    tensor.flip([0, 2])
+    tensor.invert([0, 2])
     
     # Tags should be unchanged
     assert list(tensor.itags) == original_itags
 
 
-def test_flip_out_of_range_raises():
+def test_invert_out_of_range_raises():
     """Test that out of range index positions raise error."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
@@ -662,19 +662,19 @@ def test_flip_out_of_range_raises():
     
     # Position too large
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip(2)
+        tensor.invert(2)
     
     # Negative position
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip(-1)
+        tensor.invert(-1)
     
     # In list
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip([0, 5])
+        tensor.invert([0, 5])
 
 
-def test_flip_z2_group():
-    """Test flip with Z2 symmetry group."""
+def test_invert_z2_group():
+    """Test invert with Z2 symmetry group."""
     group = Z2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
@@ -682,7 +682,7 @@ def test_flip_z2_group():
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_charges = tensor.indices[0].charges()
     
-    tensor.flip(0)
+    tensor.invert(0)
     
     # For Z2, dual(0) = 0 and dual(1) = 1, so charges appear unchanged
     # but they were conjugated (Z2 charges are self-dual)
@@ -691,8 +691,8 @@ def test_flip_z2_group():
     assert tensor.indices[0].direction == Direction.IN
 
 
-def test_flip_product_group():
-    """Test flip with product group."""
+def test_invert_product_group():
+    """Test invert with product group."""
     group = ProductGroup([U1Group(), U1Group()])
     # Use matching charges for both indices to ensure charge conservation
     idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
@@ -702,7 +702,7 @@ def test_flip_product_group():
     original_charges = tensor.indices[1].charges()
     original_direction = tensor.indices[1].direction
     
-    tensor.flip(1)
+    tensor.invert(1)
     
     # Charges should be conjugated: dual((0,0)) = (0,0), dual((1,-1)) = (-1,1)
     expected_charges = tuple(group.dual(c) for c in original_charges)
@@ -711,8 +711,8 @@ def test_flip_product_group():
     assert tensor.indices[1].direction == original_direction.reverse()
 
 
-def test_flip_double_application():
-    """Test that flipping twice returns to original direction, charges, and data."""
+def test_invert_double_application():
+    """Test that inverting twice returns to original direction, charges, and data."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
@@ -723,9 +723,9 @@ def test_flip_double_application():
     original_keys = set(tensor.data.keys())
     original_data = {k: v.copy() for k, v in tensor.data.items()}
     
-    # Flip twice
-    tensor.flip(0)
-    tensor.flip(0)
+    # Invert twice
+    tensor.invert(0)
+    tensor.invert(0)
     
     # Should be back to original
     assert tensor.indices[0].direction == original_direction

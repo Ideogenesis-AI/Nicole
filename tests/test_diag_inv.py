@@ -671,8 +671,8 @@ def test_inv_same_direction_in_gives_identity():
         },
         label="Diagonal"
     )
-    # Flip to make both IN
-    D.flip(0)
+    # Invert to make both IN
+    D.invert(0)
     
     # Verify both indices are IN
     assert D.indices[0].direction == Direction.IN
@@ -719,8 +719,8 @@ def test_inv_same_direction_out_gives_identity():
         },
         label="Diagonal"
     )
-    # Flip second index to make both OUT
-    D.flip(1)
+    # Invert second index to make both OUT
+    D.invert(1)
     
     # Verify both indices are OUT
     assert D.indices[0].direction == Direction.OUT
