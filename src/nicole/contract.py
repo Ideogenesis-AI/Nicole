@@ -46,7 +46,7 @@ def _dir_weight(idx: Index, charge: Charge) -> Tuple[SymmetryGroup, Charge]:
     group = idx.group
     if not isinstance(group, (AbelianGroup, ProductGroup)):
         raise NotImplementedError("Only Abelian/Product contraction supported")
-    return group, (charge if idx.direction == Direction.OUT else group.inverse(charge))
+    return group, (charge if idx.direction == Direction.OUT else group.dual(charge))
 
 
 def _detect_contraction_pairs(

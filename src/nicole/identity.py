@@ -133,12 +133,12 @@ def isometry(
             db = sb.dim
             
             # Compute fused charge in a direction-aware way (matching combine_indices logic)
-            # Charges being fused (IN) contribute as-is, already fused (OUT) contribute inverse
-            contrib_a = qa if first.direction == Direction.IN else group.inverse(qa)
-            contrib_b = qb if second.direction == Direction.IN else group.inverse(qb)
+            # Charges being fused (IN) contribute as-is, already fused (OUT) contribute dual
+            contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
+            contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
             total_contrib = group.fuse(contrib_a, contrib_b)
-            # Fused index: inverse when direction is IN
-            qf = group.inverse(total_contrib) if direction == Direction.IN else total_contrib
+            # Fused index: dual when direction is IN
+            qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
             
             fused_dim = dim_fused_map[qf]
             offset = offsets[qf]

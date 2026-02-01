@@ -157,17 +157,17 @@ def combine_indices(direction: Direction, *inds: Index) -> Index:
     charge_to_dim: Dict[Charge, int] = {}
     for sectors_tuple in product(*(ind.sectors for ind in inds)):
         # Compute the sum of direction-aware contributions from input indices
-        # Charges being fused (IN) contribute as-is, charges fused (OUT) contribute inverse
+        # Charges being fused (IN) contribute as-is, charges fused (OUT) contribute dual
         total_contrib = group.neutral
         dim = 1
         for ind, sector in zip(inds, sectors_tuple):
-            contrib = sector.charge if ind.direction == Direction.IN else group.inverse(sector.charge)
+            contrib = sector.charge if ind.direction == Direction.IN else group.dual(sector.charge)
             total_contrib = group.fuse(total_contrib, contrib)
             dim *= sector.dim
         
         # The fused index contains the result (outgoing)
-        # Inverse when direction is IN
-        fused_charge = group.inverse(total_contrib) if direction == Direction.IN else total_contrib
+        # Dual when direction is IN
+        fused_charge = group.dual(total_contrib) if direction == Direction.IN else total_contrib
         charge_to_dim[fused_charge] = charge_to_dim.get(fused_charge, 0) + dim
 
     # Build the fused index by sorting charges for deterministic ordering.

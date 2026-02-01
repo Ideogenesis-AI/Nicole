@@ -101,7 +101,7 @@ class BlockSchema:
         for idx, charge in zip(indices, key):
             group = idx.group
             acc = totals.get(group, group.neutral)
-            contribution = charge if idx.direction == Direction.OUT else group.inverse(charge)
+            contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
             totals[group] = group.fuse(acc, contribution)
         return totals
 
