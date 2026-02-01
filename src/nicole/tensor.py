@@ -633,13 +633,16 @@ class Tensor:
             order = tuple(reversed(range(len(self.indices))))
         self.permute(order)
 
-    def flip(self, positions: Union[int, Sequence[int]]) -> None:
-        """Flip the direction of specified index/indices while maintaining charge conservation.
+    def invert(self, positions: Union[int, Sequence[int]]) -> None:
+        """Invert the direction of specified index/indices while maintaining charge conservation.
+        
+        This operation flips both the direction and conjugates the charges using Index.dual(),
+        effectively inverting the tensor's index structure at the specified positions.
         
         Parameters
         ----------
         positions:
-            Index position(s) to flip. Can be a single int or a sequence of ints.
+            Index position(s) to invert. Can be a single int or a sequence of ints.
             Positions are 0-indexed.
         
         Notes
@@ -650,16 +653,16 @@ class Tensor:
         The tensor data arrays themselves remain unchanged.
         
         This differs from Index.flip() which only reverses direction without
-        conjugating charges. For tensors, we need charge conjugation to maintain
-        proper charge conservation rules.
+        conjugating charges. The tensor invert operation performs a complete
+        inversion of the index structure (direction + charge conjugation).
         
         Examples
         --------
-        # Flip a single index at position 0
-        tensor.flip(0)
+        # Invert a single index at position 0
+        tensor.invert(0)
         
-        # Flip multiple indices at positions 0 and 2
-        tensor.flip([0, 2])
+        # Invert multiple indices at positions 0 and 2
+        tensor.invert([0, 2])
         """
         # Normalize to a sequence
         if isinstance(positions, int):

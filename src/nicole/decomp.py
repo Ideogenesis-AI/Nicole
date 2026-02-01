@@ -509,7 +509,7 @@ def decomp(
         - For UR mode: Both ">>" and "><" normalize to ">>" (outward bonds); "<<" is also accepted
         - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
         Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
-        This parameter uses tensor.flip() to adjust from the natural flow to the desired flow.
+        This parameter uses tensor.invert() to adjust from the natural flow to the desired flow.
     itag:
         Index tag(s) for the bond dimension(s). Can be:
         - None: Use default tags "_bond_L" and "_bond_R"
@@ -670,32 +670,32 @@ def decomp(
             label="Diagonal"
         )
         
-        # Apply tensor flip to convert from natural_flow to desired flow
-        # When we flip S, we must also flip the corresponding index in U or Vh
+        # Apply tensor invert to convert from natural_flow to desired flow
+        # When we invert S, we must also invert the corresponding index in U or Vh
         if natural_flow == ">>":
             # Natural for S: (IN, OUT)
             if flow == "><":
-                # Desired: (IN, IN) - flip S's right index and Vh's bond index
-                S_tensor.flip(1)
-                Vh.flip(0)
+                # Desired: (IN, IN) - invert S's right index and Vh's bond index
+                S_tensor.invert(1)
+                Vh.invert(0)
             elif flow == "<<":
-                # Desired: (OUT, IN) - flip both S indices and both U's bond and Vh's bond
-                S_tensor.flip([0, 1])
-                U.flip(1)
-                Vh.flip(0)
-            # else flow == ">>": natural, no flip needed
+                # Desired: (OUT, IN) - invert both S indices and both U's bond and Vh's bond
+                S_tensor.invert([0, 1])
+                U.invert(1)
+                Vh.invert(0)
+            # else flow == ">>": natural, no invert needed
         else:  # natural_flow == "<<"
             # Natural for S: (OUT, IN)
             if flow == "><":
-                # Desired: (IN, IN) - flip S's left index and U's bond index
-                S_tensor.flip(0)
-                U.flip(1)
+                # Desired: (IN, IN) - invert S's left index and U's bond index
+                S_tensor.invert(0)
+                U.invert(1)
             elif flow == ">>":
-                # Desired: (IN, OUT) - flip both S indices and both U's bond and Vh's bond
-                S_tensor.flip([0, 1])
-                U.flip(1)
-                Vh.flip(0)
-            # else flow == "<<": natural, no flip needed
+                # Desired: (IN, OUT) - invert both S indices and both U's bond and Vh's bond
+                S_tensor.invert([0, 1])
+                U.invert(1)
+                Vh.invert(0)
+            # else flow == "<<": natural, no invert needed
         
         return U, S_tensor, Vh
     
@@ -735,10 +735,10 @@ def decomp(
         # For UR mode: normalize flow (both ">>" and "><" mean ">>")
         normalized_flow = ">>" if flow in (">>", "><") else "<<"
         
-        # Flip if normalized flow differs from natural flow
+        # Invert if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            U.flip(1)  # Flip U's bond index (position 1)
-            R_tensor.flip(0)  # Flip R's bond index (position 0)
+            U.invert(1)  # Invert U's bond index (position 1)
+            R_tensor.invert(0)  # Invert R's bond index (position 0)
         
         return U, R_tensor
     
@@ -776,9 +776,9 @@ def decomp(
         # For LV mode: normalize flow (both "<<" and "><" mean "<<")
         normalized_flow = "<<" if flow in ("<<", "><") else ">>"
         
-        # Flip if normalized flow differs from natural flow
+        # Invert if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            L_tensor.flip(1)  # Flip L's bond index (position 1)
-            Vh.flip(0)  # Flip Vh's bond index (position 0)
+            L_tensor.invert(1)  # Invert L's bond index (position 1)
+            Vh.invert(0)  # Invert Vh's bond index (position 0)
         
         return L_tensor, Vh
