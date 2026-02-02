@@ -502,24 +502,40 @@ def eig(
     U_blocks: Dict[BlockKey, np.ndarray] = {}
     D_blocks: Dict[BlockKey, np.ndarray] = {}
     
+    # Determine if eigenvalues and eigenvectors are actually complex
+    # If all eigenvalues and eigenvectors are real, we can use real dtype
+    all_real = all(
+        np.allclose(np.imag(eigvals), 0) and np.allclose(np.imag(eigvecs), 0)
+        for eigvecs, eigvals in eig_results.values()
+    )
+    
+    # Choose appropriate dtype
+    if all_real:
+        # Eigenvalues and eigenvectors are real
+        D_dtype = np.result_type(T.dtype, float)
+        U_dtype = np.result_type(T.dtype, float)
+    else:
+        # Complex eigenvalues/eigenvectors
+        D_dtype = np.result_type(T.dtype, np.complex128)
+        U_dtype = np.result_type(T.dtype, np.complex128)
+    
     for q, (eigvecs, eigvals) in eig_results.items():
         # For U tensor: indices (row_index, bond_index)
         # Block key: (q, q) since bond charge equals row charge
         U_key = (q, q)
-        U_blocks[U_key] = eigvecs
+        U_blocks[U_key] = eigvecs.astype(U_dtype)
         
         # For D: store eigenvalues as 1D array (memory efficient)
         # Block key: (q, q)
         D_key = (q, q)
-        # Preserve complex type if eigenvalues are complex
-        D_blocks[D_key] = eigvals.astype(np.result_type(T.dtype, np.complex128))
+        D_blocks[D_key] = eigvals.astype(D_dtype)
     
     # Construct output tensor
     U_tensor = Tensor(
         indices=(row_index, bond_index),
         itags=(T.itags[0], bond_tag),
         data=U_blocks,
-        dtype=np.result_type(T.dtype, np.complex128)  # May be complex
+        dtype=U_dtype
     )
     
     return U_tensor, D_blocks
