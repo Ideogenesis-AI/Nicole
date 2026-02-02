@@ -1654,28 +1654,29 @@ def test_eig_truncation_nkeep():
         dtype=T.dtype
     )
     
-    # Keep only top 3 eigenvalues
-    U, D = eig(T, trunc={"nkeep": 3})
+    # Keep only top 3 eigenvalues (largest/most positive)
+    U, D = eig(T, order="descend", trunc={"nkeep": 3})
     
     # Count total eigenvalues
     total_eigvals = sum(len(eigvals) for eigvals in D.values())
     assert total_eigvals == 3
     
-    # Verify they are the largest magnitude ones
+    # Verify they are the largest (most positive) ones
     all_eigvals_full = []
     for key in T.data.keys():
         q_row, q_col = key
         if q_row != q_col:
             continue
         eigvals_full, _ = np.linalg.eig(T.data[key])
-        all_eigvals_full.extend(np.abs(eigvals_full))
+        # For Hermitian matrix, eigenvalues are real - use real part for comparison
+        all_eigvals_full.extend(np.real(eigvals_full))
     
     all_eigvals_full.sort(reverse=True)
     top_3_expected = all_eigvals_full[:3]
     
     all_eigvals_truncated = []
     for eigvals in D.values():
-        all_eigvals_truncated.extend(np.abs(eigvals))
+        all_eigvals_truncated.extend(np.real(eigvals))
     
     all_eigvals_truncated.sort(reverse=True)
     
@@ -1699,12 +1700,12 @@ def test_eig_truncation_thresh():
         dtype=T.dtype
     )
     
-    # Keep eigenvalues with |λ| >= 1.0
-    U, D = eig(T, trunc={"thresh": 1.0})
+    # Keep eigenvalues >= 1.0 (using descending order)
+    U, D = eig(T, order="descend", trunc={"thresh": 1.0})
     
     # Verify all kept eigenvalues satisfy threshold
     for eigvals in D.values():
-        assert np.all(np.abs(eigvals) >= 1.0)
+        assert np.all(np.real(eigvals) >= 1.0)
 
 
 def test_eig_truncation_combined_thresh_nkeep():
@@ -1725,8 +1726,8 @@ def test_eig_truncation_combined_thresh_nkeep():
         dtype=T.dtype
     )
     
-    # Apply both truncations: first thresh >= 0.8, then nkeep top 4
-    U, D = eig(T, trunc={"thresh": 0.8, "nkeep": 4})
+    # Apply both truncations: first thresh >= 0.8, then nkeep top 4 (largest)
+    U, D = eig(T, order="descend", trunc={"thresh": 0.8, "nkeep": 4})
     
     # Count total eigenvalues
     total_eig = sum(len(eigvals) for eigvals in D.values())
@@ -1734,9 +1735,9 @@ def test_eig_truncation_combined_thresh_nkeep():
     # Should have at most 4 eigenvalues (nkeep limit)
     assert total_eig <= 4
     
-    # All eigenvalues should have |λ| >= 0.8 (thresh limit)
+    # All eigenvalues should satisfy >= 0.8 (thresh limit with descending order)
     for eigvals in D.values():
-        assert np.all(np.abs(eigvals) >= 0.8)
+        assert np.all(np.real(eigvals) >= 0.8)
 
 
 def test_eig_non_square_error():
@@ -1840,6 +1841,255 @@ def test_eig_itag():
     # Test with default itag
     U_default, D_default = eig(T)
     assert U_default.itags[1] == "_bond_eig"
+
+
+def test_eig_order_ascending_mixed_signs():
+    """Test ascending order with mixed positive and negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
+    data = {(0, 0): np.diag([-5.0, -2.0, 0.0, 3.0, 7.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    U, D = eig(T, order="ascend")
+    eigvals = np.real(D[(0, 0)])
+    
+    # Should be sorted from smallest to largest
+    expected = np.array([-5.0, -2.0, 0.0, 3.0, 7.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_order_descending_mixed_signs():
+    """Test descending order with mixed positive and negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
+    data = {(0, 0): np.diag([-5.0, -2.0, 0.0, 3.0, 7.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    U, D = eig(T, order="descend")
+    eigvals = np.real(D[(0, 0)])
+    
+    # Should be sorted from largest to smallest
+    expected = np.array([7.0, 3.0, 0.0, -2.0, -5.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_thresh_ascending_negative():
+    """Test thresh mode with ascending order for negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-8, -5, -3, -1, 2, 4]
+    data = {(0, 0): np.diag([-8.0, -5.0, -3.0, -1.0, 2.0, 4.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep eigenvalues <= -2 (should keep: -8, -5, -3)
+    U, D = eig(T, order="ascend", trunc={"thresh": -2.0})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([-8.0, -5.0, -3.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_thresh_descending_positive():
+    """Test thresh mode with descending order for positive eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-4, -2, 1, 3, 5, 8]
+    data = {(0, 0): np.diag([-4.0, -2.0, 1.0, 3.0, 5.0, 8.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep eigenvalues >= 2 (should keep: 8, 5, 3)
+    U, D = eig(T, order="descend", trunc={"thresh": 2.0})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([8.0, 5.0, 3.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_thresh_zero_boundary():
+    """Test thresh mode at zero boundary for filtering positive/negative."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Eigenvalues: [-3, -1, 0, 2, 4]
+    data = {(0, 0): np.diag([-3.0, -1.0, 0.0, 2.0, 4.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep only non-negative eigenvalues (>= 0)
+    U_pos, D_pos = eig(T, order="descend", trunc={"thresh": 0.0})
+    eigvals_pos = np.real(D_pos[(0, 0)])
+    assert np.allclose(eigvals_pos, [4.0, 2.0, 0.0])
+    
+    # Keep only non-positive eigenvalues (<= 0)
+    U_neg, D_neg = eig(T, order="ascend", trunc={"thresh": 0.0})
+    eigvals_neg = np.real(D_neg[(0, 0)])
+    assert np.allclose(eigvals_neg, [-3.0, -1.0, 0.0])
+
+
+def test_eig_nkeep_ascending_ground_states():
+    """Test nkeep with ascending order to get ground states."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
+    data = {(0, 0): np.diag([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep 3 smallest (ground state + 2 excited states)
+    U, D = eig(T, order="ascend", trunc={"nkeep": 3})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([-10.0, -5.0, -2.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_nkeep_descending_excited_states():
+    """Test nkeep with descending order to get highest excited states."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
+    data = {(0, 0): np.diag([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep 3 largest (highest excited states)
+    U, D = eig(T, order="descend", trunc={"nkeep": 3})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([8.0, 3.0, 1.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_combined_thresh_nkeep_ascending():
+    """Test combined thresh and nkeep with ascending order."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    
+    # Eigenvalues: [-10, -8, -6, -4, -2, 0, 2, 4]
+    data = {(0, 0): np.diag([-10.0, -8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep eigenvalues <= -3, then keep 2 smallest
+    # After thresh: [-10, -8, -6, -4]
+    # After nkeep: [-10, -8]
+    U, D = eig(T, order="ascend", trunc={"thresh": -3.0, "nkeep": 2})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([-10.0, -8.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_combined_thresh_nkeep_descending():
+    """Test combined thresh and nkeep with descending order."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    
+    # Eigenvalues: [-4, -2, 0, 2, 4, 6, 8, 10]
+    data = {(0, 0): np.diag([-4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 10.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep eigenvalues >= 3, then keep 2 largest
+    # After thresh: [10, 8, 6, 4]
+    # After nkeep: [10, 8]
+    U, D = eig(T, order="descend", trunc={"thresh": 3.0, "nkeep": 2})
+    eigvals = np.real(D[(0, 0)])
+    
+    expected = np.array([10.0, 8.0])
+    assert np.allclose(eigvals, expected)
+
+
+def test_eig_order_with_complex_eigenvalues():
+    """Test order parameter with complex eigenvalues (sorts by real part)."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    
+    # Create a non-Hermitian matrix with complex eigenvalues
+    # Using a simple matrix that we know has complex eigenvalues
+    mat = np.array([[0, 1, 0],
+                    [0, 0, 1],
+                    [1, 0, 0]], dtype=np.complex128)
+    data = {(0, 0): mat}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.complex128)
+    
+    U_asc, D_asc = eig(T, order="ascend")
+    eigvals_asc = D_asc[(0, 0)]
+    
+    # Check that sorting is by real part (ascending)
+    real_parts_asc = np.real(eigvals_asc)
+    assert np.all(real_parts_asc[:-1] <= real_parts_asc[1:])
+    
+    U_desc, D_desc = eig(T, order="descend")
+    eigvals_desc = D_desc[(0, 0)]
+    
+    # Check that sorting is by real part (descending)
+    real_parts_desc = np.real(eigvals_desc)
+    assert np.all(real_parts_desc[:-1] >= real_parts_desc[1:])
+
+
+def test_eig_thresh_filters_all_eigenvalues():
+    """Test thresh mode when all eigenvalues are filtered out."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    
+    # Eigenvalues: [1, 2, 3, 4]
+    data = {(0, 0): np.diag([1.0, 2.0, 3.0, 4.0])}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Keep eigenvalues <= 0 (should filter all)
+    U, D = eig(T, order="ascend", trunc={"thresh": 0.0})
+    
+    # Should have no eigenvalues
+    assert len(D) == 0
+
+
+def test_eig_order_multiple_blocks():
+    """Test that order parameter works correctly with multiple charge blocks."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # Create blocks with known eigenvalues
+    # Block (0,0): eigenvalues [-2, 0, 5]
+    # Block (1,1): eigenvalues [-3, 1]
+    data = {
+        (0, 0): np.diag([-2.0, 0.0, 5.0]),
+        (1, 1): np.diag([-3.0, 1.0])
+    }
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=np.float64)
+    
+    # Test ascending - each block should be sorted independently
+    U_asc, D_asc = eig(T, order="ascend")
+    assert np.allclose(np.real(D_asc[(0, 0)]), [-2.0, 0.0, 5.0])
+    assert np.allclose(np.real(D_asc[(1, 1)]), [-3.0, 1.0])
+    
+    # Test descending - each block should be sorted independently
+    U_desc, D_desc = eig(T, order="descend")
+    assert np.allclose(np.real(D_desc[(0, 0)]), [5.0, 0.0, -2.0])
+    assert np.allclose(np.real(D_desc[(1, 1)]), [1.0, -3.0])
+    
+    # Test nkeep across blocks - should keep 3 smallest globally
+    U_nkeep, D_nkeep = eig(T, order="ascend", trunc={"nkeep": 3})
+    all_eigvals = []
+    for eigvals in D_nkeep.values():
+        all_eigvals.extend(np.real(eigvals))
+    all_eigvals.sort()
+    assert np.allclose(all_eigvals, [-3.0, -2.0, 0.0])
 
 
 # Multi-axis decomposition tests
