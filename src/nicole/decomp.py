@@ -29,9 +29,10 @@ svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
 
-eig(T, trunc=None)
+eig(T, itag=None, order="ascend", trunc=None)
     Eigenvalue decomposition of square matrix returning U tensor and eigenvalues dict.
-    Returns eigenvalues as 1D arrays for memory efficiency.
+    Returns eigenvalues as 1D arrays for memory efficiency. Supports sorting eigenvalues
+    in ascending or descending order (by value for real eigenvalues, by real part for complex).
 
 decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     High-level decomposition with three modes:
@@ -41,7 +42,7 @@ decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     The flow parameter controls arrow directions. The itag parameter customizes bond tags.
 """
 
-from typing import Dict, List, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Literal, MutableMapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -303,6 +304,7 @@ def svd(
 def eig(
     T: Tensor,
     itag: Optional[str] = None,
+    order: Literal["ascend", "descend"] = "ascend",
     trunc: Optional[Dict[str, Union[int, float]]] = None
 ) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]:
     """Perform eigenvalue decomposition of a square matrix tensor.
@@ -314,10 +316,20 @@ def eig(
         with matching charge structure (opposite directions).
     itag:
         Index tag for the bond dimension. If None, uses default tag "_bond_eig".
+    order:
+        Sorting order for eigenvalues. Either "ascend" for ascending order (smallest
+        to largest) or "descend" for descending order (largest to smallest). Default
+        is "ascend". For real eigenvalues, sorts by value (e.g., -5 < -3 < 1 < 2).
+        For complex eigenvalues, sorts by real part. Sorting is applied per block and
+        affects both truncation modes.
     trunc:
         Truncation specification as a dict. If None, no truncation. Supported keys:
-        - "nkeep": Keep at most n eigenvalues globally (largest by magnitude)
-        - "thresh": Keep eigenvalues with |eigenvalue| >= t per block
+        - "nkeep": Keep at most n eigenvalues globally. With order="descend", keeps
+          the n largest (most positive) eigenvalues. With order="ascend", keeps the
+          n smallest (most negative) eigenvalues.
+        - "thresh": Keep eigenvalues relative to threshold t per block. With
+          order="descend", keeps eigenvalues >= t. With order="ascend", keeps
+          eigenvalues <= t.
         Both can be specified together: thresh is applied first, then nkeep.
 
     Returns
@@ -340,9 +352,17 @@ def eig(
     The eigenvalues are returned as 1D arrays for memory efficiency.
     Eigenvalues can be complex even for real matrices.
     
-    For "nkeep" mode, truncation is applied globally: the top n eigenvalues by
-    magnitude across all blocks are retained. For "thresh" mode, truncation is
-    applied per block: each block independently keeps eigenvalues with |λ| >= threshold.
+    Sorting behavior:
+    - For real eigenvalues: sorts by actual value (e.g., -5 < -3 < 1 < 2)
+    - For complex eigenvalues: sorts by real part
+    - Use order="ascend" to get smallest/most negative eigenvalues first (e.g., ground states)
+    - Use order="descend" to get largest/most positive eigenvalues first
+    
+    For "nkeep" mode, truncation respects the order parameter: with order="descend",
+    keeps the n largest eigenvalues; with order="ascend", keeps the n smallest.
+    For "thresh" mode, truncation is also order-aware: with order="descend", keeps
+    eigenvalues >= threshold (most positive); with order="ascend", keeps eigenvalues
+    <= threshold (most negative). Threshold filtering is applied per block.
     
     When both modes are specified, "thresh" is applied first (per-block filtering),
     then "nkeep" is applied globally to the remaining eigenvalues.
@@ -352,17 +372,26 @@ def eig(
     
     Examples
     --------
-    >>> # No truncation
+    >>> # No truncation, ascending order (default - smallest eigenvalues first)
     >>> U, D_blocks = eig(T)
     >>> 
-    >>> # Keep top 5 eigenvalues
-    >>> U, D_blocks = eig(T, trunc={"nkeep": 5})
+    >>> # Descending order (largest eigenvalues first)
+    >>> U, D_blocks = eig(T, order="descend")
     >>> 
-    >>> # Keep eigenvalues with |λ| >= 0.1
-    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1})
+    >>> # Keep 5 smallest (most negative) eigenvalues - useful for ground states
+    >>> U, D_blocks = eig(T, order="ascend", trunc={"nkeep": 5})
     >>> 
-    >>> # Apply both: first thresh, then nkeep
-    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1, "nkeep": 5})
+    >>> # Keep 5 largest (most positive) eigenvalues
+    >>> U, D_blocks = eig(T, order="descend", trunc={"nkeep": 5})
+    >>> 
+    >>> # Keep eigenvalues >= 0.1 (positive eigenvalues above threshold)
+    >>> U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1})
+    >>> 
+    >>> # Keep eigenvalues <= -0.5 (negative eigenvalues below threshold)
+    >>> U, D_blocks = eig(T, order="ascend", trunc={"thresh": -0.5})
+    >>> 
+    >>> # Apply both: keep eigenvalues >= 0.1, then keep top 5
+    >>> U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1, "nkeep": 5})
     """
     # Validate input tensor
     if len(T.indices) != 2:
@@ -403,9 +432,23 @@ def eig(
         # eigenvectors[:, i] is the eigenvector for eigenvalues[i]
         eigenvalues, eigenvectors = np.linalg.eig(arr)
         
+        # Sort eigenvalues according to order parameter
+        # For real eigenvalues, sorts by value; for complex, sorts by real part
+        sort_indices = np.argsort(np.real(eigenvalues))
+        if order == "descend":
+            sort_indices = sort_indices[::-1]
+        eigenvalues = eigenvalues[sort_indices]
+        eigenvectors = eigenvectors[:, sort_indices]
+        
         # Apply per-block truncation for thresh mode
         if trunc is not None and "thresh" in trunc:
-            keep_mask = np.abs(eigenvalues) >= trunc["thresh"]
+            # thresh behavior depends on order parameter:
+            # - order="descend": keep eigenvalues >= thresh (largest/most positive)
+            # - order="ascend": keep eigenvalues <= thresh (smallest/most negative)
+            if order == "descend":
+                keep_mask = np.real(eigenvalues) >= trunc["thresh"]
+            else:  # order == "ascend"
+                keep_mask = np.real(eigenvalues) <= trunc["thresh"]
             eigenvalues = eigenvalues[keep_mask]
             eigenvectors = eigenvectors[:, keep_mask]
         
@@ -423,10 +466,12 @@ def eig(
         all_eigenvalues = []
         for q, (eigvecs, eigvals) in eig_results.items():
             for i, val in enumerate(eigvals):
-                all_eigenvalues.append((np.abs(val), q, i))
+                all_eigenvalues.append((np.real(val), q, i))
         
-        # Keep top nkeep eigenvalues by magnitude
-        all_eigenvalues.sort(key=lambda x: x[0], reverse=True)
+        # Keep nkeep eigenvalues according to order parameter
+        # For "descend": keep largest (most positive) eigenvalues
+        # For "ascend": keep smallest (most negative) eigenvalues
+        all_eigenvalues.sort(key=lambda x: x[0], reverse=(order == "descend"))
         keep_set = set((q, idx) for _, q, idx in all_eigenvalues[:trunc["nkeep"]])
         
         # Apply truncation to each block
