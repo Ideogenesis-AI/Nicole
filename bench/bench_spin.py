@@ -1,13 +1,52 @@
+# Copyright (C) 2026 Changkai Zhang.
+#
+# This file is part of Nicole (TN) library.
+#
+# Nicole (TN) is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published
+# by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# Nicole (TN) is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+
+
 """Iterative diagonalization for spin chain (Heisenberg model).
+
+This module implements an iterative diagonalization algorithm to compute the ground
+state energy and matrix product state (MPS) representation of a quantum spin chain
+with Heisenberg interactions. The algorithm builds up the chain site by site,
+diagonalizing the Hamiltonian at each step and truncating to keep only the
+lowest-energy states.
+
+The Heisenberg Hamiltonian is:
+    H = J * sum_i (S_i^+ S_{i+1}^- + S_i^- S_{i+1}^+ + S_i^z S_{i+1}^z)
+
+Key features:
+- Supports arbitrary spin quantum numbers (spin-1/2, spin-1, etc.)
+- Uses U(1) symmetry to reduce computational cost
+- Truncates to a maximum bond dimension to control memory usage
+- Computes ground state energy per site at each iteration
+- Returns the full MPS representation of the ground state
+
+For spin-1/2 chains, the exact ground state energy per site for infinite N is
+E_exact = 1/4 - ln(2) ≈ -0.443147, which can be used to verify convergence.
 """
 
-import numpy as np
-from typing import Optional, Tuple, Dict
-from nicole import load_space, contract, identity, isometry, conj, permute, transpose
-from nicole.decomp import eig
-from nicole.index import Direction
-from nicole.tensor import Tensor
 import time
+from typing import Tuple
+
+import numpy as np
+
+from nicole import Direction, Tensor, load_space
+from nicole import contract, identity, isometry, conj, permute, transpose
+from nicole.decomp import eig
+
 
 
 def disptime(msg):
@@ -21,7 +60,7 @@ def iter_diag_spin(
     J: float = 1.0,
     spin: float = 0.5,
     verbose: bool = True
-) -> Tuple[np.ndarray, np.ndarray, float]:
+) -> Tuple[np.ndarray, np.ndarray, list]:
     """Run iterative diagonalization for spin chain (Heisenberg model).
     
     Parameters
@@ -44,8 +83,6 @@ def iter_diag_spin(
         Ground state energies at each iteration (length N)
     Egs : np.ndarray
         Ground state energy per site at each iteration (length N)
-    Eexact : float
-        Exact ground state energy per site for infinite chain (spin-1/2 only)
     mps : list of Tensor
         List of all isometry tensors AK generated at each iteration (length N)
     
@@ -56,17 +93,18 @@ def iter_diag_spin(
     
     For spin-1/2 chains, the exact ground state energy per site for infinite N is:
         E_exact = 1/4 - ln(2) ≈ -0.443147
+    This value is printed during execution when verbose=True.
     
     Examples
     --------
     >>> # Run with default parameters
-    >>> Eg, Egs, E_exact, mps = iter_diag_spin()
+    >>> Eg, Egs, mps = iter_diag_spin()
     
     >>> # Longer chain with more states kept
-    >>> Eg, Egs, E_exact, mps = iter_diag_spin(N=100, Nkeep=500)
+    >>> Eg, Egs, mps = iter_diag_spin(N=100, Nkeep=500)
     
     >>> # Spin-1 chain
-    >>> Eg, Egs, E_exact, mps = iter_diag_spin(spin=1.0)
+    >>> Eg, Egs, mps = iter_diag_spin(spin=1.0)
     """
     
     tol = Nkeep * 100 * np.finfo(float).eps  # numerical tolerance for degeneracy
@@ -141,6 +179,9 @@ def iter_diag_spin(
         # Diagonalize
         if itN == 1:
             V, D = eig(Hnow_sym)
+        elif itN == N:
+            # Last site: keep only the ground state
+            V, D = eig(Hnow_sym, trunc={"nkeep": 1})
         else:
             V, D = eig(Hnow_sym, trunc={"nkeep": Nkeep})
         
@@ -187,18 +228,14 @@ def iter_diag_spin(
     # Ground state energy per site
     Egs = Eg / np.arange(1, N + 1)
     
-    # Exact result only available for spin-1/2
-    if spin == 0.5:
-        Eexact = 0.25 - np.log(2)  # exact GS energy for infinite N
-    else:
-        Eexact = np.nan  # No analytical solution for higher spins
-    
     if verbose:
-        if not np.isnan(Eexact):
+        # Print exact result for spin-1/2
+        if spin == 0.5:
+            Eexact = 0.25 - np.log(2)  # exact GS energy for infinite N
             print(f"\nExact ground state energy per site: {Eexact:.6f}")
         print(f"Final iterative estimate: {Egs[-1]:.6f}")
     
-    return Eg, Egs, Eexact, mps
+    return Eg, Egs, mps
 
 
 def main():
@@ -231,7 +268,7 @@ def main():
     
     args = parser.parse_args()
     
-    Eg, Egs, Eexact, mps = iter_diag_spin(
+    Eg, Egs, mps = iter_diag_spin(
         N=args.length,
         Nkeep=args.nkeep,
         J=args.coupling,
@@ -239,7 +276,7 @@ def main():
         verbose=not args.quiet
     )
     
-    return Eg, Egs, Eexact, mps
+    return Eg, Egs, mps
 
 
 if __name__ == "__main__":
