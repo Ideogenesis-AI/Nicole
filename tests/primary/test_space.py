@@ -18,13 +18,27 @@
 
 """Tests for physical space and operator construction."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import load_space, contract
-from nicole.index import Direction, Index
-from nicole.symmetry import U1Group, Z2Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, identity, decomp
 from nicole.symmetry import ProductGroup
+from ..utils import assert_blocks_equal, assert_charge_neutral
+
+# Helper functions for scalar comparisons
+def isclose(a, b, rtol=1e-7, atol=1e-9):
+    """Check if two scalars are close."""
+    a_val = float(a) if not isinstance(a, torch.Tensor) else a.item() if a.numel() == 1 else float(a)
+    b_val = float(b) if not isinstance(b, torch.Tensor) else b.item() if b.numel() == 1 else float(b)
+    return abs(a_val - b_val) < atol + rtol * abs(b_val)
+
+def sqrt(x):
+    """Compute square root of scalar."""
+    return math.sqrt(float(x))
+
+# Helper removed - using direct Python/PyTorch constructs instead
 
 
 class TestLoadSpaceBasic:
@@ -232,9 +246,10 @@ class TestMatrixElements:
                 m_z = block[0, 0]
                 m_z_values.append(m_z)
             
-            # Should range from -J to +J
-            expected = [m for m in np.arange(-J, J + 0.1, 1.0)]
-            assert np.allclose(sorted(m_z_values), expected)
+            # Should range from -J to +J in steps of 1.0
+            expected = torch.arange(-J, J + 0.5, 1.0).tolist()
+            # Convert both to sorted lists for comparison
+            assert sorted([float(x) for x in m_z_values]) == sorted(expected)
     
     def test_sp_matrix_elements_spin_half(self):
         """Test Sp matrix elements for spin-1/2."""
@@ -249,9 +264,9 @@ class TestMatrixElements:
         
         m_z_in = -0.5
         # Expected: -sqrt(J(J+1) - m_z(m_z+1)) / sqrt(2)
-        expected = -np.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / np.sqrt(2.0)
-        assert np.isclose(Sp.data[key][0, 0, 0], expected)
-        assert np.isclose(Sp.data[key][0, 0, 0], -1/np.sqrt(2))
+        expected = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
+        assert isclose(Sp.data[key][0, 0, 0], expected)
+        assert isclose(Sp.data[key][0, 0, 0], -1/sqrt(2))
     
     def test_sm_matrix_elements_spin_half(self):
         """Test Sm matrix elements for spin-1/2."""
@@ -266,9 +281,9 @@ class TestMatrixElements:
         
         m_z_in = 0.5
         # Expected: sqrt(J(J+1) - m_z(m_z-1)) / sqrt(2)
-        expected = np.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / np.sqrt(2.0)
-        assert np.isclose(Sm.data[key][0, 0, 0], expected)
-        assert np.isclose(Sm.data[key][0, 0, 0], 1/np.sqrt(2))
+        expected = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
+        assert isclose(Sm.data[key][0, 0, 0], expected)
+        assert isclose(Sm.data[key][0, 0, 0], 1/sqrt(2))
     
     def test_sp_matrix_elements_spin_one(self):
         """Test Sp matrix elements for spin-1."""
@@ -282,16 +297,16 @@ class TestMatrixElements:
         # |-1⟩ → |0⟩
         key1 = (0, -2, 2)
         m_z_in = -1.0
-        expected1 = -np.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / np.sqrt(2.0)
-        assert np.isclose(Sp.data[key1][0, 0, 0], expected1)
-        assert np.isclose(Sp.data[key1][0, 0, 0], -1.0)
+        expected1 = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
+        assert isclose(Sp.data[key1][0, 0, 0], expected1)
+        assert isclose(Sp.data[key1][0, 0, 0], -1.0)
         
         # |0⟩ → |+1⟩
         key2 = (2, 0, 2)
         m_z_in = 0.0
-        expected2 = -np.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / np.sqrt(2.0)
-        assert np.isclose(Sp.data[key2][0, 0, 0], expected2)
-        assert np.isclose(Sp.data[key2][0, 0, 0], -1.0)
+        expected2 = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
+        assert isclose(Sp.data[key2][0, 0, 0], expected2)
+        assert isclose(Sp.data[key2][0, 0, 0], -1.0)
     
     def test_sm_matrix_elements_spin_one(self):
         """Test Sm matrix elements for spin-1."""
@@ -305,16 +320,16 @@ class TestMatrixElements:
         # |0⟩ → |-1⟩
         key1 = (-2, 0, -2)
         m_z_in = 0.0
-        expected1 = np.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / np.sqrt(2.0)
-        assert np.isclose(Sm.data[key1][0, 0, 0], expected1)
-        assert np.isclose(Sm.data[key1][0, 0, 0], 1.0)
+        expected1 = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
+        assert isclose(Sm.data[key1][0, 0, 0], expected1)
+        assert isclose(Sm.data[key1][0, 0, 0], 1.0)
         
         # |+1⟩ → |0⟩
         key2 = (0, 2, -2)
         m_z_in = 1.0
-        expected2 = np.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / np.sqrt(2.0)
-        assert np.isclose(Sm.data[key2][0, 0, 0], expected2)
-        assert np.isclose(Sm.data[key2][0, 0, 0], 1.0)
+        expected2 = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
+        assert isclose(Sm.data[key2][0, 0, 0], expected2)
+        assert isclose(Sm.data[key2][0, 0, 0], 1.0)
     
     def test_sp_has_minus_sign(self):
         """Test Sp has minus sign (spherical tensor convention)."""
@@ -406,7 +421,7 @@ class TestOperatorRelations:
             
             # Sum of diagonal elements should be 0
             trace = sum(block[0, 0] for block in Sz.data.values())
-            assert np.isclose(trace, 0.0)
+            assert isclose(trace, 0.0)
     
     def test_dimensionality_formula(self):
         """Test space dimension equals 2J+1."""
@@ -606,7 +621,7 @@ class TestFermionMatrixElements:
         # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
         key = (-1, 1, -2)
         assert key in F.data
-        assert np.isclose(F.data[key][0, 0, 0], 1.0)
+        assert isclose(F.data[key][0, 0, 0], 1.0)
     
     def test_f_matrix_elements_z2(self):
         """Test F matrix elements with Z2."""
@@ -616,7 +631,7 @@ class TestFermionMatrixElements:
         # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
         key = (0, 1, 1)
         assert key in F.data
-        assert np.isclose(F.data[key][0, 0, 0], 1.0)
+        assert isclose(F.data[key][0, 0, 0], 1.0)
     
     def test_z_matrix_elements_u1(self):
         """Test Z matrix elements with U(1)."""
@@ -625,11 +640,11 @@ class TestFermionMatrixElements:
         
         # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1 (charge -1)
         assert (-1, -1) in Z.data
-        assert np.isclose(Z.data[(-1, -1)][0, 0], 1.0)
+        assert isclose(Z.data[(-1, -1)][0, 0], 1.0)
         
         # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1 (charge 1)
         assert (1, 1) in Z.data
-        assert np.isclose(Z.data[(1, 1)][0, 0], -1.0)
+        assert isclose(Z.data[(1, 1)][0, 0], -1.0)
     
     def test_z_matrix_elements_z2(self):
         """Test Z matrix elements with Z2."""
@@ -638,11 +653,11 @@ class TestFermionMatrixElements:
         
         # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1
         assert (0, 0) in Z.data
-        assert np.isclose(Z.data[(0, 0)][0, 0], 1.0)
+        assert isclose(Z.data[(0, 0)][0, 0], 1.0)
         
         # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1
         assert (1, 1) in Z.data
-        assert np.isclose(Z.data[(1, 1)][0, 0], -1.0)
+        assert isclose(Z.data[(1, 1)][0, 0], -1.0)
     
     def test_z_eigenvalues(self):
         """Test Z has eigenvalues +1 and -1."""
@@ -650,8 +665,9 @@ class TestFermionMatrixElements:
             Spc, Op = load_space("Ferm", preserv)
             Z = Op["Z"]
             
-            eigenvalues = [Z.data[key][0, 0] for key in sorted(Z.data.keys())]
-            assert np.allclose(eigenvalues, [1.0, -1.0])
+            eigenvalues = [float(Z.data[key][0, 0]) for key in sorted(Z.data.keys())]
+            expected = [1.0, -1.0]
+            assert all(abs(a - b) < 1e-7 for a, b in zip(eigenvalues, expected))
 
 
 class TestFermionErrorHandling:
@@ -887,12 +903,12 @@ class TestBandMatrixElements:
         # F_up|↑⟩ = |0⟩: (0,1) → (-1,0)
         key1 = ((-1, 0), (0, 1), (-1, -1))
         assert key1 in F_up.data
-        assert np.isclose(F_up.data[key1][0, 0, 0], 1.0)
+        assert isclose(F_up.data[key1][0, 0, 0], 1.0)
         
         # F_up|↑↓⟩ = |↓⟩: (1,0) → (0,-1)
         key2 = ((0, -1), (1, 0), (-1, -1))
         assert key2 in F_up.data
-        assert np.isclose(F_up.data[key2][0, 0, 0], 1.0)
+        assert isclose(F_up.data[key2][0, 0, 0], 1.0)
     
     def test_f_dn_matrix_elements(self):
         """Test F_dn matrix elements."""
@@ -902,12 +918,12 @@ class TestBandMatrixElements:
         # F_dn|↓⟩ = |0⟩: (0,-1) → (-1,0)
         key1 = ((-1, 0), (0, -1), (-1, 1))
         assert key1 in F_dn.data
-        assert np.isclose(F_dn.data[key1][0, 0, 0], 1.0)
+        assert isclose(F_dn.data[key1][0, 0, 0], 1.0)
         
         # F_dn|↑↓⟩ = -|↑⟩ (minus sign from anticommutation): (1,0) → (0,1)
         key2 = ((0, 1), (1, 0), (-1, 1))
         assert key2 in F_dn.data
-        assert np.isclose(F_dn.data[key2][0, 0, 0], -1.0)
+        assert isclose(F_dn.data[key2][0, 0, 0], -1.0)
     
     def test_sz_eigenvalues(self):
         """Test Sz eigenvalues (zero eigenvalues trimmed)."""
@@ -921,8 +937,8 @@ class TestBandMatrixElements:
                 eigenvalues[q_in] = block[0, 0]
         
         # Check expected non-zero values (zero eigenvalues have been trimmed)
-        assert np.isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
-        assert np.isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
+        assert isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
+        assert isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
         # Zero eigenvalues for |0⟩ and |↑↓⟩ are trimmed
         assert (-1, 0) not in eigenvalues  # |0⟩ with Sz=0 trimmed
         assert (1, 0) not in eigenvalues   # |↑↓⟩ with Sz=0 trimmed
@@ -937,13 +953,13 @@ class TestBandMatrixElements:
         # For spin-1/2: coefficient = -1/sqrt(2)
         key_p = ((0, 1), (0, -1), (0, 2))
         assert key_p in Sp.data
-        assert np.isclose(Sp.data[key_p][0, 0, 0], -1.0 / np.sqrt(2.0))
+        assert isclose(Sp.data[key_p][0, 0, 0], -1.0 / sqrt(2.0))
         
         # Sm|↑⟩ = |↓⟩: (0,1) → (0,-1) with spherical convention
         # For spin-1/2: coefficient = +1/sqrt(2)
         key_m = ((0, -1), (0, 1), (0, -2))
         assert key_m in Sm.data
-        assert np.isclose(Sm.data[key_m][0, 0, 0], +1.0 / np.sqrt(2.0))
+        assert isclose(Sm.data[key_m][0, 0, 0], +1.0 / sqrt(2.0))
 
 
 class TestBandErrorHandling:

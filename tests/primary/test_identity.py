@@ -18,7 +18,7 @@
 
 """Tests for identity and isometry tensor construction."""
 
-import numpy as np
+import torch
 import pytest
 
 from nicole import Direction, Tensor, identity, isometry, isometry_n, U1Group, Z2Group, contract, permute
@@ -38,7 +38,7 @@ def test_identity_basic():
     # Identity should have matching charges on both legs
     for (q_left, q_right), block in ident.data.items():
         assert q_left == q_right
-        np.testing.assert_allclose(block, np.eye(block.shape[0]))
+        assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype))
 
 
 def test_identity_default_itags():
@@ -57,12 +57,12 @@ def test_identity_dtype():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     # float32
-    ident_f32 = identity(idx, dtype=np.float32)
-    assert ident_f32.dtype == np.float32
+    ident_f32 = identity(idx, dtype=torch.float32)
+    assert ident_f32.dtype == torch.float32
     
     # complex128
-    ident_c128 = identity(idx, dtype=np.complex128)
-    assert ident_c128.dtype == np.complex128
+    ident_c128 = identity(idx, dtype=torch.complex128)
+    assert ident_c128.dtype == torch.complex128
 
 
 def test_identity_directions():
@@ -83,8 +83,8 @@ def test_identity_blocks_are_identity_matrices():
     
     for (q_left, q_right), block in ident.data.items():
         assert q_left == q_right
-        expected = np.eye(block.shape[0], dtype=ident.dtype)
-        np.testing.assert_allclose(block, expected)
+        expected = torch.eye(block.shape[0], dtype=ident.dtype)
+        assert torch.allclose(block, expected)
 
 
 def test_identity_charge_neutral():
@@ -104,7 +104,7 @@ def test_identity_with_z2():
     
     assert set(ident.data.keys()) == {(0, 0), (1, 1)}
     for key, block in ident.data.items():
-        np.testing.assert_allclose(block, np.eye(block.shape[0]))
+        assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype))
 
 
 def test_identity_contraction_preserves_tensor():
@@ -167,13 +167,13 @@ def test_isometry_structure():
     # Check selection structure: each product multiplet maps to at most one fused multiplet
     for key, block in fused_tensor.data.items():
         reshaped = block.reshape(block.shape[0] * block.shape[1], block.shape[2])
-        mask = np.abs(reshaped) > 1e-12
+        mask = torch.abs(reshaped) > 1e-12
         # Each product basis row contributes to at most one fused column
-        assert np.all(mask.sum(axis=1) <= 1)
+        assert torch.all(mask.sum(axis=1) <= 1)
         # Each fused column receives either zero or one contributions (no superposition for U(1))
-        assert np.all((mask.sum(axis=0) == 0) | (mask.sum(axis=0) == 1))
+        assert torch.all((mask.sum(axis=0) == 0) | (mask.sum(axis=0) == 1))
         # Values should be exactly 0 or 1
-        assert np.all((np.abs(reshaped) < 1e-12) | (np.abs(reshaped - 1.0) < 1e-12))
+        assert torch.all((torch.abs(reshaped) < 1e-12) | (torch.abs(reshaped - 1.0) < 1e-12))
 
 
 def test_isometry_default_itags():
@@ -194,12 +194,12 @@ def test_isometry_dtype():
     idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     # float32
-    iso_f32 = isometry(idx_a, idx_b, dtype=np.float32)
-    assert iso_f32.dtype == np.float32
+    iso_f32 = isometry(idx_a, idx_b, dtype=torch.float32)
+    assert iso_f32.dtype == torch.float32
     
     # complex128
-    iso_c128 = isometry(idx_a, idx_b, dtype=np.complex128)
-    assert iso_c128.dtype == np.complex128
+    iso_c128 = isometry(idx_a, idx_b, dtype=torch.complex128)
+    assert iso_c128.dtype == torch.complex128
 
 
 def test_isometry_fused_direction():
@@ -302,7 +302,7 @@ def test_isometry_orthonormality():
         # Compute Gram matrix
         gram = reshaped.T @ reshaped
         # Should be identity (columns are orthonormal)
-        np.testing.assert_allclose(gram, np.eye(gram.shape[0]), atol=1e-12)
+        assert torch.allclose(gram, torch.eye(gram.shape[0], dtype=gram.dtype), atol=1e-12)
 
 
 def test_identity_and_isometry_consistent():
@@ -444,12 +444,12 @@ def test_isometry_n_dtype():
     idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
     
     # float32
-    iso_f32 = isometry_n([idx1, idx2], dtype=np.float32)
-    assert iso_f32.dtype == np.float32
+    iso_f32 = isometry_n([idx1, idx2], dtype=torch.float32)
+    assert iso_f32.dtype == torch.float32
     
     # complex128
-    iso_c128 = isometry_n([idx1, idx2], dtype=np.complex128)
-    assert iso_c128.dtype == np.complex128
+    iso_c128 = isometry_n([idx1, idx2], dtype=torch.complex128)
+    assert iso_c128.dtype == torch.complex128
 
 
 def test_isometry_n_z2_symmetry():
@@ -580,7 +580,7 @@ def test_isometry_n_orthonormality():
         gram = matrix_form.T @ matrix_form
         
         # Should be identity matrix (columns are orthonormal)
-        np.testing.assert_allclose(gram, np.eye(gram.shape[0]), atol=1e-10)
+        assert torch.allclose(gram, torch.eye(gram.shape[0], dtype=gram.dtype), atol=1e-10)
 
 
 def test_isometry_n_five_indices():
