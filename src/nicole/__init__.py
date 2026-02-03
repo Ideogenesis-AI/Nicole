@@ -28,7 +28,7 @@ from .operators import subsector, merge_axes
 from .space import load_space
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.product import ProductGroup
-from .tensor import Tensor
+from .tensor import Tensor, set_default_device, get_default_device
 from .typing import Charge, Direction
 
 __all__ = [
@@ -55,6 +55,8 @@ __all__ = [
     "subsector",
     "merge_axes",
     "load_space",
+    "set_default_device",
+    "get_default_device",
 ]
 
 

@@ -45,7 +45,7 @@ from traditional workflows.
 
 from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
 
-import numpy as np
+import torch
 
 from .index import Index
 from .symmetry.base import AbelianGroup
@@ -104,10 +104,11 @@ def _format_bytes(size: int) -> str:
     return f"{value:.3g} TB"
 
 
-def _format_single_value(arr: np.ndarray) -> str:
+def _format_single_value(arr: torch.Tensor) -> str:
     """Return a formatted scalar read-out for a 1x1 block."""
     val = arr.reshape(-1)[0]
-    if np.iscomplexobj(val):
+    is_complex = val.is_complex() if isinstance(val, torch.Tensor) else isinstance(val, complex)
+    if is_complex:
         real_part = f"{val.real:.6g}"
         imag_part = f"{abs(val.imag):.6g}"
         sign = "+" if val.imag >= 0 else "-"
@@ -125,8 +126,8 @@ def _format_count_list(counts: Sequence[int]) -> str:
 def tensor_summary(
     indices: Sequence[Index],
     itags: Sequence[str],
-    data: Mapping[Tuple[Charge, ...], np.ndarray],
-    dtype: np.dtype,
+    data: Mapping[Tuple[Charge, ...], torch.Tensor],
+    dtype: torch.dtype,
     label: str,
     norm: float,
     sorted_keys: Sequence[Tuple[Charge, ...]] = None,
@@ -176,20 +177,21 @@ def tensor_summary(
         if () in data:
             value = data[()].item()
             # Format value nicely
-            if np.iscomplexobj(value):
+            is_complex = value.is_complex() if isinstance(value, torch.Tensor) else isinstance(value, complex)
+            if is_complex:
                 real_part = f"{value.real:.6g}"
                 imag_part = f"{abs(value.imag):.6g}"
                 sign = "+" if value.imag >= 0 else "-"
                 value_str = f"{real_part}{sign}{imag_part}i"
             else:
                 value_str = f"{value:.6g}"
-            dtype_name = np.dtype(dtype).name
+            dtype_name = str(dtype).replace('torch.', '')
             info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
             data_line = f"  data:  0-D {dtype_name} ({_format_bytes(total_bytes)})    [ {value_str} ]"
             return info_line + "\n" + data_line
         else:
             # Empty scalar
-            dtype_name = np.dtype(dtype).name
+            dtype_name = str(dtype).replace('torch.', '')
             info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
             data_line = f"  data:  0-D {dtype_name} (0 B)    [ empty ]"
             return info_line + "\n" + data_line
@@ -218,7 +220,7 @@ def tensor_summary(
     # -------------------------------------------------------------------
     # Data line: dtype, total bytes, multiplet counts, state counts, norm
     # -------------------------------------------------------------------
-    dtype_name = np.dtype(dtype).name
+    dtype_name = str(dtype).replace('torch.', '')
     multiplet_counts_list = [idx.dim for idx in indices]
     multiplet_counts = _format_count_list(multiplet_counts_list)
     state_counts_list = []
