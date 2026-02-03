@@ -18,7 +18,8 @@
 
 """Tests for tensor contraction operations: contract, trace, partial_trace."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import Direction, Tensor, contract, identity, trace, U1Group, Z2Group, permute, Index, Sector
@@ -48,12 +49,12 @@ def test_contract_two_tensors_manual_pairs():
         for (qb_right, qc), block_b in B.data.items():
             if idx_b_left.group.equal(qb_left, qb_right):
                 out_key = (qa, qc)
-                contracted = np.tensordot(block_a, block_b, axes=(1, 0))
+                contracted = torch.tensordot(block_a, block_b, dims=([1], [0]))
                 manual[out_key] = manual.get(out_key, 0) + contracted
 
     assert set(result.data.keys()) == set(manual.keys())
     for key in manual:
-        np.testing.assert_allclose(result.data[key], manual[key])
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
 def test_contract_automatic_detection():
@@ -80,12 +81,12 @@ def test_contract_automatic_detection():
         for (qc2, qb2, qd), block_b in B.data.items():
             if group.equal(qb, qb2) and group.equal(qc, qc2):
                 out_key = (qa, qd)
-                contracted = np.tensordot(block_a, block_b, axes=([1, 2], [1, 0]))
+                contracted = torch.tensordot(block_a, block_b, dims=([1, 2], [1, 0]))
                 manual[out_key] = manual.get(out_key, 0) + contracted
 
     assert set(result.data.keys()) == set(manual)
     for key in manual:
-        np.testing.assert_allclose(result.data[key], manual[key])
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
 def test_contract_high_order_two_pairs():
@@ -122,7 +123,7 @@ def test_contract_high_order_two_pairs():
                 # Contract: b (axis 1 of A) with b (axis 2 of B)
                 #           d (axis 3 of A) with d (axis 0 of B)
                 # Result order: (a, c, e, f)
-                contracted = np.einsum('abcd,debf->acef', block_a, block_b)
+                contracted = torch.einsum('abcd,debf->acef', block_a, block_b)
                 
                 if out_key not in manual:
                     manual[out_key] = contracted
@@ -133,7 +134,7 @@ def test_contract_high_order_two_pairs():
     assert set(result.data.keys()) == set(manual.keys()), \
         f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
     for key in manual:
-        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
 def test_contract_high_order_three_pairs():
@@ -173,7 +174,7 @@ def test_contract_high_order_three_pairs():
                 #           c (axis 2 of A) with c (axis 2 of B)
                 #           e (axis 4 of A) with e (axis 0 of B)
                 # Result order: (a, d, f, g)
-                contracted = np.einsum('abcde,efcbg->adfg', block_a, block_b)
+                contracted = torch.einsum('abcde,efcbg->adfg', block_a, block_b)
                 
                 if out_key not in manual:
                     manual[out_key] = contracted
@@ -184,7 +185,7 @@ def test_contract_high_order_three_pairs():
     assert set(result.data.keys()) == set(manual.keys()), \
         f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
     for key in manual:
-        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
 def test_contract_high_order_asymmetric():
@@ -222,7 +223,7 @@ def test_contract_high_order_asymmetric():
                 # Contract: a (axis 0 of A) with a (axis 3 of B)
                 #           c (axis 2 of A) with c (axis 0 of B)
                 # Result order: (b, d, e, f, g)
-                contracted = np.einsum('abc,cdeafg->bdefg', block_a, block_b)
+                contracted = torch.einsum('abc,cdeafg->bdefg', block_a, block_b)
                 
                 if out_key not in manual:
                     manual[out_key] = contracted
@@ -233,7 +234,7 @@ def test_contract_high_order_asymmetric():
     assert set(result.data.keys()) == set(manual.keys()), \
         f"Block keys mismatch: result has {set(result.data.keys())}, manual has {set(manual.keys())}"
     for key in manual:
-        np.testing.assert_allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
 def test_contract_named_vs_positional():
@@ -255,7 +256,7 @@ def test_contract_named_vs_positional():
 
     assert list(named.itags) == list(positional.itags)
     for key in named.data:
-        np.testing.assert_allclose(named.data[key], positional.data[key])
+        assert torch.allclose(named.data[key], positional.data[key])
 
 
 def test_contract_with_perm():
@@ -296,7 +297,7 @@ def test_contract_three_tensor_associativity():
 
     assert list(left.itags) == list(right.itags)
     for key in left.data:
-        np.testing.assert_allclose(left.data[key], right.data[key])
+        assert torch.allclose(left.data[key], right.data[key])
 
 
 def test_contract_with_identity():
@@ -319,7 +320,7 @@ def test_contract_with_identity():
 
     assert list(bridge.itags) == list(direct.itags)
     for key in bridge.data:
-        np.testing.assert_allclose(bridge.data[key], direct.data[key])
+        assert torch.allclose(bridge.data[key], direct.data[key])
 
 
 def test_contract_after_permuting():
@@ -340,7 +341,7 @@ def test_contract_after_permuting():
 
     assert list(res1.itags) == list(res2.itags)
     for key in res1.data:
-        np.testing.assert_allclose(res1.data[key], res2.data[key])
+        assert torch.allclose(res1.data[key], res2.data[key])
 
 
 # Edge cases and error handling
@@ -450,7 +451,7 @@ def test_contract_excl_exclude_from_A():
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
     for key in result.data:
-        np.testing.assert_allclose(result.data[key], manual_result.data[key])
+        assert torch.allclose(result.data[key], manual_result.data[key])
 
 
 def test_contract_excl_exclude_from_B():
@@ -478,7 +479,7 @@ def test_contract_excl_exclude_from_B():
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
     for key in result.data:
-        np.testing.assert_allclose(result.data[key], manual_result.data[key])
+        assert torch.allclose(result.data[key], manual_result.data[key])
 
 
 def test_contract_excl_exclude_from_both():
@@ -526,7 +527,7 @@ def test_contract_excl_empty_exclusion():
     
     assert result_excl.itags == result_auto.itags
     for key in result_excl.data:
-        np.testing.assert_allclose(result_excl.data[key], result_auto.data[key])
+        assert torch.allclose(result_excl.data[key], result_auto.data[key])
 
 
 def test_contract_excl_single_contraction():
@@ -578,7 +579,7 @@ def test_contract_axes_single_pair_concise_syntax():
     # Both should give same result
     assert result_concise.itags == result_verbose.itags
     for key in result_concise.data:
-        np.testing.assert_allclose(result_concise.data[key], result_verbose.data[key])
+        assert torch.allclose(result_concise.data[key], result_verbose.data[key])
 
 
 def test_contract_axes_concise_with_permutation():
@@ -683,7 +684,7 @@ def test_trace_automatic():
     contracted_both = contract(contracted_x, id_y)
     
     # Automatic trace should match identity contraction
-    np.testing.assert_allclose(traced.item(), contracted_both.item())
+    assert math.isclose(traced.item(), contracted_both.item())
 
 
 def test_trace_explicit_multi_pair():
@@ -717,8 +718,8 @@ def test_trace_explicit_multi_pair():
     assert traced_seq2.is_scalar()
     
     # All three methods should give identical results
-    np.testing.assert_allclose(traced_multi.item(), traced_seq1.item())
-    np.testing.assert_allclose(traced_multi.item(), traced_seq2.item())
+    assert math.isclose(traced_multi.item(), traced_seq1.item())
+    assert math.isclose(traced_multi.item(), traced_seq2.item())
 
 
 def test_trace_manual_single_pair():
@@ -745,7 +746,8 @@ def test_trace_manual_single_pair():
     manual = {}
     for (qa, qb, qc, qd), block in tensor.data.items():
         if qa == qb:
-            diag = np.trace(block, axis1=0, axis2=1)
+            # torch.diagonal moves diagonal to last axis, sum over it to get trace
+            diag = torch.diagonal(block, dim1=0, dim2=1).sum(dim=-1)
             key = (qc, qd)
             if key in manual:
                 manual[key] += diag
@@ -754,7 +756,7 @@ def test_trace_manual_single_pair():
 
     assert set(traced.data.keys()) == set(manual.keys())
     for key, expected in manual.items():
-        np.testing.assert_allclose(traced.data[key], expected)
+        assert torch.allclose(traced.data[key], expected)
 
 
 def test_trace_exclusion_by_index():
@@ -803,7 +805,7 @@ def test_trace_manual_multiple_pairs():
     contracted_all = contract(contracted_x, id_y)
     
     # Both methods should give the same result
-    np.testing.assert_allclose(traced.item(), contracted_all.item())
+    assert math.isclose(traced.item(), contracted_all.item())
 
 
 def test_trace_exclusion_by_tag():
@@ -833,7 +835,7 @@ def test_trace_exclusion_by_tag():
     for (qa, qb, qc, qd), block in tensor.data.items():
         if qc == qd:
             # Trace over y pair (axes 2, 3 -> axes 2, 3 in block)
-            diag = np.trace(block, axis1=2, axis2=3)
+            diag = torch.diagonal(block, dim1=2, dim2=3).sum(dim=-1)
             key = (qa, qb)
             if key in manual:
                 manual[key] += diag
@@ -842,7 +844,7 @@ def test_trace_exclusion_by_tag():
     
     assert set(traced.data.keys()) == set(manual.keys())
     for key, expected in manual.items():
-        np.testing.assert_allclose(traced.data[key], expected)
+        assert torch.allclose(traced.data[key], expected)
 
 
 def test_trace_exclusion_single_int():
@@ -940,13 +942,13 @@ def test_contract_trace_consistency_high_order():
     
     # Compare block values
     for key in direct_result.data.keys():
-        np.testing.assert_allclose(
+        # err_msg not supported in PyTorch
+        assert torch.allclose(
             direct_result.data[key], 
             traced_result.data[key], 
             rtol=1e-10, 
-            atol=1e-12,
-            err_msg=f"Block {key} values differ between direct and traced methods"
-        )
+            atol=1e-12
+        ), f"Block {key} values differ between direct and traced methods"
     
     # Also verify norms match
     assert abs(direct_result.norm() - traced_result.norm()) < 1e-10
@@ -1047,9 +1049,9 @@ def test_trace_product_group():
     manual_scalar = 0.0
     for (ql, qr), block in T.data.items():
         if ql == qr:
-            manual_scalar += np.trace(block)
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
     
-    np.testing.assert_allclose(result.item(), manual_scalar)
+    assert math.isclose(result.item(), manual_scalar.item())
 
 
 # Scalar result tests
@@ -1082,9 +1084,9 @@ def test_trace_produces_scalar():
     manual_scalar = 0.0
     for (qa, qb), block in tensor.data.items():
         if qa == qb:
-            manual_scalar += np.trace(block)
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
     
-    np.testing.assert_allclose(value, manual_scalar)
+    assert math.isclose(value, manual_scalar.item())
 
 
 def test_contract_produces_scalar():
@@ -1140,8 +1142,8 @@ def test_trace_multiple_pairs_produces_scalar():
     traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
     
     # All three methods should match: automatic trace, identity contraction, and multi-pair trace
-    np.testing.assert_allclose(scalar.item(), traced_multi.item())
-    np.testing.assert_allclose(scalar.item(), contracted_both.item())
+    assert math.isclose(scalar.item(), traced_multi.item())
+    assert math.isclose(scalar.item(), contracted_both.item())
 
 
 def test_trace_ambiguous_raises():
