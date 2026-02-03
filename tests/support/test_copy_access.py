@@ -18,7 +18,7 @@
 
 """Tests for tensor copy and block access operations: copy, sorted_keys, key, block."""
 
-import numpy as np
+import torch
 import pytest
 
 from nicole import Direction, Tensor, U1Group, subsector, Index, Sector
@@ -43,13 +43,13 @@ def test_copy_has_identical_data():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=456, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx_a, idx_b], seed=456, dtype=torch.complex128, itags=["A", "B"])
 
     copied = tensor.copy()
 
     assert set(copied.data.keys()) == set(tensor.data.keys())
     for key in tensor.data:
-        np.testing.assert_array_equal(copied.data[key], tensor.data[key])
+        assert torch.equal(copied.data[key], tensor.data[key])
 
 
 def test_copy_creates_independent_data():
@@ -58,7 +58,7 @@ def test_copy_creates_independent_data():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=789, itags=["X", "Y"])
 
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     copied = tensor.copy()
 
     # Modify the copy's data
@@ -67,7 +67,7 @@ def test_copy_creates_independent_data():
 
     # Original should be unchanged
     for key in original_data:
-        np.testing.assert_array_equal(tensor.data[key], original_data[key])
+        assert torch.equal(tensor.data[key], original_data[key])
 
 
 def test_copy_preserves_metadata():
@@ -75,7 +75,7 @@ def test_copy_preserves_metadata():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
-    tensor = Tensor.random([idx_a, idx_b], seed=111, dtype=np.complex128, itags=["left", "right"])
+    tensor = Tensor.random([idx_a, idx_b], seed=111, dtype=torch.complex128, itags=["left", "right"])
     tensor.label = "MyTensor"
 
     copied = tensor.copy()
@@ -195,7 +195,7 @@ def test_block_returns_correct_data():
     tensor = Tensor.random([idx_a, idx_b], seed=105, itags=["A", "B"])
 
     for i, key in enumerate(tensor.sorted_keys, start=1):
-        np.testing.assert_array_equal(tensor.block(i), tensor.data[key])
+        assert torch.equal(tensor.block(i), tensor.data[key])
 
 
 def test_block_returns_same_object_as_data():
@@ -251,7 +251,7 @@ def test_display_numbering_matches_block_index():
     for i, key in enumerate(tensor.sorted_keys, start=1):
         # Verify the block index matches
         assert tensor.key(i) == key
-        np.testing.assert_array_equal(tensor.block(i), tensor.data[key])
+        assert torch.equal(tensor.block(i), tensor.data[key])
 
 
 # subsector tests
@@ -297,10 +297,10 @@ def test_subsector_data_is_copied():
     
     # Modify the sub tensor's data
     for key in sub.data:
-        original_value = tensor.data[key].copy()
+        original_value = tensor.data[key].clone()
         sub.data[key] *= 100.0
         # Original should be unchanged
-        np.testing.assert_array_equal(tensor.data[key], original_value)
+        assert torch.equal(tensor.data[key], original_value)
 
 
 def test_subsector_preserves_metadata():
@@ -308,7 +308,7 @@ def test_subsector_preserves_metadata():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=np.complex128, itags=["left", "right"])
+    tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=torch.complex128, itags=["left", "right"])
     tensor.label = "TestTensor"
 
     sub = subsector(tensor, 1)
@@ -350,7 +350,7 @@ def test_subsector_single_block():
 
     assert len(sub.data) == 1
     key = tensor.key(1)
-    np.testing.assert_array_equal(sub.data[key], tensor.data[key])
+    assert torch.equal(sub.data[key], tensor.data[key])
 
 
 def test_subsector_integer_vs_list_syntax():
@@ -374,7 +374,7 @@ def test_subsector_integer_vs_list_syntax():
     
     # Both should have the same data
     for key in sub_int.data:
-        np.testing.assert_array_equal(sub_int.data[key], sub_list.data[key])
+        assert torch.equal(sub_int.data[key], sub_list.data[key])
     
     # Both should preserve the same metadata
     assert sub_int.indices == sub_list.indices
@@ -394,7 +394,7 @@ def test_subsector_all_blocks():
 
     assert len(sub.data) == len(tensor.data)
     for key in tensor.data:
-        np.testing.assert_array_equal(sub.data[key], tensor.data[key])
+        assert torch.equal(sub.data[key], tensor.data[key])
 
 
 def test_subsector_raises_on_invalid_index():
