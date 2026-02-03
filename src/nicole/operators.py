@@ -42,7 +42,7 @@ merge_axes(tensor, axes, merged_tag=None, direction=OUT)
 
 from typing import Dict, Optional, Sequence, Tuple, Union
 
-import numpy as np
+import torch
 
 from .blocks import BlockKey
 from .index import Index
@@ -67,10 +67,10 @@ def conj(tensor: Tensor) -> Tensor:
         - All other attributes preserved
     """
     # Only conjugate data if dtype is complex
-    if np.issubdtype(tensor.dtype, np.complexfloating):
-        new_data = {k: np.conjugate(v) for k, v in tensor.data.items()}
+    if tensor.dtype.is_complex:
+        new_data = {k: torch.conj(v) for k, v in tensor.data.items()}
     else:
-        new_data = {k: v.copy() for k, v in tensor.data.items()}
+        new_data = {k: v.clone() for k, v in tensor.data.items()}
     
     # Flip all index directions
     new_indices = tuple(idx.flip() for idx in tensor.indices)
@@ -114,7 +114,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     
     for key, arr in tensor.data.items():
         new_key = tuple(key[i] for i in order)
-        new_data[new_key] = np.transpose(arr, axes=order)
+        new_data[new_key] = torch.permute(arr, order)
     
     return Tensor(indices=new_indices, itags=new_itags, data=new_data, dtype=tensor.dtype, label=tensor.label)
 
@@ -186,7 +186,7 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
         if i < 1 or i > num_blocks:
             raise IndexError(f"Block index {i} out of range [1, {num_blocks}]")
     
-    new_data = {tensor.key(i): tensor.block(i).copy() for i in block_indices}
+    new_data = {tensor.key(i): tensor.block(i).clone() for i in block_indices}
     
     # Prune unused sectors from indices
     pruned_indices = Tensor._prune_unused_sectors(tensor.indices, new_data)
@@ -237,7 +237,7 @@ def oplus(
     Examples
     --------
     >>> from nicole import Tensor, U1Group, Direction, Index, Sector, oplus
-    >>> import numpy as np
+    >>> import torch
     >>> 
     >>> group = U1Group()
     >>> 
@@ -409,7 +409,7 @@ def oplus(
                 out_shape.append(dim_map_A[charge])
         
         # Initialize output block with zeros
-        out_block = np.zeros(out_shape, dtype=np.result_type(A.dtype, B.dtype))
+        out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
         
         # Place block from A if it exists
         if charge_key in A.data:
@@ -444,7 +444,7 @@ def oplus(
             out_block[tuple(slices_B)] = block_B
         
         # Only add non-zero blocks
-        if np.any(out_block != 0):
+        if torch.any(out_block != 0):
             out_data[charge_key] = out_block
     
     # Step 6: Create and return output tensor
@@ -452,16 +452,16 @@ def oplus(
         indices=tuple(out_indices),
         itags=A.itags,
         data=out_data,
-        dtype=np.result_type(A.dtype, B.dtype),
+        dtype=torch.promote_types(A.dtype, B.dtype),
         label=A.label
     )
 
 
 def diag(
-    S_blocks: Dict[BlockKey, np.ndarray],
+    S_blocks: Dict[BlockKey, torch.Tensor],
     bond_index: Index,
     itags: Optional[Tuple[str, str]] = None,
-    dtype: Optional[np.dtype] = None
+    dtype: Optional[torch.dtype] = None
 ) -> Tensor:
     """Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
     
@@ -471,7 +471,7 @@ def diag(
     
     Parameters
     ----------
-    S_blocks : dict[BlockKey, np.ndarray]
+    S_blocks : dict[BlockKey, torch.Tensor]
         Dictionary mapping block keys to 1D arrays. Each array contains the diagonal
         elements for that block. Typically from the S output of svd() or D from eig().
     bond_index : Index
@@ -480,7 +480,7 @@ def diag(
     itags : tuple of two str, optional
         Custom itags for the two output indices. If None, uses ("_bond_L", "_bond_R").
         Default: None.
-    dtype : np.dtype, optional
+    dtype : torch.dtype, optional
         Data type for the output tensor. If None, inferred from input arrays.
         Default: None.
     
@@ -498,7 +498,7 @@ def diag(
     Examples
     --------
     >>> from nicole import Tensor, Index, Sector, Direction, U1Group, decomp
-    >>> import numpy as np
+    >>> import torch
     >>> # Perform SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> U, S_blocks, Vh = decomp(T, axes=0, mode="UR")  # Get S as dict
@@ -552,13 +552,13 @@ def diag(
             sample_arr = next(iter(S_blocks.values()))
             dtype = sample_arr.dtype
         else:
-            dtype = np.float64
+            dtype = torch.float64
     
     # Convert each 1D block to diagonal matrix
-    diag_blocks: Dict[BlockKey, np.ndarray] = {}
+    diag_blocks: Dict[BlockKey, torch.Tensor] = {}
     for key, vec_array in S_blocks.items():
         # Create diagonal matrix from 1D array
-        diag_matrix = np.diag(vec_array)
+        diag_matrix = torch.diag(vec_array)
         diag_blocks[key] = diag_matrix
     
     # Create output tensor with two indices
@@ -602,7 +602,7 @@ def inv(tensor: Tensor) -> Tensor:
     --------
     >>> from nicole import Tensor, Index, Sector, Direction, U1Group, diag
     >>> from nicole.decomp import svd
-    >>> import numpy as np
+    >>> import torch
     >>> # Create a diagonal tensor from SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
     >>> U, S_blocks, Vh = svd(T, axis=0)
@@ -620,7 +620,7 @@ def inv(tensor: Tensor) -> Tensor:
     >>> D = Tensor(
     ...     indices=(idx.flip(), idx),
     ...     itags=("i", "j"),
-    ...     data={(0, 0): np.diag([2.0, 4.0])},
+    ...     data={(0, 0): torch.diag(torch.tensor([2.0, 4.0]))},
     ...     label="Diagonal"
     ... )
     >>> D_inv = inv(D)
@@ -644,7 +644,7 @@ def inv(tensor: Tensor) -> Tensor:
         )
     
     # Check diagonal structure (skip if labeled "Diagonal")
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     if tensor.label != "Diagonal":
         for key, block in tensor.data.items():
             if block.ndim != 2 or block.shape[0] != block.shape[1]:
@@ -652,23 +652,23 @@ def inv(tensor: Tensor) -> Tensor:
                     f"inv requires square matrix blocks, but block {key} has shape {block.shape}"
                 )
             # Check off-diagonal elements are zero
-            off_diag = block - np.diag(np.diag(block))
-            if np.max(np.abs(off_diag)) > eps:
+            off_diag = block - torch.diag(torch.diag(block))
+            if torch.max(torch.abs(off_diag)).item() > eps:
                 raise ValueError(
                     f"inv requires diagonal matrices, but block {key} has non-zero "
-                    f"off-diagonal elements (max: {np.max(np.abs(off_diag))})"
+                    f"off-diagonal elements (max: {torch.max(torch.abs(off_diag)).item()})"
                 )
     
     # Invert each diagonal block and transpose by swapping block keys
-    inv_blocks: Dict[BlockKey, np.ndarray] = {}
+    inv_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     for key, block in tensor.data.items():
         # Extract diagonal elements
-        diag_elements = np.diag(block)
+        diag_elements = torch.diag(block)
         
         # Check for zeros
-        if np.any(np.abs(diag_elements) < eps):
-            zero_indices = np.where(np.abs(diag_elements) < eps)[0]
+        if torch.any(torch.abs(diag_elements) < eps):
+            zero_indices = torch.where(torch.abs(diag_elements) < eps)[0]
             raise ZeroDivisionError(
                 f"Cannot invert diagonal matrix: block {key} has zero elements "
                 f"at diagonal positions {zero_indices.tolist()}"
@@ -679,7 +679,7 @@ def inv(tensor: Tensor) -> Tensor:
         
         # Swap block keys for transpose
         swapped_key = (key[1], key[0])
-        inv_blocks[swapped_key] = np.diag(inv_diag)
+        inv_blocks[swapped_key] = torch.diag(inv_diag)
     
     # Always swap and flip indices (transpose)
     result_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())

@@ -30,7 +30,7 @@ of axes, respectively.
 
 from typing import Dict, Optional, Sequence, Tuple
 
-import numpy as np
+import torch
 
 from .blocks import BlockKey
 from .index import Index
@@ -320,7 +320,7 @@ def contract(
     )
 
     # Allocate the output blocks.
-    out_blocks: Dict[BlockKey, np.ndarray] = {}
+    out_blocks: Dict[BlockKey, torch.Tensor] = {}
     # Iterate over all admissible blocks in the input tensors.
     for keyA, arrA in A.data.items():
         for keyB, arrB in B.data.items():
@@ -342,7 +342,7 @@ def contract(
             # Perform the tensor contraction.
             axesA = [ia for ia, _ in axes_list]
             axesB = [ib for _, ib in axes_list]
-            res = np.tensordot(arrA, arrB, axes=(axesA, axesB))
+            res = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
             # Build the output charge key from the surviving axes.
             out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
                 keyB[i] for i in range(len(keyB)) if i not in contracted_B
@@ -353,16 +353,16 @@ def contract(
             else:
                 out_blocks[out_key] = res
     
-    # For 0D scalars, ensure the result is a proper numpy array
-    # Reason: addition of 0D np.arrays becomes a scalar instead of a numpy array
+    # For 0D scalars, ensure the result is a proper tensor
+    # PyTorch maintains tensor type through operations, so this is less critical
     if len(out_indices) == 0 and () in out_blocks:
-        out_blocks[()] = np.asarray(out_blocks[()])
+        out_blocks[()] = torch.as_tensor(out_blocks[()])
 
     result = Tensor(
         indices=out_indices,
         itags=out_itags,
         data=out_blocks,
-        dtype=np.result_type(A.dtype, B.dtype)
+        dtype=torch.promote_types(A.dtype, B.dtype)
     )
 
     # Apply permutation if requested.
@@ -601,7 +601,7 @@ def trace(
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
     out_itags = tuple(T.itags[i] for i in keep_axes)
-    out_blocks: Dict[BlockKey, np.ndarray] = {}
+    out_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     for key, arr in T.data.items():
         group = T.indices[a].group
@@ -619,17 +619,19 @@ def trace(
             continue
         
         # Trace this pair
-        diag = np.trace(arr, axis1=a, axis2=b)
+        # torch.trace() only works for 2D tensors, use diagonal() for multi-dimensional
+        # torch.diagonal moves the diagonal to the last axis, sum over it
+        diag = torch.diagonal(arr, dim1=a, dim2=b).sum(dim=-1)
         
-        # Ensure diag is a proper ndarray (not a scalar)
-        if not isinstance(diag, np.ndarray):
-            diag = np.array(diag)
+        # Ensure diag is a proper tensor (not a scalar)
+        if not isinstance(diag, torch.Tensor):
+            diag = torch.tensor(diag)
         
         out_key = tuple(key[i] for i in keep_axes)
         if out_key in out_blocks:
             result_block = out_blocks[out_key] + diag
-            if not isinstance(result_block, np.ndarray):
-                result_block = np.array(result_block)
+            if not isinstance(result_block, torch.Tensor):
+                result_block = torch.tensor(result_block)
             out_blocks[out_key] = result_block
         else:
             out_blocks[out_key] = diag
