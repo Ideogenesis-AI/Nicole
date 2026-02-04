@@ -73,6 +73,12 @@ class Tensor:
         Create a symmetry-aware tensor with admissible zero-filled blocks.
     random()
         Create a tensor filled with random values for each admissible block.
+    from_scalar()
+        Create a scalar (0D tensor) with a single value.
+    is_scalar()
+        Check if this tensor is a scalar (0D).
+    item()
+        Extract the scalar value from a 0D tensor.
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
     copy()
@@ -83,6 +89,16 @@ class Tensor:
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
     trim_zero_sectors()
         In-place: Remove sectors where all data is below double precision.
+    device
+        Property returning the device where tensor blocks are stored.
+    to()
+        Move tensor to specified device (CPU, CUDA, MPS, etc.).
+    cpu()
+        Move tensor to CPU.
+    cuda()
+        Move tensor to CUDA device.
+    requires_grad
+        Property for checking/setting gradient tracking.
     group
         Property returning the symmetry group of this tensor.
     sorted_keys
@@ -99,8 +115,8 @@ class Tensor:
         In-place: Permute tensor axes according to the provided reordering.
     transpose()
         In-place: Transpose tensor axes; defaults to reversing the index order.
-    flip()
-        In-place: Flip the direction of specified index/indices (uses dual to maintain charge conservation).
+    invert()
+        In-place: Invert the direction of specified index/indices.
     retag()
         Retag indices: update specific tags by name/index, or replace all tags.
     
