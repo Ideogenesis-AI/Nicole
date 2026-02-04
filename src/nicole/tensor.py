@@ -418,53 +418,11 @@ class Tensor:
         # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
         print(tensor_summary(self.indices, self.itags, self.data, self.dtype, self.label, self.norm(),
                              sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
-
-    # ------------------------------------------------------------
-    #   Utility methods: norm, copy, and sector access
-    # ------------------------------------------------------------
-
-    def norm(self) -> float:
-        """Compute the Frobenius norm aggregated across all dense blocks."""
-        if not self.data:
-            return 0.0
-        return float(
-            torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
-        )
-
-    def copy(self) -> Tensor:
-        """Create a deep copy of this tensor."""
-        new_data = {k: v.clone() for k, v in self.data.items()}
-        return Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=self.dtype,
-            label=self.label,
-        )
-
-    def _invalidate_sorted_keys(self) -> None:
-        """Clear the sorted keys cache (call after modifying data)."""
-        object.__setattr__(self, '_sorted_keys', None)
-
-    @property
-    def sorted_keys(self) -> Tuple[BlockKey, ...]:
-        """Return block keys sorted in display order (cached)."""
-        if self._sorted_keys is None:
-            object.__setattr__(self, '_sorted_keys', 
-                               tuple(sorted(self.data.keys(), key=str)))
-        return self._sorted_keys
-
-    def key(self, i: int) -> BlockKey:
-        """Get the BlockKey for the i-th block (1-indexed, matching display)."""
-        keys = self.sorted_keys
-        if i < 1 or i > len(keys):
-            raise IndexError(f"Block index {i} out of range [1, {len(keys)}]")
-        return keys[i - 1]
-
-    def block(self, i: int) -> torch.Tensor:
-        """Access the i-th block by integer index (1-indexed, matching display)."""
-        return self.data[self.key(i)]
     
+    # ------------------------------------------------------------
+    #   Device management: cpu, cuda, mps
+    # ------------------------------------------------------------
+
     @property
     def device(self) -> torch.device:
         """Return the device of the tensor blocks."""
@@ -513,24 +471,16 @@ class Tensor:
         return result
     
     def cpu(self) -> 'Tensor':
-        """Move tensor to CPU.
-        
-        Returns
-        -------
-        Tensor
-            New tensor on CPU
-        """
+        """Move tensor to CPU."""
         return self.to('cpu')
     
     def cuda(self) -> 'Tensor':
-        """Move tensor to CUDA device.
-        
-        Returns
-        -------
-        Tensor
-            New tensor on CUDA device
-        """
+        """Move tensor to CUDA device."""
         return self.to('cuda')
+    
+    # ------------------------------------------------------------
+    #   Autograd control: requires_grad
+    # ------------------------------------------------------------
     
     @property
     def requires_grad(self) -> bool:
@@ -580,6 +530,52 @@ class Tensor:
         """
         for block in self.data.values():
             block.requires_grad_(value)
+
+    # ------------------------------------------------------------
+    #   Utility methods: norm, copy, and sector access
+    # ------------------------------------------------------------
+
+    def norm(self) -> float:
+        """Compute the Frobenius norm aggregated across all dense blocks."""
+        if not self.data:
+            return 0.0
+        return float(
+            torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
+        )
+
+    def copy(self) -> Tensor:
+        """Create a deep copy of this tensor."""
+        new_data = {k: v.clone() for k, v in self.data.items()}
+        return Tensor(
+            indices=self.indices,
+            itags=self.itags,
+            data=new_data,
+            dtype=self.dtype,
+            label=self.label,
+        )
+
+    def _invalidate_sorted_keys(self) -> None:
+        """Clear the sorted keys cache (call after modifying data)."""
+        object.__setattr__(self, '_sorted_keys', None)
+
+    @property
+    def sorted_keys(self) -> Tuple[BlockKey, ...]:
+        """Return block keys sorted in display order (cached)."""
+        if self._sorted_keys is None:
+            object.__setattr__(self, '_sorted_keys', 
+                               tuple(sorted(self.data.keys(), key=str)))
+        return self._sorted_keys
+
+    def key(self, i: int) -> BlockKey:
+        """Get the BlockKey for the i-th block (1-indexed, matching display)."""
+        keys = self.sorted_keys
+        if i < 1 or i > len(keys):
+            raise IndexError(f"Block index {i} out of range [1, {len(keys)}]")
+        return keys[i - 1]
+
+    def block(self, i: int) -> torch.Tensor:
+        """Access the i-th block by integer index (1-indexed, matching display)."""
+        return self.data[self.key(i)]
 
     # ------------------------------------------------------------
     #   Utility methods: rand_fill, insert_index, trim_zeros
