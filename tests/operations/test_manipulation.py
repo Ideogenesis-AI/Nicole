@@ -18,6 +18,7 @@
 
 """Tests for tensor manipulation operations: conj, permute, transpose, retag."""
 
+import math
 import torch
 import pytest
 
@@ -25,17 +26,6 @@ from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group
 from ..utils import assert_blocks_equal, assert_charge_neutral
-
-# Helper functions
-def isclose(a, b):
-    """Check if two scalars are close."""
-    return abs(float(a) - float(b)) < 1e-7
-
-def assert_array_equal(a, b):
-    """Assert two tensors/arrays are equal."""
-    if not isinstance(b, torch.Tensor):
-        b = torch.tensor(b, dtype=a.dtype, device=a.device)
-    assert torch.equal(a, b), f"Arrays not equal"
 
 
 # Conjugation tests
@@ -643,7 +633,7 @@ def test_invert_preserves_data():
     tensor.invert([0, 1])
     
     # Verify norm preserved
-    assert isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
     # Verify keys unchanged
     assert set(tensor.data.keys()) == original_keys
     # Verify data values unchanged
@@ -743,7 +733,7 @@ def test_invert_double_application():
     assert tensor.indices[0].direction == original_direction
     assert tensor.indices[0].charges() == original_charges
     # Verify norm preserved
-    assert isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
     # Verify keys unchanged
     assert set(tensor.data.keys()) == original_keys
     # Verify data values unchanged
@@ -817,7 +807,7 @@ def test_insert_index_at_end():
     assert tensor.data[(1, 1, 0)].shape == (3, 3, 1)
     
     # Verify norm preserved
-    assert isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
 
 
 def test_insert_index_in_middle():
@@ -928,7 +918,7 @@ def test_insert_index_multiple_insertions():
     assert tensor.indices[4].sectors[0].dim == 1
     
     # Verify norm preserved
-    assert isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
 
 
 def test_insert_index_position_validation():
@@ -1494,9 +1484,9 @@ def test_trim_zero_sectors_negative_values():
     assert (0, 0) not in tensor.data
     
     # Verify negative values are preserved
-    assert_array_equal(
+    assert torch.equal(
         tensor.data[(-1, -1)],
-        torch.tensor([[-1.0, -0.5], [-0.3, -0.8]])
+        torch.tensor([[-1.0, -0.5], [-0.3, -0.8]], dtype=tensor.data[(-1, -1)].dtype)
     )
 
 
@@ -1540,9 +1530,9 @@ def test_trim_zero_sectors_mixed_signs():
     assert (0, 0) not in tensor.data
     
     # Verify mixed-sign data is preserved exactly
-    assert_array_equal(
+    assert torch.equal(
         tensor.data[(-1, -1)],
-        torch.tensor([[1.5, -2.3], [-0.8, 1.2]])
+        torch.tensor([[1.5, -2.3], [-0.8, 1.2]], dtype=tensor.data[(-1, -1)].dtype)
     )
     assert torch.max(torch.abs(tensor.data[(1, 1)])).item() >= 2.0  # Has the large value
 

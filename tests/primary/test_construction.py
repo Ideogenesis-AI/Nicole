@@ -27,21 +27,6 @@ from nicole.blocks import BlockSchema
 from nicole.symmetry.product import ProductGroup
 from ..utils import assert_charge_neutral
 
-# Helper functions
-def isclose(a, b):
-    """Check if two scalars are close."""
-    return abs(float(a) - float(b)) < 1e-7
-
-def is_complex_tensor(x):
-    """Check if tensor is complex."""
-    return x.is_complex() if isinstance(x, torch.Tensor) else isinstance(x, complex)
-
-def safe_sqrt(x):
-    """Compute square root."""
-    if isinstance(x, torch.Tensor):
-        return torch.sqrt(x).item()
-    return math.sqrt(float(x))
-
 
 def test_tensor_zeros_basic():
     """Test Tensor.zeros with basic indices."""
@@ -150,7 +135,7 @@ def test_tensor_random_complex():
     tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128, seed=123, itags=["A", "B"])
     
     assert tensor.dtype == torch.complex128
-    assert is_complex_tensor(tensor.data[(0, 0)])
+    assert tensor.data[(0, 0)].is_complex()
 
 
 def test_tensor_random_no_itags():
@@ -168,8 +153,8 @@ def test_tensor_norm_matches_manual():
     """Test that Tensor.norm() matches manual computation."""
     idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 3), Sector(1, 2)))
     tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
-    manual = safe_sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in tensor.data.values()))
-    assert isclose(tensor.norm(), manual)
+    manual = torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in tensor.data.values()))
+    assert math.isclose(tensor.norm(), manual.item())
 
 
 def test_tensor_norm_zero():
@@ -255,7 +240,7 @@ def test_tensor_scalar_creation():
     # Test with float
     s_float = Tensor.from_scalar(3.14, dtype=torch.float64)
     assert s_float.is_scalar()
-    assert isclose(s_float.item(), 3.14)
+    assert math.isclose(s_float.item(), 3.14)
     
     # Test with complex
     s_complex = Tensor.from_scalar(1 + 2j, dtype=torch.complex128)
@@ -275,34 +260,34 @@ def test_tensor_scalar_operations():
     # Scalar addition
     s3 = s1 + s2
     assert s3.is_scalar()
-    assert isclose(s3.item(), 5.0)
+    assert math.isclose(s3.item(), 5.0)
     
     # Scalar multiplication
     s4 = s1 * 2.5
     assert s4.is_scalar()
-    assert isclose(s4.item(), 5.0)
+    assert math.isclose(s4.item(), 5.0)
     
     # Left scalar multiplication
     s5 = 1.5 * s1
     assert s5.is_scalar()
-    assert isclose(s5.item(), 3.0)
+    assert math.isclose(s5.item(), 3.0)
     
     # Scalar subtraction
     s6 = s2 - s1
     assert s6.is_scalar()
-    assert isclose(s6.item(), 1.0)
+    assert math.isclose(s6.item(), 1.0)
 
 
 def test_tensor_scalar_norm():
     """Test norm of scalar tensors."""
     s = Tensor.from_scalar(3.0)
-    assert isclose(s.norm(), 3.0)
+    assert math.isclose(s.norm(), 3.0)
     
     s_negative = Tensor.from_scalar(-4.0)
-    assert isclose(s_negative.norm(), 4.0)
+    assert math.isclose(s_negative.norm(), 4.0)
     
     s_complex = Tensor.from_scalar(3 + 4j, dtype=torch.complex128)
-    assert isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
+    assert math.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
 
 
 def test_tensor_scalar_copy():
@@ -776,7 +761,7 @@ def test_rand_fill_complex_dtype():
     block = tensor.data[(0, 0)]
     
     # Verify it's complex
-    assert is_complex_tensor(block)
+    assert block.is_complex()
     
     # Verify both real and imaginary parts are non-zero
     assert not torch.allclose(block.real, torch.zeros_like(block.real))

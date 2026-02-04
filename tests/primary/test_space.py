@@ -27,19 +27,6 @@ from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, identity,
 from nicole.symmetry import ProductGroup
 from ..utils import assert_blocks_equal, assert_charge_neutral
 
-# Helper functions for scalar comparisons
-def isclose(a, b, rtol=1e-7, atol=1e-9):
-    """Check if two scalars are close."""
-    a_val = float(a) if not isinstance(a, torch.Tensor) else a.item() if a.numel() == 1 else float(a)
-    b_val = float(b) if not isinstance(b, torch.Tensor) else b.item() if b.numel() == 1 else float(b)
-    return abs(a_val - b_val) < atol + rtol * abs(b_val)
-
-def sqrt(x):
-    """Compute square root of scalar."""
-    return math.sqrt(float(x))
-
-# Helper removed - using direct Python/PyTorch constructs instead
-
 
 class TestLoadSpaceBasic:
     """Test basic functionality of load_space."""
@@ -264,9 +251,9 @@ class TestMatrixElements:
         
         m_z_in = -0.5
         # Expected: -sqrt(J(J+1) - m_z(m_z+1)) / sqrt(2)
-        expected = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
-        assert isclose(Sp.data[key][0, 0, 0], expected)
-        assert isclose(Sp.data[key][0, 0, 0], -1/sqrt(2))
+        expected = -math.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sp.data[key][0, 0, 0], torch.tensor(expected, dtype=Sp.dtype), atol=1e-9)
+        assert torch.isclose(Sp.data[key][0, 0, 0], torch.tensor(-1/math.sqrt(2), dtype=Sp.dtype), atol=1e-9)
     
     def test_sm_matrix_elements_spin_half(self):
         """Test Sm matrix elements for spin-1/2."""
@@ -281,9 +268,9 @@ class TestMatrixElements:
         
         m_z_in = 0.5
         # Expected: sqrt(J(J+1) - m_z(m_z-1)) / sqrt(2)
-        expected = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
-        assert isclose(Sm.data[key][0, 0, 0], expected)
-        assert isclose(Sm.data[key][0, 0, 0], 1/sqrt(2))
+        expected = math.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sm.data[key][0, 0, 0], torch.tensor(expected, dtype=Sm.dtype), atol=1e-9)
+        assert torch.isclose(Sm.data[key][0, 0, 0], torch.tensor(1/math.sqrt(2), dtype=Sm.dtype), atol=1e-9)
     
     def test_sp_matrix_elements_spin_one(self):
         """Test Sp matrix elements for spin-1."""
@@ -297,16 +284,16 @@ class TestMatrixElements:
         # |-1⟩ → |0⟩
         key1 = (0, -2, 2)
         m_z_in = -1.0
-        expected1 = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
-        assert isclose(Sp.data[key1][0, 0, 0], expected1)
-        assert isclose(Sp.data[key1][0, 0, 0], -1.0)
+        expected1 = -math.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sp.data[key1][0, 0, 0], torch.tensor(expected1, dtype=Sp.dtype), atol=1e-9)
+        assert torch.isclose(Sp.data[key1][0, 0, 0], torch.tensor(-1.0, dtype=Sp.dtype), atol=1e-9)
         
         # |0⟩ → |+1⟩
         key2 = (2, 0, 2)
         m_z_in = 0.0
-        expected2 = -sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / sqrt(2.0)
-        assert isclose(Sp.data[key2][0, 0, 0], expected2)
-        assert isclose(Sp.data[key2][0, 0, 0], -1.0)
+        expected2 = -math.sqrt(J * (J + 1) - m_z_in * (m_z_in + 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sp.data[key2][0, 0, 0], torch.tensor(expected2, dtype=Sp.dtype), atol=1e-9)
+        assert torch.isclose(Sp.data[key2][0, 0, 0], torch.tensor(-1.0, dtype=Sp.dtype), atol=1e-9)
     
     def test_sm_matrix_elements_spin_one(self):
         """Test Sm matrix elements for spin-1."""
@@ -320,16 +307,16 @@ class TestMatrixElements:
         # |0⟩ → |-1⟩
         key1 = (-2, 0, -2)
         m_z_in = 0.0
-        expected1 = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
-        assert isclose(Sm.data[key1][0, 0, 0], expected1)
-        assert isclose(Sm.data[key1][0, 0, 0], 1.0)
+        expected1 = math.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sm.data[key1][0, 0, 0], torch.tensor(expected1, dtype=Sm.dtype), atol=1e-9)
+        assert torch.isclose(Sm.data[key1][0, 0, 0], torch.tensor(1.0, dtype=Sm.dtype), atol=1e-9)
         
         # |+1⟩ → |0⟩
         key2 = (0, 2, -2)
         m_z_in = 1.0
-        expected2 = sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / sqrt(2.0)
-        assert isclose(Sm.data[key2][0, 0, 0], expected2)
-        assert isclose(Sm.data[key2][0, 0, 0], 1.0)
+        expected2 = math.sqrt(J * (J + 1) - m_z_in * (m_z_in - 1)) / math.sqrt(2.0)
+        assert torch.isclose(Sm.data[key2][0, 0, 0], torch.tensor(expected2, dtype=Sm.dtype), atol=1e-9)
+        assert torch.isclose(Sm.data[key2][0, 0, 0], torch.tensor(1.0, dtype=Sm.dtype), atol=1e-9)
     
     def test_sp_has_minus_sign(self):
         """Test Sp has minus sign (spherical tensor convention)."""
@@ -421,7 +408,7 @@ class TestOperatorRelations:
             
             # Sum of diagonal elements should be 0
             trace = sum(block[0, 0] for block in Sz.data.values())
-            assert isclose(trace, 0.0)
+            assert math.isclose(trace.item(), 0.0)
     
     def test_dimensionality_formula(self):
         """Test space dimension equals 2J+1."""
@@ -621,7 +608,7 @@ class TestFermionMatrixElements:
         # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
         key = (-1, 1, -2)
         assert key in F.data
-        assert isclose(F.data[key][0, 0, 0], 1.0)
+        assert math.isclose(F.data[key][0, 0, 0].item(), 1.0)
     
     def test_f_matrix_elements_z2(self):
         """Test F matrix elements with Z2."""
@@ -631,7 +618,7 @@ class TestFermionMatrixElements:
         # F|1⟩ = |0⟩ → ⟨0|F|1⟩ = 1
         key = (0, 1, 1)
         assert key in F.data
-        assert isclose(F.data[key][0, 0, 0], 1.0)
+        assert math.isclose(F.data[key][0, 0, 0].item(), 1.0)
     
     def test_z_matrix_elements_u1(self):
         """Test Z matrix elements with U(1)."""
@@ -640,11 +627,11 @@ class TestFermionMatrixElements:
         
         # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1 (charge -1)
         assert (-1, -1) in Z.data
-        assert isclose(Z.data[(-1, -1)][0, 0], 1.0)
+        assert math.isclose(Z.data[(-1, -1)][0, 0].item(), 1.0)
         
         # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1 (charge 1)
         assert (1, 1) in Z.data
-        assert isclose(Z.data[(1, 1)][0, 0], -1.0)
+        assert math.isclose(Z.data[(1, 1)][0, 0].item(), -1.0)
     
     def test_z_matrix_elements_z2(self):
         """Test Z matrix elements with Z2."""
@@ -653,11 +640,11 @@ class TestFermionMatrixElements:
         
         # Z|0⟩ = |0⟩ → ⟨0|Z|0⟩ = 1
         assert (0, 0) in Z.data
-        assert isclose(Z.data[(0, 0)][0, 0], 1.0)
+        assert math.isclose(Z.data[(0, 0)][0, 0].item(), 1.0)
         
         # Z|1⟩ = -|1⟩ → ⟨1|Z|1⟩ = -1
         assert (1, 1) in Z.data
-        assert isclose(Z.data[(1, 1)][0, 0], -1.0)
+        assert math.isclose(Z.data[(1, 1)][0, 0].item(), -1.0)
     
     def test_z_eigenvalues(self):
         """Test Z has eigenvalues +1 and -1."""
@@ -903,12 +890,12 @@ class TestBandMatrixElements:
         # F_up|↑⟩ = |0⟩: (0,1) → (-1,0)
         key1 = ((-1, 0), (0, 1), (-1, -1))
         assert key1 in F_up.data
-        assert isclose(F_up.data[key1][0, 0, 0], 1.0)
+        assert math.isclose(F_up.data[key1][0, 0, 0].item(), 1.0)
         
         # F_up|↑↓⟩ = |↓⟩: (1,0) → (0,-1)
         key2 = ((0, -1), (1, 0), (-1, -1))
         assert key2 in F_up.data
-        assert isclose(F_up.data[key2][0, 0, 0], 1.0)
+        assert math.isclose(F_up.data[key2][0, 0, 0].item(), 1.0)
     
     def test_f_dn_matrix_elements(self):
         """Test F_dn matrix elements."""
@@ -918,12 +905,12 @@ class TestBandMatrixElements:
         # F_dn|↓⟩ = |0⟩: (0,-1) → (-1,0)
         key1 = ((-1, 0), (0, -1), (-1, 1))
         assert key1 in F_dn.data
-        assert isclose(F_dn.data[key1][0, 0, 0], 1.0)
+        assert math.isclose(F_dn.data[key1][0, 0, 0].item(), 1.0)
         
         # F_dn|↑↓⟩ = -|↑⟩ (minus sign from anticommutation): (1,0) → (0,1)
         key2 = ((0, 1), (1, 0), (-1, 1))
         assert key2 in F_dn.data
-        assert isclose(F_dn.data[key2][0, 0, 0], -1.0)
+        assert math.isclose(F_dn.data[key2][0, 0, 0].item(), -1.0)
     
     def test_sz_eigenvalues(self):
         """Test Sz eigenvalues (zero eigenvalues trimmed)."""
@@ -937,8 +924,8 @@ class TestBandMatrixElements:
                 eigenvalues[q_in] = block[0, 0]
         
         # Check expected non-zero values (zero eigenvalues have been trimmed)
-        assert isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
-        assert isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
+        assert math.isclose(eigenvalues[(0, -1)], -0.5)  # |↓⟩
+        assert math.isclose(eigenvalues[(0, 1)], 0.5)    # |↑⟩
         # Zero eigenvalues for |0⟩ and |↑↓⟩ are trimmed
         assert (-1, 0) not in eigenvalues  # |0⟩ with Sz=0 trimmed
         assert (1, 0) not in eigenvalues   # |↑↓⟩ with Sz=0 trimmed
@@ -953,13 +940,13 @@ class TestBandMatrixElements:
         # For spin-1/2: coefficient = -1/sqrt(2)
         key_p = ((0, 1), (0, -1), (0, 2))
         assert key_p in Sp.data
-        assert isclose(Sp.data[key_p][0, 0, 0], -1.0 / sqrt(2.0))
+        assert torch.isclose(Sp.data[key_p][0, 0, 0], torch.tensor(-1.0 / math.sqrt(2.0), dtype=Sp.dtype), atol=1e-9)
         
         # Sm|↑⟩ = |↓⟩: (0,1) → (0,-1) with spherical convention
         # For spin-1/2: coefficient = +1/sqrt(2)
         key_m = ((0, -1), (0, 1), (0, -2))
         assert key_m in Sm.data
-        assert isclose(Sm.data[key_m][0, 0, 0], +1.0 / sqrt(2.0))
+        assert torch.isclose(Sm.data[key_m][0, 0, 0], torch.tensor(+1.0 / math.sqrt(2.0), dtype=Sm.dtype), atol=1e-9)
 
 
 class TestBandErrorHandling:

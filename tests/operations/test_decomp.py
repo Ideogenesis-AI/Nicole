@@ -28,8 +28,6 @@ from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
 from nicole.decomp import svd, eig
 from ..utils import assert_charge_neutral
 
-# No helper functions needed - using PyTorch directly
-
 
 # Basic SVD tests
 
