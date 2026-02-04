@@ -25,6 +25,15 @@ these features are important for practical use of the library.
 
 Test Modules
 ------------
+test_autograd.py
+    Tests for automatic differentiation:
+    - Gradient computation through tensor operations
+    - Backpropagation compatibility
+    - Integration with PyTorch autograd
+    - Gradient flow through contractions
+    - Differentiable decompositions
+    - Gradient checking and validation
+
 test_copy_access.py
     Tests for tensor copying and element access:
     - Deep copy vs. shallow copy behavior
@@ -33,6 +42,15 @@ test_copy_access.py
     - Data sharing and mutation safety
     - Memory management and ownership
     - Indexing into block structure
+
+test_device.py
+    Tests for device management:
+    - CPU and GPU device placement
+    - Device transfer operations
+    - Mixed device computations
+    - CUDA availability and compatibility
+    - Memory management across devices
+    - Device-specific optimizations
 
 test_display.py
     Tests for tensor display and formatting:
@@ -55,7 +73,9 @@ test_types.py
 
 Key Features Tested
 -------------------
+- Automatic differentiation and gradient flow
 - Copy semantics and data safety
+- Device management and GPU acceleration
 - User-friendly tensor inspection
 - Clear error messages and diagnostics
 - Type safety and validation
@@ -64,6 +84,8 @@ Key Features Tested
 Developer Experience
 --------------------
 These tests ensure that Nicole provides:
+- Seamless PyTorch integration with autograd support
+- Flexible device management for CPU/GPU workflows
 - Intuitive copying behavior without surprises
 - Clear visualization of tensor structure
 - Strong typing for better IDE support
