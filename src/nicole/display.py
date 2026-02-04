@@ -109,11 +109,11 @@ def _format_single_value(arr: torch.Tensor) -> str:
     val = arr.reshape(-1)[0]
     is_complex = val.is_complex() if isinstance(val, torch.Tensor) else isinstance(val, complex)
     if is_complex:
-        real_part = f"{val.real:.6g}"
-        imag_part = f"{abs(val.imag):.6g}"
+        real_part = f"{val.real:.4g}"
+        imag_part = f"{abs(val.imag):.4g}"
         sign = "+" if val.imag >= 0 else "-"
         return f"{real_part}{sign}{imag_part}i."
-    return f"{val:.6g}."
+    return f"{val:.4g}."
 
 
 def _format_count_list(counts: Sequence[int]) -> str:
@@ -283,11 +283,11 @@ def tensor_summary(
 
             # Display block information for each charge sector.
             block_bytes = arr.nbytes
-            if arr.size == 1:
+            if arr.numel() == 1:
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr:>7}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr:>8}"
                 )
             else:
                 # High-dimensional array — display dims and byte footprint.
