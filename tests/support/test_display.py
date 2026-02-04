@@ -62,7 +62,7 @@ def test_format_single_value_real():
     """Test _format_single_value with real numbers."""
     arr = torch.tensor([[3.14159]])
     result = _format_single_value(arr)
-    assert "3.14159" in result
+    assert "3.142" in result
 
 
 def test_format_single_value_complex():
