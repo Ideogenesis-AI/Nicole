@@ -30,7 +30,7 @@ charge conservation for a given block key.
 from itertools import product
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
-import numpy as np
+import torch
 
 from .index import Index
 from .typing import Charge, Direction
@@ -83,11 +83,11 @@ class BlockSchema:
         return tuple(shape)
 
     @staticmethod
-    def validate_blocks(indices: Sequence[Index], blocks: Mapping[BlockKey, np.ndarray]) -> None:
-        """Verify that blocks are NumPy arrays with shapes consistent with the indices."""
+    def validate_blocks(indices: Sequence[Index], blocks: Mapping[BlockKey, torch.Tensor]) -> None:
+        """Verify that blocks are PyTorch tensors with shapes consistent with the indices."""
         for arr in blocks.values():
-            if not isinstance(arr, np.ndarray):
-                raise TypeError("Blocks must be numpy arrays")
+            if not isinstance(arr, torch.Tensor):
+                raise TypeError("Blocks must be torch tensors")
         for key, arr in blocks.items():
             expected = BlockSchema.shape_for_key(indices, key)
             if arr.shape != expected:

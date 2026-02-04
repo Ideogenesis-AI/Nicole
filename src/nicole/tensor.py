@@ -21,7 +21,7 @@ from __future__ import annotations
 """Tensor container for block-symmetric data structures.
 
 This module defines the `Tensor` dataclass, which stores symmetry-aware tensor
-indices alongside a dictionary of dense NumPy blocks. Helper constructors create
+indices alongside a dictionary of dense PyTorch tensor blocks. Helper constructors create
 zero-filled or random tensors, while arithmetic and structural operations respect
 charge conservation dictated by the index metadata.
 """
@@ -29,12 +29,18 @@ charge conservation dictated by the index metadata.
 from dataclasses import dataclass, field
 from typing import Dict, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
-import numpy as np
+import torch
 
 from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
 from .symmetry.base import SymmetryGroup
+
+# Disable autograd by default for performance (tensor networks rarely need gradients)
+torch.set_grad_enabled(False)
+
+# Set default device to CPU (users can change via torch.set_default_device if needed)
+torch.set_default_device('cpu')
 
 
 @dataclass
@@ -42,7 +48,7 @@ class Tensor:
     """Block-sparse tensor backed by symmetry-aware indices and dense blocks.
 
     Each `Tensor` pairs an ordered tuple of `Index` instances with a mapping from
-    block keys (one charge per axis) to dense NumPy arrays. Arithmetic operations
+    block keys (one charge per axis) to dense PyTorch tensors. Arithmetic operations
     are defined in a way that preserves charge conservation, and helper methods
     provide convenient constructors and transformations.
 
@@ -53,11 +59,13 @@ class Tensor:
     itags:
         Ordered tuple of human-readable labels for each index.
     data:
-        Mapping from block keys (one charge per axis) to dense NumPy arrays.
+        Mapping from block keys (one charge per axis) to dense PyTorch tensors.
     dtype:
         Data type for the dense blocks. Defaults to double precision real values.
     label:
         Human-readable label for the tensor. Defaults to "Tensor".
+    device:
+        Device where tensor blocks are stored (CPU or GPU).
 
     Methods
     -------
@@ -104,8 +112,8 @@ class Tensor:
 
     indices: Tuple[Index, ...]
     itags: Tuple[str, ...]
-    data: MutableMapping[BlockKey, np.ndarray]
-    dtype: np.dtype = np.float64
+    data: MutableMapping[BlockKey, torch.Tensor]
+    dtype: torch.dtype = torch.float64
     label: str = "Tensor"
     _sorted_keys: Optional[Tuple[BlockKey, ...]] = field(default=None, repr=False, compare=False)
 
@@ -157,22 +165,54 @@ class Tensor:
     # ------------------------------------------------------------
 
     @classmethod
-    def zeros(cls, indices: Sequence[Index], dtype=np.float64, itags: Optional[Sequence[str]] = None) -> Tensor:
-        """Create a symmetry-aware tensor with admissible zero-filled blocks."""
+    def zeros(
+        cls, 
+        indices: Sequence[Index], 
+        dtype: torch.dtype = torch.float64, 
+        itags: Optional[Sequence[str]] = None,
+        device: Optional[Union[str, torch.device]] = None,
+        requires_grad: bool = False
+    ) -> Tensor:
+        """Create a symmetry-aware tensor with admissible zero-filled blocks.
+        
+        Parameters
+        ----------
+        indices : Sequence[Index]
+            Sequence of Index objects defining the tensor structure
+        dtype : torch.dtype, optional
+            Data type for the tensor blocks (default: torch.float64)
+        itags : Sequence[str], optional
+            Tags for each index (default: "_init_" for all)
+        device : str or torch.device, optional
+            Device to place tensors on (default: current default device)
+        requires_grad : bool, optional
+            If True, enables gradient tracking for this tensor (default: False)
+            
+        Notes
+        -----
+        Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
+        to enable autograd for this tensor. Use torch.no_grad() context to temporarily
+        disable gradient computation during operations.
+        """
+        if device is None:
+            device = torch.get_default_device()
+        device = torch.device(device)
+        
         # Normalise input to an immutable tuple for downstream utilities.
         indices_tuple = tuple(indices)
         if itags is None:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
-        data: Dict[BlockKey, np.ndarray] = {}
+        data: Dict[BlockKey, torch.Tensor] = {}
         # Iterate over all admissible charge assignments for the provided indices.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
             # Determine the dense shape implied by the current key and allocate zeros.
             shape = BlockSchema.shape_for_key(indices_tuple, key)
-            data[key] = np.zeros(shape, dtype=dtype)
+            block = torch.zeros(shape, dtype=dtype, device=device, requires_grad=requires_grad)
+            data[key] = block
         
         # normalize indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
@@ -180,37 +220,78 @@ class Tensor:
 
     @classmethod
     def random(
-        cls, indices: Sequence[Index], dtype=np.float64, seed: Optional[int] = None, itags: Optional[Sequence[str]] = None
+        cls, 
+        indices: Sequence[Index], 
+        dtype: torch.dtype = torch.float64, 
+        seed: Optional[int] = None, 
+        itags: Optional[Sequence[str]] = None,
+        device: Optional[Union[str, torch.device]] = None,
+        requires_grad: bool = False
     ) -> Tensor:
-        """Create a tensor filled with random values for each admissible block."""
+        """Create a tensor filled with random values for each admissible block.
+        
+        Parameters
+        ----------
+        indices : Sequence[Index]
+            Sequence of Index objects defining the tensor structure
+        dtype : torch.dtype, optional
+            Data type for the tensor blocks (default: torch.float64)
+        seed : int, optional
+            Random seed for reproducibility
+        itags : Sequence[str], optional
+            Tags for each index (default: "_init_" for all)
+        device : str or torch.device, optional
+            Device to place tensors on (default: current default device)
+        requires_grad : bool, optional
+            If True, enables gradient tracking for this tensor (default: False)
+            
+        Notes
+        -----
+        Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
+        to enable autograd for this tensor. Use torch.no_grad() context to temporarily
+        disable gradient computation during operations.
+        """
+        if device is None:
+            device = torch.get_default_device()
+        device = torch.device(device)
+        
         # Initialise the random number generator.
-        rng = np.random.default_rng(seed)
+        if seed is not None:
+            gen = torch.Generator(device=device)
+            gen.manual_seed(seed)
+        else:
+            gen = None
+            
         indices_tuple = tuple(indices)
         if itags is None:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
-        data: Dict[BlockKey, np.ndarray] = {}
-        target_dtype = np.dtype(dtype)
+        data: Dict[BlockKey, torch.Tensor] = {}
         # Walk through admissible blocks in the same fashion as `zeros`.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
             shape = BlockSchema.shape_for_key(indices_tuple, key)
-            if np.issubdtype(target_dtype, np.complexfloating):
-                real = rng.standard_normal(shape)
-                imag = rng.standard_normal(shape)
-                arr = real + 1j * imag
+            if dtype.is_complex:
+                real = torch.randn(shape, generator=gen, device=device,
+                    dtype=torch.float64 if dtype == torch.complex128 else torch.float32)
+                imag = torch.randn(shape, generator=gen, device=device,
+                    dtype=torch.float64 if dtype == torch.complex128 else torch.float32)
+                arr = torch.complex(real, imag)
+                if requires_grad:
+                    arr.requires_grad_(True)
             else:
-                arr = rng.standard_normal(shape)
-            data[key] = arr.astype(target_dtype, copy=False)
+                arr = torch.randn(shape, generator=gen, device=device, dtype=dtype,
+                    requires_grad=requires_grad)
+            data[key] = arr
         
         # Prune indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
-        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=target_dtype)
+        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=dtype)
 
     @staticmethod
-    def _prune_unused_sectors(indices: Tuple[Index, ...], data: Dict[BlockKey, np.ndarray]) -> Tuple[Index, ...]:
+    def _prune_unused_sectors(indices: Tuple[Index, ...], data: Dict[BlockKey, torch.Tensor]) -> Tuple[Index, ...]:
         """Remove sectors from indices that don't appear in any block."""
         if not data:
             # No blocks, return empty indices
@@ -242,9 +323,34 @@ class Tensor:
     # ------------------------------------------------------------
 
     @classmethod
-    def from_scalar(cls, value: Union[int, float, complex], dtype=np.float64, label: str = "Scalar") -> Tensor:
-        """Create a scalar (0D tensor) with a single value."""
-        data = {(): np.array(value, dtype=dtype)}
+    def from_scalar(
+        cls, 
+        value: Union[int, float, complex], 
+        dtype: torch.dtype = torch.float64, 
+        label: str = "Scalar",
+        device: Optional[Union[str, torch.device]] = None,
+        requires_grad: bool = False
+    ) -> Tensor:
+        """Create a scalar (0D tensor) with a single value.
+        
+        Parameters
+        ----------
+        value : int, float, or complex
+            Scalar value
+        dtype : torch.dtype, optional
+            Data type (default: torch.float64)
+        label : str, optional
+            Label for the scalar (default: "Scalar")
+        device : str or torch.device, optional
+            Device to place tensor on (default: current default device)
+        requires_grad : bool, optional
+            If True, enables gradient tracking for this tensor (default: False)
+        """
+        if device is None:
+            device = torch.get_default_device()
+        device = torch.device(device)
+        block = torch.tensor(value, dtype=dtype, device=device, requires_grad=requires_grad)
+        data = {(): block}
         return cls(indices=(), itags=(), data=data, dtype=dtype, label=label)
 
     def is_scalar(self) -> bool:
@@ -289,6 +395,118 @@ class Tensor:
         # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
         print(tensor_summary(self.indices, self.itags, self.data, self.dtype, self.label, self.norm(),
                              sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
+    
+    # ------------------------------------------------------------
+    #   Device management: cpu, cuda, mps
+    # ------------------------------------------------------------
+
+    @property
+    def device(self) -> torch.device:
+        """Return the device of the tensor blocks."""
+        if not self.data:
+            return torch.get_default_device()
+        # All blocks must be on same device
+        return next(iter(self.data.values())).device
+    
+    def to(self, device: Union[str, torch.device]) -> 'Tensor':
+        """Move tensor to specified device.
+        
+        Parameters
+        ----------
+        device : str or torch.device
+            Target device ('cpu', 'cuda', 'mps', etc.)
+            
+        Returns
+        -------
+        Tensor
+            New tensor on the specified device
+        
+        Notes
+        -----
+        MPS (Apple Silicon) doesn't support float64. If moving a float64 tensor to MPS,
+        it will be automatically converted to float32.
+        """
+        device = torch.device(device)
+        if device == self.device:
+            return self
+        
+        # MPS doesn't support float64, convert to float32 if needed
+        if device.type == 'mps' and self.dtype == torch.float64:
+            new_data = {k: v.to(device, dtype=torch.float32) for k, v in self.data.items()}
+            new_dtype = torch.float32
+        else:
+            new_data = {k: v.to(device) for k, v in self.data.items()}
+            new_dtype = self.dtype
+        
+        result = Tensor(
+            indices=self.indices,
+            itags=self.itags,
+            data=new_data,
+            dtype=new_dtype,
+            label=self.label,
+        )
+        return result
+    
+    def cpu(self) -> 'Tensor':
+        """Move tensor to CPU."""
+        return self.to('cpu')
+    
+    def cuda(self) -> 'Tensor':
+        """Move tensor to CUDA device."""
+        return self.to('cuda')
+    
+    # ------------------------------------------------------------
+    #   Autograd control: requires_grad
+    # ------------------------------------------------------------
+    
+    @property
+    def requires_grad(self) -> bool:
+        """Check if this tensor tracks gradients.
+        
+        Returns True if all underlying blocks have requires_grad=True,
+        False otherwise.
+        
+        Returns
+        -------
+        bool
+            Whether this tensor tracks gradients
+            
+        Examples
+        --------
+        >>> t = Tensor.zeros(indices)
+        >>> print(t.requires_grad)  # False
+        >>> 
+        >>> t.requires_grad = True
+        >>> print(t.requires_grad)  # True
+        """
+        if not self.data:
+            return False
+        return all(block.requires_grad for block in self.data.values())
+    
+    @requires_grad.setter
+    def requires_grad(self, value: bool) -> None:
+        """Set gradient tracking for this tensor.
+        
+        Sets requires_grad for all underlying torch.Tensor blocks.
+        
+        Parameters
+        ----------
+        value : bool
+            Whether to track gradients for this tensor
+            
+        Examples
+        --------
+        >>> t = Tensor.random(indices)
+        >>> t.requires_grad = True  # Enable gradient tracking
+        >>> 
+        >>> # Operations will now build computational graphs
+        >>> result = t * 2
+        >>> 
+        >>> # Disable for inference
+        >>> t.requires_grad = False
+        """
+        for block in self.data.values():
+            block.requires_grad_(value)
 
     # ------------------------------------------------------------
     #   Utility methods: norm, copy, and sector access
@@ -299,12 +517,12 @@ class Tensor:
         if not self.data:
             return 0.0
         return float(
-            np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in self.data.values()))
+            torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
         )
 
     def copy(self) -> Tensor:
         """Create a deep copy of this tensor."""
-        new_data = {k: v.copy() for k, v in self.data.items()}
+        new_data = {k: v.clone() for k, v in self.data.items()}
         return Tensor(
             indices=self.indices,
             itags=self.itags,
@@ -332,7 +550,7 @@ class Tensor:
             raise IndexError(f"Block index {i} out of range [1, {len(keys)}]")
         return keys[i - 1]
 
-    def block(self, i: int) -> np.ndarray:
+    def block(self, i: int) -> torch.Tensor:
         """Access the i-th block by integer index (1-indexed, matching display)."""
         return self.data[self.key(i)]
 
@@ -349,15 +567,22 @@ class Tensor:
 
     def rand_fill(self, seed: Optional[int] = None) -> None:
         """Fill all data blocks with random values in-place."""
-        rng = np.random.default_rng(seed)
+        device = self.device
+        if seed is not None:
+            gen = torch.Generator(device=device)
+            gen.manual_seed(seed)
+        else:
+            gen = None
         for key in self.data:
             shape = self.data[key].shape
-            if np.issubdtype(self.dtype, np.complexfloating):
-                real = rng.standard_normal(shape)
-                imag = rng.standard_normal(shape)
-                self.data[key] = (real + 1j * imag).astype(self.dtype, copy=False)
+            if self.dtype.is_complex:
+                real = torch.randn(shape, generator=gen, device=device, 
+                    dtype=torch.float64 if self.dtype == torch.complex128 else torch.float32)
+                imag = torch.randn(shape, generator=gen, device=device,
+                    dtype=torch.float64 if self.dtype == torch.complex128 else torch.float32)
+                self.data[key] = torch.complex(real, imag)
             else:
-                self.data[key] = rng.standard_normal(shape).astype(self.dtype, copy=False)
+                self.data[key] = torch.randn(shape, generator=gen, device=device, dtype=self.dtype)
 
     def insert_index(self, position: int, direction: Direction, itag: Optional[str] = None) -> None:
         """Insert a trivial index (neutral charge, dimension 1) at a specified position.
@@ -417,7 +642,7 @@ class Tensor:
             new_key = tuple(key_list)
             
             # Add singleton dimension at the appropriate axis
-            new_data[new_key] = np.expand_dims(arr, axis=position)
+            new_data[new_key] = torch.unsqueeze(arr, dim=position)
         
         self.data = new_data
         self._invalidate_sorted_keys()
@@ -431,16 +656,16 @@ class Tensor:
         
         Notes
         -----
-        Uses np.finfo(np.float64).eps as the threshold for numerical zero.
+        Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
         Sectors are only removed if no blocks remain that reference their charges.
         """
         # Define threshold as double precision machine epsilon
-        eps = np.finfo(np.float64).eps
+        eps = torch.finfo(torch.float64).eps
         
         # Step 1: Identify and remove blocks with all near-zero values
         blocks_to_remove = []
         for key, arr in self.data.items():
-            if np.max(np.abs(arr)) < eps:
+            if torch.max(torch.abs(arr)) < eps:
                 blocks_to_remove.append(key)
         
         for key in blocks_to_remove:
@@ -502,7 +727,7 @@ class Tensor:
             value = self.item() + other.item()
             return Tensor.from_scalar(
                 value, 
-                dtype=np.result_type(self.dtype, other.dtype),
+                dtype=torch.promote_types(self.dtype, other.dtype),
                 label=self.label
             )
         
@@ -516,7 +741,7 @@ class Tensor:
         
         # Perform addition on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
-        new_data: Dict[BlockKey, np.ndarray] = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         for k in keys:
             a = self.data.get(k)
             b = other.data.get(k)
@@ -531,7 +756,7 @@ class Tensor:
             indices=new_indices,
             itags=self.itags,
             data=new_data,
-            dtype=np.result_type(self.dtype, other.dtype),
+            dtype=torch.promote_types(self.dtype, other.dtype),
             label=self.label,
         )
 
@@ -542,7 +767,7 @@ class Tensor:
             value = self.item() - other.item()
             return Tensor.from_scalar(
                 value,
-                dtype=np.result_type(self.dtype, other.dtype),
+                dtype=torch.promote_types(self.dtype, other.dtype),
                 label=self.label
             )
         
@@ -556,7 +781,7 @@ class Tensor:
         
         # Perform subtraction on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
-        new_data: Dict[BlockKey, np.ndarray] = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         for k in keys:
             a = self.data.get(k)
             b = other.data.get(k)
@@ -571,7 +796,7 @@ class Tensor:
             indices=new_indices,
             itags=self.itags,
             data=new_data,
-            dtype=np.result_type(self.dtype, other.dtype),
+            dtype=torch.promote_types(self.dtype, other.dtype),
             label=self.label,
         )
 
@@ -580,18 +805,32 @@ class Tensor:
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
             value = self.item() * scalar
+            # Determine scalar dtype for promotion
+            if isinstance(scalar, complex):
+                scalar_dtype = torch.complex128
+            elif isinstance(scalar, float):
+                scalar_dtype = torch.float64
+            else:  # int
+                scalar_dtype = torch.int64
             return Tensor.from_scalar(
                 value,
-                dtype=np.result_type(self.dtype, type(scalar)),
+                dtype=torch.promote_types(self.dtype, scalar_dtype),
                 label=self.label
             )
         
         new_data = {k: (v * scalar) for k, v in self.data.items()}
+        # Determine scalar dtype for promotion
+        if isinstance(scalar, complex):
+            scalar_dtype = torch.complex128
+        elif isinstance(scalar, float):
+            scalar_dtype = torch.float64
+        else:  # int
+            scalar_dtype = torch.int64
         return Tensor(
             indices=self.indices,
             itags=self.itags,
             data=new_data,
-            dtype=np.result_type(self.dtype, type(scalar)),
+            dtype=torch.promote_types(self.dtype, scalar_dtype),
             label=self.label,
         )
 
@@ -604,9 +843,9 @@ class Tensor:
     def conj(self) -> None:
         """Complex conjugate every dense block if dtype is complex, and revert all index directions."""
         # Only conjugate data if dtype is complex
-        if np.issubdtype(self.dtype, np.complexfloating):
+        if self.dtype.is_complex:
             for k in self.data:
-                self.data[k] = np.conjugate(self.data[k])
+                self.data[k] = torch.conj(self.data[k])
         # Flip all index directions
         self.indices = tuple(idx.flip() for idx in self.indices)
 
@@ -623,7 +862,7 @@ class Tensor:
         new_data = {}
         for key, arr in self.data.items():
             new_key = tuple(key[i] for i in order)
-            new_data[new_key] = np.transpose(arr, axes=order)
+            new_data[new_key] = torch.permute(arr, order)
         self.data = new_data
         self._invalidate_sorted_keys()
 

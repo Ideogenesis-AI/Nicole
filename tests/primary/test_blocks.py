@@ -18,7 +18,7 @@
 
 """Tests for BlockSchema utility class."""
 
-import numpy as np
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, U1Group, Z2Group
@@ -115,8 +115,8 @@ def test_validate_blocks_valid():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 4)))
     
     blocks = {
-        (0, 0): np.zeros((2, 5)),
-        (1, -1): np.zeros((3, 4))
+        (0, 0): torch.zeros((2, 5)),
+        (1, -1): torch.zeros((3, 4))
     }
     
     # Should not raise
@@ -130,7 +130,7 @@ def test_validate_blocks_wrong_shape():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
     
     blocks = {
-        (0, 0): np.zeros((2, 3))  # Wrong shape, should be (2, 5)
+        (0, 0): torch.zeros((2, 3))  # Wrong shape, should be (2, 5)
     }
     
     with pytest.raises(ValueError, match="expected"):
@@ -146,7 +146,7 @@ def test_validate_blocks_not_numpy():
         (0,): [[1, 2], [3, 4]]  # List, not numpy array
     }
     
-    with pytest.raises(TypeError, match="numpy arrays"):
+    with pytest.raises(TypeError, match="torch tensors"):
         BlockSchema.validate_blocks([idx], blocks)
 
 

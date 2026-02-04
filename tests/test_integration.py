@@ -18,7 +18,8 @@
 
 """Integration tests for end-to-end workflows."""
 
-import numpy as np
+import math
+import torch
 
 from nicole import Direction, Tensor, contract, decomp, identity, isometry, U1Group, Z2Group, permute, conj
 from nicole import Index, Sector
@@ -97,7 +98,7 @@ def test_workflow_identity_insertion():
     T_with_id = contract(T, ident)
     
     # Norm should be preserved
-    assert np.isclose(T_with_id.norm(), original_norm)
+    assert math.isclose(T_with_id.norm(), original_norm)
 
 
 def test_workflow_fusion_contraction():
@@ -180,7 +181,7 @@ def test_workflow_arithmetic_operations_chain():
     # Verify
     for key in result.data:
         expected = 2 * A.data[key] + 3 * B.data[key] - 0.5 * C.data[key]
-        np.testing.assert_allclose(result.data[key], expected)
+        assert torch.allclose(result.data[key], expected)
 
 
 def test_workflow_conjugation_and_contraction():
@@ -190,14 +191,14 @@ def test_workflow_conjugation_and_contraction():
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
     
-    T = Tensor.random([idx_a, idx_b], dtype=np.complex128, seed=1, itags=["a", "b"])
+    T = Tensor.random([idx_a, idx_b], dtype=torch.complex128, seed=1, itags=["a", "b"])
     
     # Conjugate flips directions: OUT->IN, IN->OUT
     T_conj = conj(T)
     
     # T_conj now has (IN, OUT) directions
     # Create another tensor with matching structure for contraction
-    T2 = Tensor.random([idx_a.flip(), idx_b.flip()], dtype=np.complex128, seed=2, itags=["a", "b"])
+    T2 = Tensor.random([idx_a.flip(), idx_b.flip()], dtype=torch.complex128, seed=2, itags=["a", "b"])
     # T2 has (IN, OUT) directions, matching T_conj
     
     # For contraction to work, we need opposite directions and matching tags
@@ -206,7 +207,7 @@ def test_workflow_conjugation_and_contraction():
     # These have same directions, so won't contract automatically
     
     # Instead, let's just verify conjugation works
-    assert np.issubdtype(T_conj.dtype, np.complexfloating)
+    assert T_conj.dtype.is_complex
     assert T_conj.indices[0].direction == idx_a.direction.reverse()
     assert T_conj.indices[1].direction == idx_b.direction.reverse()
 
@@ -248,7 +249,7 @@ def test_workflow_tensor_network_contraction_order():
     result2 = contract(A, contract(B, C))
     
     # Should give same result (up to numerical precision)
-    assert np.isclose(result1.norm(), result2.norm())
+    assert math.isclose(result1.norm(), result2.norm())
     assert result1.is_scalar()
     assert result2.is_scalar()
 
@@ -315,15 +316,15 @@ def test_workflow_norm_preservation():
     
     # Permute
     T_perm = permute(T, [1, 0])
-    assert np.isclose(T_perm.norm(), original_norm)
+    assert math.isclose(T_perm.norm(), original_norm)
     
     # Transpose back
     T_back = permute(T_perm, [1, 0])
-    assert np.isclose(T_back.norm(), original_norm)
+    assert math.isclose(T_back.norm(), original_norm)
     
     # Conjugate (real tensor, norm should be same)
     T_conj = conj(T)
-    assert np.isclose(T_conj.norm(), original_norm)
+    assert math.isclose(T_conj.norm(), original_norm)
 
 
 def test_workflow_large_tensor_operations():
@@ -354,16 +355,16 @@ def test_workflow_mixed_dtypes():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     # float32 tensor
-    A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["a", "b"])
+    A = Tensor.random([idx, idx.flip()], dtype=torch.float32, seed=1, itags=["a", "b"])
     
     # float64 tensor
-    B = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=2, itags=["a", "b"])
+    B = Tensor.random([idx, idx.flip()], dtype=torch.float64, seed=2, itags=["a", "b"])
     
     # Add (should promote to float64)
     C = A + B
-    assert C.dtype == np.float64
+    assert C.dtype == torch.float64
     
     # Multiply by complex (should promote to complex)
     D = C * (1 + 1j)
-    assert np.issubdtype(D.dtype, np.complexfloating)
+    assert D.dtype.is_complex
 

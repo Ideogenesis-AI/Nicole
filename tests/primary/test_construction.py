@@ -18,7 +18,8 @@
 
 """Tests for Tensor construction methods."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
@@ -33,13 +34,13 @@ def test_tensor_zeros_basic():
     left = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     right = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
 
-    tensor = Tensor.zeros([left, right], dtype=np.float64, itags=["L", "R"])
+    tensor = Tensor.zeros([left, right], dtype=torch.float64, itags=["L", "R"])
     
     # Allowed charge combinations: (0,0) and (1,1)
     assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
     for block in tensor.data.values():
         assert block.shape in {(2, 3), (1, 1)}
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
     assert_charge_neutral(tensor)
 
 
@@ -73,10 +74,10 @@ def test_tensor_zeros_complex_dtype():
     left = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     right = Index(Direction.IN, group, sectors=(Sector(0, 3),))
     
-    tensor = Tensor.zeros([left, right], dtype=np.complex128, itags=["L", "R"])
+    tensor = Tensor.zeros([left, right], dtype=torch.complex128, itags=["L", "R"])
     
-    assert tensor.dtype == np.complex128
-    assert np.allclose(tensor.data[(0, 0)], 0.0 + 0.0j)
+    assert tensor.dtype == torch.complex128
+    assert torch.allclose(tensor.data[(0, 0)], torch.zeros_like(tensor.data[(0, 0)]))
 
 
 def test_tensor_zeros_z2():
@@ -112,7 +113,7 @@ def test_tensor_random_seed_reproducible():
     t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     t2 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     
-    np.testing.assert_allclose(t1.data[(0, 0)], t2.data[(0, 0)])
+    assert torch.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
 def test_tensor_random_different_seeds():
@@ -123,7 +124,7 @@ def test_tensor_random_different_seeds():
     t1 = Tensor.random([idx, idx.flip()], seed=42, itags=["A", "B"])
     t2 = Tensor.random([idx, idx.flip()], seed=99, itags=["A", "B"])
     
-    assert not np.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
+    assert not torch.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
 def test_tensor_random_complex():
@@ -131,10 +132,10 @@ def test_tensor_random_complex():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
-    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=123, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128, seed=123, itags=["A", "B"])
     
-    assert tensor.dtype == np.complex128
-    assert np.iscomplexobj(tensor.data[(0, 0)])
+    assert tensor.dtype == torch.complex128
+    assert tensor.data[(0, 0)].is_complex()
 
 
 def test_tensor_random_no_itags():
@@ -152,8 +153,8 @@ def test_tensor_norm_matches_manual():
     """Test that Tensor.norm() matches manual computation."""
     idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 3), Sector(1, 2)))
     tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
-    manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
-    assert np.isclose(tensor.norm(), manual)
+    manual = torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in tensor.data.values()))
+    assert math.isclose(tensor.norm(), manual.item())
 
 
 def test_tensor_norm_zero():
@@ -171,7 +172,7 @@ def test_tensor_norm_empty():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=())
     
-    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data={}, dtype=np.float64)
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data={}, dtype=torch.float64)
     
     assert tensor.norm() == 0.0
 
@@ -182,7 +183,7 @@ def test_tensor_validation_mismatched_itags():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     with pytest.raises(ValueError, match="must match number of indices"):
-        Tensor(indices=(idx, idx.flip()), itags=("A", "B", "C"), data={}, dtype=np.float64)
+        Tensor(indices=(idx, idx.flip()), itags=("A", "B", "C"), data={}, dtype=torch.float64)
 
 
 def test_tensor_validation_invalid_block_shape():
@@ -190,10 +191,10 @@ def test_tensor_validation_invalid_block_shape():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    blocks = {(0, 0): np.zeros((3, 2))}  # Wrong shape, should be (2, 2)
+    blocks = {(0, 0): torch.zeros((3, 2))}  # Wrong shape, should be (2, 2)
     
     with pytest.raises(ValueError, match="expected"):
-        Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data=blocks, dtype=np.float64)
+        Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data=blocks, dtype=torch.float64)
 
 
 def test_tensor_validation_charge_violation():
@@ -203,10 +204,10 @@ def test_tensor_validation_charge_violation():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
     
     # Block (1, 0) violates charge conservation
-    blocks = {(1, 0): np.zeros((1, 3))}
+    blocks = {(1, 0): torch.zeros((1, 3))}
     
     with pytest.raises(ValueError, match="violates charge conservation"):
-        Tensor(indices=(idx1, idx2), itags=("A", "B"), data=blocks, dtype=np.float64)
+        Tensor(indices=(idx1, idx2), itags=("A", "B"), data=blocks, dtype=torch.float64)
 
 
 def test_tensor_validation_rejects_single_index():
@@ -216,7 +217,7 @@ def test_tensor_validation_rejects_single_index():
     
     # Exactly 1 index should raise error
     with pytest.raises(ValueError, match="exactly 1 index"):
-        Tensor(indices=(idx,), itags=("A",), data={}, dtype=np.float64)
+        Tensor(indices=(idx,), itags=("A",), data={}, dtype=torch.float64)
     
     with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor.zeros([idx], itags=["A"])
@@ -237,12 +238,12 @@ def test_tensor_scalar_creation():
     assert len(s_int.itags) == 0
     
     # Test with float
-    s_float = Tensor.from_scalar(3.14, dtype=np.float64)
+    s_float = Tensor.from_scalar(3.14, dtype=torch.float64)
     assert s_float.is_scalar()
-    assert np.isclose(s_float.item(), 3.14)
+    assert math.isclose(s_float.item(), 3.14)
     
     # Test with complex
-    s_complex = Tensor.from_scalar(1 + 2j, dtype=np.complex128)
+    s_complex = Tensor.from_scalar(1 + 2j, dtype=torch.complex128)
     assert s_complex.is_scalar()
     assert s_complex.item() == 1 + 2j
     
@@ -259,34 +260,34 @@ def test_tensor_scalar_operations():
     # Scalar addition
     s3 = s1 + s2
     assert s3.is_scalar()
-    assert np.isclose(s3.item(), 5.0)
+    assert math.isclose(s3.item(), 5.0)
     
     # Scalar multiplication
     s4 = s1 * 2.5
     assert s4.is_scalar()
-    assert np.isclose(s4.item(), 5.0)
+    assert math.isclose(s4.item(), 5.0)
     
     # Left scalar multiplication
     s5 = 1.5 * s1
     assert s5.is_scalar()
-    assert np.isclose(s5.item(), 3.0)
+    assert math.isclose(s5.item(), 3.0)
     
     # Scalar subtraction
     s6 = s2 - s1
     assert s6.is_scalar()
-    assert np.isclose(s6.item(), 1.0)
+    assert math.isclose(s6.item(), 1.0)
 
 
 def test_tensor_scalar_norm():
     """Test norm of scalar tensors."""
     s = Tensor.from_scalar(3.0)
-    assert np.isclose(s.norm(), 3.0)
+    assert math.isclose(s.norm(), 3.0)
     
     s_negative = Tensor.from_scalar(-4.0)
-    assert np.isclose(s_negative.norm(), 4.0)
+    assert math.isclose(s_negative.norm(), 4.0)
     
-    s_complex = Tensor.from_scalar(3 + 4j, dtype=np.complex128)
-    assert np.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
+    s_complex = Tensor.from_scalar(3 + 4j, dtype=torch.complex128)
+    assert math.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
 
 
 def test_tensor_scalar_copy():
@@ -324,11 +325,11 @@ def test_tensor_scalar_validation():
     """Test scalar-specific validation."""
     # Scalar must have empty key
     with pytest.raises(ValueError, match="empty tuple"):
-        Tensor(indices=(), itags=(), data={(0,): np.array(1.0)}, dtype=np.float64)
+        Tensor(indices=(), itags=(), data={(0,): torch.tensor(1.0)}, dtype=torch.float64)
     
     # Scalar can only have one block
     with pytest.raises(ValueError, match="only have one block"):
-        Tensor(indices=(), itags=(), data={(): np.array(1.0), (1,): np.array(2.0)}, dtype=np.float64)
+        Tensor(indices=(), itags=(), data={(): torch.tensor(1.0), (1,): torch.tensor(2.0)}, dtype=torch.float64)
 
 
 def test_tensor_str_repr():
@@ -351,10 +352,10 @@ def test_tensor_construction_float32():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["A", "B"])
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=torch.float32, itags=["A", "B"])
     
-    assert tensor.dtype == np.float32
-    assert tensor.data[(0, 0)].dtype == np.float32
+    assert tensor.dtype == torch.float32
+    assert tensor.data[(0, 0)].dtype == torch.float32
 
 
 def test_tensor_construction_complex64():
@@ -362,10 +363,10 @@ def test_tensor_construction_complex64():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex64, seed=1, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex64, seed=1, itags=["A", "B"])
     
-    assert tensor.dtype == np.complex64
-    assert tensor.data[(0, 0)].dtype == np.complex64
+    assert tensor.dtype == torch.complex64
+    assert tensor.data[(0, 0)].dtype == torch.complex64
 
 
 def test_tensor_zeros_three_indices():
@@ -379,7 +380,7 @@ def test_tensor_zeros_three_indices():
     
     assert_charge_neutral(tensor)
     for block in tensor.data.values():
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
 
 
 # ProductGroup integration tests
@@ -419,7 +420,7 @@ def test_tensor_zeros_product_group_u1_u1():
     assert tensor.data[((0, 1), (0, 1))].shape == (1, 2)
     
     for block in tensor.data.values():
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
 
 
 def test_tensor_zeros_product_group_u1_z2():
@@ -472,7 +473,7 @@ def test_tensor_random_product_group():
     assert tensor.data[((1, -1), (1, -1))].shape == (1, 2)
     
     # Check that blocks are not all zeros
-    assert not np.allclose(tensor.data[((0, 0), (0, 0))], 0.0)
+    assert not torch.allclose(tensor.data[((0, 0), (0, 0))], torch.zeros_like(tensor.data[((0, 0), (0, 0))]))
     assert tensor.norm() > 0.0
 
 
@@ -696,14 +697,14 @@ def test_rand_fill_basic():
     
     # Verify initially zeros
     for block in tensor.data.values():
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
     
     # Fill with random values
     tensor.rand_fill(seed=42)
     
     # Verify no longer all zeros
     for block in tensor.data.values():
-        assert not np.allclose(block, 0.0)
+        assert not torch.allclose(block, torch.zeros_like(block))
     
     # Verify structure preserved
     assert len(tensor.data) == 2
@@ -727,7 +728,7 @@ def test_rand_fill_reproducible():
     
     # Should be identical
     for key in tensor1.data:
-        assert np.allclose(tensor1.data[key], tensor2.data[key])
+        assert torch.allclose(tensor1.data[key], tensor2.data[key])
 
 
 def test_rand_fill_different_seeds():
@@ -745,7 +746,7 @@ def test_rand_fill_different_seeds():
     
     # Should be different
     for key in tensor1.data:
-        assert not np.allclose(tensor1.data[key], tensor2.data[key])
+        assert not torch.allclose(tensor1.data[key], tensor2.data[key])
 
 
 def test_rand_fill_complex_dtype():
@@ -754,17 +755,17 @@ def test_rand_fill_complex_dtype():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
     
-    tensor = Tensor.zeros([idx1, idx2], dtype=np.complex128, itags=["a", "b"])
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.complex128, itags=["a", "b"])
     tensor.rand_fill(seed=42)
     
     block = tensor.data[(0, 0)]
     
     # Verify it's complex
-    assert np.iscomplexobj(block)
+    assert block.is_complex()
     
     # Verify both real and imaginary parts are non-zero
-    assert not np.allclose(block.real, 0.0)
-    assert not np.allclose(block.imag, 0.0)
+    assert not torch.allclose(block.real, torch.zeros_like(block.real))
+    assert not torch.allclose(block.imag, torch.zeros_like(block.imag))
 
 
 def test_rand_fill_inplace():
@@ -789,7 +790,7 @@ def test_rand_fill_inplace():
     
     # But data should be modified
     for block in tensor.data.values():
-        assert not np.allclose(block, 0.0)
+        assert not torch.allclose(block, torch.zeros_like(block))
 
 
 def test_rand_fill_preserves_metadata():
@@ -798,7 +799,7 @@ def test_rand_fill_preserves_metadata():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
     
-    tensor = Tensor.zeros([idx1, idx2], dtype=np.float64, itags=["left", "right"])
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64, itags=["left", "right"])
     tensor.label = "TestTensor"
     
     original_indices = tensor.indices
@@ -825,14 +826,14 @@ def test_rand_fill_multiple_times():
     
     # First fill
     tensor.rand_fill(seed=1)
-    first_values = tensor.data[(0, 0)].copy()
+    first_values = tensor.data[(0, 0)].clone()  # Clone the torch.Tensor block
     
     # Second fill with different seed
     tensor.rand_fill(seed=2)
     second_values = tensor.data[(0, 0)]
     
     # Values should be different
-    assert not np.allclose(first_values, second_values)
+    assert not torch.allclose(first_values, second_values)
 
 
 def test_rand_fill_z2_group():
@@ -849,7 +850,7 @@ def test_rand_fill_z2_group():
     
     # Verify filled with non-zero values
     for block in tensor.data.values():
-        assert not np.allclose(block, 0.0)
+        assert not torch.allclose(block, torch.zeros_like(block))
 
 
 def test_rand_fill_product_group():
@@ -871,7 +872,7 @@ def test_rand_fill_product_group():
     
     # Verify filled with non-zero values
     for block in tensor.data.values():
-        assert not np.allclose(block, 0.0)
+        assert not torch.allclose(block, torch.zeros_like(block))
 
 
 def test_rand_fill_different_dtypes():
@@ -880,7 +881,7 @@ def test_rand_fill_different_dtypes():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
-    dtypes = [np.float32, np.float64, np.complex64, np.complex128]
+    dtypes = [torch.float32, torch.float64, torch.complex64, torch.complex128]
     
     for dtype in dtypes:
         tensor = Tensor.zeros([idx1, idx2], dtype=dtype, itags=["a", "b"])
@@ -888,12 +889,12 @@ def test_rand_fill_different_dtypes():
         
         block = tensor.data[(0, 0)]
         assert block.dtype == dtype
-        assert not np.allclose(block, 0.0)
+        assert not torch.allclose(block, torch.zeros_like(block))
 
 
 def test_rand_fill_scalar_tensor():
     """Test rand_fill works with scalar tensor."""
-    tensor = Tensor.from_scalar(0.0, dtype=np.float64)
+    tensor = Tensor.from_scalar(0.0, dtype=torch.float64)
     
     # Fill with random value
     tensor.rand_fill(seed=42)
@@ -953,8 +954,7 @@ def test_mixed_groups_direct_construction_raises_error():
     idx1 = Index(Direction.OUT, u1_group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, z2_group, sectors=(Sector(0, 2),))
     
-    import numpy as np
-    data = {(0, 0): np.zeros((2, 2))}
+    data = {(0, 0): torch.zeros((2, 2))}
     
     with pytest.raises(ValueError, match="All indices must share the same symmetry group"):
         Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data)

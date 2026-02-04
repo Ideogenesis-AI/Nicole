@@ -6,7 +6,7 @@
 
 Nicole is a Python library for symmetry-aware tensor computations, specifically designed for quantum many-body physics and tensor network algorithms. It provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations.
 
-With the assistance of various AI coding agents, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on NumPy, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
+With the assistance of various AI coding agents, Nicole reimagines the block-symmetric tensor approach with a Python-native API built upon PyTorch, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
 
 
 ## Key Features
@@ -14,7 +14,9 @@ With the assistance of various AI coding agents, Nicole reimagines the block-sym
 - **Block-Sparse Tensors**: Memory-efficient representation of tensors with conserved quantum numbers
 - **Abelian Symmetries**: Built-in support for U(1) (particle number, magnetization) and Z₂ (parity), etc.
 - **Charge Conservation**: Automatic enforcement of selection rules through symmetry-aware indices
-- **NumPy Backend**: Pure Python implementation using NumPy for high-performance dense block operations
+- **PyTorch Backend**: Python implementation using PyTorch for high-performance dense block operations
+- **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations on large tensors
+- **Autograd Control**: Optional gradient tracking for efficient optimization tasks
 - **Tensor Operations**: Essential operations including contraction, trace, SVD decompositions, and more
 - **Type-Safe API**: Modern Python with type hints for better IDE support and fewer runtime errors
 - **Extensible Design**: Clean abstractions for adding custom symmetry groups
