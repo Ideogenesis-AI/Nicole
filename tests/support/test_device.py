@@ -22,15 +22,14 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group
-from nicole import set_default_device, get_default_device
 from ..utils import assert_blocks_equal
 
 
 def test_default_device_is_cpu():
     """Test that default device is CPU."""
     # Reset to default
-    set_default_device('cpu')
-    assert get_default_device() == torch.device('cpu')
+    torch.set_default_device('cpu')
+    assert torch.get_default_device() == torch.device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -42,25 +41,25 @@ def test_default_device_is_cpu():
 
 
 def test_set_default_device():
-    """Test changing default device."""
-    original_device = get_default_device()
+    """Test changing default device using PyTorch's native functions."""
+    original_device = torch.get_default_device()
     
     try:
         # Test with string
-        set_default_device('cpu')
-        assert get_default_device() == torch.device('cpu')
+        torch.set_default_device('cpu')
+        assert torch.get_default_device() == torch.device('cpu')
         
         # Test with torch.device
-        set_default_device(torch.device('cpu'))
-        assert get_default_device() == torch.device('cpu')
+        torch.set_default_device(torch.device('cpu'))
+        assert torch.get_default_device() == torch.device('cpu')
     finally:
         # Restore original device
-        set_default_device(original_device)
+        torch.set_default_device(original_device)
 
 
 def test_tensor_device_property():
     """Test Tensor.device property."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -71,7 +70,7 @@ def test_tensor_device_property():
 
 def test_tensor_to_cpu():
     """Test Tensor.to() and cpu() methods."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -91,7 +90,7 @@ def test_tensor_to_cpu():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_tensor_to_cuda():
     """Test moving tensor to CUDA device."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -115,7 +114,7 @@ def test_tensor_to_cuda():
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
 def test_tensor_to_mps():
     """Test moving tensor to MPS device (Apple Silicon)."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -143,7 +142,7 @@ def test_tensor_to_mps():
 
 def test_tensor_explicit_device_in_constructor():
     """Test passing device parameter to constructors."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -179,11 +178,11 @@ def test_tensor_creation_on_cuda():
 
 
 def test_default_device_affects_construction():
-    """Test that set_default_device affects new tensor construction."""
-    original_device = get_default_device()
+    """Test that torch.set_default_device affects new tensor construction."""
+    original_device = torch.get_default_device()
     
     try:
-        set_default_device('cpu')
+        torch.set_default_device('cpu')
         
         group = U1Group()
         idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
@@ -191,12 +190,12 @@ def test_default_device_affects_construction():
         
         assert tensor.device == torch.device('cpu')
     finally:
-        set_default_device(original_device)
+        torch.set_default_device(original_device)
 
 
 def test_operations_preserve_device():
     """Test that tensor operations preserve device placement."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -249,7 +248,7 @@ def test_operations_on_cuda():
 
 def test_empty_tensor_device():
     """Test device property of empty tensor."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     # Create a tensor with no charge-conserving blocks
@@ -260,4 +259,4 @@ def test_empty_tensor_device():
     tensor = Tensor.zeros([idx_out, idx_in])
     
     # Empty tensor should report default device
-    assert tensor.device == get_default_device()
+    assert tensor.device == torch.get_default_device()

@@ -22,7 +22,6 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group
-from nicole import set_default_device
 
 
 def test_autograd_disabled_by_default():
@@ -155,7 +154,7 @@ def test_no_gradients_outside_context():
 
 def test_device_and_autograd_interaction():
     """Test that device management and autograd work together."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
@@ -179,7 +178,7 @@ def test_device_and_autograd_interaction():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_move_to_cuda_preserves_gradients():
     """Test that moving to CUDA preserves gradient tracking."""
-    set_default_device('cpu')
+    torch.set_default_device('cpu')
     
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
