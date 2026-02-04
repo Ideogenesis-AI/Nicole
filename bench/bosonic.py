@@ -44,7 +44,7 @@ from typing import Tuple
 import numpy as np
 
 from nicole import Direction, Tensor, load_space
-from nicole import contract, identity, isometry, conj, permute, transpose, oplus
+from nicole import contract, identity, isometry, conj, permute, transpose, oplus, diag
 from nicole.decomp import eig
 
 
@@ -202,16 +202,7 @@ def iter_diag_spin(
         
         # Create diagonal Hprev from truncated eigenvalues
         bond_index = V.indices[1]  # Update bond index for next iteration
-        Hprev_blocks = {}
-        for key, eigvals in D.items():
-            Hprev_blocks[key] = np.diag(eigvals)
-        
-        Hprev = Tensor(
-            indices=(bond_index.flip(), bond_index),
-            itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"),
-            data=Hprev_blocks,
-            dtype=np.float64
-        )
+        Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
         
         # Spin operator at the current site: sandwich Snow with AK
         # AK: (left, right, phys), Snow: (bra, ket, op)
