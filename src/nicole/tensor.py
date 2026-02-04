@@ -39,31 +39,8 @@ from .symmetry.base import SymmetryGroup
 # Disable autograd by default for performance (tensor networks rarely need gradients)
 torch.set_grad_enabled(False)
 
-# Default device management
-_default_device = torch.device('cpu')
-
-
-def set_default_device(device: Union[str, torch.device]) -> None:
-    """Set the default device for new tensors.
-    
-    Parameters
-    ----------
-    device : str or torch.device
-        Device to use ('cpu', 'cuda', 'mps', or torch.device object)
-        
-    Examples
-    --------
-    >>> import nicole
-    >>> nicole.set_default_device('cuda')  # Use GPU by default
-    >>> nicole.set_default_device('cpu')   # Back to CPU
-    """
-    global _default_device
-    _default_device = torch.device(device)
-
-
-def get_default_device() -> torch.device:
-    """Get the current default device."""
-    return _default_device
+# Set default device to CPU (users can change via torch.set_default_device if needed)
+torch.set_default_device('cpu')
 
 
 @dataclass
@@ -218,7 +195,7 @@ class Tensor:
         disable gradient computation during operations.
         """
         if device is None:
-            device = get_default_device()
+            device = torch.get_default_device()
         device = torch.device(device)
         
         # Normalise input to an immutable tuple for downstream utilities.
@@ -275,7 +252,7 @@ class Tensor:
         disable gradient computation during operations.
         """
         if device is None:
-            device = get_default_device()
+            device = torch.get_default_device()
         device = torch.device(device)
         
         # Initialise the random number generator.
@@ -370,7 +347,7 @@ class Tensor:
             If True, enables gradient tracking for this tensor (default: False)
         """
         if device is None:
-            device = get_default_device()
+            device = torch.get_default_device()
         device = torch.device(device)
         block = torch.tensor(value, dtype=dtype, device=device, requires_grad=requires_grad)
         data = {(): block}
@@ -427,7 +404,7 @@ class Tensor:
     def device(self) -> torch.device:
         """Return the device of the tensor blocks."""
         if not self.data:
-            return get_default_device()
+            return torch.get_default_device()
         # All blocks must be on same device
         return next(iter(self.data.values())).device
     
