@@ -529,12 +529,14 @@ def eig(
         # For U tensor: indices (row_index, bond_index)
         # Block key: (q, q) since bond charge equals row charge
         U_key = (q, q)
-        U_blocks[U_key] = eigvecs.to(dtype=U_dtype)
+        # When all_real is True, explicitly take real part to avoid casting warning
+        U_blocks[U_key] = eigvecs.real.to(dtype=U_dtype) if all_real else eigvecs.to(dtype=U_dtype)
         
         # For D: store eigenvalues as 1D array (memory efficient)
         # Block key: (q, q)
         D_key = (q, q)
-        D_blocks[D_key] = eigvals.to(dtype=D_dtype)
+        # When all_real is True, explicitly take real part to avoid casting warning
+        D_blocks[D_key] = eigvals.real.to(dtype=D_dtype) if all_real else eigvals.to(dtype=D_dtype)
     
     # Construct output tensor
     U_tensor = Tensor(
