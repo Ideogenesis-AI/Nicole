@@ -2,6 +2,126 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.1.1] - 2026-02-01
+
+**Documentation and Developer Experience Release**
+
+Release version 0.1.1 of Nicole, introducing complete documentation infrastructure with live code execution, comprehensive API references, extensive examples, and enhanced developer experience for tensor network computations with Abelian symmetries.
+
+### Documentation Infrastructure
+
+#### MkDocs Configuration with Material Theme
+- Professional documentation site with modern Material Design
+- Configured navigation with hierarchical structure (Getting Started, Examples, API Reference)
+- Custom branding with Nicole logo (nicole-font-awesome.png, 1.6 MB)
+- Responsive design for desktop and mobile viewing
+- Search functionality with indexed content
+- Dark/light theme switching with system preference support
+
+#### Live Code Execution (markdown-exec)
+- All code examples execute automatically during documentation build
+- Real-time output generation ensures documentation accuracy
+- Session-based execution for shared imports across code blocks
+- Source code and console output displayed side-by-side using material-block format
+- ANSI color support for enhanced terminal output visualization
+- Pyodide integration for future web-based interactive examples
+
+#### Documentation Plugins and Extensions
+- mkdocstrings: Automatic API documentation from Python docstrings with NumPy style
+- git-revision-date-localized: Last modified timestamps on each page
+- git-committers: Contributor tracking and author information
+- pymdownx.arithmatex: LaTeX math rendering via MathJax
+- pymdownx.superfences: Enhanced code blocks with syntax highlighting
+- pymdownx.tabbed: Tabbed content for alternative implementations
+- pymdownx.emoji: Icon support with Material Design and FontAwesome
+
+### API Reference Documentation
+
+**45+ documentation pages covering:**
+
+- **Core Concepts**: Tensor, Index, Sector, Direction with detailed explanations
+- **Symmetry Groups**: U1Group, Z2Group, ProductGroup with mathematical foundations
+- **Operations**: contract, trace, decomp, svd with comprehensive examples
+- **Arithmetic**: Addition, subtraction, oplus, diag, inv with sector handling
+- **Creation Functions**: identity, isometry, isometry_n, random, zeros
+- **Manipulation**: retag, subsector, merge_axes, flip, permute, transpose, conjugate
+- **Utilities**: load_space, blocks, display with usage patterns
+
+### Example Documentation with Live Execution
+
+**20+ pages of executable examples:**
+
+#### Basic Examples
+- Creating Your First Tensor: Introduction to Index, Sector, block structure
+- Arithmetic Operations: Addition, subtraction, norms with symmetries
+- Indexing: Block access, sector filtering, index properties, trivial indices
+
+#### Symmetry Examples
+- U(1) Examples: Particle number conservation, multi-particle states, Fock space
+- Z(2) Examples: Fermion parity, parity operators, Jordan-Wigner strings
+- Product Group Examples: Charge-spin systems, SU(2) via U(1)⊗U(1), multi-quantum numbers
+
+#### Operations Examples
+- Contraction Examples: Matrix multiplication, multi-index contractions, MPS-like patterns, trace operations
+- Decomposition Examples: SVD for entanglement, truncation strategies, UR/LV decompositions
+- Manipulation Examples: Index reordering, axis merging, conjugation, retag workflows
+
+#### Advanced Examples
+- Build Operators: Custom operator construction (identity, number, ladder, spin)
+- Load Space: Physical system presets with spherical tensor conventions
+- Performance Tips: Memory optimization, computational efficiency, profiling strategies
+
+### Getting Started Guide
+
+**7 pages of comprehensive introduction:**
+
+- **What is Nicole**: Philosophy, design principles, target audience
+- **Installation**: pip installation, development setup, dependency management
+- **Core Concepts**: Symmetries, sectors, blocks, charge conservation explained
+- **Quick Examples**: Complete workflows from tensor creation to decomposition
+- **Contributing**: Guidelines for community contributions and development practices
+- **Changelog**: Version history and release notes
+
+### Configuration and Build System
+
+#### Build System Migration
+- Migrated from setuptools to Hatchling for modern Python packaging
+- Simplified build configuration with cleaner pyproject.toml structure
+- Added project URLs: homepage, documentation, repository, issues
+- Removed setuptools-specific configuration sections
+
+#### Documentation Dependencies
+- mkdocs>=1.5, mkdocs-material>=9.5: Core documentation framework
+- mkdocstrings[python]>=0.24: API documentation generator
+- markdown-exec[ansi]>=1.12: Live code execution with ANSI support
+- mkdocs-git-revision-date-localized-plugin>=1.2: Date tracking
+- mkdocs-git-committers-plugin-2>=2.0: Contributor information
+
+### Visual Branding
+
+- nicole-font-awesome.png (1.6 MB): Navigation header logo with FontAwesome styling
+- Consistent branding across documentation site
+- Professional visual identity for the library
+- Custom CSS styling (extra.css) for enhanced presentation
+
+### Statistics
+
+- **57 files changed**, 4,663 lines added
+- **45+ documentation pages** across Getting Started, Examples, API Reference
+- **100+ code examples** with live execution
+- **20+ API reference pages** with function signatures and descriptions
+- Complete coverage of all core classes, operations, and utilities
+
+### Rationale
+
+Version 0.1.1 focuses on documentation and developer experience, addressing the critical need for comprehensive, accessible documentation as Nicole gains users. The live code execution via markdown-exec ensures all examples are accurate, executable, and up-to-date, eliminating documentation drift that plagues many scientific libraries. The complete API references, extensive practical examples, and clear getting-started guides significantly lower the barrier to entry for new users while providing depth for advanced use cases. The professional documentation infrastructure with modern tooling (MkDocs Material, mkdocstrings, live execution) establishes Nicole as a mature, well-maintained library suitable for research and production use in the quantum physics and tensor network communities.
+
+### Breaking Changes
+
+None - fully backward compatible with v0.1.0
+
+---
+
 ## [0.1.0] - 2026-01-26
 
 **Initial stable release of Nicole Tensor Library**
@@ -131,4 +251,5 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.1.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.1.0
