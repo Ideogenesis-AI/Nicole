@@ -22,6 +22,7 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group
+from nicole import contract, trace, permute, decomp
 
 
 def test_autograd_disabled_by_default():
@@ -378,3 +379,258 @@ def test_backward_on_zero_scalar():
         
         # Gradient should be 5.0
         assert torch.isclose(zero.data[()].grad, torch.tensor(5.0, dtype=torch.float64))
+
+
+# ============================================================================
+#   Tests for autograd with tensor operations
+# ============================================================================
+
+def test_autograd_with_contraction():
+    """Test that gradients flow through tensor contraction."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    with torch.enable_grad():
+        # Create tensors with gradient tracking
+        A = Tensor.random([idx_a, idx_b], itags=["a", "b"], seed=42, requires_grad=True)
+        B = Tensor.random([idx_b.flip(), idx_c], itags=["b", "c"], seed=43, requires_grad=True)
+        
+        # Verify output has requires_grad and is part of computational graph
+        assert A.requires_grad and B.requires_grad
+        
+        # Contract along matching indices
+        C = contract(A, B)
+        
+        # Verify C blocks are part of computational graph
+        assert any(block.requires_grad for block in C.data.values())
+        assert any(block.grad_fn is not None for block in C.data.values())
+        
+        # Compute a scalar loss (sum of all elements) using torch.stack
+        loss = torch.stack([block.sum() for block in C.data.values()]).sum()
+        
+        # Backward
+        loss.backward()
+        
+        # Check that at least some gradients exist (blocks that contributed to output)
+        # Not all blocks may have gradients due to charge conservation
+        has_grad_A = sum(1 for block in A.data.values() if block.grad is not None)
+        has_grad_B = sum(1 for block in B.data.values() if block.grad is not None)
+        
+        assert has_grad_A > 0, "At least some blocks in A should have gradients"
+        assert has_grad_B > 0, "At least some blocks in B should have gradients"
+        
+        # Check shapes of existing gradients
+        for block in A.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+        
+        for block in B.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_with_trace():
+    """Test that gradients flow through trace operation."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    with torch.enable_grad():
+        # Create tensor with gradient tracking (4 indices to avoid single-index result)
+        T = Tensor.random([idx_a, idx_b, idx_c, idx_d], itags=["a", "a", "c", "d"], seed=42, requires_grad=True)
+        
+        # Trace over the first two indices (leaves 2 indices in result)
+        result = trace(T, axes=(0, 1))
+        
+        # Verify result is part of computational graph
+        assert any(block.requires_grad for block in result.data.values())
+        
+        # Compute a scalar loss using torch.stack
+        loss = torch.stack([block.sum() for block in result.data.values()]).sum()
+        
+        # Backward
+        loss.backward()
+        
+        # Check that at least some gradients exist
+        has_grad = sum(1 for block in T.data.values() if block.grad is not None)
+        assert has_grad > 0, "At least some blocks should have gradients"
+        
+        # Check shapes of existing gradients
+        for block in T.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_with_permute():
+    """Test that gradients flow through permutation."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    with torch.enable_grad():
+        # Create tensor with gradient tracking
+        T = Tensor.random([idx_a, idx_b, idx_c], itags=["a", "b", "c"], seed=42, requires_grad=True)
+        
+        # Permute axes
+        T_perm = permute(T, [2, 0, 1])
+        
+        # Verify permuted tensor is part of computational graph
+        assert any(block.requires_grad for block in T_perm.data.values())
+        
+        # Compute a scalar loss using torch.stack
+        loss = torch.stack([block.sum() for block in T_perm.data.values()]).sum()
+        
+        # Backward
+        loss.backward()
+        
+        # Permutation should preserve all blocks, so all should have gradients
+        for block in T.data.values():
+            assert block.grad is not None, "All blocks should have gradients after permute"
+            assert block.grad.shape == block.shape
+
+
+def test_autograd_with_decomposition():
+    """Test that gradients flow through SVD decomposition."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    with torch.enable_grad():
+        # Create tensor with gradient tracking
+        T = Tensor.random([idx_a, idx_b, idx_c], itags=["a", "b", "c"], seed=42, requires_grad=True)
+        
+        # Decompose (SVD mode returns U, S, Vh)
+        result = decomp(T, axes="a", mode="SVD")
+        U, S, Vh = result
+        
+        # Verify U and Vh are part of computational graph
+        assert any(block.requires_grad for block in U.data.values())
+        assert any(block.requires_grad for block in Vh.data.values())
+        
+        # Compute a scalar loss from U and Vh using torch.stack
+        loss_u = torch.stack([block.sum() for block in U.data.values()]).sum()
+        loss_vh = torch.stack([block.sum() for block in Vh.data.values()]).sum()
+        loss = loss_u + loss_vh
+        
+        # Backward
+        loss.backward()
+        
+        # Check that at least some gradients exist for the input tensor
+        has_grad = sum(1 for block in T.data.values() if block.grad is not None)
+        assert has_grad > 0, "At least some blocks should have gradients"
+        
+        # Check shapes of existing gradients
+        for block in T.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_with_chained_operations():
+    """Test gradients through multiple chained operations."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    with torch.enable_grad():
+        # Create tensors with gradient tracking
+        A = Tensor.random([idx_a, idx_b], itags=["a", "b"], seed=42, requires_grad=True)
+        B = Tensor.random([idx_b.flip(), idx_c], itags=["b", "c"], seed=43, requires_grad=True)
+        
+        # Chain operations: contract, then permute, then scale
+        C = contract(A, B)  # Result has indices ["a", "c"]
+        C_perm = permute(C, [1, 0])  # Swap to ["c", "a"]
+        C_scaled = C_perm * 2.0  # Scale by 2
+        
+        # Verify final result is part of computational graph
+        assert any(block.requires_grad for block in C_scaled.data.values())
+        
+        # Compute a scalar loss using torch.stack
+        loss = torch.stack([block.sum() for block in C_scaled.data.values()]).sum()
+        
+        # Backward
+        loss.backward()
+        
+        # Check gradients exist for both original tensors (at least some blocks)
+        has_grad_A = sum(1 for block in A.data.values() if block.grad is not None)
+        has_grad_B = sum(1 for block in B.data.values() if block.grad is not None)
+        
+        assert has_grad_A > 0, "At least some blocks in A should have gradients"
+        assert has_grad_B > 0, "At least some blocks in B should have gradients"
+        
+        # Check shapes
+        for block in A.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+        
+        for block in B.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_with_trace_to_scalar():
+    """Test backward through trace that produces a scalar."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    with torch.enable_grad():
+        # Create a tensor where we can trace all indices to get a scalar
+        T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=42, requires_grad=True)
+        
+        # Trace to get a scalar
+        scalar = trace(T)
+        
+        # Verify it's a scalar
+        assert scalar.is_scalar()
+        
+        # Backward directly on the scalar
+        scalar.backward()
+        
+        # Check gradients
+        for block in T.data.values():
+            assert block.grad is not None
+            assert block.grad.shape == block.shape
+
+
+def test_autograd_with_contraction_to_scalar():
+    """Test backward through contraction that produces a scalar."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    with torch.enable_grad():
+        # Create tensors that contract to a scalar
+        # A has ["a", "b"] with directions [OUT, IN]
+        # B has ["a", "b"] with directions [IN, OUT] - opposite to A's
+        A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=42, requires_grad=True)
+        B = Tensor.random([idx.flip(), idx], itags=["a", "b"], seed=43, requires_grad=True)
+        
+        # Contract to scalar (both indices match)
+        scalar = contract(A, B)
+        
+        # Verify it's a scalar
+        assert scalar.is_scalar()
+        
+        # Backward
+        scalar.backward()
+        
+        # Check gradients exist for blocks that contributed
+        has_grad_A = sum(1 for block in A.data.values() if block.grad is not None)
+        has_grad_B = sum(1 for block in B.data.values() if block.grad is not None)
+        
+        assert has_grad_A > 0, "At least some blocks in A should have gradients"
+        assert has_grad_B > 0, "At least some blocks in B should have gradients"
+        
+        # Check shapes of existing gradients
+        for block in A.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+        
+        for block in B.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
