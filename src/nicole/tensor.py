@@ -34,6 +34,7 @@ import torch
 from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
+from .typing import normalize_dtype_for_device
 from .symmetry.base import SymmetryGroup
 
 # Disable autograd by default for performance (tensor networks rarely need gradients)
@@ -211,10 +212,16 @@ class Tensor:
         Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
         to enable autograd for this tensor. Use torch.no_grad() context to temporarily
         disable gradient computation during operations.
+        
+        MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+        these dtypes, they will be automatically downgraded to float32/complex64.
         """
         if device is None:
             device = torch.get_default_device()
         device = torch.device(device)
+        
+        # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+        dtype = normalize_dtype_for_device(dtype, device)
         
         # Normalise input to an immutable tuple for downstream utilities.
         indices_tuple = tuple(indices)
@@ -268,10 +275,16 @@ class Tensor:
         Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
         to enable autograd for this tensor. Use torch.no_grad() context to temporarily
         disable gradient computation during operations.
+        
+        MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+        these dtypes, they will be automatically downgraded to float32/complex64.
         """
         if device is None:
             device = torch.get_default_device()
         device = torch.device(device)
+        
+        # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+        dtype = normalize_dtype_for_device(dtype, device)
         
         # Initialise the random number generator.
         if seed is not None:
@@ -363,10 +376,19 @@ class Tensor:
             Device to place tensor on (default: current default device)
         requires_grad : bool, optional
             If True, enables gradient tracking for this tensor (default: False)
+            
+        Notes
+        -----
+        MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+        these dtypes, they will be automatically downgraded to float32/complex64.
         """
         if device is None:
             device = torch.get_default_device()
         device = torch.device(device)
+        
+        # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+        dtype = normalize_dtype_for_device(dtype, device)
+        
         block = torch.tensor(value, dtype=dtype, device=device, requires_grad=requires_grad)
         data = {(): block}
         return cls(indices=(), itags=(), data=data, dtype=dtype, label=label)
@@ -441,20 +463,22 @@ class Tensor:
         
         Notes
         -----
-        MPS (Apple Silicon) doesn't support float64. If moving a float64 tensor to MPS,
-        it will be automatically converted to float32.
+        MPS (Apple Silicon) doesn't support float64/complex128. If moving a tensor with
+        these dtypes to MPS, they will be automatically downgraded to float32/complex64.
         """
         device = torch.device(device)
         if device == self.device:
             return self
         
-        # MPS doesn't support float64, convert to float32 if needed
-        if device.type == 'mps' and self.dtype == torch.float64:
-            new_data = {k: v.to(device, dtype=torch.float32) for k, v in self.data.items()}
-            new_dtype = torch.float32
+        # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+        new_dtype = normalize_dtype_for_device(self.dtype, device)
+        
+        if new_dtype != self.dtype:
+            # Need to convert dtype as well as device
+            new_data = {k: v.to(device, dtype=new_dtype) for k, v in self.data.items()}
         else:
+            # Just move to new device
             new_data = {k: v.to(device) for k, v in self.data.items()}
-            new_dtype = self.dtype
         
         result = Tensor(
             indices=self.indices,

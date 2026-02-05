@@ -22,7 +22,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Hashable
+from typing import Hashable, Union
+
+import torch
 
 # Charge can be any hashable value. For single symmetry groups (U1Group, Z2Group),
 # charges are typically integers. For ProductGroup (multiple symmetries), charges
@@ -66,3 +68,39 @@ class Sector:
         """Validate that the sector has a strictly positive dimension."""
         if self.dim <= 0:
             raise ValueError("Sector dimension must be positive")
+
+
+def normalize_dtype_for_device(dtype: torch.dtype, device: Union[str, torch.device]) -> torch.dtype:
+    """Normalize dtype to be compatible with the target device.
+    
+    Some devices have limited dtype support:
+    - MPS (Apple Silicon) doesn't support float64/complex128
+    
+    Parameters
+    ----------
+    dtype : torch.dtype
+        Requested data type
+    device : str or torch.device
+        Target device
+        
+    Returns
+    -------
+    torch.dtype
+        Compatible dtype for the device (may be downgraded if needed)
+        
+    Notes
+    -----
+    This helper automatically converts:
+    - float64 -> float32 on MPS
+    - complex128 -> complex64 on MPS
+    """
+    device = torch.device(device)
+    
+    if device.type == 'mps':
+        # MPS doesn't support float64 or complex128
+        if dtype == torch.float64:
+            return torch.float32
+        elif dtype == torch.complex128:
+            return torch.complex64
+    
+    return dtype
