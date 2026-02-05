@@ -782,11 +782,11 @@ class Tensor:
         """Element-wise addition while preserving symmetry metadata."""
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
-            value = self.item() + other.item()
-            return Tensor.from_scalar(
-                value, 
-                dtype=torch.promote_types(self.dtype, other.dtype),
-                label=self.label
+            # Perform operation on torch tensors to preserve computational graph
+            result_data = self.data[()] + other.data[()]
+            return Tensor(
+                indices=(), itags=(), data={(): result_data},
+                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
         self._align_for_binary(other)
@@ -822,11 +822,11 @@ class Tensor:
         """Element-wise subtraction while preserving symmetry metadata."""
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
-            value = self.item() - other.item()
-            return Tensor.from_scalar(
-                value,
-                dtype=torch.promote_types(self.dtype, other.dtype),
-                label=self.label
+            # Perform operation on torch tensors to preserve computational graph
+            result_data = self.data[()] - other.data[()]
+            return Tensor(
+                indices=(), itags=(), data={(): result_data},
+                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
         self._align_for_binary(other)
@@ -862,7 +862,8 @@ class Tensor:
         """Scale every dense block by a scalar."""
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
-            value = self.item() * scalar
+            # Perform operation on torch tensor to preserve computational graph
+            result_data = self.data[()] * scalar
             # Determine scalar dtype for promotion
             if isinstance(scalar, complex):
                 scalar_dtype = torch.complex128
@@ -870,10 +871,9 @@ class Tensor:
                 scalar_dtype = torch.float64
             else:  # int
                 scalar_dtype = torch.int64
-            return Tensor.from_scalar(
-                value,
-                dtype=torch.promote_types(self.dtype, scalar_dtype),
-                label=self.label
+            return Tensor(
+                indices=(), itags=(), data={(): result_data},
+                dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
             )
         
         new_data = {k: (v * scalar) for k, v in self.data.items()}
