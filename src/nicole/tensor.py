@@ -99,6 +99,8 @@ class Tensor:
         Move tensor to CUDA device.
     requires_grad
         Property for checking/setting gradient tracking.
+    backward()
+        Compute gradients by backpropagating through the computational graph (scalars only).
     group
         Property returning the symmetry group of this tensor.
     sorted_keys
@@ -523,6 +525,46 @@ class Tensor:
         """
         for block in self.data.values():
             block.requires_grad_(value)
+    
+    def backward(self) -> None:
+        """Compute gradients by backpropagating through the computational graph.
+        
+        This method can only be called on scalar tensors (0D tensors). It calls
+        the backward() method on the underlying PyTorch tensor to compute gradients
+        for all tensors in the computational graph that have requires_grad=True.
+        
+        Raises
+        ------
+        ValueError
+            If the tensor is not a scalar (has more than 0 dimensions)
+            
+        Examples
+        --------
+        >>> # Create tensors with gradient tracking
+        >>> t = Tensor.random(indices, requires_grad=True)
+        >>> 
+        >>> # Perform operations
+        >>> loss = contract(t, t, ...)  # Some operation resulting in a scalar
+        >>> 
+        >>> # Compute gradients
+        >>> loss.backward()
+        >>> 
+        >>> # Access gradients from underlying PyTorch tensors
+        >>> for block in t.data.values():
+        ...     print(block.grad)
+        """
+        if not self.is_scalar():
+            raise ValueError(
+                f"backward() can only be called on scalars (0D tensors), got {len(self.indices)} indices"
+            )
+        # Verify the underlying torch tensor is a scalar (single element)
+        block = self.data[()]
+        if block.numel() != 1:
+            raise ValueError(
+                f"backward() requires a scalar tensor with 1 element, got {block.numel()} elements"
+            )
+        # Call backward on the underlying PyTorch scalar tensor
+        block.backward()
 
     # ------------------------------------------------------------
     #   Utility methods: norm, copy, and sector access
