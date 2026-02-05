@@ -22,6 +22,7 @@ Block-sparse tensor with symmetry-aware indices.
         - permute
         - transpose
         - retag
+        - invert
 
 ## Description
 

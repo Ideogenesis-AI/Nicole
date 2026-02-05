@@ -20,12 +20,13 @@
 
 """Tests for tensor decomposition operations: SVD."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
 from nicole.decomp import svd, eig
-from .utils import assert_charge_neutral
+from ..utils import assert_charge_neutral
 
 
 # Basic SVD tests
@@ -58,7 +59,7 @@ def test_svd_basic_reconstruction():
     assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
     
     # Check norms are preserved
-    np.testing.assert_allclose(reconstructed.norm(), original_norm, rtol=1e-12)
+    assert math.isclose(reconstructed.norm(), original_norm)
 
 
 def test_svd_integer_axis():
@@ -262,9 +263,11 @@ def test_svd_singular_values_positive():
     # Check singular values directly
     for key, s_array in S_values.items():
         # Check all positive
-        assert np.all(s_array >= 0), "Singular values should be non-negative"
+        assert torch.all(s_array >= 0).item(), "Singular values should be non-negative"
         # Check sorted in descending order
-        assert np.allclose(s_array, np.sort(s_array)[::-1]), \
+        sorted_s = torch.sort(s_array)[0]
+        reversed_s = torch.flip(sorted_s, dims=[0])
+        assert torch.allclose(s_array, reversed_s), \
             "Singular values should be sorted descending"
 
 
@@ -301,7 +304,7 @@ def test_svd_s_diagonal():
     # Check that S blocks are diagonal
     for key, block in S.data.items():
         # Off-diagonal elements should be zero
-        assert np.allclose(block, np.diag(np.diag(block)))
+        assert torch.allclose(block, torch.diag(torch.diag(block)))
 
 
 # Charge conservation tests
@@ -398,14 +401,14 @@ def test_svd_complex_dtype():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
     
-    T = Tensor.random([idx1, idx2], dtype=np.complex128, itags=["a", "b"], seed=5)
+    T = Tensor.random([idx1, idx2], dtype=torch.complex128, itags=["a", "b"], seed=5)
     
     # Use UR mode for efficient reconstruction
     U, R = decomp(T, axes=0, mode="UR")
     
     # U and R should be complex
-    assert np.issubdtype(U.dtype, np.complexfloating)
-    assert np.issubdtype(R.dtype, np.complexfloating)
+    assert U.dtype.is_complex
+    assert R.dtype.is_complex
     
     # Reconstruct using explicit pairs
     reconstructed = contract(U, R, axes=(1, 0))
@@ -480,7 +483,8 @@ def test_decomp_svd_mode():
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
         # Check it's diagonal (off-diagonal elements are zero)
-        np.testing.assert_allclose(block - np.diag(np.diag(block)), 0, atol=1e-14)
+        off_diag = block - torch.diag(torch.diag(block))
+        assert torch.allclose(off_diag, torch.zeros_like(off_diag), atol=1e-14)
 
 
 def test_decomp_modes_equivalent():
@@ -541,7 +545,7 @@ def test_svd_returns_dict():
     
     # Check all values are 1D arrays
     for key, s_array in S_values.items():
-        assert isinstance(s_array, np.ndarray)
+        assert isinstance(s_array, torch.Tensor)
         assert s_array.ndim == 1
         assert len(s_array) > 0
 
@@ -658,7 +662,7 @@ def test_decomp_ur_efficiency():
         # So block should be (3, 4) which is not square
         assert block.shape[0] <= min(3, 4)
         # Verify it's been scaled by singular values (not all zeros)
-        assert np.abs(block).max() > 1e-10
+        assert torch.abs(block).max() > 1e-10
 
 
 def test_decomp_lv_efficiency():
@@ -679,7 +683,7 @@ def test_decomp_lv_efficiency():
         # So block should be (3, 3) which happens to be square but scaled
         assert block.shape[1] <= min(3, 4)
         # Verify it's been scaled by singular values (not all zeros)
-        assert np.abs(block).max() > 1e-10
+        assert torch.abs(block).max() > 1e-10
 
 
 # Truncation tests
@@ -718,7 +722,7 @@ def test_svd_truncation_thresh():
     
     # Check that all kept singular values are >= threshold
     for key, s_array in S_blocks.items():
-        assert np.all(s_array >= threshold), f"Block {key} has singular values < {threshold}"
+        assert torch.all(s_array >= threshold).item(), f"Block {key} has singular values < {threshold}"
     
     # Verify truncation happened (should have fewer than 10 singular values)
     total_kept = sum(len(s_array) for s_array in S_blocks.values())
@@ -834,7 +838,7 @@ def test_svd_truncation_combined_thresh_nkeep():
     
     # All singular values should be >= 0.5 (thresh limit)
     for s_array in S_blocks.values():
-        assert np.all(s_array >= 0.5)
+        assert torch.all(s_array >= 0.5).item()
     
     # Verify we got exactly 3 (both constraints satisfied)
     assert total_sv == 3
@@ -991,7 +995,7 @@ def test_high_order_tensor_different_axis_sizes():
     
     # Verify singular values are sorted
     for key, s_array in S_blocks.items():
-        assert np.all(s_array[:-1] >= s_array[1:]), "Singular values should be sorted descending"
+        assert torch.all(s_array[:-1] >= s_array[1:]).item(), "Singular values should be sorted descending"
 
 
 def test_high_order_tensor_all_modes():
@@ -1074,7 +1078,7 @@ def test_high_order_tensor_thresh_truncation():
     
     # All kept singular values should be >= threshold
     for key, s_array in S_blocks.items():
-        assert np.all(s_array >= threshold)
+        assert torch.all(s_array >= threshold).item()
     
     # Verify we can still reconstruct (approximately)
     U_full = decomp(T, axes=0, mode="UR", trunc={"thresh": threshold})[0]
@@ -1577,7 +1581,8 @@ def test_eig_basic():
     
     # Check eigenvalues are real for Hermitian matrix
     for key, eigvals in D.items():
-        assert np.allclose(eigvals.imag, 0, atol=1e-10)
+        if eigvals.is_complex():
+            assert torch.allclose(eigvals.imag, torch.zeros_like(eigvals.imag), atol=1e-10)
     
     # Verify eigendecomposition: T @ U = U @ diag(D) for each block
     for key in T.data.keys():
@@ -1592,9 +1597,9 @@ def test_eig_basic():
         # T @ U
         T_U = T_block @ U_block
         # U @ diag(D)
-        U_D = U_block @ np.diag(D_block)
+        U_D = U_block @ torch.diag(D_block)
         
-        assert np.allclose(T_U, U_D, atol=1e-10)
+        assert torch.allclose(T_U, U_D, atol=1e-10)
 
 
 def test_eig_reconstruction():
@@ -1630,10 +1635,10 @@ def test_eig_reconstruction():
         
         # Reconstruct T from eigendecomposition: T = U @ diag(D) @ U^{-1}
         # For symmetric matrices, U is orthogonal: U^{-1} = U^T
-        D_diag = np.diag(D_block)
+        D_diag = torch.diag(D_block)
         T_reconstructed = U_block @ D_diag @ U_block.T.conj()
         
-        rel_error = np.linalg.norm(T_block - T_reconstructed) / np.linalg.norm(T_block)
+        rel_error = torch.linalg.norm(T_block - T_reconstructed).item() / torch.linalg.norm(T_block).item()
         assert rel_error < 1e-10
 
 
@@ -1654,32 +1659,32 @@ def test_eig_truncation_nkeep():
         dtype=T.dtype
     )
     
-    # Keep only top 3 eigenvalues
-    U, D = eig(T, trunc={"nkeep": 3})
+    # Keep only top 3 eigenvalues (largest/most positive)
+    U, D = eig(T, order="descend", trunc={"nkeep": 3})
     
     # Count total eigenvalues
     total_eigvals = sum(len(eigvals) for eigvals in D.values())
     assert total_eigvals == 3
     
-    # Verify they are the largest magnitude ones
+    # Verify they are the largest (most positive) ones
     all_eigvals_full = []
     for key in T.data.keys():
         q_row, q_col = key
         if q_row != q_col:
             continue
-        eigvals_full, _ = np.linalg.eig(T.data[key])
-        all_eigvals_full.extend(np.abs(eigvals_full))
+        eigvals_full, _ = torch.linalg.eig(T.data[key])
+        # For Hermitian matrix, eigenvalues are real - use real part for comparison
+        all_eigvals_full.append(torch.real(eigvals_full))
     
-    all_eigvals_full.sort(reverse=True)
+    all_eigvals_full = torch.cat(all_eigvals_full)
+    all_eigvals_full, _ = torch.sort(all_eigvals_full, descending=True)
     top_3_expected = all_eigvals_full[:3]
     
-    all_eigvals_truncated = []
-    for eigvals in D.values():
-        all_eigvals_truncated.extend(np.abs(eigvals))
+    # Collect truncated eigenvalues as tensors
+    all_eigvals_truncated = torch.cat([torch.real(eigvals) for eigvals in D.values()])
+    all_eigvals_truncated, _ = torch.sort(all_eigvals_truncated, descending=True)
     
-    all_eigvals_truncated.sort(reverse=True)
-    
-    assert np.allclose(all_eigvals_truncated, top_3_expected, atol=1e-10)
+    assert torch.allclose(all_eigvals_truncated, top_3_expected, atol=1e-10)
 
 
 def test_eig_truncation_thresh():
@@ -1699,12 +1704,12 @@ def test_eig_truncation_thresh():
         dtype=T.dtype
     )
     
-    # Keep eigenvalues with |λ| >= 1.0
-    U, D = eig(T, trunc={"thresh": 1.0})
+    # Keep eigenvalues >= 1.0 (using descending order)
+    U, D = eig(T, order="descend", trunc={"thresh": 1.0})
     
     # Verify all kept eigenvalues satisfy threshold
     for eigvals in D.values():
-        assert np.all(np.abs(eigvals) >= 1.0)
+        assert torch.all(torch.real(eigvals) >= 1.0).item()
 
 
 def test_eig_truncation_combined_thresh_nkeep():
@@ -1725,8 +1730,8 @@ def test_eig_truncation_combined_thresh_nkeep():
         dtype=T.dtype
     )
     
-    # Apply both truncations: first thresh >= 0.8, then nkeep top 4
-    U, D = eig(T, trunc={"thresh": 0.8, "nkeep": 4})
+    # Apply both truncations: first thresh >= 0.8, then nkeep top 4 (largest)
+    U, D = eig(T, order="descend", trunc={"thresh": 0.8, "nkeep": 4})
     
     # Count total eigenvalues
     total_eig = sum(len(eigvals) for eigvals in D.values())
@@ -1734,9 +1739,9 @@ def test_eig_truncation_combined_thresh_nkeep():
     # Should have at most 4 eigenvalues (nkeep limit)
     assert total_eig <= 4
     
-    # All eigenvalues should have |λ| >= 0.8 (thresh limit)
+    # All eigenvalues should satisfy >= 0.8 (thresh limit with descending order)
     for eigvals in D.values():
-        assert np.all(np.abs(eigvals) >= 0.8)
+        assert torch.all(torch.real(eigvals) >= 0.8).item()
 
 
 def test_eig_non_square_error():
@@ -1778,12 +1783,12 @@ def test_eig_complex_matrix():
     idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     # Create a complex matrix
-    data = {(0, 0): np.array([[1+1j, 2-1j], [2+1j, 3-2j]], dtype=np.complex128)}
+    data = {(0, 0): torch.tensor([[1+1j, 2-1j], [2+1j, 3-2j]], dtype=torch.complex128)}
     T = Tensor(
         indices=(idx_out, idx_in),
         itags=("i", "j"),
         data=data,
-        dtype=np.complex128
+        dtype=torch.complex128
     )
     
     U, D = eig(T)
@@ -1795,9 +1800,9 @@ def test_eig_complex_matrix():
     
     # T @ U = U @ diag(D)
     T_U = T_block @ U_block
-    U_D = U_block @ np.diag(D_block)
+    U_D = U_block @ torch.diag(D_block)
     
-    assert np.allclose(T_U, U_D, atol=1e-10)
+    assert torch.allclose(T_U, U_D)
 
 
 def test_eig_charge_conservation():
@@ -1840,6 +1845,257 @@ def test_eig_itag():
     # Test with default itag
     U_default, D_default = eig(T)
     assert U_default.itags[1] == "_bond_eig"
+
+
+def test_eig_order_ascending_mixed_signs():
+    """Test ascending order with mixed positive and negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
+    data = {(0, 0): torch.diag(torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    U, D = eig(T, order="ascend")
+    eigvals = torch.real(D[(0, 0)])
+    
+    # Should be sorted from smallest to largest
+    expected = torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_order_descending_mixed_signs():
+    """Test descending order with mixed positive and negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
+    data = {(0, 0): torch.diag(torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    U, D = eig(T, order="descend")
+    eigvals = torch.real(D[(0, 0)])
+    
+    # Should be sorted from largest to smallest
+    expected = torch.tensor([7.0, 3.0, 0.0, -2.0, -5.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_thresh_ascending_negative():
+    """Test thresh mode with ascending order for negative eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-8, -5, -3, -1, 2, 4]
+    data = {(0, 0): torch.diag(torch.tensor([-8.0, -5.0, -3.0, -1.0, 2.0, 4.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep eigenvalues <= -2 (should keep: -8, -5, -3)
+    U, D = eig(T, order="ascend", trunc={"thresh": -2.0})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([-8.0, -5.0, -3.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_thresh_descending_positive():
+    """Test thresh mode with descending order for positive eigenvalues."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-4, -2, 1, 3, 5, 8]
+    data = {(0, 0): torch.diag(torch.tensor([-4.0, -2.0, 1.0, 3.0, 5.0, 8.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep eigenvalues >= 2 (should keep: 8, 5, 3)
+    U, D = eig(T, order="descend", trunc={"thresh": 2.0})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([8.0, 5.0, 3.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_thresh_zero_boundary():
+    """Test thresh mode at zero boundary for filtering positive/negative."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
+    
+    # Eigenvalues: [-3, -1, 0, 2, 4]
+    data = {(0, 0): torch.diag(torch.tensor([-3.0, -1.0, 0.0, 2.0, 4.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep only non-negative eigenvalues (>= 0)
+    U_pos, D_pos = eig(T, order="descend", trunc={"thresh": 0.0})
+    eigvals_pos = torch.real(D_pos[(0, 0)])
+    assert torch.allclose(eigvals_pos, torch.tensor([4.0, 2.0, 0.0], dtype=eigvals_pos.dtype))
+    
+    # Keep only non-positive eigenvalues (<= 0)
+    U_neg, D_neg = eig(T, order="ascend", trunc={"thresh": 0.0})
+    eigvals_neg = torch.real(D_neg[(0, 0)])
+    assert torch.allclose(eigvals_neg, torch.tensor([-3.0, -1.0, 0.0], dtype=eigvals_neg.dtype))
+
+
+def test_eig_nkeep_ascending_ground_states():
+    """Test nkeep with ascending order to get ground states."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
+    data = {(0, 0): torch.diag(torch.tensor([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep 3 smallest (ground state + 2 excited states)
+    U, D = eig(T, order="ascend", trunc={"nkeep": 3})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([-10.0, -5.0, -2.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_nkeep_descending_excited_states():
+    """Test nkeep with descending order to get highest excited states."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
+    
+    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
+    data = {(0, 0): torch.diag(torch.tensor([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep 3 largest (highest excited states)
+    U, D = eig(T, order="descend", trunc={"nkeep": 3})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([8.0, 3.0, 1.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_combined_thresh_nkeep_ascending():
+    """Test combined thresh and nkeep with ascending order."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    
+    # Eigenvalues: [-10, -8, -6, -4, -2, 0, 2, 4]
+    data = {(0, 0): torch.diag(torch.tensor([-10.0, -8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep eigenvalues <= -3, then keep 2 smallest
+    # After thresh: [-10, -8, -6, -4]
+    # After nkeep: [-10, -8]
+    U, D = eig(T, order="ascend", trunc={"thresh": -3.0, "nkeep": 2})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([-10.0, -8.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_combined_thresh_nkeep_descending():
+    """Test combined thresh and nkeep with descending order."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    
+    # Eigenvalues: [-4, -2, 0, 2, 4, 6, 8, 10]
+    data = {(0, 0): torch.diag(torch.tensor([-4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 10.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep eigenvalues >= 3, then keep 2 largest
+    # After thresh: [10, 8, 6, 4]
+    # After nkeep: [10, 8]
+    U, D = eig(T, order="descend", trunc={"thresh": 3.0, "nkeep": 2})
+    eigvals = torch.real(D[(0, 0)])
+    
+    expected = torch.tensor([10.0, 8.0], dtype=eigvals.dtype)
+    assert torch.allclose(eigvals, expected)
+
+
+def test_eig_order_with_complex_eigenvalues():
+    """Test order parameter with complex eigenvalues (sorts by real part)."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    
+    # Create a non-Hermitian matrix with complex eigenvalues
+    # Using a simple matrix that we know has complex eigenvalues
+    mat = torch.tensor([[0, 1, 0],
+                    [0, 0, 1],
+                    [1, 0, 0]], dtype=torch.complex128)
+    data = {(0, 0): mat}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.complex128)
+    
+    U_asc, D_asc = eig(T, order="ascend")
+    eigvals_asc = D_asc[(0, 0)]
+    
+    # Check that sorting is by real part (ascending)
+    real_parts_asc = torch.real(eigvals_asc)
+    assert torch.all(real_parts_asc[:-1] <= real_parts_asc[1:]).item()
+    
+    U_desc, D_desc = eig(T, order="descend")
+    eigvals_desc = D_desc[(0, 0)]
+    
+    # Check that sorting is by real part (descending)
+    real_parts_desc = torch.real(eigvals_desc)
+    assert torch.all(real_parts_desc[:-1] >= real_parts_desc[1:]).item()
+
+
+def test_eig_thresh_filters_all_eigenvalues():
+    """Test thresh mode when all eigenvalues are filtered out."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    
+    # Eigenvalues: [1, 2, 3, 4]
+    data = {(0, 0): torch.diag(torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float64))}
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Keep eigenvalues <= 0 (should filter all)
+    U, D = eig(T, order="ascend", trunc={"thresh": 0.0})
+    
+    # Should have no eigenvalues
+    assert len(D) == 0
+
+
+def test_eig_order_multiple_blocks():
+    """Test that order parameter works correctly with multiple charge blocks."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # Create blocks with known eigenvalues
+    # Block (0,0): eigenvalues [-2, 0, 5]
+    # Block (1,1): eigenvalues [-3, 1]
+    data = {
+        (0, 0): torch.diag(torch.tensor([-2.0, 0.0, 5.0], dtype=torch.float64)),
+        (1, 1): torch.diag(torch.tensor([-3.0, 1.0], dtype=torch.float64))
+    }
+    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
+    
+    # Test ascending - each block should be sorted independently
+    U_asc, D_asc = eig(T, order="ascend")
+    eigvals_asc_00 = torch.real(D_asc[(0, 0)])
+    eigvals_asc_11 = torch.real(D_asc[(1, 1)])
+    assert torch.allclose(eigvals_asc_00, torch.tensor([-2.0, 0.0, 5.0], dtype=eigvals_asc_00.dtype))
+    assert torch.allclose(eigvals_asc_11, torch.tensor([-3.0, 1.0], dtype=eigvals_asc_11.dtype))
+    
+    # Test descending - each block should be sorted independently
+    U_desc, D_desc = eig(T, order="descend")
+    eigvals_desc_00 = torch.real(D_desc[(0, 0)])
+    eigvals_desc_11 = torch.real(D_desc[(1, 1)])
+    assert torch.allclose(eigvals_desc_00, torch.tensor([5.0, 0.0, -2.0], dtype=eigvals_desc_00.dtype))
+    assert torch.allclose(eigvals_desc_11, torch.tensor([1.0, -3.0], dtype=eigvals_desc_11.dtype))
+    
+    # Test nkeep across blocks - should keep 3 smallest globally
+    U_nkeep, D_nkeep = eig(T, order="ascend", trunc={"nkeep": 3})
+    all_eigvals = torch.cat([torch.real(eigvals) for eigvals in D_nkeep.values()])
+    all_eigvals, _ = torch.sort(all_eigvals)
+    assert torch.allclose(all_eigvals, torch.tensor([-3.0, -2.0, 0.0], dtype=all_eigvals.dtype))
 
 
 # Multi-axis decomposition tests
@@ -1968,7 +2224,7 @@ def test_decomp_multi_axis_reconstruction():
     # Data should match (up to numerical precision)
     for key in T.data.keys():
         if key in reconstructed.data:
-            np.testing.assert_allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_multi_axis_too_few_raises():
@@ -2078,7 +2334,7 @@ def test_decomp_multi_axis_duplicate_itags():
     
     # Check that all blocks match
     for key in T.data:
-        np.testing.assert_allclose(reconstructed.data[key], T.data[key], atol=1e-10)
+        assert torch.allclose(reconstructed.data[key], T.data[key], atol=1e-10)
 
 
 def test_decomp_multi_axis_preserves_index_order():
@@ -2139,7 +2395,7 @@ def test_decomp_multi_axis_preserves_index_order():
     # recon1 has itags ('a', 'c', 'b', 'd'), need to permute to ('a', 'b', 'c', 'd')
     recon1.permute([0, 2, 1, 3])
     for key in T.data:
-        np.testing.assert_allclose(recon1.data[key], T.data[key], atol=1e-10)
+        assert torch.allclose(recon1.data[key], T.data[key], rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_truncation_combined_thresh_nkeep():
@@ -2156,14 +2412,14 @@ def test_decomp_truncation_combined_thresh_nkeep():
     # Extract singular values from diagonal S tensor
     all_sv = []
     for key, block in S.data.items():
-        sv = np.diag(block)
+        sv = torch.diag(block)
         all_sv.extend(sv)
     
     # Should have at most 5 values (nkeep)
     assert len(all_sv) <= 5
     
     # All should be >= 0.5 (thresh)
-    assert np.all(np.array(all_sv) >= 0.5)
+    assert torch.all(torch.tensor(all_sv) >= 0.5).item()
     
     # Verify reconstruction still works
     S_Vh = contract(S, Vh, axes=(1, 0))

@@ -9,7 +9,7 @@ U(1) symmetry group with integer charges.
       members:
         - name
         - neutral
-        - inverse
+        - dual
         - fuse
         - equal
         - validate_charge
@@ -21,7 +21,7 @@ Represents continuous U(1) symmetry. Charges are integers representing conserved
 ### Charge Operations
 
 - **Fusion**: Addition (`q1 + q2`)
-- **Inverse**: Negation (`-q`)
+- **Dual**: Negation (`-q`)
 - **Identity**: 0
 
 ## Physical Applications

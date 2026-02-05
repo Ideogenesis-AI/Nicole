@@ -38,7 +38,7 @@ class U1Group(AbelianGroup):
     def neutral(self) -> int:
         return 0
 
-    def inverse(self, q: int) -> int:
+    def dual(self, q: int) -> int:
         self.validate_charge(q)
         return -q
 
@@ -70,7 +70,7 @@ class Z2Group(AbelianGroup):
     def neutral(self) -> int:
         return 0
 
-    def inverse(self, q: int) -> int:
+    def dual(self, q: int) -> int:
         self.validate_charge(q)
         return q & 1
 

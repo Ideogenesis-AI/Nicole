@@ -106,22 +106,6 @@ class ProductGroup(SymmetryGroup):
         """Return the neutral element as a tuple of component neutrals."""
         return tuple(comp.neutral for comp in self.components)
     
-    def inverse(self, q: Tuple[Any, ...]) -> Tuple[Any, ...]:
-        """Return the inverse of a charge tuple.
-        
-        Parameters
-        ----------
-        q:
-            Charge tuple with one component per group.
-        
-        Returns
-        -------
-        Tuple
-            Tuple of inverted charges.
-        """
-        self.validate_charge(q)
-        return tuple(comp.inverse(qi) for comp, qi in zip(self.components, q))
-    
     def fuse(self, *qs: Tuple[Any, ...]) -> Tuple[Any, ...]:
         """Fuse multiple charge tuples component-wise.
         

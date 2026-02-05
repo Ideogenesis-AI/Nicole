@@ -18,12 +18,12 @@
 
 """Tests for oplus (direct sum) operation."""
 
-import numpy as np
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, contract, oplus
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_charge_neutral
+from ..utils import assert_charge_neutral
 
 
 # ============================================================================
@@ -129,8 +129,8 @@ def test_oplus_identical_sectors():
         
         # Top-left should be from A, bottom-right from B
         # Off-diagonal blocks should be zero
-        np.testing.assert_allclose(block[0:2, 2:4], 0, atol=1e-10)
-        np.testing.assert_allclose(block[2:4, 0:2], 0, atol=1e-10)
+        assert torch.allclose(block[0:2, 2:4], torch.zeros_like(block[0:2, 2:4]), atol=1e-10)
+        assert torch.allclose(block[2:4, 0:2], torch.zeros_like(block[2:4, 0:2]), atol=1e-10)
 
 
 # ============================================================================
@@ -543,10 +543,10 @@ def test_oplus_orthogonality():
     
     # Create tensors with known values
     A = Tensor.zeros([idx, idx.flip()], itags=['a', 'b'])
-    A.data[(0, 0)] = np.ones((2, 2))
+    A.data[(0, 0)] = torch.ones((2, 2))
     
     B = Tensor.zeros([idx, idx.flip()], itags=['a', 'b'])
-    B.data[(0, 0)] = 2 * np.ones((2, 2))
+    B.data[(0, 0)] = 2 * torch.ones((2, 2))
     
     C = oplus(A, B)
     
@@ -555,14 +555,14 @@ def test_oplus_orthogonality():
     assert block.shape == (4, 4)
     
     # Top-left should be all ones (from A)
-    np.testing.assert_array_equal(block[0:2, 0:2], 1)
+    assert torch.allclose(block[0:2, 0:2], torch.ones_like(block[0:2, 0:2]))
     
     # Bottom-right should be all twos (from B)
-    np.testing.assert_array_equal(block[2:4, 2:4], 2)
+    assert torch.allclose(block[2:4, 2:4], 2 * torch.ones_like(block[2:4, 2:4]))
     
     # Off-diagonal should be zero
-    np.testing.assert_array_equal(block[0:2, 2:4], 0)
-    np.testing.assert_array_equal(block[2:4, 0:2], 0)
+    assert torch.allclose(block[0:2, 2:4], torch.zeros_like(block[0:2, 2:4]))
+    assert torch.allclose(block[2:4, 0:2], torch.zeros_like(block[2:4, 0:2]))
 
 
 # ============================================================================
@@ -574,13 +574,13 @@ def test_oplus_dtype_promotion():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    A = Tensor.random([idx, idx.flip()], seed=1100, itags=['a', 'b'], dtype=np.float32)
-    B = Tensor.random([idx, idx.flip()], seed=1200, itags=['a', 'b'], dtype=np.float64)
+    A = Tensor.random([idx, idx.flip()], seed=1100, itags=['a', 'b'], dtype=torch.float32)
+    B = Tensor.random([idx, idx.flip()], seed=1200, itags=['a', 'b'], dtype=torch.float64)
     
     C = oplus(A, B)
     
     # Should promote to float64
-    assert C.dtype == np.float64
+    assert C.dtype == torch.float64
 
 
 def test_oplus_preserves_itags():
@@ -644,11 +644,11 @@ def test_oplus_empty_blocks():
     
     # Create A with only charge 0 block
     A = Tensor.zeros([idx_A, idx_A.flip()], itags=['a', 'b'])
-    A.data[(0, 0)] = np.ones((2, 2))
+    A.data[(0, 0)] = torch.ones((2, 2))
     
     # Create B with only charge 0 block
     B = Tensor.zeros([idx_B, idx_B.flip()], itags=['a', 'b'])
-    B.data[(0, 0)] = 2 * np.ones((1, 1))
+    B.data[(0, 0)] = 2 * torch.ones((1, 1))
     
     C = oplus(A, B)
     

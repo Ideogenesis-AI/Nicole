@@ -18,12 +18,13 @@
 
 """Tests for Tensor arithmetic operations."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
-from .utils import assert_blocks_equal
+from ..utils import assert_blocks_equal
 
 
 # Addition tests
@@ -44,7 +45,7 @@ def test_addition_simple():
     
     for key in C.data:
         expected = A.data[key] + B.data[key]
-        np.testing.assert_allclose(C.data[key], expected)
+        assert torch.allclose(C.data[key], expected)
 
 
 def test_addition_multi_tensor():
@@ -65,7 +66,7 @@ def test_addition_multi_tensor():
     manual_data = {}
     for key in sum_tensor.data:
         manual_data[key] = A.data[key] + B.data[key] + C.data[key]
-        np.testing.assert_allclose(sum_tensor.data[key], manual_data[key])
+        assert torch.allclose(sum_tensor.data[key], manual_data[key])
 
 
 def test_addition_zero_tensor():
@@ -158,7 +159,7 @@ def test_subtraction_simple():
     
     for key in C.data:
         expected = A.data[key] - B.data[key]
-        np.testing.assert_allclose(C.data[key], expected)
+        assert torch.allclose(C.data[key], expected)
 
 
 def test_subtraction_self_gives_zero():
@@ -171,7 +172,7 @@ def test_subtraction_self_gives_zero():
     result = A - A
     
     for block in result.data.values():
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
 
 
 def test_subtraction_inverse_of_addition():
@@ -205,7 +206,7 @@ def test_scalar_multiplication_int():
     result = A * 3
     
     for key in A.data:
-        np.testing.assert_allclose(result.data[key], A.data[key] * 3)
+        assert torch.allclose(result.data[key], A.data[key] * 3)
 
 
 def test_scalar_multiplication_float():
@@ -218,7 +219,7 @@ def test_scalar_multiplication_float():
     result = A * 2.5
     
     for key in A.data:
-        np.testing.assert_allclose(result.data[key], A.data[key] * 2.5)
+        assert torch.allclose(result.data[key], A.data[key] * 2.5)
 
 
 def test_scalar_multiplication_complex():
@@ -226,11 +227,11 @@ def test_scalar_multiplication_complex():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
 
     scaled = tensor * (2 - 3j)
     for key in tensor.data:
-        np.testing.assert_allclose(scaled.data[key], tensor.data[key] * (2 - 3j))
+        assert torch.allclose(scaled.data[key], tensor.data[key] * (2 - 3j))
 
 
 def test_scalar_multiplication_left():
@@ -243,7 +244,7 @@ def test_scalar_multiplication_left():
     result = 3.5 * A
     
     for key in A.data:
-        np.testing.assert_allclose(result.data[key], A.data[key] * 3.5)
+        assert torch.allclose(result.data[key], A.data[key] * 3.5)
 
 
 def test_scalar_multiplication_commutative():
@@ -266,7 +267,7 @@ def test_scalar_multiplication_zero():
     result = A * 0
     
     for block in result.data.values():
-        assert np.allclose(block, 0.0)
+        assert torch.allclose(block, torch.zeros_like(block))
 
 
 # Norm tests
@@ -296,7 +297,7 @@ def test_norm_linear_scaling():
     idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 4),))
     tensor = Tensor.random([idx, idx.flip()], seed=0, itags=["X", "Y"])
     scaled = tensor * 5.0
-    assert np.isclose(scaled.norm(), tensor.norm() * 5.0)
+    assert math.isclose(scaled.norm(), tensor.norm() * 5.0)
 
 
 def test_norm_manual_computation():
@@ -305,9 +306,9 @@ def test_norm_manual_computation():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
     tensor = Tensor.random([idx, idx.flip()], seed=11, itags=["A", "B"])
     
-    manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
+    manual = torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in tensor.data.values()))
     
-    assert np.isclose(tensor.norm(), manual)
+    assert math.isclose(tensor.norm(), manual.item())
 
 
 def test_norm_complex():
@@ -315,11 +316,11 @@ def test_norm_complex():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
     
-    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128, seed=1, itags=["A", "B"])
     
-    manual = np.sqrt(sum(np.sum(np.abs(block) ** 2) for block in tensor.data.values()))
+    manual = float(torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in tensor.data.values())))
     
-    assert np.isclose(tensor.norm(), manual)
+    assert math.isclose(tensor.norm(), manual)
 
 
 # Mixed operations tests
@@ -338,7 +339,7 @@ def test_combined_arithmetic_operations():
     
     for key in result.data:
         expected = 2 * A.data[key] + 3 * B.data[key] - C.data[key]
-        np.testing.assert_allclose(result.data[key], expected)
+        assert torch.allclose(result.data[key], expected)
 
 
 def test_dtype_promotion():
@@ -346,12 +347,12 @@ def test_dtype_promotion():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    A = Tensor.random([idx, idx.flip()], dtype=np.float32, seed=1, itags=["A", "B"])
-    B = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=2, itags=["A", "B"])
+    A = Tensor.random([idx, idx.flip()], dtype=torch.float32, seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], dtype=torch.float64, seed=2, itags=["A", "B"])
     
     result = A + B
     
-    assert result.dtype == np.float64
+    assert result.dtype == torch.float64
 
 
 def test_complex_dtype_promotion():
@@ -359,11 +360,11 @@ def test_complex_dtype_promotion():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    A = Tensor.random([idx, idx.flip()], dtype=np.float64, seed=1, itags=["A", "B"])
+    A = Tensor.random([idx, idx.flip()], dtype=torch.float64, seed=1, itags=["A", "B"])
     
     result = A * (1 + 2j)
     
-    assert np.issubdtype(result.dtype, np.complexfloating)
+    assert result.dtype.is_complex
 
 
 def test_z2_arithmetic():
@@ -403,7 +404,7 @@ def test_product_group_addition():
     # Verify block-wise addition
     for key in C.data:
         expected = A.data[key] + B.data[key]
-        np.testing.assert_allclose(C.data[key], expected)
+        assert torch.allclose(C.data[key], expected)
 
 
 def test_product_group_subtraction():
@@ -421,7 +422,7 @@ def test_product_group_subtraction():
     
     for key in C.data:
         expected = A.data[key] - B.data[key]
-        np.testing.assert_allclose(C.data[key], expected)
+        assert torch.allclose(C.data[key], expected)
 
 
 def test_product_group_scalar_multiplication():
@@ -441,8 +442,8 @@ def test_product_group_scalar_multiplication():
     # Both should give same result
     for key in A.data:
         expected = scalar * A.data[key]
-        np.testing.assert_allclose(B.data[key], expected)
-        np.testing.assert_allclose(C.data[key], expected)
+        assert torch.allclose(B.data[key], expected)
+        assert torch.allclose(C.data[key], expected)
 
 
 def test_addition_non_overlapping_sectors():
@@ -455,8 +456,8 @@ def test_addition_non_overlapping_sectors():
         indices=[idx_a, idx_a.flip()],
         itags=["i", "j"],
         data={
-            (0, 0): np.array([[1.0, 2.0], [3.0, 4.0]]),
-            (1, 1): np.array([[5.0, 6.0], [7.0, 8.0]])
+            (0, 0): torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            (1, 1): torch.tensor([[5.0, 6.0], [7.0, 8.0]])
         }
     )
     
@@ -466,8 +467,8 @@ def test_addition_non_overlapping_sectors():
         indices=[idx_b, idx_b.flip()],
         itags=["i", "j"],
         data={
-            (0, 0): np.array([[10.0, 20.0], [30.0, 40.0]]),
-            (-1, -1): np.array([[50.0, 60.0], [70.0, 80.0]])
+            (0, 0): torch.tensor([[10.0, 20.0], [30.0, 40.0]]),
+            (-1, -1): torch.tensor([[50.0, 60.0], [70.0, 80.0]])
         }
     )
     
@@ -478,12 +479,12 @@ def test_addition_non_overlapping_sectors():
     assert set(C.data.keys()) == {(0, 0), (1, 1), (-1, -1)}
     
     # Check overlapping block (0, 0) was added
-    expected_00 = np.array([[11.0, 22.0], [33.0, 44.0]])
-    assert np.allclose(C.data[(0, 0)], expected_00)
+    expected_00 = torch.tensor([[11.0, 22.0], [33.0, 44.0]])
+    assert torch.allclose(C.data[(0, 0)], expected_00)
     
     # Check non-overlapping blocks preserved
-    assert np.allclose(C.data[(1, 1)], A.data[(1, 1)])
-    assert np.allclose(C.data[(-1, -1)], B.data[(-1, -1)])
+    assert torch.allclose(C.data[(1, 1)], A.data[(1, 1)])
+    assert torch.allclose(C.data[(-1, -1)], B.data[(-1, -1)])
     
     # Check result indices contain union of sectors
     result_charges = [s.charge for s in C.indices[0].sectors]
@@ -499,8 +500,8 @@ def test_subtraction_non_overlapping_sectors():
         indices=[idx_a, idx_a.flip()],
         itags=["i", "j"],
         data={
-            (0, 0): np.array([[1.0, 2.0], [3.0, 4.0]]),
-            (1, 1): np.array([[5.0, 6.0, 7.0], [8.0, 9.0, 10.0], [11.0, 12.0, 13.0]])
+            (0, 0): torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            (1, 1): torch.tensor([[5.0, 6.0, 7.0], [8.0, 9.0, 10.0], [11.0, 12.0, 13.0]])
         }
     )
     
@@ -509,8 +510,8 @@ def test_subtraction_non_overlapping_sectors():
         indices=[idx_b, idx_b.flip()],
         itags=["i", "j"],
         data={
-            (0, 0): np.array([[0.5, 1.0], [1.5, 2.0]]),
-            (-1, -1): np.array([[100.0]])
+            (0, 0): torch.tensor([[0.5, 1.0], [1.5, 2.0]]),
+            (-1, -1): torch.tensor([[100.0]])
         }
     )
     
@@ -521,14 +522,14 @@ def test_subtraction_non_overlapping_sectors():
     assert set(C.data.keys()) == {(0, 0), (1, 1), (-1, -1)}
     
     # Check overlapping block
-    expected_00 = np.array([[0.5, 1.0], [1.5, 2.0]])
-    assert np.allclose(C.data[(0, 0)], expected_00)
+    expected_00 = torch.tensor([[0.5, 1.0], [1.5, 2.0]])
+    assert torch.allclose(C.data[(0, 0)], expected_00)
     
     # Check A's exclusive block preserved
-    assert np.allclose(C.data[(1, 1)], A.data[(1, 1)])
+    assert torch.allclose(C.data[(1, 1)], A.data[(1, 1)])
     
     # Check B's exclusive block negated
-    assert np.allclose(C.data[(-1, -1)], -B.data[(-1, -1)])
+    assert torch.allclose(C.data[(-1, -1)], -B.data[(-1, -1)])
 
 
 def test_addition_partially_overlapping_sectors():
@@ -543,9 +544,9 @@ def test_addition_partially_overlapping_sectors():
         indices=[idx_a, idx_a.flip()],
         itags=["i", "j"],
         data={
-            (-1, -1): np.ones((2, 2)),
-            (0, 0): np.ones((2, 2)) * 2,
-            (1, 1): np.ones((2, 2)) * 3
+            (-1, -1): torch.ones((2, 2)),
+            (0, 0): torch.ones((2, 2)) * 2,
+            (1, 1): torch.ones((2, 2)) * 3
         }
     )
     
@@ -557,9 +558,9 @@ def test_addition_partially_overlapping_sectors():
         indices=[idx_b, idx_b.flip()],
         itags=["i", "j"],
         data={
-            (0, 0): np.ones((2, 2)) * 10,
-            (1, 1): np.ones((2, 2)) * 20,
-            (2, 2): np.ones((3, 3)) * 30
+            (0, 0): torch.ones((2, 2)) * 10,
+            (1, 1): torch.ones((2, 2)) * 20,
+            (2, 2): torch.ones((3, 3)) * 30
         }
     )
     
@@ -569,12 +570,12 @@ def test_addition_partially_overlapping_sectors():
     assert set(C.data.keys()) == {(-1, -1), (0, 0), (1, 1), (2, 2)}
     
     # Check exclusive blocks
-    assert np.allclose(C.data[(-1, -1)], np.ones((2, 2)))
-    assert np.allclose(C.data[(2, 2)], np.ones((3, 3)) * 30)
+    assert torch.allclose(C.data[(-1, -1)], torch.ones((2, 2)))
+    assert torch.allclose(C.data[(2, 2)], torch.ones((3, 3)) * 30)
     
     # Check overlapping blocks
-    assert np.allclose(C.data[(0, 0)], np.ones((2, 2)) * 12)  # 2 + 10
-    assert np.allclose(C.data[(1, 1)], np.ones((2, 2)) * 23)  # 3 + 20
+    assert torch.allclose(C.data[(0, 0)], torch.ones((2, 2)) * 12)  # 2 + 10
+    assert torch.allclose(C.data[(1, 1)], torch.ones((2, 2)) * 23)  # 3 + 20
 
 
 def test_addition_empty_blocks():
@@ -586,7 +587,7 @@ def test_addition_empty_blocks():
     A = Tensor(
         indices=[idx_a, idx_a.flip()],
         itags=["i", "j"],
-        data={(0, 0): np.ones((2, 2))}
+        data={(0, 0): torch.ones((2, 2))}
         # Note: block (1, 1) is missing (implicitly zero)
     )
     
@@ -595,7 +596,7 @@ def test_addition_empty_blocks():
     B = Tensor(
         indices=[idx_b, idx_b.flip()],
         itags=["i", "j"],
-        data={(1, 1): np.ones((2, 2)) * 5}
+        data={(1, 1): torch.ones((2, 2)) * 5}
         # Note: block (0, 0) is missing (implicitly zero)
     )
     
@@ -603,6 +604,6 @@ def test_addition_empty_blocks():
     
     # Result should have both blocks
     assert set(C.data.keys()) == {(0, 0), (1, 1)}
-    assert np.allclose(C.data[(0, 0)], np.ones((2, 2)))
-    assert np.allclose(C.data[(1, 1)], np.ones((2, 2)) * 5)
+    assert torch.allclose(C.data[(0, 0)], torch.ones((2, 2)))
+    assert torch.allclose(C.data[(1, 1)], torch.ones((2, 2)) * 5)
 

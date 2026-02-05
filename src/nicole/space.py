@@ -19,7 +19,7 @@
 """Physical space and operator construction for quantum many-body systems."""
 
 from typing import Dict, Optional, Tuple, Any
-import numpy as np
+import torch
 
 from .index import Index, Direction, Sector
 from .tensor import Tensor
@@ -189,13 +189,13 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         # Block key: (charge_in, charge_out) = (charge, charge) for diagonal
         key = (charge, charge)
         # Value is m_z (1x1 matrix)
-        Sz_data[key] = np.array([[m_z]], dtype=np.float64)
+        Sz_data[key] = torch.tensor([[m_z]], dtype=torch.float64)
     
     Op["Sz"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build S^+ operator (raising operator)
@@ -220,17 +220,17 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         # Matrix element: -⟨m_z+1| S^+ |m_z⟩ / sqrt(2)
         # Additional minus sign for spherical tensor component convention
         # Scaled by 1/sqrt(2) so that S^+S^- + S^-S^+ = S_x^2 + S_y^2
-        coeff = -np.sqrt(J * (J + 1) - m_z * (m_z + 1)) / np.sqrt(2.0)
+        coeff = -torch.sqrt(torch.tensor(J * (J + 1) - m_z * (m_z + 1))) / torch.sqrt(torch.tensor(2.0))
         
         # Block key: (charge_out, charge_in, charge_aux)
         key = (charge_next, charge, 2)
-        Sp_data[key] = np.array([[[coeff]]], dtype=np.float64)
+        Sp_data[key] = torch.tensor([[[coeff.item()]]], dtype=torch.float64)
     
     Op["Sp"] = Tensor(
         indices=(Spc, Spc.flip(), aux_plus),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build S^- operator (lowering operator)
@@ -254,17 +254,17 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         
         # Matrix element: ⟨m_z-1| S^- |m_z⟩ / sqrt(2)
         # Scaled by 1/sqrt(2) so that S^+S^- + S^-S^+ = S_x^2 + S_y^2
-        coeff = np.sqrt(J * (J + 1) - m_z * (m_z - 1)) / np.sqrt(2.0)
+        coeff = torch.sqrt(torch.tensor(J * (J + 1) - m_z * (m_z - 1))) / torch.sqrt(torch.tensor(2.0))
         
         # Block key: (charge_out, charge_in, charge_aux)
         key = (charge_prev, charge, -2)
-        Sm_data[key] = np.array([[[coeff]]], dtype=np.float64)
+        Sm_data[key] = torch.tensor([[[coeff.item()]]], dtype=torch.float64)
     
     Op["Sm"] = Tensor(
         indices=(Spc, Spc.flip(), aux_minus),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Create vacuum index (trivial space with charge 0)
@@ -347,27 +347,27 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     F_data = {}
     # Matrix element: ⟨0|F|1⟩ = 1
     # Block key: (q_out, q_in, q_aux) = (-1, 1, -2)
-    F_data[(-1, 1, -2)] = np.array([[[1.0]]], dtype=np.float64)
+    F_data[(-1, 1, -2)] = torch.tensor([[[1.0]]], dtype=torch.float64)
     
     Op["F"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F),
         itags=("_init_", "_init_", "_aux_"),
         data=F_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
     # This is a diagonal 2-index tensor
     Z_data = {}
-    Z_data[(-1, -1)] = np.array([[1.0]], dtype=np.float64)   # ⟨0|Z|0⟩ = 1
-    Z_data[(1, 1)] = np.array([[-1.0]], dtype=np.float64)    # ⟨1|Z|1⟩ = -1
+    Z_data[(-1, -1)] = torch.tensor([[1.0]], dtype=torch.float64)   # ⟨0|Z|0⟩ = 1
+    Z_data[(1, 1)] = torch.tensor([[-1.0]], dtype=torch.float64)    # ⟨1|Z|1⟩ = -1
     
     Op["Z"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Create vacuum index (trivial space with charge 0)
@@ -422,27 +422,27 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     F_data = {}
     # Matrix element: ⟨0|F|1⟩ = 1
     # Block key: (parity_out, parity_in, parity_aux) = (0, 1, 1)
-    F_data[(0, 1, 1)] = np.array([[[1.0]]], dtype=np.float64)
+    F_data[(0, 1, 1)] = torch.tensor([[[1.0]]], dtype=torch.float64)
     
     Op["F"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F),
         itags=("_init_", "_init_", "_aux_"),
         data=F_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
     # This is a diagonal 2-index tensor
     Z_data = {}
-    Z_data[(0, 0)] = np.array([[1.0]], dtype=np.float64)   # ⟨0|Z|0⟩ = 1
-    Z_data[(1, 1)] = np.array([[-1.0]], dtype=np.float64)  # ⟨1|Z|1⟩ = -1
+    Z_data[(0, 0)] = torch.tensor([[1.0]], dtype=torch.float64)   # ⟨0|Z|0⟩ = 1
+    Z_data[(1, 1)] = torch.tensor([[-1.0]], dtype=torch.float64)  # ⟨1|Z|1⟩ = -1
     
     Op["Z"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Create vacuum index (trivial space with parity 0)
@@ -526,15 +526,15 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     F_up_data = {}
     # |↑⟩ → |0⟩: (0,1) → (-1,0)
-    F_up_data[((-1, 0), (0, 1), (-1, -1))] = np.array([[[1.0]]], dtype=np.float64)
+    F_up_data[((-1, 0), (0, 1), (-1, -1))] = torch.tensor([[[1.0]]], dtype=torch.float64)
     # |↑↓⟩ → |↓⟩: (1,0) → (0,-1)
-    F_up_data[((0, -1), (1, 0), (-1, -1))] = np.array([[[1.0]]], dtype=np.float64)
+    F_up_data[((0, -1), (1, 0), (-1, -1))] = torch.tensor([[[1.0]]], dtype=torch.float64)
     
     Op["F_up"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F_up),
         itags=("_init_", "_init_", "_aux_"),
         data=F_up_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build F_dn operator (annihilates spin-down electron)
@@ -550,45 +550,45 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     F_dn_data = {}
     # |↓⟩ → |0⟩: (0,-1) → (-1,0)
-    F_dn_data[((-1, 0), (0, -1), (-1, 1))] = np.array([[[1.0]]], dtype=np.float64)
+    F_dn_data[((-1, 0), (0, -1), (-1, 1))] = torch.tensor([[[1.0]]], dtype=torch.float64)
     # |↑↓⟩ → |↑⟩: (1,0) → (0,1), with a minus sign from anticommutation
-    F_dn_data[((0, 1), (1, 0), (-1, 1))] = np.array([[[-1.0]]], dtype=np.float64)
+    F_dn_data[((0, 1), (1, 0), (-1, 1))] = torch.tensor([[[-1.0]]], dtype=torch.float64)
     
     Op["F_dn"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F_dn),
         itags=("_init_", "_init_", "_aux_"),
         data=F_dn_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Z operator (Jordan-Wigner string)
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
     Z_data = {}
-    Z_data[((-1, 0), (-1, 0))] = np.array([[1.0]], dtype=np.float64)
-    Z_data[((0, -1), (0, -1))] = np.array([[-1.0]], dtype=np.float64)
-    Z_data[((0, 1), (0, 1))] = np.array([[-1.0]], dtype=np.float64)
-    Z_data[((1, 0), (1, 0))] = np.array([[1.0]], dtype=np.float64)
+    Z_data[((-1, 0), (-1, 0))] = torch.tensor([[1.0]], dtype=torch.float64)
+    Z_data[((0, -1), (0, -1))] = torch.tensor([[-1.0]], dtype=torch.float64)
+    Z_data[((0, 1), (0, 1))] = torch.tensor([[-1.0]], dtype=torch.float64)
+    Z_data[((1, 0), (1, 0))] = torch.tensor([[1.0]], dtype=torch.float64)
     
     Op["Z"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Sz operator (spin z-component)
     # Sz|0⟩ = 0, Sz|↑⟩ = +1/2|↑⟩, Sz|↓⟩ = -1/2|↓⟩, Sz|↑↓⟩ = 0
     Sz_data = {}
-    Sz_data[((-1, 0), (-1, 0))] = np.array([[0.0]], dtype=np.float64)
-    Sz_data[((0, -1), (0, -1))] = np.array([[-0.5]], dtype=np.float64)
-    Sz_data[((0, 1), (0, 1))] = np.array([[0.5]], dtype=np.float64)
-    Sz_data[((1, 0), (1, 0))] = np.array([[0.0]], dtype=np.float64)
+    Sz_data[((-1, 0), (-1, 0))] = torch.tensor([[0.0]], dtype=torch.float64)
+    Sz_data[((0, -1), (0, -1))] = torch.tensor([[-0.5]], dtype=torch.float64)
+    Sz_data[((0, 1), (0, 1))] = torch.tensor([[0.5]], dtype=torch.float64)
+    Sz_data[((1, 0), (1, 0))] = torch.tensor([[0.0]], dtype=torch.float64)
     
     Op["Sz"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     Op["Sz"].trim_zero_sectors()
     
@@ -602,14 +602,14 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     Sp_data = {}
     # |↓⟩ → |↑⟩ with spherical convention coefficient
-    coeff_Sp = -1.0 / np.sqrt(2.0)
-    Sp_data[((0, 1), (0, -1), (0, 2))] = np.array([[[coeff_Sp]]], dtype=np.float64)
+    coeff_Sp = -1.0 / torch.sqrt(torch.tensor(2.0))
+    Sp_data[((0, 1), (0, -1), (0, 2))] = torch.tensor([[[coeff_Sp]]], dtype=torch.float64)
     
     Op["Sp"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sp),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Sm operator (spin lowering: |↑⟩ → |↓⟩)
@@ -622,14 +622,14 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     Sm_data = {}
     # |↑⟩ → |↓⟩ with spherical convention coefficient
-    coeff_Sm = +1.0 / np.sqrt(2.0)
-    Sm_data[((0, -1), (0, 1), (0, -2))] = np.array([[[coeff_Sm]]], dtype=np.float64)
+    coeff_Sm = +1.0 / torch.sqrt(torch.tensor(2.0))
+    Sm_data[((0, -1), (0, 1), (0, -2))] = torch.tensor([[[coeff_Sm]]], dtype=torch.float64)
     
     Op["Sm"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sm),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Create vacuum index
@@ -685,16 +685,16 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     # |↑⟩ → |0⟩: from sector (1,1) to sector (0,0) index 0
     # Block key: (charge_out, charge_in, charge_aux)
     # Shape: (dim_out, dim_in, dim_aux) = (2, 1, 1)
-    F_up_data[((0, 0), (1, 1), (1, -1))] = np.array([[[1.0]], [[0.0]]], dtype=np.float64)  # Output to |0⟩
+    F_up_data[((0, 0), (1, 1), (1, -1))] = torch.tensor([[[1.0]], [[0.0]]], dtype=torch.float64)  # Output to |0⟩
     # |↑↓⟩ → |↓⟩: from sector (0,0) index 1 to sector (1,-1)
     # Shape: (dim_out, dim_in, dim_aux) = (1, 2, 1)
-    F_up_data[((1, -1), (0, 0), (1, -1))] = np.array([[[0.0], [1.0]]], dtype=np.float64)  # Input from |↑↓⟩
+    F_up_data[((1, -1), (0, 0), (1, -1))] = torch.tensor([[[0.0], [1.0]]], dtype=torch.float64)  # Input from |↑↓⟩
     
     Op["F_up"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F_up),
         itags=("_init_", "_init_", "_aux_"),
         data=F_up_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build F_dn operator
@@ -708,44 +708,44 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     F_dn_data = {}
     # |↓⟩ → |0⟩: Shape: (2, 1, 1)
-    F_dn_data[((0, 0), (1, -1), (1, 1))] = np.array([[[1.0]], [[0.0]]], dtype=np.float64)
+    F_dn_data[((0, 0), (1, -1), (1, 1))] = torch.tensor([[[1.0]], [[0.0]]], dtype=torch.float64)
     # |↑↓⟩ → |↑⟩ with minus sign: Shape: (1, 2, 1)
-    F_dn_data[((1, 1), (0, 0), (1, 1))] = np.array([[[0.0], [-1.0]]], dtype=np.float64)
+    F_dn_data[((1, 1), (0, 0), (1, 1))] = torch.tensor([[[0.0], [-1.0]]], dtype=torch.float64)
     
     Op["F_dn"] = Tensor(
         indices=(Spc, Spc.flip(), aux_F_dn),
         itags=("_init_", "_init_", "_aux_"),
         data=F_dn_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Z operator
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
     Z_data = {}
     # (0,0) sector: diagonal 2x2 with [1, 0; 0, 1] for |0⟩ and |↑↓⟩
-    Z_data[((0, 0), (0, 0))] = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float64)
-    Z_data[((1, -1), (1, -1))] = np.array([[-1.0]], dtype=np.float64)
-    Z_data[((1, 1), (1, 1))] = np.array([[-1.0]], dtype=np.float64)
+    Z_data[((0, 0), (0, 0))] = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)
+    Z_data[((1, -1), (1, -1))] = torch.tensor([[-1.0]], dtype=torch.float64)
+    Z_data[((1, 1), (1, 1))] = torch.tensor([[-1.0]], dtype=torch.float64)
     
     Op["Z"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Sz operator
     Sz_data = {}
     # (0,0) sector: both |0⟩ and |↑↓⟩ have Sz = 0
-    Sz_data[((0, 0), (0, 0))] = np.array([[0.0, 0.0], [0.0, 0.0]], dtype=np.float64)
-    Sz_data[((1, -1), (1, -1))] = np.array([[-0.5]], dtype=np.float64)
-    Sz_data[((1, 1), (1, 1))] = np.array([[0.5]], dtype=np.float64)
+    Sz_data[((0, 0), (0, 0))] = torch.tensor([[0.0, 0.0], [0.0, 0.0]], dtype=torch.float64)
+    Sz_data[((1, -1), (1, -1))] = torch.tensor([[-0.5]], dtype=torch.float64)
+    Sz_data[((1, 1), (1, 1))] = torch.tensor([[0.5]], dtype=torch.float64)
     
     Op["Sz"] = Tensor(
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     Op["Sz"].trim_zero_sectors()
     
@@ -760,14 +760,14 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sp_data = {}
-    coeff_Sp = -1.0 / np.sqrt(2.0)
-    Sp_data[((1, 1), (1, -1), (0, 2))] = np.array([[[coeff_Sp]]], dtype=np.float64)
+    coeff_Sp = -1.0 / torch.sqrt(torch.tensor(2.0))
+    Sp_data[((1, 1), (1, -1), (0, 2))] = torch.tensor([[[coeff_Sp]]], dtype=torch.float64)
     
     Op["Sp"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sp),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Build Sm operator (|↑⟩ → |↓⟩)
@@ -781,14 +781,14 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     
     Sm_data = {}
-    coeff_Sm = +1.0 / np.sqrt(2.0)
-    Sm_data[((1, -1), (1, 1), (0, -2))] = np.array([[[coeff_Sm]]], dtype=np.float64)
+    coeff_Sm = +1.0 / torch.sqrt(torch.tensor(2.0))
+    Sm_data[((1, -1), (1, 1), (0, -2))] = torch.tensor([[[coeff_Sm]]], dtype=torch.float64)
     
     Op["Sm"] = Tensor(
         indices=(Spc, Spc.flip(), aux_Sm),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Create vacuum index

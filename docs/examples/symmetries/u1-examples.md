@@ -48,9 +48,9 @@ charge1, charge2 = 2, 3
 fused = group.fuse(charge1, charge2)
 print(f"{charge1} + {charge2} = {fused}\n")
 
-# Inverse (negation)
-inv = group.inverse(5)
-print(f"Inverse of 5: {inv}\n")
+# Dual (negation)
+dual_charge = group.dual(5)
+print(f"Dual of 5: {dual_charge}\n")
 
 # Multiple fusion
 result = group.fuse(1, 2, -1, 3)

@@ -33,12 +33,12 @@ from nicole import U1Group, Z2Group
 # U(1) example
 u1 = U1Group()
 print(u1.fuse(2, 3))      # 5 (addition)
-print(u1.inverse(5))      # -5 (negation)
+print(u1.dual(5))         # -5 (dual representation)
 
 # Z(2) example
 z2 = Z2Group()
 print(z2.fuse(1, 1))      # 0 (XOR: 1⊕1=0)
-print(z2.inverse(1))      # 1 (identity)
+print(z2.dual(1))         # 1 (self-dual)
 ```
 
 ## Charges

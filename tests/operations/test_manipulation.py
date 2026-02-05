@@ -18,12 +18,14 @@
 
 """Tests for tensor manipulation operations: conj, permute, transpose, retag."""
 
-import numpy as np
+import math
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group
+from ..utils import assert_blocks_equal, assert_charge_neutral
 
 
 # Conjugation tests
@@ -33,7 +35,7 @@ def test_conj_functional_returns_new_instance():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
     
@@ -45,12 +47,12 @@ def test_conj_functional_conjugates_data():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
     
     for key in tensor.data:
-        np.testing.assert_allclose(tensor_conj.data[key], np.conjugate(tensor.data[key]))
+        assert torch.allclose(tensor_conj.data[key], torch.conj(tensor.data[key]))
 
 
 def test_conj_functional_flips_directions():
@@ -58,7 +60,7 @@ def test_conj_functional_flips_directions():
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
 
     tensor_conj = conj(tensor)
     
@@ -70,16 +72,16 @@ def test_conj_inplace_modifies_original():
     """Test that in-place conj modifies the original tensor."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     original_direction = tensor.indices[0].direction
     
     tensor.conj()
     
     # Verify data was conjugated
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], np.conjugate(original_data[key]))
+        assert torch.allclose(tensor.data[key], torch.conj(original_data[key]))
     
     # Verify direction was flipped
     assert tensor.indices[0].direction == original_direction.reverse()
@@ -89,30 +91,30 @@ def test_conj_real_dtype_no_data_change():
     """Test that conj on real dtype doesn't change data."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.float64, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.float64, itags=["A", "B"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     result = conj(tensor)
     
     # Data should be unchanged (just copied) for real dtype
     for key in original_data:
-        np.testing.assert_allclose(result.data[key], original_data[key])
+        assert torch.allclose(result.data[key], original_data[key])
 
 
 def test_conj_double_application():
     """Test that conjugating twice returns to original."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=np.complex128, itags=["A", "B"])
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     original_direction = tensor.indices[0].direction
     
     double_conj = conj(conj(tensor))
     
     for key in original_data:
-        np.testing.assert_allclose(double_conj.data[key], original_data[key])
+        assert torch.allclose(double_conj.data[key], original_data[key])
     
     assert double_conj.indices[0].direction == original_direction
 
@@ -148,16 +150,16 @@ def test_permute_reorders_indices_and_blocks():
     tensor = Tensor.random(indices, seed=10, itags=itags)
     order = [2, 0, 3, 1]
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     permuted = permute(tensor, order)
 
     assert list(permuted.itags) == [itags[i] for i in order]
     for key, block in original_data.items():
         new_key = tuple(key[i] for i in order)
-        np.testing.assert_allclose(
+        assert torch.allclose(
             permuted.data[new_key],
-            np.transpose(block, axes=order),
+            torch.permute(block, order),
         )
 
 
@@ -170,14 +172,14 @@ def test_permute_inplace():
     ]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     tensor.permute([1, 0])
     
     assert list(tensor.itags) == ["b", "a"]
     for key, block in original_data.items():
         new_key = (key[1], key[0])
-        np.testing.assert_allclose(tensor.data[new_key], np.transpose(block, axes=[1, 0]))
+        assert torch.allclose(tensor.data[new_key], torch.permute(block, [1, 0]))
 
 
 def test_permute_identity():
@@ -186,13 +188,13 @@ def test_permute_identity():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     permuted = permute(tensor, [0, 1, 2])
     
     assert list(permuted.itags) == ["a", "b", "c"]
     for key in original_data:
-        np.testing.assert_allclose(permuted.data[key], original_data[key])
+        assert torch.allclose(permuted.data[key], original_data[key])
 
 
 def test_permute_invalid_order():
@@ -232,16 +234,16 @@ def test_transpose_default_reverses_order():
     itags = ["i0", "i1", "i2"]
     tensor = Tensor.random(indices, seed=11, itags=itags)
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     transposed = transpose(tensor)
 
     assert list(transposed.itags) == list(reversed(itags))
     for key, block in original_data.items():
         new_key = tuple(reversed(key))
-        np.testing.assert_allclose(
+        assert torch.allclose(
             transposed.data[new_key],
-            np.transpose(block, axes=(2, 1, 0)),
+            torch.permute(block, (2, 1, 0)),
         )
 
 
@@ -275,13 +277,13 @@ def test_transpose_double_application():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
     
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     double_transpose = transpose(transpose(tensor))
     
     assert list(double_transpose.itags) == ["a", "b"]
     for key in original_data:
-        np.testing.assert_allclose(double_transpose.data[key], original_data[key])
+        assert torch.allclose(double_transpose.data[key], original_data[key])
 
 
 # Retag tests
@@ -297,14 +299,14 @@ def test_retag_mode1_mapping():
     itags = ["x", "y", "z"]
     
     tensor = Tensor.random(indices, seed=12, itags=itags)
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     result = tensor.retag({"x": "left", "y": "right"})
     
     assert result is None  # retag() is in-place
     assert list(tensor.itags) == ["left", "right", "z"]
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
 def test_retag_mode2_full_replacement():
@@ -318,14 +320,14 @@ def test_retag_mode2_full_replacement():
     itags = ["x", "y", "z"]
     
     tensor = Tensor.random(indices, seed=13, itags=itags)
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     result = tensor.retag(["a", "b", "c"])
     
     assert result is None
     assert list(tensor.itags) == ["a", "b", "c"]
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
 def test_retag_mode3_selective_update():
@@ -339,14 +341,14 @@ def test_retag_mode3_selective_update():
     itags = ["x", "y", "z"]
     
     tensor = Tensor.random(indices, seed=14, itags=itags)
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     result = tensor.retag([0, 2], ["first", "third"])
     
     assert result is None
     assert list(tensor.itags) == ["first", "y", "third"]
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
 def test_retag_single_int_and_str():
@@ -360,7 +362,7 @@ def test_retag_single_int_and_str():
     itags = ["x", "y", "z"]
     
     tensor = Tensor.random(indices, seed=15, itags=itags)
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     # Test single int with single str
     result = tensor.retag(1, "middle")
@@ -368,7 +370,7 @@ def test_retag_single_int_and_str():
     assert result is None
     assert list(tensor.itags) == ["x", "middle", "z"]
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
     
     # Test that it works with another index
     tensor.retag(0, "left")
@@ -464,10 +466,10 @@ def test_flip_single_index():
     original_direction_1 = tensor.indices[1].direction
     original_charges_0 = tensor.indices[0].charges()
     original_charges_1 = tensor.indices[1].charges()
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    # Flip first index
-    tensor.flip(0)
+    # Invert first index
+    tensor.invert(0)
     
     # Verify direction changed for index 0
     assert tensor.indices[0].direction == original_direction_0.reverse()
@@ -479,7 +481,7 @@ def test_flip_single_index():
     assert tensor.indices[1].charges() == original_charges_1
     # Verify data unchanged
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
 def test_flip_multiple_indices():
@@ -492,10 +494,10 @@ def test_flip_multiple_indices():
     tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
     original_directions = [idx.direction for idx in tensor.indices]
     original_charges = [idx.charges() for idx in tensor.indices]
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    # Flip indices 0 and 2
-    tensor.flip([0, 2])
+    # Invert indices 0 and 2
+    tensor.invert([0, 2])
     
     # Verify directions changed for indices 0 and 2
     assert tensor.indices[0].direction == original_directions[0].reverse()
@@ -507,11 +509,11 @@ def test_flip_multiple_indices():
     assert tensor.indices[2].charges() == tuple(group.dual(c) for c in original_charges[2])
     # Verify data unchanged
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
-def test_flip_uses_dual():
-    """Test that tensor.flip() uses Index.dual() to maintain charge conservation."""
+def test_invert_uses_dual():
+    """Test that tensor.invert() uses Index.dual() to maintain charge conservation."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(-1, 2)))
     
@@ -521,18 +523,18 @@ def test_flip_uses_dual():
     original_charges = tensor.indices[0].charges()
     original_direction = tensor.indices[0].direction
     
-    # Flip the tensor index
-    tensor.flip(0)
+    # Invert the tensor index
+    tensor.invert(0)
     
-    # Tensor.flip() should use Index.dual() internally
+    # Tensor.invert() should use Index.dual() internally
     # This means both direction is reversed AND charges are conjugated
     assert tensor.indices[0].direction == original_direction.reverse()
     assert tensor.indices[0].charges() == tuple(group.dual(c) for c in original_charges)
     assert tensor.indices[0].charges() == (0, -1, 1)  # For U1, dual(q) = -q
 
 
-def test_flip_updates_block_keys():
-    """Test that flip updates block keys to reflect conjugated charges."""
+def test_invert_updates_block_keys():
+    """Test that invert updates block keys to reflect conjugated charges."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
@@ -541,10 +543,10 @@ def test_flip_updates_block_keys():
     original_keys = set(tensor.data.keys())
     
     # Store data arrays by their original keys
-    original_data_by_key = {k: v.copy() for k, v in tensor.data.items()}
+    original_data_by_key = {k: v.clone() for k, v in tensor.data.items()}
     
-    # Flip first index
-    tensor.flip(0)
+    # Invert first index
+    tensor.invert(0)
     
     # Block keys should be updated: charge at position 0 should be conjugated
     # For U1: dual(0) = 0, dual(1) = -1
@@ -559,11 +561,11 @@ def test_flip_updates_block_keys():
     for old_key, old_arr in original_data_by_key.items():
         new_key = (group.dual(old_key[0]), old_key[1])
         assert new_key in tensor.data
-        np.testing.assert_allclose(tensor.data[new_key], old_arr)
+        assert torch.allclose(tensor.data[new_key], old_arr)
 
 
-def test_flip_multiple_indices_updates_keys():
-    """Test that flipping multiple indices updates all relevant positions in block keys."""
+def test_invert_multiple_indices_updates_keys():
+    """Test that inverting multiple indices updates all relevant positions in block keys."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 2)))
@@ -572,8 +574,8 @@ def test_flip_multiple_indices_updates_keys():
     tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
     original_keys = set(tensor.data.keys())
     
-    # Flip indices 0 and 2
-    tensor.flip([0, 2])
+    # Invert indices 0 and 2
+    tensor.invert([0, 2])
     
     # Block keys should be updated at positions 0 and 2
     expected_keys = set()
@@ -584,8 +586,8 @@ def test_flip_multiple_indices_updates_keys():
     assert set(tensor.data.keys()) == expected_keys
 
 
-def test_flip_all_indices():
-    """Test flipping all indices."""
+def test_invert_all_indices():
+    """Test inverting all indices."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
@@ -593,23 +595,23 @@ def test_flip_all_indices():
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_directions = [idx.direction for idx in tensor.indices]
     
-    # Flip all indices
-    tensor.flip([0, 1])
+    # Invert all indices
+    tensor.invert([0, 1])
     
     # All directions should be reversed
     for i, orig_dir in enumerate(original_directions):
         assert tensor.indices[i].direction == orig_dir.reverse()
 
 
-def test_flip_inplace_modification():
-    """Test that flip modifies tensor in-place."""
+def test_invert_inplace_modification():
+    """Test that invert modifies tensor in-place."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
     original_id = id(tensor)
     
-    result = tensor.flip(0)
+    result = tensor.invert(0)
     
     # Should return None (in-place operation)
     assert result is None
@@ -617,8 +619,8 @@ def test_flip_inplace_modification():
     assert id(tensor) == original_id
 
 
-def test_flip_preserves_data():
-    """Test that flip preserves all tensor data."""
+def test_invert_preserves_data():
+    """Test that invert preserves all tensor data."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
@@ -626,34 +628,34 @@ def test_flip_preserves_data():
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_norm = tensor.norm()
     original_keys = set(tensor.data.keys())
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    tensor.flip([0, 1])
+    tensor.invert([0, 1])
     
     # Verify norm preserved
-    assert np.isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
     # Verify keys unchanged
     assert set(tensor.data.keys()) == original_keys
     # Verify data values unchanged
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
-def test_flip_preserves_itags():
-    """Test that flip preserves index tags."""
+def test_invert_preserves_itags():
+    """Test that invert preserves index tags."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.random([idx, idx.flip(), idx], seed=42, itags=["x", "y", "z"])
     original_itags = list(tensor.itags)
     
-    tensor.flip([0, 2])
+    tensor.invert([0, 2])
     
     # Tags should be unchanged
     assert list(tensor.itags) == original_itags
 
 
-def test_flip_out_of_range_raises():
+def test_invert_out_of_range_raises():
     """Test that out of range index positions raise error."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
@@ -662,19 +664,19 @@ def test_flip_out_of_range_raises():
     
     # Position too large
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip(2)
+        tensor.invert(2)
     
     # Negative position
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip(-1)
+        tensor.invert(-1)
     
     # In list
     with pytest.raises(IndexError, match="out of range"):
-        tensor.flip([0, 5])
+        tensor.invert([0, 5])
 
 
-def test_flip_z2_group():
-    """Test flip with Z2 symmetry group."""
+def test_invert_z2_group():
+    """Test invert with Z2 symmetry group."""
     group = Z2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
@@ -682,7 +684,7 @@ def test_flip_z2_group():
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_charges = tensor.indices[0].charges()
     
-    tensor.flip(0)
+    tensor.invert(0)
     
     # For Z2, dual(0) = 0 and dual(1) = 1, so charges appear unchanged
     # but they were conjugated (Z2 charges are self-dual)
@@ -691,8 +693,8 @@ def test_flip_z2_group():
     assert tensor.indices[0].direction == Direction.IN
 
 
-def test_flip_product_group():
-    """Test flip with product group."""
+def test_invert_product_group():
+    """Test invert with product group."""
     group = ProductGroup([U1Group(), U1Group()])
     # Use matching charges for both indices to ensure charge conservation
     idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 3)))
@@ -702,7 +704,7 @@ def test_flip_product_group():
     original_charges = tensor.indices[1].charges()
     original_direction = tensor.indices[1].direction
     
-    tensor.flip(1)
+    tensor.invert(1)
     
     # Charges should be conjugated: dual((0,0)) = (0,0), dual((1,-1)) = (-1,1)
     expected_charges = tuple(group.dual(c) for c in original_charges)
@@ -711,8 +713,8 @@ def test_flip_product_group():
     assert tensor.indices[1].direction == original_direction.reverse()
 
 
-def test_flip_double_application():
-    """Test that flipping twice returns to original direction, charges, and data."""
+def test_invert_double_application():
+    """Test that inverting twice returns to original direction, charges, and data."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
@@ -721,22 +723,22 @@ def test_flip_double_application():
     original_charges = tensor.indices[0].charges()
     original_norm = tensor.norm()
     original_keys = set(tensor.data.keys())
-    original_data = {k: v.copy() for k, v in tensor.data.items()}
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    # Flip twice
-    tensor.flip(0)
-    tensor.flip(0)
+    # Invert twice
+    tensor.invert(0)
+    tensor.invert(0)
     
     # Should be back to original
     assert tensor.indices[0].direction == original_direction
     assert tensor.indices[0].charges() == original_charges
     # Verify norm preserved
-    assert np.isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
     # Verify keys unchanged
     assert set(tensor.data.keys()) == original_keys
     # Verify data values unchanged
     for key in original_data:
-        np.testing.assert_allclose(tensor.data[key], original_data[key])
+        assert torch.allclose(tensor.data[key], original_data[key])
 
 
 # insert_index tests
@@ -749,7 +751,7 @@ def test_insert_index_at_beginning():
     
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     original_norm = tensor.norm()
-    original_block_00 = tensor.data[(0, 0)].copy()
+    original_block_00 = tensor.data[(0, 0)].clone()
     
     # Insert at position 0
     tensor.insert_index(0, Direction.OUT, itag="new")
@@ -776,7 +778,7 @@ def test_insert_index_at_beginning():
     assert tensor.data[(0, 1, 1)].shape == (1, 3, 3)
     
     # Verify data preserved (just reshaped)
-    assert np.allclose(tensor.data[(0, 0, 0)][0], original_block_00)
+    assert torch.allclose(tensor.data[(0, 0, 0)][0], original_block_00)
     assert tensor.norm() == original_norm
 
 
@@ -805,7 +807,7 @@ def test_insert_index_at_end():
     assert tensor.data[(1, 1, 0)].shape == (3, 3, 1)
     
     # Verify norm preserved
-    assert np.isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
 
 
 def test_insert_index_in_middle():
@@ -874,7 +876,7 @@ def test_insert_index_preserves_data_values():
     # Store all original values
     original_values = {}
     for key, arr in tensor.data.items():
-        original_values[key] = arr.copy()
+        original_values[key] = arr.clone()
     
     # Insert index
     tensor.insert_index(1, Direction.OUT, itag="inserted")
@@ -883,7 +885,7 @@ def test_insert_index_preserves_data_values():
     for old_key, old_arr in original_values.items():
         new_key = (old_key[0], 0, old_key[1])  # Insert neutral charge
         assert new_key in tensor.data
-        assert np.allclose(tensor.data[new_key][:, 0, :], old_arr)
+        assert torch.allclose(tensor.data[new_key][:, 0, :], old_arr)
 
 
 def test_insert_index_multiple_insertions():
@@ -916,7 +918,7 @@ def test_insert_index_multiple_insertions():
     assert tensor.indices[4].sectors[0].dim == 1
     
     # Verify norm preserved
-    assert np.isclose(tensor.norm(), original_norm)
+    assert math.isclose(tensor.norm(), original_norm)
 
 
 def test_insert_index_position_validation():
@@ -981,14 +983,14 @@ def test_insert_index_complex_dtype():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
-    tensor = Tensor.random([idx1, idx2], seed=42, dtype=np.complex128, itags=["a", "b"])
+    tensor = Tensor.random([idx1, idx2], seed=42, dtype=torch.complex128, itags=["a", "b"])
     
     tensor.insert_index(1, Direction.OUT)
     
     # Verify dtype preserved
-    assert tensor.dtype == np.complex128
+    assert tensor.dtype == torch.complex128
     for arr in tensor.data.values():
-        assert arr.dtype == np.complex128
+        assert arr.dtype == torch.complex128
 
 
 def test_insert_index_inplace_modification():
@@ -1114,7 +1116,7 @@ def test_merge_axes_unfuse_with_conjugate():
     # Now compare block by block
     assert set(T.data.keys()) == set(unmerged.data.keys())
     for key in T.data.keys():
-        np.testing.assert_allclose(T.data[key], unmerged.data[key], rtol=1e-10, atol=1e-12)
+        assert torch.allclose(T.data[key], unmerged.data[key], rtol=1e-10, atol=1e-12)
 
 
 def test_merge_axes_direction_parameter():
@@ -1260,7 +1262,7 @@ def test_merge_axes_product_group():
     # Verify data blocks match
     assert set(T.data.keys()) == set(unmerged.data.keys())
     for key in T.data.keys():
-        assert np.allclose(T.data[key], unmerged.data[key])
+        assert torch.allclose(T.data[key], unmerged.data[key], rtol=1e-10, atol=1e-12)
 
 
 def test_merge_axes_preserves_dtype():
@@ -1269,13 +1271,13 @@ def test_merge_axes_preserves_dtype():
     idx = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(1, 1)))
     
     # Test with complex dtype
-    T = Tensor.random([idx, idx.flip(), idx], seed=1, dtype=np.complex128, itags=['a', 'b', 'c'])
+    T = Tensor.random([idx, idx.flip(), idx], seed=1, dtype=torch.complex128, itags=['a', 'b', 'c'])
     
     merged, iso_conj = merge_axes(T, [0, 1], merged_tag='ab')
     
-    assert merged.dtype == np.complex128
+    assert merged.dtype == torch.complex128
     # Isometry uses the tensor's dtype
-    assert iso_conj.dtype == np.complex128
+    assert iso_conj.dtype == torch.complex128
 
 
 # Trim zero sectors tests
@@ -1304,16 +1306,16 @@ def test_trim_zero_sectors_single_block():
     
     # Create data with one near-zero block
     data = {
-        (-1, -1): np.array([[1.0, 0.5], [0.3, 0.8]]),
-        (0, 0): np.array([[1e-20, 1e-20], [1e-20, 1e-20]]),  # Near-zero
-        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),
+        (-1, -1): torch.tensor([[1.0, 0.5], [0.3, 0.8]]),
+        (0, 0): torch.tensor([[1e-20, 1e-20], [1e-20, 1e-20]]),  # Near-zero
+        (1, 1): torch.tensor([[0.7, 0.2], [0.4, 0.9]]),
     }
     
     tensor = Tensor(
         indices=(idx_in, idx_out),
         itags=("in", "out"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Apply trim
@@ -1353,19 +1355,19 @@ def test_trim_zero_sectors_multiple_blocks():
     )
     
     # Multiple near-zero blocks
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     data = {
-        (-1, -1): np.array([[1.0]]),
-        (0, 0): np.array([[eps / 2]]),  # Below threshold
-        (1, 1): np.array([[eps / 10]]),  # Below threshold
-        (2, 2): np.array([[2.0]]),
+        (-1, -1): torch.tensor([[1.0]]),
+        (0, 0): torch.tensor([[eps / 2]]),  # Below threshold
+        (1, 1): torch.tensor([[eps / 10]]),  # Below threshold
+        (2, 2): torch.tensor([[2.0]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     tensor.trim_zero_sectors()
@@ -1392,15 +1394,15 @@ def test_trim_zero_sectors_no_removal():
     )
     
     data = {
-        (0, 0): np.array([[1.0, 0.5], [0.3, 0.8]]),
-        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),
+        (0, 0): torch.tensor([[1.0, 0.5], [0.3, 0.8]]),
+        (1, 1): torch.tensor([[0.7, 0.2], [0.4, 0.9]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Store original state
@@ -1424,15 +1426,15 @@ def test_trim_zero_sectors_inplace():
     )
     
     data = {
-        (0, 0): np.array([[1e-20]]),
-        (1, 1): np.array([[1.0]]),
+        (0, 0): torch.tensor([[1e-20]]),
+        (1, 1): torch.tensor([[1.0]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     # Get object id before
@@ -1459,18 +1461,18 @@ def test_trim_zero_sectors_negative_values():
         )
     )
     
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     data = {
-        (-1, -1): np.array([[-1.0, -0.5], [-0.3, -0.8]]),  # All negative, non-zero
-        (0, 0): np.array([[-eps/2, -eps/3], [-eps/4, -eps/5]]),  # All negative, near-zero
-        (1, 1): np.array([[0.7, 0.2], [0.4, 0.9]]),  # All positive, non-zero
+        (-1, -1): torch.tensor([[-1.0, -0.5], [-0.3, -0.8]]),  # All negative, non-zero
+        (0, 0): torch.tensor([[-eps/2, -eps/3], [-eps/4, -eps/5]]),  # All negative, near-zero
+        (1, 1): torch.tensor([[0.7, 0.2], [0.4, 0.9]]),  # All positive, non-zero
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     tensor.trim_zero_sectors()
@@ -1482,9 +1484,9 @@ def test_trim_zero_sectors_negative_values():
     assert (0, 0) not in tensor.data
     
     # Verify negative values are preserved
-    np.testing.assert_array_equal(
+    assert torch.equal(
         tensor.data[(-1, -1)],
-        np.array([[-1.0, -0.5], [-0.3, -0.8]])
+        torch.tensor([[-1.0, -0.5], [-0.3, -0.8]], dtype=tensor.data[(-1, -1)].dtype)
     )
 
 
@@ -1501,21 +1503,21 @@ def test_trim_zero_sectors_mixed_signs():
         )
     )
     
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     data = {
         # Mixed signs with large magnitude - should be kept
-        (-1, -1): np.array([[1.5, -2.3], [-0.8, 1.2]]),
+        (-1, -1): torch.tensor([[1.5, -2.3], [-0.8, 1.2]]),
         # Mixed signs with tiny magnitude - should be removed
-        (0, 0): np.array([[eps/2, -eps/3], [-eps/4, eps/5]]),
+        (0, 0): torch.tensor([[eps/2, -eps/3], [-eps/4, eps/5]]),
         # Mixed signs with one large value - should be kept
-        (1, 1): np.array([[eps/2, -eps/3], [2.0, -eps/5]]),
+        (1, 1): torch.tensor([[eps/2, -eps/3], [2.0, -eps/5]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     tensor.trim_zero_sectors()
@@ -1528,11 +1530,11 @@ def test_trim_zero_sectors_mixed_signs():
     assert (0, 0) not in tensor.data
     
     # Verify mixed-sign data is preserved exactly
-    np.testing.assert_array_equal(
+    assert torch.equal(
         tensor.data[(-1, -1)],
-        np.array([[1.5, -2.3], [-0.8, 1.2]])
+        torch.tensor([[1.5, -2.3], [-0.8, 1.2]], dtype=tensor.data[(-1, -1)].dtype)
     )
-    assert np.max(np.abs(tensor.data[(1, 1)])) >= 2.0  # Has the large value
+    assert torch.max(torch.abs(tensor.data[(1, 1)])).item() >= 2.0  # Has the large value
 
 
 def test_trim_zero_sectors_complex_values():
@@ -1545,19 +1547,19 @@ def test_trim_zero_sectors_complex_values():
     )
     
     # Complex near-zero block (both real and imaginary parts near zero)
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     data = {
-        (0, 0): np.array([[eps/2 + 1j*eps/3, eps/4 + 1j*eps/5],
-                        [eps/6 + 1j*eps/7, eps/8 + 1j*eps/9]], dtype=np.complex128),
-        (1, 1): np.array([[1.0 + 1.0j, 2.0 + 2.0j],
-                        [3.0 + 3.0j, 4.0 + 4.0j]], dtype=np.complex128),
+        (0, 0): torch.tensor([[eps/2 + 1j*eps/3, eps/4 + 1j*eps/5],
+                        [eps/6 + 1j*eps/7, eps/8 + 1j*eps/9]], dtype=torch.complex128),
+        (1, 1): torch.tensor([[1.0 + 1.0j, 2.0 + 2.0j],
+                        [3.0 + 3.0j, 4.0 + 4.0j]], dtype=torch.complex128),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.complex128
+        dtype=torch.complex128
     )
     
     tensor.trim_zero_sectors()
@@ -1578,15 +1580,15 @@ def test_trim_zero_sectors_z2_symmetry():
     )
     
     data = {
-        (0, 0): np.array([[1e-20, 1e-20], [1e-20, 1e-20]]),
-        (1, 1): np.array([[0.5, 0.3], [0.2, 0.8]]),
+        (0, 0): torch.tensor([[1e-20, 1e-20], [1e-20, 1e-20]]),
+        (1, 1): torch.tensor([[0.5, 0.3], [0.2, 0.8]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     tensor.trim_zero_sectors()
@@ -1614,16 +1616,16 @@ def test_trim_zero_sectors_product_group():
     )
     
     data = {
-        ((0, 0), (0, 0)): np.array([[1.0]]),
-        ((0, 1), (0, 1)): np.array([[1e-20]]),  # Near-zero
-        ((1, 0), (1, 0)): np.array([[0.5]]),
+        ((0, 0), (0, 0)): torch.tensor([[1.0]]),
+        ((0, 1), (0, 1)): torch.tensor([[1e-20]]),  # Near-zero
+        ((1, 0), (1, 0)): torch.tensor([[0.5]]),
     }
     
     tensor = Tensor(
         indices=(idx, idx.flip()),
         itags=("a", "b"),
         data=data,
-        dtype=np.float64
+        dtype=torch.float64
     )
     
     tensor.trim_zero_sectors()

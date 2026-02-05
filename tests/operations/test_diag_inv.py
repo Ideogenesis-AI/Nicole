@@ -18,7 +18,7 @@
 
 """Tests for diag and inv functions."""
 
-import numpy as np
+import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, diag, inv
@@ -38,8 +38,8 @@ def test_diag_basic_u1():
     
     # Create singular value blocks
     S_blocks = {
-        (0, 0): np.array([3.0, 2.0, 1.0]),
-        (1, 1): np.array([0.5, 0.3])
+        (0, 0): torch.tensor([3.0, 2.0, 1.0]),
+        (1, 1): torch.tensor([0.5, 0.3])
     }
     
     S_diag = diag(S_blocks, bond_index)
@@ -61,16 +61,16 @@ def test_diag_basic_u1():
     # Verify block (0, 0) is diagonal
     block_00 = S_diag.data[(0, 0)]
     assert block_00.shape == (3, 3)
-    expected_00 = np.diag([3.0, 2.0, 1.0])
-    np.testing.assert_allclose(block_00, expected_00)
-    assert np.allclose(block_00, np.diag(np.diag(block_00)))
+    expected_00 = torch.diag(torch.tensor([3.0, 2.0, 1.0]))
+    assert torch.allclose(block_00, expected_00)
+    assert torch.allclose(block_00, torch.diag(torch.diag(block_00)))
     
     # Verify block (1, 1) is diagonal
     block_11 = S_diag.data[(1, 1)]
     assert block_11.shape == (2, 2)
-    expected_11 = np.diag([0.5, 0.3])
-    np.testing.assert_allclose(block_11, expected_11)
-    assert np.allclose(block_11, np.diag(np.diag(block_11)))
+    expected_11 = torch.diag(torch.tensor([0.5, 0.3]))
+    assert torch.allclose(block_11, expected_11)
+    assert torch.allclose(block_11, torch.diag(torch.diag(block_11)))
 
 
 def test_diag_custom_itags():
@@ -78,7 +78,7 @@ def test_diag_custom_itags():
     group = U1Group()
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
     
-    S_blocks = {(0, 0): np.array([1.0, 0.5])}
+    S_blocks = {(0, 0): torch.tensor([1.0, 0.5])}
     
     S_diag = diag(S_blocks, bond_index, itags=("left", "right"))
     
@@ -91,11 +91,11 @@ def test_diag_custom_dtype():
     group = U1Group()
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
     
-    S_blocks = {(0, 0): np.array([1.0, 0.5])}
+    S_blocks = {(0, 0): torch.tensor([1.0, 0.5])}
     
-    S_diag = diag(S_blocks, bond_index, dtype=np.float32)
+    S_diag = diag(S_blocks, bond_index, dtype=torch.float32)
     
-    assert S_diag.dtype == np.float32
+    assert S_diag.dtype == torch.float32
 
 
 def test_diag_z2_group():
@@ -104,8 +104,8 @@ def test_diag_z2_group():
     bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
     
     S_blocks = {
-        (0, 0): np.array([2.0, 1.5]),
-        (1, 1): np.array([1.0, 0.8, 0.3])
+        (0, 0): torch.tensor([2.0, 1.5]),
+        (1, 1): torch.tensor([1.0, 0.8, 0.3])
     }
     
     S_diag = diag(S_blocks, bond_index)
@@ -115,8 +115,8 @@ def test_diag_z2_group():
     assert S_diag.indices[1].group == group
     
     # Check diagonal structure
-    assert np.allclose(S_diag.data[(0, 0)], np.diag([2.0, 1.5]))
-    assert np.allclose(S_diag.data[(1, 1)], np.diag([1.0, 0.8, 0.3]))
+    assert torch.allclose(S_diag.data[(0, 0)], torch.diag(torch.tensor([2.0, 1.5])))
+    assert torch.allclose(S_diag.data[(1, 1)], torch.diag(torch.tensor([1.0, 0.8, 0.3])))
 
 
 def test_diag_product_group():
@@ -130,9 +130,9 @@ def test_diag_product_group():
     
     # Keys are tuples of tuples for ProductGroup
     S_blocks = {
-        ((0, 0), (0, 0)): np.array([2.5, 1.2]),
-        ((1, 1), (1, 1)): np.array([1.5, 0.8, 0.4]),
-        ((-1, 0), (-1, 0)): np.array([0.9])
+        ((0, 0), (0, 0)): torch.tensor([2.5, 1.2]),
+        ((1, 1), (1, 1)): torch.tensor([1.5, 0.8, 0.4]),
+        ((-1, 0), (-1, 0)): torch.tensor([0.9])
     }
     
     S_diag = diag(S_blocks, bond_index)
@@ -145,9 +145,9 @@ def test_diag_product_group():
     assert set(S_diag.data.keys()) == {((0, 0), (0, 0)), ((1, 1), (1, 1)), ((-1, 0), (-1, 0))}
     
     # Verify diagonal structure for each block
-    np.testing.assert_allclose(S_diag.data[((0, 0), (0, 0))], np.diag([2.5, 1.2]))
-    np.testing.assert_allclose(S_diag.data[((1, 1), (1, 1))], np.diag([1.5, 0.8, 0.4]))
-    np.testing.assert_allclose(S_diag.data[((-1, 0), (-1, 0))], np.diag([0.9]))
+    assert torch.allclose(S_diag.data[((0, 0), (0, 0))], torch.diag(torch.tensor([2.5, 1.2])))
+    assert torch.allclose(S_diag.data[((1, 1), (1, 1))], torch.diag(torch.tensor([1.5, 0.8, 0.4])))
+    assert torch.allclose(S_diag.data[((-1, 0), (-1, 0))], torch.diag(torch.tensor([0.9])))
 
 
 def test_diag_with_svd_u1():
@@ -175,8 +175,8 @@ def test_diag_with_svd_u1():
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
         # Check it's diagonal (off-diagonal elements are zero)
-        off_diag = block - np.diag(np.diag(block))
-        assert np.max(np.abs(off_diag)) < 1e-14
+        off_diag = block - torch.diag(torch.diag(block))
+        assert torch.max(torch.abs(off_diag)).item() < 1e-14
 
 
 def test_diag_with_svd_product_group():
@@ -219,8 +219,8 @@ def test_diag_with_svd_product_group():
         # Check diagonal structure
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
-        off_diag = block - np.diag(np.diag(block))
-        assert np.max(np.abs(off_diag)) < 1e-14
+        off_diag = block - torch.diag(torch.diag(block))
+        assert torch.max(torch.abs(off_diag)).item() < 1e-14
 
 
 def test_diag_with_eig():
@@ -246,8 +246,8 @@ def test_diag_with_eig():
     # Verify all blocks are diagonal
     for key, block in D_diag.data.items():
         assert block.ndim == 2
-        off_diag = block - np.diag(np.diag(block))
-        assert np.max(np.abs(off_diag)) < 1e-14
+        off_diag = block - torch.diag(torch.diag(block))
+        assert torch.max(torch.abs(off_diag)).item() < 1e-14
 
 
 def test_diag_empty_blocks():
@@ -269,15 +269,15 @@ def test_diag_single_element_blocks():
     bond_index = Index(Direction.IN, group, (Sector(0, 1), Sector(1, 1)))
     
     S_blocks = {
-        (0, 0): np.array([5.0]),
-        (1, 1): np.array([3.0])
+        (0, 0): torch.tensor([5.0]),
+        (1, 1): torch.tensor([3.0])
     }
     
     S_diag = diag(S_blocks, bond_index)
     
     # Single element should become 1x1 matrix
-    np.testing.assert_allclose(S_diag.data[(0, 0)], np.array([[5.0]]))
-    np.testing.assert_allclose(S_diag.data[(1, 1)], np.array([[3.0]]))
+    assert torch.allclose(S_diag.data[(0, 0)], torch.tensor([[5.0]]))
+    assert torch.allclose(S_diag.data[(1, 1)], torch.tensor([[3.0]]))
 
 
 def test_diag_negative_charges():
@@ -286,17 +286,17 @@ def test_diag_negative_charges():
     bond_index = Index(Direction.IN, group, (Sector(-2, 2), Sector(-1, 1), Sector(0, 3)))
     
     S_blocks = {
-        (-2, -2): np.array([1.5, 0.8]),
-        (-1, -1): np.array([2.0]),
-        (0, 0): np.array([3.0, 2.5, 1.0])
+        (-2, -2): torch.tensor([1.5, 0.8]),
+        (-1, -1): torch.tensor([2.0]),
+        (0, 0): torch.tensor([3.0, 2.5, 1.0])
     }
     
     S_diag = diag(S_blocks, bond_index)
     
     assert set(S_diag.data.keys()) == {(-2, -2), (-1, -1), (0, 0)}
-    np.testing.assert_allclose(S_diag.data[(-2, -2)], np.diag([1.5, 0.8]))
-    np.testing.assert_allclose(S_diag.data[(-1, -1)], np.diag([2.0]))
-    np.testing.assert_allclose(S_diag.data[(0, 0)], np.diag([3.0, 2.5, 1.0]))
+    assert torch.allclose(S_diag.data[(-2, -2)], torch.diag(torch.tensor([1.5, 0.8])))
+    assert torch.allclose(S_diag.data[(-1, -1)], torch.diag(torch.tensor([2.0])))
+    assert torch.allclose(S_diag.data[(0, 0)], torch.diag(torch.tensor([3.0, 2.5, 1.0])))
 
 
 def test_diag_error_non_1d_blocks():
@@ -306,10 +306,10 @@ def test_diag_error_non_1d_blocks():
     
     # Create 2D block (invalid)
     S_blocks = {
-        (0, 0): np.array([[1.0, 0.5], [0.5, 1.0]])
+        (0, 0): torch.tensor([[1.0, 0.5], [0.5, 1.0]])
     }
     
-    with pytest.raises(ValueError, match="1-dimensional.*shape \\(2, 2\\)"):
+    with pytest.raises(ValueError, match="1-dimensional.*shape"):
         diag(S_blocks, bond_index)
 
 
@@ -317,7 +317,7 @@ def test_diag_error_invalid_itags():
     """Test diag raises error for invalid itags."""
     group = U1Group()
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
-    S_blocks = {(0, 0): np.array([1.0, 0.5])}
+    S_blocks = {(0, 0): torch.tensor([1.0, 0.5])}
     
     # Wrong number of itags
     with pytest.raises(ValueError, match="tuple of two strings"):
@@ -333,13 +333,13 @@ def test_diag_complex_dtype():
     group = U1Group()
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
     
-    S_blocks = {(0, 0): np.array([1.0 + 0.5j, 0.5 + 0.2j])}
+    S_blocks = {(0, 0): torch.tensor([1.0 + 0.5j, 0.5 + 0.2j])}
     
     S_diag = diag(S_blocks, bond_index)
     
-    expected = np.diag([1.0 + 0.5j, 0.5 + 0.2j])
-    np.testing.assert_allclose(S_diag.data[(0, 0)], expected)
-    assert np.iscomplexobj(S_diag.data[(0, 0)])
+    expected = torch.diag(torch.tensor([1.0 + 0.5j, 0.5 + 0.2j]))
+    assert torch.allclose(S_diag.data[(0, 0)], expected)
+    assert S_diag.data[(0, 0)].is_complex()
 
 
 def test_diag_preserves_charge_conservation():
@@ -348,8 +348,8 @@ def test_diag_preserves_charge_conservation():
     bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
     
     S_blocks = {
-        (0, 0): np.array([2.0, 1.0]),
-        (1, 1): np.array([3.0, 2.0, 1.0])
+        (0, 0): torch.tensor([2.0, 1.0]),
+        (1, 1): torch.tensor([3.0, 2.0, 1.0])
     }
     
     S_diag = diag(S_blocks, bond_index)
@@ -380,10 +380,10 @@ def test_inv_basic_u1():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            (-1, -1): np.diag([1.0, 2.0]),
-            (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.diag([5.0, 10.0]),
-            (2, 2): np.array([[3.0]])
+            (-1, -1): torch.diag(torch.tensor([1.0, 2.0])),
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.diag(torch.tensor([5.0, 10.0])),
+            (2, 2): torch.tensor([[3.0]])
         },
         label="Diagonal"
     )
@@ -399,22 +399,22 @@ def test_inv_basic_u1():
     assert D_inv.indices[1].direction == Direction.IN  # Flipped from OUT
     
     # Check inverted values (keys remain same for diagonal blocks)
-    np.testing.assert_allclose(D_inv.data[(-1, -1)], np.diag([1.0, 0.5]))
-    np.testing.assert_allclose(D_inv.data[(0, 0)], np.diag([0.5, 0.25]))
-    np.testing.assert_allclose(D_inv.data[(1, 1)], np.diag([0.2, 0.1]))
-    np.testing.assert_allclose(D_inv.data[(2, 2)], np.array([[1.0/3.0]]))
+    assert torch.allclose(D_inv.data[(-1, -1)], torch.diag(torch.tensor([1.0, 0.5])))
+    assert torch.allclose(D_inv.data[(0, 0)], torch.diag(torch.tensor([0.5, 0.25])))
+    assert torch.allclose(D_inv.data[(1, 1)], torch.diag(torch.tensor([0.2, 0.1])))
+    assert torch.allclose(D_inv.data[(2, 2)], torch.tensor([[1.0/3.0]]))
     
     # Verify D * D_inv = I (element-wise check)
     for key in D.data.keys():
-        product = np.diag(D.data[key]) * np.diag(D_inv.data[key])
-        np.testing.assert_allclose(product, 1.0)
+        product = torch.diag(D.data[key]) * torch.diag(D_inv.data[key])
+        assert torch.allclose(product, torch.ones_like(product))
     
     # Verify D @ D_inv = I (tensor contraction check)
     result = contract(D, D_inv, axes=(1, 0))
     for key, block in result.data.items():
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
-        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
+        assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype), atol=1e-14)
 
 
 def test_inv_with_diag_output():
@@ -423,8 +423,8 @@ def test_inv_with_diag_output():
     bond_index = Index(Direction.IN, group, (Sector(0, 3), Sector(1, 2)))
     
     S_blocks = {
-        (0, 0): np.array([3.0, 2.0, 1.0]),
-        (1, 1): np.array([0.5, 0.3])
+        (0, 0): torch.tensor([3.0, 2.0, 1.0]),
+        (1, 1): torch.tensor([0.5, 0.3])
     }
     
     S_diag = diag(S_blocks, bond_index)
@@ -435,11 +435,11 @@ def test_inv_with_diag_output():
     assert S_inv.label == "Diagonal"
     
     # Verify inversion
-    expected_00 = np.diag([1/3.0, 1/2.0, 1/1.0])
-    expected_11 = np.diag([1/0.5, 1/0.3])
+    expected_00 = torch.diag(torch.tensor([1/3.0, 1/2.0, 1/1.0]))
+    expected_11 = torch.diag(torch.tensor([1/0.5, 1/0.3]))
     
-    np.testing.assert_allclose(S_inv.data[(0, 0)], expected_00)
-    np.testing.assert_allclose(S_inv.data[(1, 1)], expected_11)
+    assert torch.allclose(S_inv.data[(0, 0)], expected_00)
+    assert torch.allclose(S_inv.data[(1, 1)], expected_11)
 
 
 def test_inv_with_svd():
@@ -460,8 +460,8 @@ def test_inv_with_svd():
     
     # Verify all blocks give identity when multiplied
     for key in S_diag.data.keys():
-        product = np.diag(S_diag.data[key]) * np.diag(S_inv.data[key])
-        np.testing.assert_allclose(product, 1.0, rtol=1e-14)
+        product = torch.diag(S_diag.data[key]) * torch.diag(S_inv.data[key])
+        assert torch.allclose(product, torch.ones_like(product), rtol=1e-14)
 
 
 def test_inv_z2_group():
@@ -473,16 +473,16 @@ def test_inv_z2_group():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.diag([1.0, 0.5, 0.25])
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.diag(torch.tensor([1.0, 0.5, 0.25]))
         },
         label="Diagonal"
     )
     
     D_inv = inv(D)
     
-    np.testing.assert_allclose(D_inv.data[(0, 0)], np.diag([0.5, 0.25]))
-    np.testing.assert_allclose(D_inv.data[(1, 1)], np.diag([1.0, 2.0, 4.0]))
+    assert torch.allclose(D_inv.data[(0, 0)], torch.diag(torch.tensor([0.5, 0.25])))
+    assert torch.allclose(D_inv.data[(1, 1)], torch.diag(torch.tensor([1.0, 2.0, 4.0])))
 
 
 def test_inv_product_group():
@@ -498,8 +498,8 @@ def test_inv_product_group():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            ((0, 0), (0, 0)): np.diag([2.0, 5.0]),
-            ((1, 1), (1, 1)): np.diag([1.0, 0.5, 0.2])
+            ((0, 0), (0, 0)): torch.diag(torch.tensor([2.0, 5.0])),
+            ((1, 1), (1, 1)): torch.diag(torch.tensor([1.0, 0.5, 0.2]))
         },
         label="Diagonal"
     )
@@ -510,8 +510,8 @@ def test_inv_product_group():
     assert set(D_inv.data.keys()) == {((0, 0), (0, 0)), ((1, 1), (1, 1))}
     
     # Check inversions
-    np.testing.assert_allclose(D_inv.data[((0, 0), (0, 0))], np.diag([0.5, 0.2]))
-    np.testing.assert_allclose(D_inv.data[((1, 1), (1, 1))], np.diag([1.0, 2.0, 5.0]))
+    assert torch.allclose(D_inv.data[((0, 0), (0, 0))], torch.diag(torch.tensor([0.5, 0.2])))
+    assert torch.allclose(D_inv.data[((1, 1), (1, 1))], torch.diag(torch.tensor([1.0, 2.0, 5.0])))
 
 
 def test_inv_single_element():
@@ -523,16 +523,16 @@ def test_inv_single_element():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            (0, 0): np.array([[5.0]]),
-            (1, 1): np.array([[2.0]])
+            (0, 0): torch.tensor([[5.0]]),
+            (1, 1): torch.tensor([[2.0]])
         },
         label="Diagonal"
     )
     
     D_inv = inv(D)
     
-    np.testing.assert_allclose(D_inv.data[(0, 0)], np.array([[0.2]]))
-    np.testing.assert_allclose(D_inv.data[(1, 1)], np.array([[0.5]]))
+    assert torch.allclose(D_inv.data[(0, 0)], torch.tensor([[0.2]]))
+    assert torch.allclose(D_inv.data[(1, 1)], torch.tensor([[0.5]]))
 
 
 def test_inv_negative_charges():
@@ -544,18 +544,18 @@ def test_inv_negative_charges():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            (-1, -1): np.diag([2.0, 4.0]),
-            (0, 0): np.diag([1.0, 0.5]),
-            (1, 1): np.diag([10.0])
+            (-1, -1): torch.diag(torch.tensor([2.0, 4.0])),
+            (0, 0): torch.diag(torch.tensor([1.0, 0.5])),
+            (1, 1): torch.diag(torch.tensor([10.0]))
         },
         label="Diagonal"
     )
     
     D_inv = inv(D)
     
-    np.testing.assert_allclose(D_inv.data[(-1, -1)], np.diag([0.5, 0.25]))
-    np.testing.assert_allclose(D_inv.data[(0, 0)], np.diag([1.0, 2.0]))
-    np.testing.assert_allclose(D_inv.data[(1, 1)], np.diag([0.1]))
+    assert torch.allclose(D_inv.data[(-1, -1)], torch.diag(torch.tensor([0.5, 0.25])))
+    assert torch.allclose(D_inv.data[(0, 0)], torch.diag(torch.tensor([1.0, 2.0])))
+    assert torch.allclose(D_inv.data[(1, 1)], torch.diag(torch.tensor([0.1])))
 
 
 def test_inv_complex_dtype():
@@ -567,19 +567,19 @@ def test_inv_complex_dtype():
     D = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.diag([1.0 + 1.0j, 2.0 + 0.0j])},
+        data={(0, 0): torch.diag(torch.tensor([1.0 + 1.0j, 2.0 + 0.0j]))},
         label="Diagonal"
     )
     
     D_inv = inv(D)
     
     # Verify inversion
-    expected = np.diag([1/(1.0 + 1.0j), 1/(2.0 + 0.0j)])
-    np.testing.assert_allclose(D_inv.data[(0, 0)], expected)
+    expected = torch.diag(torch.tensor([1/(1.0 + 1.0j), 1/(2.0 + 0.0j)]))
+    assert torch.allclose(D_inv.data[(0, 0)], expected)
     
     # Verify D * D_inv = I
-    product_diag = np.diag(D.data[(0, 0)]) * np.diag(D_inv.data[(0, 0)])
-    np.testing.assert_allclose(product_diag, 1.0)
+    product_diag = torch.diag(D.data[(0, 0)]) * torch.diag(D_inv.data[(0, 0)])
+    assert torch.allclose(product_diag, torch.ones_like(product_diag))
 
 
 def test_inv_non_diagonal_without_label():
@@ -591,7 +591,7 @@ def test_inv_non_diagonal_without_label():
     T = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.array([[1.0, 0.5], [0.0, 2.0]])},  # Upper triangular
+        data={(0, 0): torch.tensor([[1.0, 0.5], [0.0, 2.0]])},  # Upper triangular
         label="Tensor"  # Not labeled "Diagonal"
     )
     
@@ -608,7 +608,7 @@ def test_inv_non_diagonal_skipped_with_label():
     T = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.array([[1.0, 0.0], [0.0, 2.0]])},  # Actually diagonal
+        data={(0, 0): torch.tensor([[1.0, 0.0], [0.0, 2.0]])},  # Actually diagonal
         label="Diagonal"
     )
     
@@ -638,7 +638,7 @@ def test_inv_same_direction_flips():
     T = Tensor(
         indices=(idx, idx),  # Both OUT
         itags=("i", "j"),
-        data={(0, 0): np.diag([2.0, 4.0])},
+        data={(0, 0): torch.diag(torch.tensor([2.0, 4.0]))},
         label="Diagonal"
     )
     
@@ -650,7 +650,7 @@ def test_inv_same_direction_flips():
     assert T_inv.indices[1].direction == Direction.IN
     
     # Verify inversion is correct
-    np.testing.assert_allclose(T_inv.data[(0, 0)], np.diag([0.5, 0.25]))
+    assert torch.allclose(T_inv.data[(0, 0)], torch.diag(torch.tensor([0.5, 0.25])))
 
 
 def test_inv_same_direction_in_gives_identity():
@@ -665,14 +665,14 @@ def test_inv_same_direction_in_gives_identity():
         indices=(idx.flip(), idx),
         itags=("i", "j"),
         data={
-            (-1, -1): np.diag([1.5, 2.5]),
-            (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.array([[3.0]])
+            (-1, -1): torch.diag(torch.tensor([1.5, 2.5])),
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.tensor([[3.0]])
         },
         label="Diagonal"
     )
-    # Flip to make both IN
-    D.flip(0)
+    # Invert to make both IN
+    D.invert(0)
     
     # Verify both indices are IN
     assert D.indices[0].direction == Direction.IN
@@ -696,7 +696,7 @@ def test_inv_same_direction_in_gives_identity():
     for key, block in result.data.items():
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
-        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
+        assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype), atol=1e-14)
 
 
 def test_inv_same_direction_out_gives_identity():
@@ -712,15 +712,15 @@ def test_inv_same_direction_out_gives_identity():
         indices=(idx.flip(), idx),
         itags=("i", "j"),
         data={
-            (-2, -2): np.array([[5.0]]),
-            (-1, -1): np.diag([1.5, 2.5]),
-            (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.array([[3.0]])
+            (-2, -2): torch.tensor([[5.0]]),
+            (-1, -1): torch.diag(torch.tensor([1.5, 2.5])),
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.tensor([[3.0]])
         },
         label="Diagonal"
     )
-    # Flip second index to make both OUT
-    D.flip(1)
+    # Invert second index to make both OUT
+    D.invert(1)
     
     # Verify both indices are OUT
     assert D.indices[0].direction == Direction.OUT
@@ -744,7 +744,7 @@ def test_inv_same_direction_out_gives_identity():
     for key, block in result.data.items():
         assert block.ndim == 2
         assert block.shape[0] == block.shape[1]
-        np.testing.assert_allclose(block, np.eye(block.shape[0]), atol=1e-14)
+        assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype), atol=1e-14)
 
 
 def test_inv_error_zero_element():
@@ -755,7 +755,7 @@ def test_inv_error_zero_element():
     D = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.diag([1.0, 0.0, 3.0])},  # Zero in the middle
+        data={(0, 0): torch.diag(torch.tensor([1.0, 0.0, 3.0]))},  # Zero in the middle
         label="Diagonal"
     )
     
@@ -772,7 +772,7 @@ def test_inv_error_non_square_block():
     T = Tensor(
         indices=(idx_i, idx_j),
         itags=("i", "j"),
-        data={(0, 0): np.zeros((2, 3))},
+        data={(0, 0): torch.zeros((2, 3))},
         label="Tensor"
     )
     
@@ -789,10 +789,10 @@ def test_inv_preserves_structure():
         indices=(bond_index.flip(), bond_index),
         itags=("left", "right"),
         data={
-            (0, 0): np.diag([2.0, 4.0]),
-            (1, 1): np.diag([1.0, 0.5, 0.25])
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.diag(torch.tensor([1.0, 0.5, 0.25]))
         },
-        dtype=np.float64,
+        dtype=torch.float64,
         label="Diagonal"
     )
     
@@ -817,8 +817,8 @@ def test_inv_double_inversion():
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
         data={
-            (0, 0): np.diag([2.0, 5.0]),
-            (1, 1): np.diag([0.5, 10.0])
+            (0, 0): torch.diag(torch.tensor([2.0, 5.0])),
+            (1, 1): torch.diag(torch.tensor([0.5, 10.0]))
         },
         label="Diagonal"
     )
@@ -828,7 +828,7 @@ def test_inv_double_inversion():
     
     # Should recover original
     for key in D.data.keys():
-        np.testing.assert_allclose(D_inv_inv.data[key], D.data[key], rtol=1e-14)
+        assert torch.allclose(D_inv_inv.data[key], D.data[key], rtol=1e-14)
 
 
 def test_inv_very_small_values():
@@ -837,12 +837,12 @@ def test_inv_very_small_values():
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
     
     # Value below machine epsilon (treated as zero)
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     tiny_val = eps / 10  # Below threshold
     D = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.diag([tiny_val, 1.0])},
+        data={(0, 0): torch.diag(torch.tensor([tiny_val, 1.0]))},
         label="Diagonal"
     )
     
@@ -857,17 +857,17 @@ def test_inv_small_but_invertible():
     bond_index = Index(Direction.IN, group, (Sector(0, 2),))
     
     # Small but above machine epsilon
-    eps = np.finfo(np.float64).eps
+    eps = torch.finfo(torch.float64).eps
     small_val = eps * 100  # Well above threshold
     D = Tensor(
         indices=(bond_index.flip(), bond_index),
         itags=("i", "j"),
-        data={(0, 0): np.diag([small_val, 1.0])},
+        data={(0, 0): torch.diag(torch.tensor([small_val, 1.0]))},
         label="Diagonal"
     )
     
     D_inv = inv(D)
     
     # Inversion should work
-    expected = np.diag([1/small_val, 1.0])
-    np.testing.assert_allclose(D_inv.data[(0, 0)], expected)
+    expected = torch.diag(torch.tensor([1/small_val, 1.0]))
+    assert torch.allclose(D_inv.data[(0, 0)], expected)

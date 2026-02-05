@@ -28,7 +28,7 @@ charge conservation across all generated blocks.
 
 from typing import Dict, Optional, Sequence, Tuple
 
-import numpy as np
+import torch
 
 from .index import Index, combine_indices
 from .symmetry.base import AbelianGroup
@@ -37,7 +37,7 @@ from .tensor import Tensor
 from .typing import Charge, Direction
 
 
-def identity(index: Index, *, dtype=np.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
+def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
     """Return a 2-leg identity tensor between `index` and its conjugate leg.
 
     Parameters
@@ -62,12 +62,12 @@ def identity(index: Index, *, dtype=np.float64, itags: Optional[Tuple[str, str]]
     if itags is None:
         itags = ("_init_", "_init_")
 
-    blocks: Dict[tuple[Charge, Charge], np.ndarray] = {}
+    blocks: Dict[tuple[Charge, Charge], torch.Tensor] = {}
     # Populate diagonal blocks keyed by identical charges.
     for sector in left.sectors:
         q = sector.charge
         dim = sector.dim
-        blocks[(q, q)] = np.eye(dim, dtype=dtype)
+        blocks[(q, q)] = torch.eye(dim, dtype=dtype)
 
     return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
 
@@ -76,7 +76,7 @@ def isometry(
     first: Index,
     second: Index,
     *, # keyword-only parameters
-    dtype=np.float64,
+    dtype: torch.dtype = torch.float64,
     itags: Optional[Tuple[str, str, str]] = None,
     fused_direction: Optional[Direction] = None,
 ) -> Tensor:
@@ -122,7 +122,7 @@ def isometry(
 
     # Track how many columns have been written per fused charge.
     offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
-    blocks: Dict[tuple[Charge, Charge, Charge], np.ndarray] = {}
+    blocks: Dict[tuple[Charge, Charge, Charge], torch.Tensor] = {}
     dim_fused_map = fused.sector_dim_map()
 
     for sa in first.sectors:
@@ -133,21 +133,21 @@ def isometry(
             db = sb.dim
             
             # Compute fused charge in a direction-aware way (matching combine_indices logic)
-            # Charges being fused (IN) contribute as-is, already fused (OUT) contribute inverse
-            contrib_a = qa if first.direction == Direction.IN else group.inverse(qa)
-            contrib_b = qb if second.direction == Direction.IN else group.inverse(qb)
+            # Charges being fused (IN) contribute as-is, already fused (OUT) contribute dual
+            contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
+            contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
             total_contrib = group.fuse(contrib_a, contrib_b)
-            # Fused index: inverse when direction is IN
-            qf = group.inverse(total_contrib) if direction == Direction.IN else total_contrib
+            # Fused index: dual when direction is IN
+            qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
             
             fused_dim = dim_fused_map[qf]
             offset = offsets[qf]
-            arr = np.zeros((da, db, fused_dim), dtype=dtype)
+            arr = torch.zeros((da, db, fused_dim), dtype=dtype)
             # Fill a set of identity matrices at appropriate column offsets.
             for i in range(da):
                 base = offset + i * db
                 cols = slice(base, base + db)
-                arr[i, :, cols] = np.eye(db, dtype=dtype)
+                arr[i, :, cols] = torch.eye(db, dtype=dtype)
             blocks[(qa, qb, qf)] = arr
             offsets[qf] = offset + da * db
 
@@ -162,7 +162,7 @@ def isometry(
 def isometry_n(
     indices: Sequence[Index],
     *,
-    dtype=np.float64,
+    dtype: torch.dtype = torch.float64,
     itags: Optional[Sequence[str]] = None,
     direction: Direction = Direction.OUT,
 ) -> Tensor:

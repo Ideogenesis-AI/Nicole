@@ -31,12 +31,12 @@ def test_u1_neutral():
     assert group.neutral == 0
 
 
-def test_u1_inverse():
-    """Test U1Group inverse operation."""
+def test_u1_dual():
+    """Test U1Group dual operation."""
     group = U1Group()
-    assert group.inverse(4) == -4
-    assert group.inverse(-3) == 3
-    assert group.inverse(0) == 0
+    assert group.dual(4) == -4
+    assert group.dual(-3) == 3
+    assert group.dual(0) == 0
 
 
 def test_u1_fuse_two():
@@ -91,12 +91,6 @@ def test_u1_validate_charge_invalid():
         group.validate_charge([1, 2])
 
 
-def test_u1_dual():
-    """Test U1Group dual (should be same as inverse for Abelian)."""
-    group = U1Group()
-    assert group.dual(5) == -5
-    assert group.dual(-3) == 3
-    assert group.dual(0) == 0
 
 
 def test_u1_name():
@@ -113,11 +107,11 @@ def test_z2_neutral():
     assert group.neutral == 0
 
 
-def test_z2_inverse():
-    """Test Z2Group inverse operation."""
+def test_z2_dual():
+    """Test Z2Group dual operation."""
     group = Z2Group()
-    assert group.inverse(0) == 0
-    assert group.inverse(1) == 1
+    assert group.dual(0) == 0
+    assert group.dual(1) == 1
 
 
 def test_z2_fuse_two():
@@ -184,11 +178,6 @@ def test_z2_validate_charge_invalid_value():
         group.validate_charge(10)
 
 
-def test_z2_dual():
-    """Test Z2Group dual (should be same as inverse)."""
-    group = Z2Group()
-    assert group.dual(0) == 0
-    assert group.dual(1) == 1
 
 
 def test_z2_name():

@@ -10,7 +10,7 @@ Multiple simultaneous symmetries.
         - __init__
         - name
         - neutral
-        - inverse
+        - dual
         - fuse
         - equal
         - validate_charge
@@ -24,7 +24,7 @@ Combines multiple independent symmetry groups. Charges are tuples with one compo
 All operations are performed component-wise:
 
 - **Fusion**: `(q1_a, q1_b) ⊕ (q2_a, q2_b) = (q1_a ⊕ q2_a, q1_b ⊕ q2_b)`
-- **Inverse**: Component-wise inverse
+- **Dual**: Component-wise dual
 - **Identity**: Tuple of component identities
 
 ## Physical Applications

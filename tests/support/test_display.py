@@ -18,7 +18,7 @@
 
 """Tests for display module functions."""
 
-import numpy as np
+import torch
 
 from nicole import Direction, Index, Tensor, U1Group, Sector
 from nicole.display import (
@@ -60,14 +60,14 @@ def test_format_bytes_gigabytes():
 
 def test_format_single_value_real():
     """Test _format_single_value with real numbers."""
-    arr = np.array([[3.14159]])
+    arr = torch.tensor([[3.14159]])
     result = _format_single_value(arr)
-    assert "3.14159" in result
+    assert "3.142" in result
 
 
 def test_format_single_value_complex():
     """Test _format_single_value with complex numbers."""
-    arr = np.array([[2.0 + 3.0j]])
+    arr = torch.tensor([[2.0 + 3.0j]])
     result = _format_single_value(arr)
     assert "2" in result
     assert "3" in result
@@ -76,7 +76,7 @@ def test_format_single_value_complex():
 
 def test_format_single_value_negative_imaginary():
     """Test _format_single_value with negative imaginary part."""
-    arr = np.array([[1.0 - 2.0j]])
+    arr = torch.tensor([[1.0 - 2.0j]])
     result = _format_single_value(arr)
     assert "1" in result
     assert "2" in result
@@ -182,7 +182,7 @@ def test_tensor_summary_includes_dtype():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    tensor = Tensor.zeros([idx, idx.flip()], dtype=np.float32, itags=["a", "b"])
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=torch.float32, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -270,7 +270,7 @@ def test_tensor_summary_empty_tensor():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=())
     
-    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data={}, dtype=np.float64)
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data={}, dtype=torch.float64)
     
     summary = str(tensor)
     
@@ -282,7 +282,7 @@ def test_tensor_summary_complex_dtype():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    tensor = Tensor.random([idx, idx.flip()], dtype=np.complex128, seed=1, itags=["a", "b"])
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128, seed=1, itags=["a", "b"])
     
     summary = str(tensor)
     
@@ -321,8 +321,8 @@ def test_tensor_summary_custom_label():
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
-    data = {(0, 0): np.zeros((2, 2))}
-    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data=data, dtype=np.float64, label="MyTensor")
+    data = {(0, 0): torch.zeros((2, 2))}
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("a", "b"), data=data, dtype=torch.float64, label="MyTensor")
     
     summary = str(tensor)
     

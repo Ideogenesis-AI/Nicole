@@ -47,9 +47,9 @@ print(f"0 ⊕ 1 = {group.fuse(0, 1)}")  # 1 (even + odd = odd)
 print(f"1 ⊕ 0 = {group.fuse(1, 0)}")  # 1 (odd + even = odd)
 print(f"1 ⊕ 1 = {group.fuse(1, 1)}\n")  # 0 (odd + odd = even)
 
-# Self-inverse
-print(f"Inverse of 0: {group.inverse(0)}")  # 0
-print(f"Inverse of 1: {group.inverse(1)}")  # 1
+# Self-dual
+print(f"Dual of 0: {group.dual(0)}")  # 0
+print(f"Dual of 1: {group.dual(1)}")  # 1
 ```
 
 ## Fermion Parity

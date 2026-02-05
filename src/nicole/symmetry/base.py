@@ -40,7 +40,14 @@ class SymmetryGroup(ABC):
         ...
 
     @abstractmethod
-    def inverse(self, q: Charge) -> Charge:
+    def dual(self, q: Charge) -> Charge:
+        """Return the dual (contragredient) representation of a charge.
+        
+        The dual representation is the representation that makes contraction
+        well-defined in the presence of symmetries. For Abelian groups, this
+        coincides with the group inverse, but conceptually they are different:
+        charges label representations, not group elements.
+        """
         ...
 
     @abstractmethod
@@ -61,16 +68,6 @@ class SymmetryGroup(ABC):
         for q in qs:
             acc = self.fuse(acc, q)
         return acc
-
-    def dual(self, q: Charge) -> Charge:
-        """Return the dual (contragredient) of a charge.
-
-        By default, the dual coincides with the inverse element; individual
-        symmetry groups can override this if their contragredient differs from
-        the group inverse.
-        """
-
-        return self.inverse(q)
 
 
 class AbelianGroup(SymmetryGroup, ABC):

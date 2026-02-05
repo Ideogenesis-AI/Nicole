@@ -29,9 +29,10 @@ svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
 
-eig(T, trunc=None)
+eig(T, itag=None, order="ascend", trunc=None)
     Eigenvalue decomposition of square matrix returning U tensor and eigenvalues dict.
-    Returns eigenvalues as 1D arrays for memory efficiency.
+    Returns eigenvalues as 1D arrays for memory efficiency. Supports sorting eigenvalues
+    in ascending or descending order (by value for real eigenvalues, by real part for complex).
 
 decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     High-level decomposition with three modes:
@@ -41,9 +42,10 @@ decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
     The flow parameter controls arrow directions. The itag parameter customizes bond tags.
 """
 
-from typing import Dict, List, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Literal, MutableMapping, Optional, Sequence, Tuple, Union
+import math
 
-import numpy as np
+import torch
 
 from .blocks import BlockKey
 from .index import Index
@@ -62,7 +64,7 @@ def svd(
     T: Tensor, 
     axis: int | str,
     trunc: Optional[Dict[str, Union[int, float]]] = None
-) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]:
+) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
 
     Parameters
@@ -80,7 +82,7 @@ def svd(
 
     Returns
     -------
-    tuple[Tensor, MutableMapping[BlockKey, np.ndarray], Tensor]
+    tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor]
         Triplet `(U, S_blocks, Vh)` where:
         - U has indices (left_index, bond_index)
         - S_blocks is a Dict mapping block keys to 1D arrays of singular values
@@ -157,11 +159,11 @@ def svd(
     
     # Group blocks by left charge for proper general-purpose SVD
     # Structure: q_left -> list of (key, arr_perm, dims_right, mat)
-    blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, np.ndarray, Tuple[int, ...], np.ndarray]]] = {}
+    blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, torch.Tensor, Tuple[int, ...], torch.Tensor]]] = {}
     
     for key, arr in T.data.items():
         # Permute array to [left_axis] + right_axes
-        arr_perm = np.transpose(arr, axes=perm)
+        arr_perm = torch.permute(arr, perm)
         
         # Get left charge and right charges
         q_left = key[left_axis]
@@ -169,7 +171,7 @@ def svd(
         # Reshape to matrix: (dim_left, prod(dims_right))
         dim_left = arr_perm.shape[0]
         dims_right = arr_perm.shape[1:]
-        dim_right_prod = int(np.prod(dims_right))
+        dim_right_prod = math.prod(dims_right)
         mat = arr_perm.reshape(dim_left, dim_right_prod)
         
         # Group by left charge
@@ -178,16 +180,16 @@ def svd(
         blocks_by_left_charge[q_left].append((key, arr_perm, dims_right, mat))
     
     # Perform SVD for each left charge sector by concatenating all blocks with same q_left
-    svd_results: Dict[tuple, Tuple[np.ndarray, np.ndarray, Dict[BlockKey, np.ndarray]]] = {}
+    svd_results: Dict[tuple, Tuple[torch.Tensor, torch.Tensor, Dict[BlockKey, torch.Tensor]]] = {}
     bond_charge_dims: Dict[tuple, int] = {}
     
     for q_left, block_list in blocks_by_left_charge.items():
         # Concatenate all matrices with the same left charge horizontally
         mats = [mat for _, _, _, mat in block_list]
-        concatenated_mat = np.concatenate(mats, axis=1)
+        concatenated_mat = torch.cat(mats, dim=1)
         
         # Perform single SVD on concatenated matrix
-        U, s, Vh = np.linalg.svd(concatenated_mat, full_matrices=False)
+        U, s, Vh = torch.linalg.svd(concatenated_mat, full_matrices=False)
         
         # Apply per-block truncation for thresh mode
         if trunc is not None and "thresh" in trunc:
@@ -201,7 +203,7 @@ def svd(
             continue
         
         # Split Vh back to individual blocks
-        Vh_dict: Dict[BlockKey, np.ndarray] = {}
+        Vh_dict: Dict[BlockKey, torch.Tensor] = {}
         col_offset = 0
         for key, arr_perm, dims_right, mat in block_list:
             n_cols = mat.shape[1]
@@ -258,9 +260,9 @@ def svd(
     bond_index = Index(direction=bond_direction, group=left_index.group, sectors=bond_sectors)
     
     # Construct output blocks from grouped SVD results
-    U_blocks: Dict[BlockKey, np.ndarray] = {}
-    S_blocks: Dict[BlockKey, np.ndarray] = {}
-    Vh_blocks: Dict[BlockKey, np.ndarray] = {}
+    U_blocks: Dict[BlockKey, torch.Tensor] = {}
+    S_blocks: Dict[BlockKey, torch.Tensor] = {}
+    Vh_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     for q_left, (U, s, Vh_dict) in svd_results.items():
         rank = len(s)
@@ -273,7 +275,10 @@ def svd(
         # For S: store singular values as 1D array (memory efficient)
         # Block key: (q_left, q_left)
         S_key = (q_left, q_left)
-        S_blocks[S_key] = s.astype(np.result_type(T.dtype, float))
+        # Promote to appropriate dtype (float for real input, stays as-is for complex)
+        target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] \
+            else torch.promote_types(T.dtype, torch.float64)
+        S_blocks[S_key] = s.to(dtype=target_dtype)
         
         # For Vh tensor: indices (bond_index.flip(), *right_indices)
         # Each block gets its corresponding Vh from the dictionary
@@ -303,8 +308,9 @@ def svd(
 def eig(
     T: Tensor,
     itag: Optional[str] = None,
+    order: Literal["ascend", "descend"] = "ascend",
     trunc: Optional[Dict[str, Union[int, float]]] = None
-) -> Tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]:
+) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor]]:
     """Perform eigenvalue decomposition of a square matrix tensor.
 
     Parameters
@@ -314,15 +320,25 @@ def eig(
         with matching charge structure (opposite directions).
     itag:
         Index tag for the bond dimension. If None, uses default tag "_bond_eig".
+    order:
+        Sorting order for eigenvalues. Either "ascend" for ascending order (smallest
+        to largest) or "descend" for descending order (largest to smallest). Default
+        is "ascend". For real eigenvalues, sorts by value (e.g., -5 < -3 < 1 < 2).
+        For complex eigenvalues, sorts by real part. Sorting is applied per block and
+        affects both truncation modes.
     trunc:
         Truncation specification as a dict. If None, no truncation. Supported keys:
-        - "nkeep": Keep at most n eigenvalues globally (largest by magnitude)
-        - "thresh": Keep eigenvalues with |eigenvalue| >= t per block
+        - "nkeep": Keep at most n eigenvalues globally. With order="descend", keeps
+          the n largest (most positive) eigenvalues. With order="ascend", keeps the
+          n smallest (most negative) eigenvalues.
+        - "thresh": Keep eigenvalues relative to threshold t per block. With
+          order="descend", keeps eigenvalues >= t. With order="ascend", keeps
+          eigenvalues <= t.
         Both can be specified together: thresh is applied first, then nkeep.
 
     Returns
     -------
-    tuple[Tensor, MutableMapping[BlockKey, np.ndarray]]
+    tuple[Tensor, MutableMapping[BlockKey, torch.Tensor]]
         Pair `(U, D)` where:
         - U has indices (row_index, bond_index) containing eigenvectors as columns
         - D is a Dict mapping block keys to 1D arrays of eigenvalues
@@ -340,9 +356,17 @@ def eig(
     The eigenvalues are returned as 1D arrays for memory efficiency.
     Eigenvalues can be complex even for real matrices.
     
-    For "nkeep" mode, truncation is applied globally: the top n eigenvalues by
-    magnitude across all blocks are retained. For "thresh" mode, truncation is
-    applied per block: each block independently keeps eigenvalues with |λ| >= threshold.
+    Sorting behavior:
+    - For real eigenvalues: sorts by actual value (e.g., -5 < -3 < 1 < 2)
+    - For complex eigenvalues: sorts by real part
+    - Use order="ascend" to get smallest/most negative eigenvalues first (e.g., ground states)
+    - Use order="descend" to get largest/most positive eigenvalues first
+    
+    For "nkeep" mode, truncation respects the order parameter: with order="descend",
+    keeps the n largest eigenvalues; with order="ascend", keeps the n smallest.
+    For "thresh" mode, truncation is also order-aware: with order="descend", keeps
+    eigenvalues >= threshold (most positive); with order="ascend", keeps eigenvalues
+    <= threshold (most negative). Threshold filtering is applied per block.
     
     When both modes are specified, "thresh" is applied first (per-block filtering),
     then "nkeep" is applied globally to the remaining eigenvalues.
@@ -352,17 +376,26 @@ def eig(
     
     Examples
     --------
-    >>> # No truncation
+    >>> # No truncation, ascending order (default - smallest eigenvalues first)
     >>> U, D_blocks = eig(T)
     >>> 
-    >>> # Keep top 5 eigenvalues
-    >>> U, D_blocks = eig(T, trunc={"nkeep": 5})
+    >>> # Descending order (largest eigenvalues first)
+    >>> U, D_blocks = eig(T, order="descend")
     >>> 
-    >>> # Keep eigenvalues with |λ| >= 0.1
-    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1})
+    >>> # Keep 5 smallest (most negative) eigenvalues - useful for ground states
+    >>> U, D_blocks = eig(T, order="ascend", trunc={"nkeep": 5})
     >>> 
-    >>> # Apply both: first thresh, then nkeep
-    >>> U, D_blocks = eig(T, trunc={"thresh": 0.1, "nkeep": 5})
+    >>> # Keep 5 largest (most positive) eigenvalues
+    >>> U, D_blocks = eig(T, order="descend", trunc={"nkeep": 5})
+    >>> 
+    >>> # Keep eigenvalues >= 0.1 (positive eigenvalues above threshold)
+    >>> U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1})
+    >>> 
+    >>> # Keep eigenvalues <= -0.5 (negative eigenvalues below threshold)
+    >>> U, D_blocks = eig(T, order="ascend", trunc={"thresh": -0.5})
+    >>> 
+    >>> # Apply both: keep eigenvalues >= 0.1, then keep top 5
+    >>> U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1, "nkeep": 5})
     """
     # Validate input tensor
     if len(T.indices) != 2:
@@ -391,7 +424,7 @@ def eig(
     
     # Perform eigendecomposition block by block
     # Only diagonal blocks (same charge) can exist for square matrix
-    eig_results: Dict[tuple, Tuple[np.ndarray, np.ndarray]] = {}
+    eig_results: Dict[tuple, Tuple[torch.Tensor, torch.Tensor]] = {}
     bond_charge_dims: Dict[tuple, int] = {}
     
     for key, arr in T.data.items():
@@ -399,13 +432,27 @@ def eig(
         # Note: charge conservation ensures q_row == key[1] for square matrices
         
         # Perform eigendecomposition
-        # np.linalg.eig returns (eigenvalues, eigenvectors)
+        # torch.linalg.eig returns (eigenvalues, eigenvectors)
         # eigenvectors[:, i] is the eigenvector for eigenvalues[i]
-        eigenvalues, eigenvectors = np.linalg.eig(arr)
+        eigenvalues, eigenvectors = torch.linalg.eig(arr)
+        
+        # Sort eigenvalues according to order parameter
+        # For real eigenvalues, sorts by value; for complex, sorts by real part
+        sort_indices = torch.argsort(eigenvalues.real)
+        if order == "descend":
+            sort_indices = torch.flip(sort_indices, dims=[0])
+        eigenvalues = eigenvalues[sort_indices]
+        eigenvectors = eigenvectors[:, sort_indices]
         
         # Apply per-block truncation for thresh mode
         if trunc is not None and "thresh" in trunc:
-            keep_mask = np.abs(eigenvalues) >= trunc["thresh"]
+            # thresh behavior depends on order parameter:
+            # - order="descend": keep eigenvalues >= thresh (largest/most positive)
+            # - order="ascend": keep eigenvalues <= thresh (smallest/most negative)
+            if order == "descend":
+                keep_mask = eigenvalues.real >= trunc["thresh"]
+            else:  # order == "ascend"
+                keep_mask = eigenvalues.real <= trunc["thresh"]
             eigenvalues = eigenvalues[keep_mask]
             eigenvectors = eigenvectors[:, keep_mask]
         
@@ -423,10 +470,12 @@ def eig(
         all_eigenvalues = []
         for q, (eigvecs, eigvals) in eig_results.items():
             for i, val in enumerate(eigvals):
-                all_eigenvalues.append((np.abs(val), q, i))
+                all_eigenvalues.append((val.real.item(), q, i))
         
-        # Keep top nkeep eigenvalues by magnitude
-        all_eigenvalues.sort(key=lambda x: x[0], reverse=True)
+        # Keep nkeep eigenvalues according to order parameter
+        # For "descend": keep largest (most positive) eigenvalues
+        # For "ascend": keep smallest (most negative) eigenvalues
+        all_eigenvalues.sort(key=lambda x: x[0], reverse=(order == "descend"))
         keep_set = set((q, idx) for _, q, idx in all_eigenvalues[:trunc["nkeep"]])
         
         # Apply truncation to each block
@@ -454,27 +503,47 @@ def eig(
     bond_index = Index(direction=bond_direction, group=row_index.group, sectors=bond_sectors)
     
     # Construct output blocks
-    U_blocks: Dict[BlockKey, np.ndarray] = {}
-    D_blocks: Dict[BlockKey, np.ndarray] = {}
+    U_blocks: Dict[BlockKey, torch.Tensor] = {}
+    D_blocks: Dict[BlockKey, torch.Tensor] = {}
+    
+    # Determine if eigenvalues and eigenvectors are actually complex
+    # If all eigenvalues and eigenvectors are real, we can use real dtype
+    all_real = all(
+        (torch.allclose(eigvals.imag, torch.zeros_like(eigvals.imag)) if eigvals.is_complex() else True) and 
+        (torch.allclose(eigvecs.imag, torch.zeros_like(eigvecs.imag)) if eigvecs.is_complex() else True)
+        for eigvecs, eigvals in eig_results.values()
+    )
+    
+    # Choose appropriate dtype
+    if all_real:
+        # Eigenvalues and eigenvectors are real
+        D_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype == torch.float32 \
+            else torch.promote_types(T.dtype, torch.float64)
+        U_dtype = D_dtype
+    else:
+        # Complex eigenvalues/eigenvectors
+        D_dtype = torch.promote_types(T.dtype, torch.complex128)
+        U_dtype = D_dtype
     
     for q, (eigvecs, eigvals) in eig_results.items():
         # For U tensor: indices (row_index, bond_index)
         # Block key: (q, q) since bond charge equals row charge
         U_key = (q, q)
-        U_blocks[U_key] = eigvecs
+        # When all_real is True, explicitly take real part to avoid casting warning
+        U_blocks[U_key] = eigvecs.real.to(dtype=U_dtype) if all_real else eigvecs.to(dtype=U_dtype)
         
         # For D: store eigenvalues as 1D array (memory efficient)
         # Block key: (q, q)
         D_key = (q, q)
-        # Preserve complex type if eigenvalues are complex
-        D_blocks[D_key] = eigvals.astype(np.result_type(T.dtype, np.complex128))
+        # When all_real is True, explicitly take real part to avoid casting warning
+        D_blocks[D_key] = eigvals.real.to(dtype=D_dtype) if all_real else eigvals.to(dtype=D_dtype)
     
     # Construct output tensor
     U_tensor = Tensor(
         indices=(row_index, bond_index),
         itags=(T.itags[0], bond_tag),
         data=U_blocks,
-        dtype=np.result_type(T.dtype, np.complex128)  # May be complex
+        dtype=U_dtype
     )
     
     return U_tensor, D_blocks
@@ -509,7 +578,7 @@ def decomp(
         - For UR mode: Both ">>" and "><" normalize to ">>" (outward bonds); "<<" is also accepted
         - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
         Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
-        This parameter uses tensor.flip() to adjust from the natural flow to the desired flow.
+        This parameter uses tensor.invert() to adjust from the natural flow to the desired flow.
     itag:
         Index tag(s) for the bond dimension(s). Can be:
         - None: Use default tags "_bond_L" and "_bond_R"
@@ -656,52 +725,53 @@ def decomp(
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
         
-        S_diag_blocks: Dict[BlockKey, np.ndarray] = {}
+        S_diag_blocks: Dict[BlockKey, torch.Tensor] = {}
         for key, s_array in S_blocks.items():
             # Convert 1D singular values to diagonal matrix
-            S_diag_blocks[key] = np.diag(s_array)
+            S_diag_blocks[key] = torch.diag(s_array)
         
         # Natural S has indices matching the natural flow from svd
+        target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] else torch.promote_types(T.dtype, torch.float64)
         S_tensor = Tensor(
             indices=(bond_index.flip(), bond_index),
             itags=(bond_tag_left, bond_tag_right),
             data=S_diag_blocks,
-            dtype=np.result_type(T.dtype, float),
+            dtype=target_dtype,
             label="Diagonal"
         )
         
-        # Apply tensor flip to convert from natural_flow to desired flow
-        # When we flip S, we must also flip the corresponding index in U or Vh
+        # Apply tensor invert to convert from natural_flow to desired flow
+        # When we invert S, we must also invert the corresponding index in U or Vh
         if natural_flow == ">>":
             # Natural for S: (IN, OUT)
             if flow == "><":
-                # Desired: (IN, IN) - flip S's right index and Vh's bond index
-                S_tensor.flip(1)
-                Vh.flip(0)
+                # Desired: (IN, IN) - invert S's right index and Vh's bond index
+                S_tensor.invert(1)
+                Vh.invert(0)
             elif flow == "<<":
-                # Desired: (OUT, IN) - flip both S indices and both U's bond and Vh's bond
-                S_tensor.flip([0, 1])
-                U.flip(1)
-                Vh.flip(0)
-            # else flow == ">>": natural, no flip needed
+                # Desired: (OUT, IN) - invert both S indices and both U's bond and Vh's bond
+                S_tensor.invert([0, 1])
+                U.invert(1)
+                Vh.invert(0)
+            # else flow == ">>": natural, no invert needed
         else:  # natural_flow == "<<"
             # Natural for S: (OUT, IN)
             if flow == "><":
-                # Desired: (IN, IN) - flip S's left index and U's bond index
-                S_tensor.flip(0)
-                U.flip(1)
+                # Desired: (IN, IN) - invert S's left index and U's bond index
+                S_tensor.invert(0)
+                U.invert(1)
             elif flow == ">>":
-                # Desired: (IN, OUT) - flip both S indices and both U's bond and Vh's bond
-                S_tensor.flip([0, 1])
-                U.flip(1)
-                Vh.flip(0)
-            # else flow == "<<": natural, no flip needed
+                # Desired: (IN, OUT) - invert both S indices and both U's bond and Vh's bond
+                S_tensor.invert([0, 1])
+                U.invert(1)
+                Vh.invert(0)
+            # else flow == "<<": natural, no invert needed
         
         return U, S_tensor, Vh
     
     elif mode == "UR":
         # Multiply singular values into Vh to get R = S*Vh
-        R_blocks: Dict[BlockKey, np.ndarray] = {}
+        R_blocks: Dict[BlockKey, torch.Tensor] = {}
         
         for key, vh_block in Vh.data.items():
             # key = (q_bond, *q_right)
@@ -716,7 +786,7 @@ def decomp(
                 # Broadcast multiplication along first axis
                 rank = len(s_array)
                 s_broadcasted = s_array.reshape((rank,) + (1,) * (vh_block.ndim - 1))
-                R_blocks[key] = (s_broadcasted * vh_block).astype(T.dtype)
+                R_blocks[key] = (s_broadcasted * vh_block).to(dtype=T.dtype)
             else:
                 # No singular values for this block (shouldn't happen normally)
                 R_blocks[key] = vh_block
@@ -735,16 +805,16 @@ def decomp(
         # For UR mode: normalize flow (both ">>" and "><" mean ">>")
         normalized_flow = ">>" if flow in (">>", "><") else "<<"
         
-        # Flip if normalized flow differs from natural flow
+        # Invert if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            U.flip(1)  # Flip U's bond index (position 1)
-            R_tensor.flip(0)  # Flip R's bond index (position 0)
+            U.invert(1)  # Invert U's bond index (position 1)
+            R_tensor.invert(0)  # Invert R's bond index (position 0)
         
         return U, R_tensor
     
     else:  # mode == "LV"
         # Multiply singular values into U to get L = U*S
-        L_blocks: Dict[BlockKey, np.ndarray] = {}
+        L_blocks: Dict[BlockKey, torch.Tensor] = {}
         
         for key, u_block in U.data.items():
             # key = (q_left, q_bond)
@@ -757,7 +827,7 @@ def decomp(
                 # Multiply: L = U @ diag(s) = U * s[None, :]
                 # u_block shape: (dim_left, rank)
                 # Broadcast multiplication along second axis
-                L_blocks[key] = (u_block * s_array[None, :]).astype(T.dtype)
+                L_blocks[key] = (u_block * s_array[None, :]).to(dtype=T.dtype)
             else:
                 # No singular values for this block (shouldn't happen normally)
                 L_blocks[key] = u_block
@@ -776,9 +846,9 @@ def decomp(
         # For LV mode: normalize flow (both "<<" and "><" mean "<<")
         normalized_flow = "<<" if flow in ("<<", "><") else ">>"
         
-        # Flip if normalized flow differs from natural flow
+        # Invert if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            L_tensor.flip(1)  # Flip L's bond index (position 1)
-            Vh.flip(0)  # Flip Vh's bond index (position 0)
+            L_tensor.invert(1)  # Invert L's bond index (position 1)
+            Vh.invert(0)  # Invert Vh's bond index (position 0)
         
         return L_tensor, Vh

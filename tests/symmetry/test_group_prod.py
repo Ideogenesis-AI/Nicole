@@ -70,7 +70,7 @@ def test_product_group_creation_non_abelian_fails():
         def neutral(self):
             return 0
         
-        def inverse(self, q):
+        def dual(self, q):
             return -q
         
         def fuse(self, *qs):
@@ -101,22 +101,22 @@ def test_product_group_neutral_u1_z2():
     assert group.neutral == (0, 0)
 
 
-# Inverse tests
+# Dual tests
 
-def test_product_group_inverse_u1_u1():
-    """Test inverse for U1×U1."""
+def test_product_group_dual_u1_u1():
+    """Test dual for U1×U1."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.inverse((2, 3)) == (-2, -3)
-    assert group.inverse((-1, 5)) == (1, -5)
-    assert group.inverse((0, 0)) == (0, 0)
+    assert group.dual((2, 3)) == (-2, -3)
+    assert group.dual((-1, 5)) == (1, -5)
+    assert group.dual((0, 0)) == (0, 0)
 
 
-def test_product_group_inverse_u1_z2():
-    """Test inverse for U1×Z2."""
+def test_product_group_dual_u1_z2():
+    """Test dual for U1×Z2."""
     group = ProductGroup([U1Group(), Z2Group()])
-    assert group.inverse((3, 1)) == (-3, 1)
-    assert group.inverse((-2, 0)) == (2, 0)
-    assert group.inverse((0, 1)) == (0, 1)
+    assert group.dual((3, 1)) == (-3, 1)
+    assert group.dual((-2, 0)) == (2, 0)
+    assert group.dual((0, 1)) == (0, 1)
 
 
 # Fuse tests
@@ -205,23 +205,6 @@ def test_product_group_validate_invalid_component():
         group.validate_charge((3, 2))  # Z2 charge must be 0 or 1
     with pytest.raises(ValueError, match="Invalid charge for component"):
         group.validate_charge((3.5, 0))  # U1 charge must be int
-
-
-# Dual tests
-
-def test_product_group_dual_u1_u1():
-    """Test dual for U1×U1."""
-    group = ProductGroup([U1Group(), U1Group()])
-    assert group.dual((2, 3)) == (-2, -3)
-    assert group.dual((-1, 5)) == (1, -5)
-    assert group.dual((0, 0)) == (0, 0)
-
-
-def test_product_group_dual_u1_z2():
-    """Test dual for U1×Z2."""
-    group = ProductGroup([U1Group(), Z2Group()])
-    assert group.dual((3, 1)) == (-3, 1)
-    assert group.dual((-2, 0)) == (2, 0)
 
 
 # Component access tests
