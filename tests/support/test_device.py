@@ -140,6 +140,98 @@ def test_tensor_to_mps():
     assert_blocks_equal(tensor_cpu_f32, tensor_back)
 
 
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_random():
+    """Test that creating random tensors on MPS automatically normalizes dtypes."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    
+    # Request float64 on MPS - should automatically use float32
+    t_f64 = Tensor.random([idx1, idx2], dtype=torch.float64, device='mps')
+    assert t_f64.device.type == 'mps'
+    assert t_f64.dtype == torch.float32
+    for block in t_f64.data.values():
+        assert block.dtype == torch.float32
+        assert block.device.type == 'mps'
+    
+    # Request complex128 on MPS - should automatically use complex64
+    t_c128 = Tensor.random([idx1, idx2], dtype=torch.complex128, device='mps')
+    assert t_c128.device.type == 'mps'
+    assert t_c128.dtype == torch.complex64
+    for block in t_c128.data.values():
+        assert block.dtype == torch.complex64
+        assert block.device.type == 'mps'
+    
+    # Request float32 on MPS - should stay float32
+    t_f32 = Tensor.random([idx1, idx2], dtype=torch.float32, device='mps')
+    assert t_f32.device.type == 'mps'
+    assert t_f32.dtype == torch.float32
+    for block in t_f32.data.values():
+        assert block.dtype == torch.float32
+        assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_zeros():
+    """Test that creating zeros tensors on MPS automatically normalizes dtypes."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    
+    # Request float64 on MPS - should automatically use float32
+    t = Tensor.zeros([idx1, idx2], dtype=torch.float64, device='mps')
+    assert t.device.type == 'mps'
+    assert t.dtype == torch.float32
+    for block in t.data.values():
+        assert block.dtype == torch.float32
+        assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_scalar():
+    """Test that creating scalars on MPS automatically normalizes dtypes."""
+    # Request float64 on MPS - should automatically use float32
+    t_f64 = Tensor.from_scalar(3.14159, dtype=torch.float64, device='mps')
+    assert t_f64.device.type == 'mps'
+    assert t_f64.dtype == torch.float32
+    assert t_f64.data[()].dtype == torch.float32
+    assert t_f64.data[()].device.type == 'mps'
+    # Value should be preserved (within float32 precision)
+    assert abs(t_f64.item() - 3.14159) < 1e-6
+    
+    # Request complex128 on MPS - should automatically use complex64
+    t_c128 = Tensor.from_scalar(1.5 + 2.5j, dtype=torch.complex128, device='mps')
+    assert t_c128.device.type == 'mps'
+    assert t_c128.dtype == torch.complex64
+    assert t_c128.data[()].dtype == torch.complex64
+    assert t_c128.data[()].device.type == 'mps'
+    # Value should be preserved (within float32 precision)
+    val = t_c128.item()
+    assert abs(val.real - 1.5) < 1e-6
+    assert abs(val.imag - 2.5) < 1e-6
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_to_method_complex_dtype():
+    """Test that .to() method handles complex128 -> complex64 conversion for MPS."""
+    group = U1Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    
+    # Create on CPU with complex128
+    t_cpu = Tensor.random([idx1, idx2], dtype=torch.complex128, device='cpu')
+    assert t_cpu.dtype == torch.complex128
+    
+    # Move to MPS - should automatically convert to complex64
+    t_mps = t_cpu.to('mps')
+    assert t_mps.device.type == 'mps'
+    assert t_mps.dtype == torch.complex64
+    for block in t_mps.data.values():
+        assert block.dtype == torch.complex64
+        assert block.device.type == 'mps'
+
+
 def test_tensor_explicit_device_in_constructor():
     """Test passing device parameter to constructors."""
     torch.set_default_device('cpu')
