@@ -186,13 +186,13 @@ def tensor_summary(
             else:
                 value_str = f"{value:.6g}"
             dtype_name = str(dtype).replace('torch.', '')
-            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            info_line = f"\n  info:  0x {{ 1 x 0 }},   {label}"
             data_line = f"  data:  0-D {dtype_name} ({_format_bytes(total_bytes)})    [ {value_str} ]"
             return info_line + "\n" + data_line
         else:
             # Empty scalar
             dtype_name = str(dtype).replace('torch.', '')
-            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            info_line = f"\n  info:  0x {{ 1 x 0 }},   {label}"
             data_line = f"  data:  0-D {dtype_name} (0 B)    [ empty ]"
             return info_line + "\n" + data_line
 
@@ -214,7 +214,7 @@ def tensor_summary(
     )
     info_line = (
         f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "
-        f"having '{sym_signature}'  {label:>8},  {{ {itag_list} }}"
+        f"having '{sym_signature}',  {label:>7},  {{ {itag_list} }}"
     )
 
     # -------------------------------------------------------------------
