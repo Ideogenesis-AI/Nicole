@@ -195,7 +195,8 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build S^+ operator (raising operator)
@@ -230,7 +231,8 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         indices=(Spc, Spc.flip(), aux_plus),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build S^- operator (lowering operator)
@@ -264,7 +266,8 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         indices=(Spc, Spc.flip(), aux_minus),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Create vacuum index (trivial space with charge 0)
@@ -353,7 +356,8 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F),
         itags=("_init_", "_init_", "_aux_"),
         data=F_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Z operator (Jordan-Wigner string / Z-string)
@@ -367,7 +371,8 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Create vacuum index (trivial space with charge 0)
@@ -428,7 +433,8 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F),
         itags=("_init_", "_init_", "_aux_"),
         data=F_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Z operator (Jordan-Wigner string / Z-string)
@@ -442,7 +448,8 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Create vacuum index (trivial space with parity 0)
@@ -534,7 +541,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F_up),
         itags=("_init_", "_init_", "_aux_"),
         data=F_up_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build F_dn operator (annihilates spin-down electron)
@@ -558,7 +566,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F_dn),
         itags=("_init_", "_init_", "_aux_"),
         data=F_dn_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Z operator (Jordan-Wigner string)
@@ -573,7 +582,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Sz operator (spin z-component)
@@ -588,7 +598,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     Op["Sz"].trim_zero_sectors()
     
@@ -609,7 +620,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_Sp),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Sm operator (spin lowering: |↑⟩ → |↓⟩)
@@ -629,7 +641,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_Sm),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Create vacuum index
@@ -694,7 +707,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F_up),
         itags=("_init_", "_init_", "_aux_"),
         data=F_up_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build F_dn operator
@@ -716,7 +730,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_F_dn),
         itags=("_init_", "_init_", "_aux_"),
         data=F_dn_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Z operator
@@ -731,7 +746,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Z_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Sz operator
@@ -745,7 +761,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip()),
         itags=("_init_", "_init_"),
         data=Sz_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     Op["Sz"].trim_zero_sectors()
     
@@ -767,7 +784,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_Sp),
         itags=("_init_", "_init_", "_aux_"),
         data=Sp_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Build Sm operator (|↑⟩ → |↓⟩)
@@ -788,7 +806,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         indices=(Spc, Spc.flip(), aux_Sm),
         itags=("_init_", "_init_", "_aux_"),
         data=Sm_data,
-        dtype=torch.float64
+        dtype=torch.float64,
+        label="Operator"
     )
     
     # Create vacuum index
