@@ -10,7 +10,7 @@ The recommended way to install Nicole is via pip:
 pip install nicole
 ```
 
-This will install Nicole and its required dependencies (NumPy 2.0+).
+This will install Nicole and its required dependencies (PyTorch 2.5+).
 
 ### Optional Dependencies
 
@@ -33,7 +33,7 @@ pip install nicole[test,docs,lint]
 ## Requirements
 
 - **Python**: 3.11 or higher
-- **NumPy**: 2.0 or higher
+- **PyTorch**: 2.5 or higher
 
 ## Installing from Source (Development)
 
@@ -76,7 +76,11 @@ To verify that Nicole is installed correctly:
 
 ```python
 import nicole
+import torch
+
 print(f"Nicole version: {nicole.__version__}")
+print(f"PyTorch version: {torch.__version__}")
+print(f"Default device: {torch.get_default_device()}")
 
 # Create a simple tensor to test
 from nicole import Tensor, Index, Sector, Direction, U1Group
@@ -85,21 +89,44 @@ group = U1Group()
 index = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
 tensor = Tensor.random([index, index.flip()], itags=["i", "j"], seed=42)
 print(f"Successfully created tensor with {len(tensor.data)} blocks")
+print(f"Tensor device: {tensor.device}")
 ```
 
 ## Troubleshooting
 
-### NumPy Version Issues
+### PyTorch Installation
 
-Nicole requires NumPy 2.0 or higher. If you encounter issues:
+Nicole requires PyTorch 2.5 or higher. If you encounter issues:
 
 ```bash
-# Upgrade NumPy
-pip install --upgrade numpy
+# Upgrade PyTorch
+pip install --upgrade torch
 
-# Verify NumPy version
-python -c "import numpy; print(numpy.__version__)"
+# Verify PyTorch version
+python -c "import torch; print(torch.__version__)"
 ```
+
+### GPU Support
+
+Nicole supports GPU acceleration through PyTorch on NVIDIA GPUs (CUDA) and Apple Silicon (MPS).
+
+**NVIDIA GPU (CUDA)**:
+```bash
+# Install PyTorch with CUDA support (example for CUDA 11.8)
+pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+# Verify CUDA availability
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+**Apple Silicon (MPS)**:
+```bash
+# PyTorch with MPS support is included in the standard installation
+# Verify MPS availability
+python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
+```
+
+For detailed GPU usage and optimization, see the [GPU Acceleration](../examples/advanced/gpu-acceleration.md) guide.
 
 ### Python Version
 

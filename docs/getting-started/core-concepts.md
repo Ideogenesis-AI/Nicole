@@ -129,17 +129,17 @@ Only valid blocks are created and stored, automatically enforcing physical selec
 
 ## Block-Sparse Storage
 
-Nicole represents tensors as dictionaries of dense NumPy arrays:
+Nicole represents tensors as dictionaries of dense PyTorch tensors:
 
 ```python
 tensor.data = {
-    (0, 0): array([[1.2, 0.3], [0.5, 0.8]]),    # 2×2 block
-    (1, 1): array([[0.7]]),                       # 1×1 block
-    (-1, -1): array([[0.4]]),                     # 1×1 block
+    (0, 0): torch.tensor([[1.2, 0.3], [0.5, 0.8]]),      # 2×2 block
+    (1, 1): torch.tensor([[0.7]]),                       # 1×1 block
+    (-1, -1): torch.tensor([[0.4]]),                     # 1×1 block
 }
 ```
 
-Each key is a tuple of charges, one per index. The corresponding value is the dense NumPy array for that block.
+Each key is a tuple of charges, one per index. The corresponding value is the dense PyTorch tensor for that block.
 
 ## Index Tags
 
