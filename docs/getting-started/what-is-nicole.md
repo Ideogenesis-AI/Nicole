@@ -4,14 +4,16 @@ Welcome to the documentation for **Nicole**, a Python library for symmetry-aware
 
 ## What is Nicole?
 
-Nicole provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations. Created as part of the Ideogenesis-AI effort in studying quantum many-body systems, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on NumPy, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
+Nicole provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations. Created as part of the Ideogenesis-AI effort in studying quantum many-body systems, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on PyTorch, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
 
 ## Key Features
 
 - **Block-Sparse Tensors**: Efficient representation of tensors with conserved quantum numbers
 - **Abelian Symmetries**: Built-in support for U(1), Z₂, and their product groups
 - **Charge Conservation**: Enforcement of selection rules through symmetry-aware indices
-- **NumPy Backend**: Implementation using NumPy for high-performance dense operations
+- **PyTorch Backend**: Implementation using PyTorch for high-performance dense operations
+- **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations on large tensors
+- **Autograd Control**: Optional gradient tracking for efficient optimization tasks
 - **Tensor Network Operations**: Essential operations including contraction, trace, SVD, and more
 - **Type-Safe API**: Modern Python with type hints for better IDE support
 - **Extensible Design**: Clean abstractions for adding custom symmetry groups
