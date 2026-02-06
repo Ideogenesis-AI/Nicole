@@ -287,13 +287,13 @@ def tensor_summary(
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr:>8}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {value_repr:>7}"
                 )
             else:
                 # High-dimensional array — display dims and byte footprint.
                 byte_repr = _format_bytes(block_bytes)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {byte_repr:>7}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {byte_repr:>6}"
                 )
 
         # If more than max_lines blocks, note how many are omitted.
