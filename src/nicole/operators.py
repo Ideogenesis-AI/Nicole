@@ -203,7 +203,7 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
 def oplus(
     A: Tensor,
     B: Tensor,
-    axes: Optional[Union[Sequence[int], Sequence[str]]] = None
+    axes: Optional[Union[int, str, Sequence[int], Sequence[str]]] = None
 ) -> Tensor:
     """Direct sum of two tensors with selective axis merging.
     
@@ -217,10 +217,12 @@ def oplus(
         First tensor
     B : Tensor
         Second tensor
-    axes : Optional[Union[Sequence[int], Sequence[str]]], default=None
+    axes : Optional[Union[int, str, Sequence[int], Sequence[str]]], default=None
         Axes to merge. Can be:
         - None: merge all axes (default)
+        - Single integer: axis position (e.g., 0)
         - Sequence of integers: axis positions (e.g., [0, 2])
+        - Single string: itag name (e.g., 'i')
         - Sequence of strings: itag names (e.g., ['i', 'k'])
         Axes not specified must have identical Index structure in A and B.
     
@@ -260,7 +262,7 @@ def oplus(
     >>> A2 = Tensor.random([idx_A0, idx_A1_match], seed=3, itags=['i', 'j'])
     >>> B2 = Tensor.random([idx_B0, idx_B1_match], seed=4, itags=['i', 'j'])
     >>> 
-    >>> C2 = oplus(A2, B2, axes=[0])  # or axes=['i']
+    >>> C2 = oplus(A2, B2, axes=0)  # or axes='i', or axes=[0], or axes=['i']
     >>> # C2.indices[0] has sectors: [(0, 3), (1, 3), (2, 2)]  ← merged
     >>> # C2.indices[1] has sectors: [(0, 5)]  ← unchanged (matched exactly)
     
@@ -282,11 +284,21 @@ def oplus(
     
     # Step 2: Resolve axes argument
     n_axes = len(A.indices)
+    
     if axes is None:
         # Default: merge all axes
         axes_int = list(range(n_axes))
+    elif isinstance(axes, int):
+        # Single integer axis
+        axes_int = [axes]
+    elif isinstance(axes, str):
+        # Single string itag - convert to integer position
+        try:
+            axes_int = [A.itags.index(axes)]
+        except ValueError:
+            raise ValueError(f"Itag '{axes}' not found in tensor A")
     elif len(axes) > 0 and isinstance(axes[0], str):
-        # Convert itags to integer positions
+        # Sequence of string itags - convert to integer positions
         axes_int = []
         for tag in axes:
             try:
@@ -295,7 +307,7 @@ def oplus(
             except ValueError:
                 raise ValueError(f"Itag '{tag}' not found in tensor A")
     else:
-        # Already integers
+        # Sequence of integers
         axes_int = list(axes)
     
     # Validate axes range
