@@ -12,7 +12,7 @@ Nicole provides efficient block-sparse tensor operations that respect Abelian sy
 - **Abelian Symmetries**: Built-in support for U(1), Z₂, and their product groups
 - **Charge Conservation**: Enforcement of selection rules through symmetry-aware indices
 - **PyTorch Backend**: Implementation using PyTorch for high-performance dense operations
-- **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations on large tensors
+- **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations
 - **Autograd Control**: Optional gradient tracking for efficient optimization tasks
 - **Tensor Network Operations**: Essential operations including contraction, trace, SVD, and more
 - **Type-Safe API**: Modern Python with type hints for better IDE support
