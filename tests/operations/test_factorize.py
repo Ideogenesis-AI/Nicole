@@ -1074,7 +1074,7 @@ def test_qr_6index_tensor():
         assert idx.dim == T.indices[i].dim
 
 
-def test_high_order_tensor_multiple_charges():
+def test_qr_high_order_tensor_multiple_charges():
     """Test high-order tensor with multiple charge blocks."""
     group = U1Group()
     indices = [
@@ -1100,7 +1100,7 @@ def test_high_order_tensor_multiple_charges():
     assert rel_error < 1e-12
 
 
-def test_high_order_tensor_different_axis_sizes():
+def test_qr_high_order_tensor_different_axis_sizes():
     """Test high-order tensor with varying axis dimensions."""
     group = U1Group()
     indices = [
@@ -1122,7 +1122,7 @@ def test_high_order_tensor_different_axis_sizes():
     assert bond_dim == 5
 
 
-def test_high_order_tensor_bond_structure():
+def test_qr_high_order_tensor_bond_structure():
     """Test bond index structure in high-order tensor QR."""
     group = U1Group()
     indices = [
