@@ -84,14 +84,16 @@ nav:
     - Arithmetic:
       - Basic Operations: api/arithmetic/addition.md
       - Direct Sum (oplus): api/arithmetic/oplus.md
-      - diag: api/arithmetic/diag.md
-      - inv: api/arithmetic/inv.md
+      - Diagonal (diag): api/arithmetic/diag.md
+      - Inverse (inv): api/arithmetic/inv.md
     - Contraction:
       - contract: api/contraction/contract.md
       - trace: api/contraction/trace.md
     - Decomposition:
       - decomp: api/decomposition/decomp.md
-      - svd: api/decomposition/svd.md
+      - svd (linalg): api/decomposition/svd.md
+      - qr (linalg): api/decomposition/qr.md
+      - eig (linalg): api/decomposition/eig.md
     - Symmetry Groups:
       - Overview: api/symmetry/overview.md
       - U1Group: api/symmetry/u1-group.md
