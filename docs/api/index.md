@@ -138,7 +138,9 @@ Nicole follows these principles:
 - **Functional operations** return new tensors (e.g., `conj()`)
 - **In-place methods** modify existing tensors (e.g., `Tensor.conj()`)
 - **Charge conservation** enforced automatically
-- **NumPy-style** API for familiarity
+- **Array-style** API with familiar syntax (similar to NumPy/PyTorch)
+- **Device management** for CPU and GPU computation
+- **Autograd control** for optional gradient tracking
 
 ## See Also
 

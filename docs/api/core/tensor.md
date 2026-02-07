@@ -10,29 +10,42 @@ Block-sparse tensor with symmetry-aware indices.
         - __init__
         - zeros
         - random
+        - from_scalar
+        - is_scalar
+        - item
         - norm
         - copy
         - rand_fill
         - insert_index
+        - trim_zero_sectors
         - sorted_keys
         - key
         - block
+        - group
         - show
         - conj
         - permute
         - transpose
         - retag
         - invert
+        - device
+        - to
+        - cpu
+        - cuda
+        - requires_grad
+        - backward
 
 ## Description
 
-The `Tensor` class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense NumPy blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.
+The `Tensor` class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense PyTorch tensor blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.
 
 ### Key Features
 
 - **Block-sparse storage**: Only admissible blocks are stored
 - **Automatic charge conservation**: Selection rules enforced by structure
-- **NumPy-backed blocks**: Dense operations within each symmetry sector
+- **PyTorch-backed blocks**: Dense operations within each symmetry sector
+- **Device management**: CPU and GPU (CUDA/MPS) support
+- **Autograd control**: Optional gradient tracking
 - **Immutable indices**: Index structure fixed at creation
 
 ## See Also

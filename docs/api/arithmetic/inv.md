@@ -32,7 +32,7 @@ result = contract(S_diag, S_inv)
 ## Manual Diagonal Tensor
 
 ```python
-import numpy as np
+import torch
 from nicole import Tensor, Index, Sector, Direction, U1Group, inv
 
 group = U1Group()
@@ -42,7 +42,7 @@ idx = Index(Direction.IN, group, sectors=(Sector(0, 2),))
 D = Tensor(
     indices=(idx.flip(), idx),
     itags=("i", "j"),
-    data={(0, 0): np.diag([2.0, 4.0])},
+    data={(0, 0): torch.diag(torch.tensor([2.0, 4.0]))},
     label="Diagonal"
 )
 
