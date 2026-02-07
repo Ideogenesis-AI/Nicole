@@ -55,6 +55,7 @@ print(f"Right multiplication: {F.norm():.4f}")
 ## Requirements for Operations
 
 Tensors must have:
+
 - Same number of indices
 - Same index structure (charges and dimensions)
 - Same index tags

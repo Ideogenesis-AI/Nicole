@@ -263,6 +263,7 @@ Beyond computation time, autograd also increases memory consumption significantl
 3. **Computation graph metadata**: Nodes tracking operation types and connections
 
 For tensor networks, this can be problematic because:
+
 - **Large bond dimensions** create big intermediate tensors
 - **Deep contraction trees** accumulate many intermediates
 - **Iterative algorithms** repeatedly build and destroy graphs
