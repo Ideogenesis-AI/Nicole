@@ -2,6 +2,131 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.2.1] - 2026-02-08
+
+**QR Decomposition and Documentation Enhancement Release**
+
+Release version 0.2.1 of Nicole, introducing QR decomposition for orthogonal tensor factorization, API improvements for more flexible tensor operations, and comprehensive documentation enhancements covering the PyTorch backend transition.
+
+### QR Decomposition
+
+#### Core Functionality
+- Added `qr()` function in `decomp` module for symmetry-preserving QR decomposition
+- Separates tensors into orthogonal (Q) and upper triangular (R) components
+- Block-wise decomposition preserving symmetry structure
+- No truncation applied, useful for canonical forms without compression
+
+#### Integration with decomp()
+- New **"QR"** mode in `decomp()` function alongside SVD, UR, and LV modes
+- Consistent API with existing decomposition modes
+- Custom bond index tags and flow direction control via `itag` and `flow` parameters
+- Full support for axis specification (integer positions or string itags)
+
+#### Testing
+- Comprehensive test coverage in `test_factorize.py` (new)
+- Tests for standard 2-index and multi-index tensors
+- Validation of orthogonality (Q†Q = I) and reconstruction accuracy
+- Stress tests for high-order tensors with complex symmetry structures
+- Refactored test organization: `test_decomp.py` for high-level API, `test_factorize.py` for low-level functions
+
+### API Enhancements
+
+#### oplus Function Improvements
+- Enhanced `oplus()` to accept single integer or string for `axes` parameter
+- Previously required sequences: now `axes=0` works alongside `axes=[0]`
+- Single string itag support: `axes='i'` alongside `axes=['i']`
+- Improved ergonomics for common single-axis direct sum operations
+- Added validation and error messages for non-existent itags
+
+#### Operator Labeling
+- Added `label="Operator"` parameter to all operator tensors in `load_space()`
+- Operators created for spin systems, fermions, and band structures now properly labeled
+- Improved tensor identification and debugging capabilities
+- Enhances clarity in tensor network diagrams and summaries
+
+#### Display Improvements
+- Refined tensor summary output formatting for consistent alignment
+- Enhanced readability of charge and value representations
+- Improved spacing and comma placement in info lines
+
+### Documentation Infrastructure
+
+#### Comprehensive PyTorch Transition Documentation
+- Updated all code examples from NumPy to PyTorch syntax
+- Added GPU acceleration guide with CUDA and MPS (Apple Silicon) support
+- Added autograd documentation for gradient tracking in tensor networks
+- Updated installation guide with PyTorch dependency requirements
+- Revised API reference to reflect device management and autograd features
+
+#### QR Decomposition Documentation
+- Complete API reference page for `qr()` function with examples
+- Updated `decomp()` documentation to include QR mode
+- Added QR section to decomposition examples with working code
+- Cross-references between SVD, QR, and eigenvalue decomposition docs
+- Usage patterns for orthogonal factorization without truncation
+
+#### MkDocs Hooks for Enhanced Rendering
+- Implemented custom post-processing hook for bullet list conversion
+- Automatically converts markdown bullets to proper HTML `<ul>/<li>` tags in tables
+- Handles multi-line bullet items with continuation line detection
+- Supports inline HTML tags (code, emphasis, links) within bullet lists
+- Debug logging mode (`NICOLE_HOOKS_DEBUG=1`) for troubleshooting
+- Logs stored in `.logging/hooks.log` with detailed transformation tracking
+
+#### Documentation Quality Improvements
+- Fixed bullet list rendering in parameter tables across API docs
+- Enhanced navigation structure with clear decomposition method organization
+- Added "linalg" labels for low-level functions (svd, qr, eig)
+- Improved cross-referencing between related functions
+- Updated performance recommendations for CPU vs GPU usage in tensor networks
+
+### Code Quality and Maintenance
+
+#### Test Organization
+- Refactored decomposition tests into focused modules:
+  - `test_decomp.py`: High-level `decomp()` API tests
+  - `test_factorize.py`: Low-level SVD, QR, EIG function tests
+- Enhanced test clarity with descriptive names and documentation
+- Renamed "flip" tests to "invert" for consistency with API changes
+
+#### Project Hygiene
+- Cleaned up `.gitignore` for better project management
+- Added `.logging/` directory to gitignore for Nicole logging
+- Improved code formatting consistency in tensor summary outputs
+
+### Statistics and Scope
+
+#### Code Changes
+- 27 commits focused on QR decomposition, API enhancements, and documentation
+- New function: `qr()` in `decomp.py` (~200 lines)
+- Enhanced: `decomp()` with QR mode support
+- Enhanced: `oplus()` with flexible axis specification
+- New test file: `test_factorize.py` with comprehensive factorization tests
+
+#### Documentation Expansion
+- 3 new documentation pages: `qr.md`, `eig.md`, hooks implementation
+- Updated 15+ existing documentation pages for PyTorch transition
+- Added 2 comprehensive guides: GPU acceleration and autograd
+- Enhanced API index with clearer categorization
+
+#### Test Coverage
+- Added 10+ new tests for QR decomposition
+- Enhanced 5+ tests for oplus functionality
+- Maintained 100% pass rate across CPU, CUDA, and MPS devices
+- Stress tests validate correctness for high-order tensors
+
+### Rationale
+
+Version 0.2.1 completes the tensor decomposition toolkit with QR factorization, providing researchers with orthogonal decomposition capabilities essential for canonical forms in tensor network algorithms. The flexible axis specification in `oplus()` improves code ergonomics for direct sum operations common in symmetry-adapted basis constructions. The comprehensive documentation updates ensure users can effectively leverage the new PyTorch backend, GPU acceleration, and autograd features introduced in v0.2.0.
+
+The MkDocs hooks enhancement addresses a long-standing rendering issue with bullet lists in parameter tables, ensuring professional-quality documentation that properly displays multi-line parameter descriptions with inline code formatting.
+
+**Breaking Changes**: None - fully backward compatible with v0.2.0 API.
+
+**Target Users**: Researchers in quantum many-body physics and tensor network methods requiring orthogonal decompositions, improved API ergonomics, and comprehensive documentation for PyTorch-based workflows.
+
+---
+
 ## [0.2.0] - 2026-02-06
 
 **PyTorch Backend Migration with Autograd and Device Management**
@@ -266,9 +391,9 @@ Release the first stable version of Nicole, a Python library for block-sparse te
 
 #### Tensor Operations
 - **Contraction**: np.tensordot-style interface with automatic index pairing
-  - Flexible axes specification with exclusion support
-  - Automatic ambiguity detection and validation
-  - Full support for scalar tensors (0D)
+    - Flexible axes specification with exclusion support
+    - Automatic ambiguity detection and validation
+    - Full support for scalar tensors (0D)
 - **Trace**: Automatic pairing with exclusion options
 - **Arithmetic**: Element-wise addition, subtraction with sector union
 - **Manipulation**: permute, transpose, conjugate, retag, merge_axes, flip
@@ -276,8 +401,8 @@ Release the first stable version of Nicole, a Python library for block-sparse te
 
 #### Tensor Decomposition
 - SVD with symmetry preservation and truncation support
-  - Bond dimension (chi) and singular value (tol) truncation
-  - Automatic index direction handling
+    - Bond dimension (chi) and singular value (tol) truncation
+    - Automatic index direction handling
 - Eigenvalue decomposition for symmetric tensors
 - High-level decomp function with customizable truncation
 - Multi-axis decomposition support
@@ -296,10 +421,10 @@ Release the first stable version of Nicole, a Python library for block-sparse te
 
 #### Quantum Many-Body Systems (load_space)
 - Preset-based Hilbert space construction with physical operators:
-  - **Ferm**: Spinless fermions with U(1) charge conservation
-  - **FermU1U1/FermZ2U1**: Spinful fermions with spin and charge symmetries
-  - **Band**: Hardcore bosons with U(1)⊗U(1) or Z(2)⊗U(1) symmetries
-  - **Spin**: Spin-1/2 chains with U(1) or Z(2) symmetries
+    - **Ferm**: Spinless fermions with U(1) charge conservation
+    - **FermU1U1/FermZ2U1**: Spinful fermions with spin and charge symmetries
+    - **Band**: Hardcore bosons with U(1)⊗U(1) or Z(2)⊗U(1) symmetries
+    - **Spin**: Spin-1/2 chains with U(1) or Z(2) symmetries
 - Automatic operator generation (creation, annihilation, number, spin)
 - Charge conventions optimized for half-filling calculations
 - Spherical tensor convention for spin operators
@@ -377,6 +502,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.2.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.2.0
 [0.1.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.1.0
