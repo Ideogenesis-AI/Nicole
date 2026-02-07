@@ -7,6 +7,9 @@ repo_url: https://github.com/Ideogenesis-AI/Nicole
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2025-2026 Changkai Zhang
 
+hooks:
+  - docs/hooks.py
+
 theme:
   name: material
   logo: images/nicole-font-awesome.png
@@ -116,6 +119,8 @@ nav:
       - Build Operators: examples/advanced/build-operators.md
       - Load Space: examples/advanced/load-space-examples.md
       - Performance: examples/advanced/performance.md
+      - Autograd: examples/advanced/autograd.md
+      - GPU Acceleration: examples/advanced/gpu-acceleration.md
   # - Tutorials:
   #   - tutorials/index.md
 
@@ -213,9 +218,9 @@ extra:
     - icon: fontawesome/brands/python
       link: https://www.python.org
       name: Python
-    - icon: simple/numpy
-      link: https://numpy.org
-      name: NumPy
+    - icon: simple/pytorch
+      link: https://pytorch.org
+      name: PyTorch
   version:
     provider: mike
   analytics:
