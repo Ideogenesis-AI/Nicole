@@ -2,7 +2,8 @@
 #               .gitignore for Nicole                     #
 # ------------------------------------------------------- #
 
-# To be supplied ...
+# Logging directory for Nicole
+.logging/
 
 
 
