@@ -39,10 +39,11 @@ eig(T, itag=None, order="ascend", trunc=None)
     in ascending or descending order (by value for real eigenvalues, by real part for complex).
 
 decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
-    High-level decomposition with three modes:
-    - "UR": Returns (U, R) where R = S*Vh
+    High-level decomposition with four modes:
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
+    - "UR": Returns (U, R) where R = S*Vh
     - "LV": Returns (L, V) where L = U*S
+    - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
     The flow parameter controls arrow directions. The itag parameter customizes bond tags.
 """
 
@@ -735,14 +736,16 @@ def decomp(
         - Sequence of integer positions or string tags (merges multiple axes first)
     mode:
         Decomposition mode:
-        - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
+        - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
+        - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
     flow:
         Arrow direction control. Default is "><" (both arrows incoming).
         - For SVD mode: Controls S matrix arrow directions ("><", ">>", or "<<")
         - For UR mode: Both ">>" and "><" normalize to ">>" (outward bonds); "<<" is also accepted
         - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
+        - For QR mode: Controls bond arrow directions
         Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
         This parameter uses tensor.invert() to adjust from the natural flow to the desired flow.
     itag:
@@ -759,14 +762,16 @@ def decomp(
     Returns
     -------
     tuple[Tensor, Tensor] or tuple[Tensor, Tensor, Tensor]
-        - "UR" mode: (U, R) where R incorporates singular values
         - "SVD" mode: (U, S, Vh) with S as diagonal matrix tensor
+        - "UR" mode: (U, R) where R incorporates singular values
         - "LV" mode: (L, V) where L incorporates singular values
+        - "QR" mode: (Q, R) where Q is orthogonal and R is upper triangular
     
     Raises
     ------
     ValueError
-        If mode is not one of "UR", "SVD", or "LV", or if flow is not ">>", "<<", or "><"
+        If mode is not one of "SVD", "UR", "LV", or "QR",
+        or if flow is not ">>", "<<", or "><"
     
     Examples
     --------
@@ -830,10 +835,10 @@ def decomp(
             iso_conj_last_idx = len(iso_conj.indices) - 1
             U_unmerged = contract(iso_conj, U, axes=(iso_conj_last_idx, 0))
             return U_unmerged, S, Vh
-        else:  # mode == "UR" or "LV"
+        else:  # mode == "UR", "LV", or "QR"
             first, second = result
-            # For UR mode, first is U; for LV mode, first is L
-            # Both have the merged index at position 0
+            # For UR mode, first is U; for LV mode, first is L; for QR mode, first is Q
+            # All have the merged index at position 0
             # The merged index is at position 0 of first, and at last position of iso_conj
             iso_conj_last_idx = len(iso_conj.indices) - 1
             first_unmerged = contract(iso_conj, first, axes=(iso_conj_last_idx, 0))
@@ -842,8 +847,8 @@ def decomp(
     # Single axis: original behavior
     # Validate mode
     mode = mode.upper()
-    if mode not in ("UR", "SVD", "LV"):
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'UR', 'SVD', or 'LV'")
+    if mode not in ("SVD", "UR", "LV", "QR"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
     
     # Validate flow parameter
     if flow not in (">>", "<<", "><"):
@@ -978,7 +983,7 @@ def decomp(
         
         return U, R_tensor
     
-    else:  # mode == "LV"
+    elif mode == "LV":
         # Multiply singular values into U to get L = U*S
         L_blocks: Dict[BlockKey, torch.Tensor] = {}
         
@@ -1018,3 +1023,35 @@ def decomp(
             Vh.invert(0)  # Invert Vh's bond index (position 0)
         
         return L_tensor, Vh
+    
+    elif mode == "QR":
+        # Use the qr function directly
+        # axes go into Q, remaining axes go into R
+        Q, R = qr(T, axis_idx)
+        
+        # Update bond tags to use unified tag (or custom tags if specified)
+        # If itag is a string (same tag for both), use it; otherwise use separate tags
+        if isinstance(itag, str):
+            unified_tag = itag
+        else:
+            # For QR, we use bond_tag_left for both to allow automatic contraction
+            unified_tag = bond_tag_left
+        
+        Q.retag({Q.itags[1]: unified_tag})
+        R.retag({R.itags[0]: unified_tag})
+        
+        # For QR mode: natural flow depends on left_index direction
+        # Similar to UR mode, normalize flow (both ">>" and "><" mean ">>")
+        normalized_flow = ">>" if flow in (">>", "><") else "<<"
+        
+        # Determine natural flow from Q's left index (same as SVD logic)
+        q_left_direction = Q.indices[0].direction
+        # If Q's left index is OUT, natural flow is "<<"; if IN, natural flow is ">>"
+        qr_natural_flow = "<<" if q_left_direction == Direction.OUT else ">>"
+        
+        # Invert if normalized flow differs from natural flow
+        if normalized_flow != qr_natural_flow:
+            Q.invert(1)  # Invert Q's bond index
+            R.invert(0)  # Invert R's bond index
+        
+        return Q, R
