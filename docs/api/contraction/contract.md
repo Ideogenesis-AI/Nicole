@@ -2,7 +2,7 @@
 
 Contract two tensors along specified index pairs.
 
-::: nicole.contract
+::: nicole.contract.contract
     options:
       show_source: false
       heading_level: 2
