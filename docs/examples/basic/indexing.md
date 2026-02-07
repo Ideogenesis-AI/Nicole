@@ -14,7 +14,7 @@ Understanding block structure is essential for debugging, analyzing tensor prope
 
 ```python exec="1" session="indexing" result=""
 from nicole import Tensor, Index, Sector, Direction, U1Group, subsector
-import numpy as np
+import torch
 ```
 
 ## Accessing Blocks
@@ -47,7 +47,7 @@ if (0, 0) in T.data:
 # Method 1: Using sorted_keys property
 for key in T.sorted_keys:
     block = T.data[key]
-    print(f"Block {key}: shape {block.shape}, norm {np.linalg.norm(block):.4f}")
+    print(f"Block {key}: shape {block.shape}, norm {torch.linalg.norm(block):.4f}")
 
 print()
 

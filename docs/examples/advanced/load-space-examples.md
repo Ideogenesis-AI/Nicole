@@ -18,7 +18,6 @@ The function returns:
 
 ```python exec="1" session="load-space" result=""
 from nicole import load_space, contract
-import numpy as np
 ```
 
 ## Spin Systems

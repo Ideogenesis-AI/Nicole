@@ -12,7 +12,7 @@ All operations are **block-wise**: they operate independently on each charge sec
 
 ```python exec="1" session="arithmetic" result=""
 from nicole import Tensor, Index, Sector, Direction, U1Group
-import numpy as np
+import torch
 ```
 
 ## Addition and Subtraction
@@ -85,11 +85,11 @@ norm = A_norm.norm()
 print(f"Tensor norm: {norm:.4f}")
 
 # Verify norm computation manually
-manual_norm = np.sqrt(sum(
-    np.sum(block ** 2) for block in A_norm.data.values()
+manual_norm = torch.sqrt(sum(
+    torch.sum(block ** 2) for block in A_norm.data.values()
 ))
 print(f"Manual norm: {manual_norm:.4f}")
-print(f"Match: {abs(norm - manual_norm) < 1e-10}")
+print(f"Match: {abs(norm - manual_norm.item()) < 1e-10}")
 ```
 
 ## Combining Operations
