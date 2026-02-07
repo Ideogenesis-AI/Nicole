@@ -5,7 +5,6 @@ This page provides quick examples to get you started with Nicole. After understa
 ```python exec="1" session="quick" result=""
 from nicole import Tensor, Index, Sector, Direction, U1Group, Z2Group, ProductGroup
 from nicole import identity, contract, trace, permute, transpose, conj, decomp
-import numpy as np
 ```
 
 ## Basic U(1) Tensor

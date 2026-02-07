@@ -2,7 +2,7 @@
 
 Compute trace over index pairs within a tensor.
 
-::: nicole.trace
+::: nicole.contract.trace
     options:
       show_source: false
       heading_level: 2

@@ -90,10 +90,10 @@ idx_spatial = Index(
 )
 
 # Parity operator: +I for even, -I for odd
-import numpy as np
+import torch
 P_data = {
-    (0, 0): np.eye(5),      # +I for even parity states
-    (1, 1): -np.eye(5),     # -I for odd parity states
+    (0, 0): torch.eye(5),      # +I for even parity states
+    (1, 1): -torch.eye(5),     # -I for odd parity states
 }
 P = Tensor(
     indices=[idx_spatial, idx_spatial.flip()],

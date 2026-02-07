@@ -118,7 +118,7 @@ Future tutorials may include:
 Most tutorials will assume:
 
 - **Python**: Basic to intermediate Python knowledge
-- **NumPy**: Familiarity with NumPy arrays
+- **PyTorch**: Familiarity with PyTorch tensors
 - **Linear Algebra**: Matrices, eigenvalues, SVD
 - **Quantum Mechanics**: Basic quantum mechanics (for physics applications)
 
