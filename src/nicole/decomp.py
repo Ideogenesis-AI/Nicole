@@ -21,13 +21,17 @@ from __future__ import annotations
 """Decomposition utilities for symmetry-aware Nicole (TN) tensors.
 
 This module provides functions for decomposing tensors into their singular
-value decomposition (SVD) components and eigenvalue decomposition.
+value decomposition (SVD) components, QR decomposition, and eigen-decomposition.
 
 Functions
 ---------
 svd(T, axis, trunc=None)
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
     Returns singular values as 1D arrays for memory efficiency.
+
+qr(T, axis)
+    QR decomposition returning Q (orthogonal) and R (upper triangular) tensors.
+    Separates specified axis into Q, all other axes go to R. No truncation applied.
 
 eig(T, itag=None, order="ascend", trunc=None)
     Eigenvalue decomposition of square matrix returning U tensor and eigenvalues dict.
@@ -303,6 +307,168 @@ def svd(
     )
     
     return U_tensor, S_blocks, Vh_tensor
+
+
+def qr(
+    T: Tensor,
+    axis: int | str
+) -> Tuple[Tensor, Tensor]:
+    """Perform a symmetry-preserving QR decomposition separating one axis from all others.
+
+    Parameters
+    ----------
+    T:
+        Tensor to be decomposed.
+    axis:
+        Axis to separate from all others. Can be an integer axis or itag.
+        This axis forms the left partition (Q), all others form the right partition (R).
+
+    Returns
+    -------
+    tuple[Tensor, Tensor]
+        Pair `(Q, R)` where:
+        - Q has indices (left_index, bond_index) and is orthogonal
+        - R has indices (bond_index.flip(), *right_indices) and is upper triangular
+    
+    Raises
+    ------
+    ValueError
+        If axis specification is invalid or ambiguous.
+    
+    Notes
+    -----
+    QR decomposition factors a tensor into an orthogonal matrix Q and an upper triangular
+    matrix R such that T = Q @ R. Unlike SVD, no truncation is applied.
+    
+    The decomposition is performed block-wise, preserving symmetry structure. For each
+    charge sector, blocks with the same left charge are concatenated horizontally,
+    QR decomposed together, and then R is split back into individual blocks.
+    
+    Examples
+    --------
+    >>> # Basic QR decomposition
+    >>> Q, R = qr(T, axis=0)
+    >>> 
+    >>> # Using itag
+    >>> Q, R = qr(T, axis="physical")
+    """
+    # Parse itags to integer axes
+    if isinstance(axis, str):
+        # Check for ambiguity: ensure the itag appears exactly once
+        matching_axes = [i for i, tag in enumerate(T.itags) if tag == axis]
+        if len(matching_axes) == 0:
+            raise ValueError(f"itag '{axis}' not found in tensor")
+        elif len(matching_axes) > 1:
+            raise ValueError(
+                f"Ambiguous axis specification: itag '{axis}' appears at "
+                f"multiple positions {matching_axes}. Please use integer axis instead."
+            )
+        axis_idx = matching_axes[0]
+    else:
+        axis_idx = axis
+        if axis_idx < 0 or axis_idx >= len(T.indices):
+            raise ValueError(f"Axis index {axis_idx} out of range [0, {len(T.indices)})")
+    
+    # Define partitions: single axis vs all others
+    left_axis = axis_idx
+    right_axes = [i for i in range(len(T.indices)) if i != left_axis]
+    
+    # Build permutation to place left axis first
+    perm = [left_axis] + right_axes
+    
+    # Get indices
+    left_index = T.indices[left_axis]
+    right_indices = tuple(T.indices[i] for i in right_axes)
+    right_itags = tuple(T.itags[i] for i in right_axes)
+    
+    # Group blocks by left charge for proper QR decomposition
+    # Structure: q_left -> list of (key, arr_perm, dims_right, mat)
+    blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, torch.Tensor, Tuple[int, ...], torch.Tensor]]] = {}
+    
+    for key, arr in T.data.items():
+        # Permute array to [left_axis] + right_axes
+        arr_perm = torch.permute(arr, perm)
+        
+        # Get left charge
+        q_left = key[left_axis]
+        
+        # Reshape to matrix: (dim_left, prod(dims_right))
+        dim_left = arr_perm.shape[0]
+        dims_right = arr_perm.shape[1:]
+        dim_right_prod = math.prod(dims_right)
+        mat = arr_perm.reshape(dim_left, dim_right_prod)
+        
+        # Group by left charge
+        if q_left not in blocks_by_left_charge:
+            blocks_by_left_charge[q_left] = []
+        blocks_by_left_charge[q_left].append((key, arr_perm, dims_right, mat))
+    
+    # Perform QR for each left charge sector by concatenating all blocks with same q_left
+    qr_results: Dict[tuple, Tuple[torch.Tensor, Dict[BlockKey, torch.Tensor]]] = {}
+    bond_charge_dims: Dict[tuple, int] = {}
+    
+    for q_left, block_list in blocks_by_left_charge.items():
+        # Concatenate all matrices with the same left charge horizontally
+        mats = [mat for _, _, _, mat in block_list]
+        concatenated_mat = torch.cat(mats, dim=1)
+        
+        # Perform QR decomposition on concatenated matrix
+        Q, R = torch.linalg.qr(concatenated_mat, mode='reduced')
+        
+        # Split R back to individual blocks
+        R_dict: Dict[BlockKey, torch.Tensor] = {}
+        col_offset = 0
+        for key, arr_perm, dims_right, mat in block_list:
+            n_cols = mat.shape[1]
+            R_block = R[:, col_offset:col_offset+n_cols]
+            # Reshape back to original right dimensions
+            rank = R_block.shape[0]
+            R_reshaped = R_block.reshape((rank,) + dims_right)
+            R_dict[key] = R_reshaped
+            col_offset += n_cols
+        
+        # Store results grouped by left charge
+        qr_results[q_left] = (Q, R_dict)
+        bond_charge_dims[q_left] = Q.shape[1]
+    
+    # Build bond index with sectors from left charges
+    bond_sectors = tuple(Sector(q, d) for q, d in sorted(bond_charge_dims.items(), key=lambda x: str(x[0])))
+    bond_direction = left_index.direction.reverse()
+    bond_index = Index(direction=bond_direction, group=left_index.group, sectors=bond_sectors)
+    
+    # Construct output blocks from grouped QR results
+    Q_blocks: Dict[BlockKey, torch.Tensor] = {}
+    R_blocks: Dict[BlockKey, torch.Tensor] = {}
+    
+    for q_left, (Q, R_dict) in qr_results.items():
+        # For Q tensor: indices (left_index, bond_index)
+        # Block key: (q_left, q_left) since bond charge equals left charge
+        Q_key = (q_left, q_left)
+        Q_blocks[Q_key] = Q
+        
+        # For R tensor: indices (bond_index.flip(), *right_indices)
+        # Each block gets its corresponding R from the dictionary
+        for key, R_reshaped in R_dict.items():
+            q_right = tuple(key[i] for i in right_axes)
+            R_key = (q_left,) + q_right
+            R_blocks[R_key] = R_reshaped
+    
+    # Construct output tensors
+    Q_tensor = Tensor(
+        indices=(left_index, bond_index),
+        itags=(T.itags[left_axis], "_bond"),
+        data=Q_blocks,
+        dtype=T.dtype
+    )
+    
+    R_tensor = Tensor(
+        indices=(bond_index.flip(),) + right_indices,
+        itags=("_bond",) + right_itags,
+        data=R_blocks,
+        dtype=T.dtype
+    )
+    
+    return Q_tensor, R_tensor
 
 
 def eig(
