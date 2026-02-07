@@ -14,7 +14,7 @@ Operators with **auxiliary indices** (like creation/annihilation or spin raising
 
 ```python exec="1" session="build-operators" result=""
 from nicole import identity, isometry, Tensor, Index, Sector, Direction, U1Group
-import numpy as np
+import torch
 ```
 
 ## Identity Operator
@@ -55,7 +55,7 @@ for sector in idx_num.sectors:
     charge = sector.charge
     dim = sector.dim
     # Diagonal matrix with charge values
-    N_data[(charge, charge)] = np.eye(dim) * charge
+    N_data[(charge, charge)] = torch.eye(dim) * charge
 
 N = Tensor(indices=(idx_num, idx_num.flip()), itags=("out", "in"), data=N_data)
 
@@ -80,7 +80,7 @@ idx_aux_plus = Index(Direction.OUT, group, sectors=(Sector(1, 1),))
 a_dag_data = {}
 for n in range(n_max):
     # Connects |n⟩ to |n+1⟩, charge conserved: (n+1) + (-n) + (-1) = 0
-    a_dag_data[(n + 1, n, 1)] = np.array([[[np.sqrt(n + 1)]]])
+    a_dag_data[(n + 1, n, 1)] = torch.tensor([[[torch.sqrt(torch.tensor(float(n + 1)))]]])
 
 a_dag = Tensor(
     indices=(idx_ladder, idx_ladder.flip(), idx_aux_plus.flip()),
@@ -97,7 +97,7 @@ idx_aux_minus = Index(Direction.OUT, group, sectors=(Sector(-1, 1),))
 a_data = {}
 for n in range(1, n_max + 1):
     # Connects |n⟩ to |n-1⟩, charge conserved: (n-1) + (-n) + (1) = 0
-    a_data[(n - 1, n, -1)] = np.array([[[np.sqrt(n)]]])
+    a_data[(n - 1, n, -1)] = torch.tensor([[[torch.sqrt(torch.tensor(float(n)))]]])
 
 a = Tensor(
     indices=(idx_ladder, idx_ladder.flip(), idx_aux_minus.flip()),
@@ -119,8 +119,8 @@ idx_spin = Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(1, 1)))
 
 # Sz is diagonal
 Sz_data = {
-    (-1, -1): np.array([[-0.5]]),  # |↓⟩
-    (1, 1): np.array([[0.5]]),     # |↑⟩
+    (-1, -1): torch.tensor([[-0.5]]),  # |↓⟩
+    (1, 1): torch.tensor([[0.5]]),     # |↑⟩
 }
 
 Sz = Tensor(indices=(idx_spin, idx_spin.flip()), itags=("out", "in"), data=Sz_data)

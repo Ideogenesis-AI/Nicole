@@ -69,12 +69,14 @@ Contract and trace tensors:
 
 ## Decomposition
 
-SVD and related operations:
+SVD, QR, eigenvalue decomposition, and related operations:
 
 | Function | Description |
 |----------|-------------|
-| [decomp](decomposition/decomp.md) | High-level decomposition |
+| [decomp](decomposition/decomp.md) | High-level decomposition (SVD/QR) |
 | [svd](decomposition/svd.md) | Low-level SVD |
+| [qr](decomposition/qr.md) | Low-level QR |
+| [eig](decomposition/eig.md) | Eigenvalue decomposition |
 
 ## Symmetry Groups
 
@@ -117,7 +119,7 @@ For practical examples and complete working code, see:
 → [contract](contraction/contract.md), [trace](contraction/trace.md)
 
 **Decompose a tensor**
-→ [decomp](decomposition/decomp.md), [svd](decomposition/svd.md)
+→ [decomp](decomposition/decomp.md), [svd](decomposition/svd.md), [qr](decomposition/qr.md), [eig](decomposition/eig.md)
 
 **Merge tensor axes**
 → [merge_axes](manipulation/merge_axes.md), [isometry_n](creation/isometry_n.md)
@@ -138,7 +140,9 @@ Nicole follows these principles:
 - **Functional operations** return new tensors (e.g., `conj()`)
 - **In-place methods** modify existing tensors (e.g., `Tensor.conj()`)
 - **Charge conservation** enforced automatically
-- **NumPy-style** API for familiarity
+- **Array-style** API with familiar syntax (similar to NumPy/PyTorch)
+- **Device management** for CPU and GPU computation
+- **Autograd control** for optional gradient tracking
 
 ## See Also
 

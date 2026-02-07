@@ -183,6 +183,57 @@ def test_oplus_single_axis_by_itag():
     assert dim_map_0[1] == 5
 
 
+def test_oplus_single_int_no_list():
+    """Test merging single axis using bare int (not wrapped in list)."""
+    group = U1Group()
+    
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 5)))
+    
+    A = Tensor.random([idx_A0, idx_match], seed=100, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_match], seed=200, itags=['i', 'j'])
+    
+    # Use bare int instead of [0]
+    C = oplus(A, B, axes=0)
+    
+    # Should have same result as axes=[0]
+    dim_map_0 = C.indices[0].sector_dim_map()
+    assert dim_map_0[0] == 3  # 2 + 1
+    assert dim_map_0[1] == 5  # 3 + 2
+    
+    # Index 1 should be unchanged
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 3
+    assert dim_map_1[1] == 5
+    assert len(dim_map_1) == 2
+
+
+def test_oplus_single_str_no_list():
+    """Test merging single axis using bare string itag (not wrapped in list)."""
+    group = U1Group()
+    
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_match = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 5)))
+    
+    A = Tensor.random([idx_A0, idx_match], seed=110, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_match], seed=210, itags=['i', 'j'])
+    
+    # Use bare string instead of ['i']
+    C = oplus(A, B, axes='i')
+    
+    # Should have same result as axes=['i']
+    dim_map_0 = C.indices[0].sector_dim_map()
+    assert dim_map_0[0] == 3
+    assert dim_map_0[1] == 5
+    
+    # Index 1 should be unchanged
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 3
+    assert dim_map_1[1] == 5
+
+
 def test_oplus_multiple_axes():
     """Test merging multiple non-contiguous axes [0, 2] with axis 1 matching."""
     group = U1Group()
@@ -351,6 +402,18 @@ def test_oplus_invalid_axes_itag():
     
     with pytest.raises(ValueError, match="not found"):
         oplus(A, B, axes=['c'])
+
+
+def test_oplus_invalid_single_str_itag():
+    """Test error for non-existent single string itag (not in list)."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=['a', 'b'])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=['a', 'b'])
+    
+    with pytest.raises(ValueError, match="not found"):
+        oplus(A, B, axes='c')
 
 
 def test_oplus_scalar_error():

@@ -186,13 +186,13 @@ def tensor_summary(
             else:
                 value_str = f"{value:.6g}"
             dtype_name = str(dtype).replace('torch.', '')
-            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            info_line = f"\n  info:  0x {{ 1 x 0 }},   {label}"
             data_line = f"  data:  0-D {dtype_name} ({_format_bytes(total_bytes)})    [ {value_str} ]"
             return info_line + "\n" + data_line
         else:
             # Empty scalar
             dtype_name = str(dtype).replace('torch.', '')
-            info_line = f"\n  info:  0x {{ 1 x 0 }}   {label}"
+            info_line = f"\n  info:  0x {{ 1 x 0 }},   {label}"
             data_line = f"  data:  0-D {dtype_name} (0 B)    [ empty ]"
             return info_line + "\n" + data_line
 
@@ -214,7 +214,7 @@ def tensor_summary(
     )
     info_line = (
         f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "
-        f"having '{sym_signature}'  {label:>8},  {{ {itag_list} }}"
+        f"having '{sym_signature}',  {label:>7},  {{ {itag_list} }}"
     )
 
     # -------------------------------------------------------------------
@@ -287,13 +287,13 @@ def tensor_summary(
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {value_repr:>8}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {value_repr:>7}"
                 )
             else:
                 # High-dimensional array — display dims and byte footprint.
                 byte_repr = _format_bytes(block_bytes)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr} {byte_repr:>7}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {byte_repr:>6}"
                 )
 
         # If more than max_lines blocks, note how many are omitted.

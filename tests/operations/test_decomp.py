@@ -18,404 +18,14 @@
 # along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor decomposition operations: SVD."""
+"""Tests for tensor decomposition operations: decomp() high-level function."""
 
-import math
 import torch
 import pytest
 
 from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
-from nicole.decomp import svd, eig
+from nicole.decomp import svd
 from ..utils import assert_charge_neutral
-
-
-# Basic SVD tests
-
-def test_svd_basic_reconstruction():
-    """Test basic SVD and reconstruction on a simple tensor."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 3), Sector(2, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 3)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 1), Sector(1, 2), Sector(2, 1)))
-
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=42)
-    original_norm = T.norm()
-
-    # Perform SVD separating axis 0 from the rest
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-
-    # Check that all tensors are charge neutral
-    assert_charge_neutral(U)
-    assert_charge_neutral(S)
-    assert_charge_neutral(Vh)
-
-    # Reconstruct tensor (automatic detection based on matching itags)
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
-
-    # Check reconstruction accuracy
-    diff_norm = (T - reconstructed).norm()
-    rel_error = diff_norm / original_norm
-    assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
-    
-    # Check norms are preserved
-    assert math.isclose(reconstructed.norm(), original_norm)
-
-
-def test_svd_integer_axis():
-    """Test SVD with integer axis specification."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1)
-    
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-    
-    assert len(U.indices) == 2
-    assert len(S.indices) == 2
-    assert len(Vh.indices) == 2
-
-
-def test_svd_string_axis():
-    """Test SVD with axis specified by string tag."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=123)
-
-    # Perform SVD by axis name
-    U, S, Vh = decomp(T, axes="b", mode="SVD")
-
-    # Check structure
-    assert len(U.indices) == 2
-    assert len(S.indices) == 2
-    assert len(Vh.indices) == 3
-    assert U.itags[0] == "b"
-    assert Vh.itags[1] == "a"
-    assert Vh.itags[2] == "c"
-
-    # Reconstruct and verify
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
-    
-    # Permute reconstructed to match original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
-    
-    diff_norm = (T - reconstructed).norm()
-    rel_error = diff_norm / T.norm()
-    assert rel_error < 1e-12
-
-
-def test_svd_different_axis_positions():
-    """Test SVD on different axis positions."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
-
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=111)
-
-    # Test SVD on each axis (using UR mode for efficiency)
-    for axis in [0, 1, 2]:
-        U, R = decomp(T, axes=axis, mode="UR")
-        
-        # Reconstruct using explicit pairs
-        reconstructed = contract(U, R, axes=(1, 0))
-        
-        # Permute back to original order
-        if axis == 0:
-            # Already in correct order (a, b, c)
-            pass
-        elif axis == 1:
-            # Current order (b, a, c) -> (a, b, c)
-            reconstructed.permute([1, 0, 2])
-        elif axis == 2:
-            # Current order (c, a, b) -> (a, b, c)
-            reconstructed.permute([1, 2, 0])
-        
-        # Verify reconstruction
-        diff_norm = (T - reconstructed).norm()
-        rel_error = diff_norm / T.norm()
-        assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
-
-
-# Block handling tests
-
-def test_svd_multiple_blocks_same_charge():
-    """Test SVD with multiple blocks and diverse charge sectors."""
-    group = U1Group()
-    
-    # Create indices with diverse charge sectors
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(2, 1)))
-
-    T = Tensor.random(indices=(idx1, idx2, idx3), itags=["a", "b", "c"], seed=42)
-
-    # Perform SVD using decomp
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-
-    # Verify that we have blocks for multiple charges
-    assert len(U.data) >= 2, "Should have blocks for multiple q_left charges"
-    assert len(S.data) >= 2, "Should have blocks for multiple q_left charges"
-    assert len(Vh.data) >= 2, "Should have multiple Vh blocks"
-
-    # Reconstruct and verify
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
-    
-    diff_norm = (T - reconstructed).norm()
-    rel_error = diff_norm / T.norm()
-    assert rel_error < 1e-12
-
-
-def test_svd_single_block():
-    """Test SVD with single block tensor."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=999)
-    
-    # Test with raw svd() - should return dict for S
-    U, S_values, Vh = svd(T, axis=0)
-    
-    assert len(U.data) == 1
-    assert isinstance(S_values, dict)
-    assert len(S_values) == 1
-    assert len(Vh.data) == 1
-
-
-# Index and direction tests
-
-def test_svd_index_directions():
-    """Test that SVD produces correct index directions for contraction."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
-
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=456)
-
-    # Test with default flow "><"
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-
-    # With corrected logic, default "><" gives both S indices IN
-    assert S.indices[0].direction == Direction.IN, "S first index should be IN for ><"
-    assert S.indices[1].direction == Direction.IN, "S second index should be IN for ><"
-    
-    # Verify contraction works
-    S_Vh = contract(S, Vh)
-    reconstructed = contract(U, S_Vh)
-    
-    # Check that reconstructed has same index directions as original
-    for i, idx in enumerate(reconstructed.indices):
-        assert idx.direction == T.indices[i].direction
-
-
-def test_svd_bond_index_structure():
-    """Test that bond index has correct structure."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 3), Sector(2, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=123)
-    
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-    
-    bond_index = U.indices[1]
-    
-    # Bond should have same group as left index
-    assert bond_index.group == idx1.group
-    
-    # Bond charges should be a subset of left charges
-    bond_charges = bond_index.charges()
-    left_charges = idx1.charges()
-    assert set(bond_charges).issubset(set(left_charges))
-    
-    # Bond should have at least one charge (non-trivial)
-    assert len(bond_charges) > 0
-    
-    # With default flow="><", both U indices are OUT, so bond charges = -left_charges_in_data
-    # (charge conservation: q_left + q_bond = 0, so q_bond = -q_left)
-    left_charges_in_data = set(key[0] for key in T.data.keys())
-    expected_bond_charges = {-q for q in left_charges_in_data}
-    assert set(bond_charges) == expected_bond_charges, \
-        f"Bond charges {set(bond_charges)} should equal negatives of left data charges {expected_bond_charges}"
-
-
-# Singular value tests
-
-def test_svd_singular_values_positive():
-    """Test that singular values are positive and sorted."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
-
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=789)
-
-    # Use raw svd() to get singular values dict
-    U, S_values, Vh = svd(T, axis=0)
-
-    # Check singular values directly
-    for key, s_array in S_values.items():
-        # Check all positive
-        assert torch.all(s_array >= 0).item(), "Singular values should be non-negative"
-        # Check sorted in descending order
-        sorted_s = torch.sort(s_array)[0]
-        reversed_s = torch.flip(sorted_s, dims=[0])
-        assert torch.allclose(s_array, reversed_s), \
-            "Singular values should be sorted descending"
-
-
-def test_svd_bond_dimensions():
-    """Test that bond dimensions are computed correctly."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=444)
-
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-
-    # Bond dimension should be min(3, 5) = 3
-    bond_index = U.indices[1]
-    assert bond_index.dim == 3, "Bond dimension should be min of left and right dimensions"
-    
-    # Check S block dimensions match
-    for key, block in S.data.items():
-        assert block.shape[0] == bond_index.dim
-        assert block.shape[1] == bond_index.dim
-
-
-def test_svd_s_diagonal():
-    """Test that S tensor contains diagonal matrices."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=3)
-    
-    U, S, Vh = decomp(T, axes=0, mode="SVD")
-    
-    # Check that S blocks are diagonal
-    for key, block in S.data.items():
-        # Off-diagonal elements should be zero
-        assert torch.allclose(block, torch.diag(torch.diag(block)))
-
-
-# Charge conservation tests
-
-def test_svd_preserves_charge_conservation():
-    """Test that SVD preserves charge conservation in all output tensors."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=222)
-    
-    # Original tensor should be charge neutral
-    assert_charge_neutral(T)
-
-    # Perform SVD
-    U, S, Vh = decomp(T, axes=1, mode="SVD")
-
-    # All output tensors should be charge neutral
-    assert_charge_neutral(U)
-    assert_charge_neutral(S)
-    assert_charge_neutral(Vh)
-
-
-def test_svd_charge_conservation_all_axes():
-    """Test charge conservation for SVD on all axes."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(2, 1)))
-    
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=4)
-    
-    for axis in [0, 1, 2]:
-        U, S, Vh = decomp(T, axes=axis, mode="SVD")
-        
-        assert_charge_neutral(U)
-        assert_charge_neutral(S)
-        assert_charge_neutral(Vh)
-
-
-# Error handling tests
-
-def test_svd_invalid_integer_axis():
-    """Test that SVD raises error for invalid integer axis."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=333)
-
-    # Test invalid integer axis
-    with pytest.raises(ValueError, match="out of range"):
-        svd(T, axis=5)
-    
-    with pytest.raises(ValueError, match="out of range"):
-        svd(T, axis=-1)
-
-
-def test_svd_invalid_string_axis():
-    """Test that SVD raises error for invalid string axis."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=333)
-
-    # Test invalid string axis
-    with pytest.raises(ValueError, match="not found"):
-        svd(T, axis="nonexistent")
-
-
-def test_svd_ambiguous_string_axis():
-    """Test that SVD raises error for ambiguous string axis (duplicate itags)."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-
-    # Create tensor with duplicate itags
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "a"], seed=444)
-
-    # Test ambiguous string axis
-    with pytest.raises(ValueError, match="Ambiguous axis specification"):
-        svd(T, axis="a")
-
-
-# dtype tests
-
-def test_svd_complex_dtype():
-    """Test SVD with complex dtype."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
-    
-    T = Tensor.random([idx1, idx2], dtype=torch.complex128, itags=["a", "b"], seed=5)
-    
-    # Use UR mode for efficient reconstruction
-    U, R = decomp(T, axes=0, mode="UR")
-    
-    # U and R should be complex
-    assert U.dtype.is_complex
-    assert R.dtype.is_complex
-    
-    # Reconstruct using explicit pairs
-    reconstructed = contract(U, R, axes=(1, 0))
-    
-    diff_norm = (T - reconstructed).norm()
-    rel_error = diff_norm / T.norm()
-    assert rel_error < 1e-12
 
 
 # Decomp function tests
@@ -529,25 +139,26 @@ def test_decomp_invalid_mode():
         decomp(T, axes=0, mode="invalid")
 
 
-def test_svd_returns_dict():
-    """Test that new svd returns dict of singular values."""
+def test_decomp_qr_mode():
+    """Test decomp in QR mode."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=42)
     
-    U, S_values, Vh = svd(T, axis=0)
+    Q, R = decomp(T, axes=0, mode="QR")
     
-    # Check S_values is a dict, not a Tensor
-    assert isinstance(S_values, dict)
-    assert not isinstance(S_values, Tensor)
+    # Check structure
+    assert len(Q.indices) == 2
+    assert len(R.indices) == 2
     
-    # Check all values are 1D arrays
-    for key, s_array in S_values.items():
-        assert isinstance(s_array, torch.Tensor)
-        assert s_array.ndim == 1
-        assert len(s_array) > 0
+    # Reconstruct using explicit pairs
+    reconstructed = contract(Q, R, axes=(1, 0))
+    
+    # Verify accuracy
+    diff_norm = (T - reconstructed).norm()
+    assert diff_norm / T.norm() < 1e-12
 
 
 def test_decomp_ur_multiindex():
@@ -602,156 +213,117 @@ def test_decomp_lv_multiindex():
     assert diff_norm / T.norm() < 1e-12
 
 
+def test_decomp_qr_multiindex():
+    """Test QR mode with multi-index tensor."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=789)
+    
+    Q, R = decomp(T, axes=1, mode="QR")
+    
+    # Check structure: Q should have 2 indices, R should have 3 indices
+    assert len(Q.indices) == 2
+    assert len(R.indices) == 3
+    
+    # Reconstruct using explicit pairs
+    reconstructed = contract(Q, R, axes=(1, 0))
+    
+    # Permute back to original order (b, a, c) -> (a, b, c)
+    reconstructed.permute([1, 0, 2])
+    
+    # Verify accuracy
+    diff_norm = (T - reconstructed).norm()
+    assert diff_norm / T.norm() < 1e-12
+
+
 def test_decomp_mode_case_insensitive():
-    """Test that decomp mode is case insensitive."""
+    """Test that decomp mode is case-insensitive."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=789)
     
-    # Test lowercase
-    U1, R1 = decomp(T, axes=0, mode="ur")
-    
-    # Test uppercase
-    U2, R2 = decomp(T, axes=0, mode="UR")
-    
-    # Test mixed case
+    # All of these should work
+    U1, R1 = decomp(T, axes=0, mode="UR")
+    U2, R2 = decomp(T, axes=0, mode="ur")
     U3, R3 = decomp(T, axes=0, mode="Ur")
     
-    # All should give same results
-    assert (U1 - U2).norm() < 1e-14
-    assert (R1 - R2).norm() < 1e-14
-    assert (U1 - U3).norm() < 1e-14
-    assert (R1 - R3).norm() < 1e-14
+    # Should give same results
+    assert (U1 - U2).norm() / U1.norm() < 1e-15
+    assert (R1 - R2).norm() / R1.norm() < 1e-15
 
 
 def test_decomp_preserves_charge_neutrality():
-    """Test that all decomp modes preserve charge neutrality."""
+    """Test that decomposition preserves charge neutrality."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(2, 1)))
-    
-    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=321)
-    
-    # Test all modes
-    for mode in ["UR", "SVD", "LV"]:
-        result = decomp(T, axes=0, mode=mode)
-        
-        # Check all output tensors are charge neutral
-        for tensor in result:
-            assert_charge_neutral(tensor)
-
-
-def test_decomp_ur_efficiency():
-    """Test that UR mode doesn't create unnecessary diagonal matrix."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 2)))
     
     T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=111)
     
+    # Original should be charge neutral
+    assert_charge_neutral(T)
+    
+    # After decomposition
     U, R = decomp(T, axes=0, mode="UR")
     
-    # R should have singular values multiplied in
-    # R blocks should not be square (they're rank x dim_right)
-    for key, block in R.data.items():
-        # R has shape (rank, dim_right) where rank <= min(dim_left, dim_right)
-        # For this test: rank <= min(3, 4) = 3, dim_right = 4
-        # So block should be (3, 4) which is not square
-        assert block.shape[0] <= min(3, 4)
-        # Verify it's been scaled by singular values (not all zeros)
-        assert torch.abs(block).max() > 1e-10
+    # U and R should each be charge neutral
+    assert_charge_neutral(U)
+    assert_charge_neutral(R)
+
+
+def test_decomp_ur_efficiency():
+    """Test UR mode is more efficient than SVD for reconstruction."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=1000)
+    
+    # UR mode returns 2 tensors
+    result_ur = decomp(T, axes=0, mode="UR")
+    assert len(result_ur) == 2
+    
+    # SVD mode returns 3 tensors
+    result_svd = decomp(T, axes=0, mode="SVD")
+    assert len(result_svd) == 3
 
 
 def test_decomp_lv_efficiency():
-    """Test that LV mode doesn't create unnecessary diagonal matrix."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=222)
-    
-    L, V = decomp(T, axes=0, mode="LV")
-    
-    # L should have singular values multiplied in
-    # L blocks should not be square (they're dim_left x rank)
-    for key, block in L.data.items():
-        # L has shape (dim_left, rank) where rank <= min(dim_left, dim_right)
-        # For this test: rank <= min(3, 4) = 3, dim_left = 3
-        # So block should be (3, 3) which happens to be square but scaled
-        assert block.shape[1] <= min(3, 4)
-        # Verify it's been scaled by singular values (not all zeros)
-        assert torch.abs(block).max() > 1e-10
-
-
-# Truncation tests
-
-def test_svd_truncation_nkeep():
-    """Test SVD with nkeep (keep at most N singular values globally)."""
+    """Test LV mode is more efficient than SVD for reconstruction."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
     
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=100)
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=2000)
     
-    # Perform SVD with nkeep to keep at most 5 singular values globally
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 5})
+    # LV mode returns 2 tensors
+    result_lv = decomp(T, axes=0, mode="LV")
+    assert len(result_lv) == 2
     
-    # Check that total number of kept singular values is at most 5
-    total_kept = sum(len(s_array) for s_array in S_blocks.values())
-    assert total_kept <= 5, f"Expected at most 5 singular values, got {total_kept}"
-    
-    # Check bond dimension
-    bond_index = U.indices[1]
-    assert bond_index.dim == total_kept
-
-
-def test_svd_truncation_thresh():
-    """Test SVD with thresh (keep singular values >= threshold per block)."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=200)
-    
-    # Perform SVD with threshold truncation (use higher threshold to ensure truncation)
-    threshold = 0.5
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
-    
-    # Check that all kept singular values are >= threshold
-    for key, s_array in S_blocks.items():
-        assert torch.all(s_array >= threshold).item(), f"Block {key} has singular values < {threshold}"
-    
-    # Verify truncation happened (should have fewer than 10 singular values)
-    total_kept = sum(len(s_array) for s_array in S_blocks.values())
-    assert total_kept < 10, "Expected truncation to reduce number of singular values"
+    # SVD mode returns 3 tensors
+    result_svd = decomp(T, axes=0, mode="SVD")
+    assert len(result_svd) == 3
 
 
 def test_decomp_truncation_ur_mode():
-    """Test decomp with nkeep truncation in UR mode."""
+    """Test truncation in UR mode."""
     group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 10),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 10),))
     
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=300)
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=3000)
     
-    # Decomp with nkeep truncation
-    U, R = decomp(T, axes=0, mode="UR", trunc={"nkeep": 4})
+    # Truncate to 3 values
+    U, R = decomp(T, axes=0, mode="UR", trunc={"nkeep": 3})
     
-    # Check bond dimension
-    bond_index = U.indices[1]
-    assert bond_index.dim <= 4
-    
-    # Verify reconstruction is approximate (not exact due to truncation)
-    reconstructed = contract(U, R, axes=(1, 0))
-    rel_error = (T - reconstructed).norm() / T.norm()
-    
-    # Error should be non-zero (truncation loses information)
-    # but not too large (we kept significant singular values)
-    assert rel_error > 1e-10, "Expected non-zero error due to truncation"
-    assert rel_error < 0.5, "Truncation error too large"
+    # Bond dimension should be at most 3
+    bond_dim = U.indices[1].dim
+    assert bond_dim <= 3
 
 
 def test_decomp_truncation_svd_mode():
@@ -768,80 +340,6 @@ def test_decomp_truncation_svd_mode():
     # Check that total singular values is at most 3
     total_svs = sum(block.shape[0] for block in S.data.values())
     assert total_svs <= 3
-
-
-def test_svd_truncation_no_truncation():
-    """Test that no truncation parameters performs no truncation."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 7),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=500)
-    
-    # SVD without truncation
-    U, S_blocks, Vh = svd(T, axis=0)
-    
-    # Should have min(5, 7) = 5 singular values
-    total_kept = sum(len(s_array) for s_array in S_blocks.values())
-    assert total_kept == 5
-
-
-def test_svd_truncation_multiblock():
-    """Test global truncation with multiple charge blocks."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(-2, 3), Sector(-1, 4), Sector(0, 6), Sector(1, 4), Sector(2, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 5), Sector(1, 3), Sector(2, 2)))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
-    
-    # Truncate to 3 singular values globally (across all blocks)
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 3})
-    
-    # Total should be at most 3 singular values across all blocks
-    total_kept = sum(len(s_array) for s_array in S_blocks.values())
-    assert total_kept <= 3, f"Expected at most 3 singular values globally, got {total_kept}"
-
-
-def test_svd_truncation_invalid_mode():
-    """Test that invalid truncation mode raises error."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=700)
-    
-    # Invalid truncation format (not a dict)
-    with pytest.raises(ValueError, match="trunc must be a dict"):
-        svd(T, axis=0, trunc=("nkeep", 3))
-    
-    # Invalid truncation mode key
-    with pytest.raises(ValueError, match="Invalid truncation mode"):
-        svd(T, axis=0, trunc={"invalid_mode": 3})
-
-
-def test_svd_truncation_combined_thresh_nkeep():
-    """Test SVD with both thresh and nkeep truncation modes."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 5), Sector(1, 4)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 6), Sector(1, 5)))
-    
-    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=999)
-    
-    # Apply both truncations: first thresh, then nkeep
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": 0.5, "nkeep": 3})
-    
-    # Count total singular values
-    total_sv = sum(len(s) for s in S_blocks.values())
-    
-    # Should have at most 3 singular values (nkeep limit)
-    assert total_sv <= 3
-    
-    # All singular values should be >= 0.5 (thresh limit)
-    for s_array in S_blocks.values():
-        assert torch.all(s_array >= 0.5).item()
-    
-    # Verify we got exactly 3 (both constraints satisfied)
-    assert total_sv == 3
 
 
 # High-order tensor tests
@@ -944,148 +442,6 @@ def test_decomp_6index_tensor_with_truncation():
     assert len(reconstructed.indices) == 6
     for i, idx in enumerate(reconstructed.indices):
         assert idx.dim == T.indices[i].dim
-
-
-def test_high_order_tensor_multiple_charges():
-    """Test high-order tensor with multiple charge blocks."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 2))),
-        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1))),
-        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(2, 1)))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1100)
-    
-    # Test LV mode
-    L, V = decomp(T, axes=0, mode="LV")
-    
-    # Check that we have multiple charge sectors
-    bond_charges = set(L.indices[1].charges())
-    assert len(bond_charges) > 1, "Should have multiple charge sectors"
-    
-    # Reconstruct
-    reconstructed = contract(L, V, axes=(1, 0))
-    
-    rel_error = (T - reconstructed).norm() / T.norm()
-    assert rel_error < 1e-12
-
-
-def test_high_order_tensor_different_axis_sizes():
-    """Test high-order tensor with varying axis dimensions."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 5),)),
-        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1200)
-    
-    # Decompose on axis 1 (separates axis 1 from axes 0,2,3)
-    U, S_blocks, Vh = svd(T, axis=1)
-    
-    # Bond dimension should be min(dim_axis1, dim_others)
-    # dim_axis1 = 5, dim_others = 2*3*4 = 24
-    # So bond_dim = min(5, 24) = 5
-    total_bond_dim = sum(len(s) for s in S_blocks.values())
-    assert total_bond_dim == 5
-    
-    # Verify singular values are sorted
-    for key, s_array in S_blocks.items():
-        assert torch.all(s_array[:-1] >= s_array[1:]).item(), "Singular values should be sorted descending"
-
-
-def test_high_order_tensor_all_modes():
-    """Test all decomp modes on high-order tensor."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1300)
-    
-    # Test all three modes give equivalent results
-    U_ur, R = decomp(T, axes=1, mode="UR")
-    recon_ur = contract(U_ur, R, axes=(1, 0))
-    
-    U_svd, S, Vh_svd = decomp(T, axes=1, mode="SVD")
-    S_Vh = contract(S, Vh_svd, axes=(1, 0))
-    recon_svd = contract(U_svd, S_Vh, axes=(1, 0))
-    
-    L, V_lv = decomp(T, axes=1, mode="LV")
-    recon_lv = contract(L, V_lv, axes=(1, 0))
-    
-    # All reconstructions should match (after permuting to same order)
-    # Current order is (b, a, c, d), need (a, b, c, d)
-    recon_ur.permute([1, 0, 2, 3])
-    recon_svd.permute([1, 0, 2, 3])
-    recon_lv.permute([1, 0, 2, 3])
-    
-    assert (recon_ur - recon_svd).norm() / T.norm() < 1e-12
-    assert (recon_svd - recon_lv).norm() / T.norm() < 1e-12
-
-
-def test_high_order_tensor_bond_structure():
-    """Test bond index structure in high-order tensor decomposition."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
-        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1400)
-    
-    U, S_blocks, Vh = svd(T, axis=0)
-    
-    bond_index = U.indices[1]
-    
-    # Bond should have charges that appear in the tensor's first index
-    left_charges_in_data = set(key[0] for key in T.data.keys())
-    bond_charges = set(bond_index.charges())
-    
-    assert bond_charges == left_charges_in_data
-    
-    # Bond should have correct group
-    assert bond_index.group == indices[0].group
-    
-    # Bond direction should be opposite of left index
-    assert bond_index.direction == indices[0].direction.reverse()
-
-
-def test_high_order_tensor_thresh_truncation():
-    """Test threshold truncation on high-order tensor."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3))),
-        Index(Direction.IN, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
-        Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1500)
-    
-    # Apply threshold truncation
-    threshold = 1.0
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
-    
-    # All kept singular values should be >= threshold
-    for key, s_array in S_blocks.items():
-        assert torch.all(s_array >= threshold).item()
-    
-    # Verify we can still reconstruct (approximately)
-    U_full = decomp(T, axes=0, mode="UR", trunc={"thresh": threshold})[0]
-    assert len(U_full.indices) == 2
-    # Left index should be unchanged (sum of all sector dimensions)
-    expected_left_dim = sum(s.dim for s in indices[0].sectors)
-    assert U_full.indices[0].dim == expected_left_dim
 
 
 # Flow parameter tests
@@ -1317,6 +673,55 @@ def test_decomp_flow_lv_mode_in_index():
     assert rel_error < 1e-12
 
 
+def test_decomp_flow_qr_mode_default():
+    """Test QR mode with default flow (should normalize to >>)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=300)
+    
+    # QR with default flow "><" (should normalize to ">>")
+    Q, R = decomp(T, axes=0, mode="QR")
+    
+    # Check flow: "><" normalizes to ">>" which means bonds point outward
+    # Q's bond is OUT (pointing out from Q), R's bond is IN (pointing into R from outside)
+    assert Q.indices[1].direction == Direction.OUT
+    assert R.indices[0].direction == Direction.IN
+    
+    # Reconstruct
+    reconstructed = contract(Q, R, axes=(1, 0))
+    
+    # Verify accuracy
+    assert (T - reconstructed).norm() / T.norm() < 1e-12
+
+
+def test_decomp_flow_qr_mode_explicit():
+    """Test QR mode with explicit flow values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=301)
+    
+    # QR with flow ">>" (bonds point outward: Q bond is OUT, R bond is IN)
+    Q1, R1 = decomp(T, axes=0, mode="QR", flow=">>")
+    assert Q1.indices[1].direction == Direction.OUT
+    assert R1.indices[0].direction == Direction.IN
+    
+    # QR with flow "<<" (bonds point inward: Q bond is IN, R bond is OUT)
+    Q2, R2 = decomp(T, axes=0, mode="QR", flow="<<")
+    assert Q2.indices[1].direction == Direction.IN
+    assert R2.indices[0].direction == Direction.OUT
+    
+    # Both should reconstruct correctly
+    recon1 = contract(Q1, R1, axes=(1, 0))
+    recon2 = contract(Q2, R2, axes=(1, 0))
+    
+    assert (T - recon1).norm() / T.norm() < 1e-12
+    assert (T - recon2).norm() / T.norm() < 1e-12
+
+
 def test_decomp_flow_multiindex_svd():
     """Test flow parameter with multi-index tensor in SVD mode."""
     group = U1Group()
@@ -1508,6 +913,24 @@ def test_decomp_itag_lv_mode():
     assert rel_error2 < 1e-12
 
 
+def test_decomp_itag_qr_mode():
+    """Test QR mode with custom itag."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=302)
+    
+    # Test with single string itag
+    Q, R = decomp(T, axes=0, mode="QR", itag="qr_bond")
+    assert Q.itags[1] == "qr_bond"
+    assert R.itags[0] == "qr_bond"
+    
+    # Verify reconstruction
+    reconstructed = contract(Q, R, axes=(1, 0))
+    assert (T - reconstructed).norm() / T.norm() < 1e-12
+
+
 def test_decomp_itag_multiindex():
     """Test itag parameter with multi-index tensor."""
     group = U1Group()
@@ -1549,553 +972,6 @@ def test_decomp_itag_invalid():
     # Invalid itag: wrong type
     with pytest.raises(ValueError, match="itag must be"):
         decomp(T, axes=0, mode="SVD", itag=123)
-
-
-# Eigenvalue decomposition tests
-
-def test_eig_basic():
-    """Test basic eigenvalue decomposition."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    
-    # Create a symmetric matrix for real eigenvalues
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=62)
-    # Make it Hermitian by averaging with its transpose
-    T_data_sym = {}
-    for key, arr in T.data.items():
-        T_data_sym[key] = (arr + arr.T.conj()) / 2
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=T_data_sym,
-        dtype=T.dtype
-    )
-    
-    U, D = eig(T)
-    
-    # Check dimensions
-    assert len(U.indices) == 2
-    assert U.itags[0] == "i"
-    assert U.itags[1] == "_bond_eig"
-    
-    # Check eigenvalues are real for Hermitian matrix
-    for key, eigvals in D.items():
-        if eigvals.is_complex():
-            assert torch.allclose(eigvals.imag, torch.zeros_like(eigvals.imag), atol=1e-10)
-    
-    # Verify eigendecomposition: T @ U = U @ diag(D) for each block
-    for key in T.data.keys():
-        q_row, q_col = key
-        if q_row != q_col:
-            continue  # Skip off-diagonal blocks
-        
-        T_block = T.data[key]
-        U_block = U.data[(q_row, q_row)]
-        D_block = D[(q_row, q_row)]
-        
-        # T @ U
-        T_U = T_block @ U_block
-        # U @ diag(D)
-        U_D = U_block @ torch.diag(D_block)
-        
-        assert torch.allclose(T_U, U_D, atol=1e-10)
-
-
-def test_eig_reconstruction():
-    """Test that eigendecomposition can reconstruct the original matrix."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 1)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
-    
-    # Create a symmetric matrix
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=63)
-    T_data_sym = {}
-    for key, arr in T.data.items():
-        T_data_sym[key] = (arr + arr.T.conj()) / 2
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=T_data_sym,
-        dtype=T.dtype
-    )
-    
-    U, D = eig(T)
-    
-    # Verify eigendecomposition block-by-block
-    # T @ U = U @ diag(D)
-    for key in T.data.keys():
-        q_row, q_col = key
-        if q_row != q_col:
-            continue
-        
-        T_block = T.data[key]
-        U_block = U.data[(q_row, q_row)]
-        D_block = D[(q_row, q_row)]
-        
-        # Reconstruct T from eigendecomposition: T = U @ diag(D) @ U^{-1}
-        # For symmetric matrices, U is orthogonal: U^{-1} = U^T
-        D_diag = torch.diag(D_block)
-        T_reconstructed = U_block @ D_diag @ U_block.T.conj()
-        
-        rel_error = torch.linalg.norm(T_block - T_reconstructed).item() / torch.linalg.norm(T_block).item()
-        assert rel_error < 1e-10
-
-
-def test_eig_truncation_nkeep():
-    """Test eigenvalue decomposition with nkeep truncation."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 3), Sector(2, 2)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 3), Sector(2, 2)))
-    
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=64)
-    T_data_sym = {}
-    for key, arr in T.data.items():
-        T_data_sym[key] = (arr + arr.T.conj()) / 2
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=T_data_sym,
-        dtype=T.dtype
-    )
-    
-    # Keep only top 3 eigenvalues (largest/most positive)
-    U, D = eig(T, order="descend", trunc={"nkeep": 3})
-    
-    # Count total eigenvalues
-    total_eigvals = sum(len(eigvals) for eigvals in D.values())
-    assert total_eigvals == 3
-    
-    # Verify they are the largest (most positive) ones
-    all_eigvals_full = []
-    for key in T.data.keys():
-        q_row, q_col = key
-        if q_row != q_col:
-            continue
-        eigvals_full, _ = torch.linalg.eig(T.data[key])
-        # For Hermitian matrix, eigenvalues are real - use real part for comparison
-        all_eigvals_full.append(torch.real(eigvals_full))
-    
-    all_eigvals_full = torch.cat(all_eigvals_full)
-    all_eigvals_full, _ = torch.sort(all_eigvals_full, descending=True)
-    top_3_expected = all_eigvals_full[:3]
-    
-    # Collect truncated eigenvalues as tensors
-    all_eigvals_truncated = torch.cat([torch.real(eigvals) for eigvals in D.values()])
-    all_eigvals_truncated, _ = torch.sort(all_eigvals_truncated, descending=True)
-    
-    assert torch.allclose(all_eigvals_truncated, top_3_expected, atol=1e-10)
-
-
-def test_eig_truncation_thresh():
-    """Test eigenvalue decomposition with threshold truncation."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 3), Sector(2, 2)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 3), Sector(2, 2)))
-    
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=65)
-    T_data_sym = {}
-    for key, arr in T.data.items():
-        T_data_sym[key] = (arr + arr.T.conj()) / 2
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=T_data_sym,
-        dtype=T.dtype
-    )
-    
-    # Keep eigenvalues >= 1.0 (using descending order)
-    U, D = eig(T, order="descend", trunc={"thresh": 1.0})
-    
-    # Verify all kept eigenvalues satisfy threshold
-    for eigvals in D.values():
-        assert torch.all(torch.real(eigvals) >= 1.0).item()
-
-
-def test_eig_truncation_combined_thresh_nkeep():
-    """Test eigenvalue decomposition with both thresh and nkeep truncation."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
-    
-    # Create symmetric tensor
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=888)
-    T_data_sym = {}
-    for key, arr in T.data.items():
-        T_data_sym[key] = (arr + arr.T.conj()) / 2
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=T_data_sym,
-        dtype=T.dtype
-    )
-    
-    # Apply both truncations: first thresh >= 0.8, then nkeep top 4 (largest)
-    U, D = eig(T, order="descend", trunc={"thresh": 0.8, "nkeep": 4})
-    
-    # Count total eigenvalues
-    total_eig = sum(len(eigvals) for eigvals in D.values())
-    
-    # Should have at most 4 eigenvalues (nkeep limit)
-    assert total_eig <= 4
-    
-    # All eigenvalues should satisfy >= 0.8 (thresh limit with descending order)
-    for eigvals in D.values():
-        assert torch.all(torch.real(eigvals) >= 0.8).item()
-
-
-def test_eig_non_square_error():
-    """Test that eig raises error for non-square matrices."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))  # Different size
-    
-    T = Tensor.random([idx1, idx2], itags=["i", "j"], seed=66)
-    
-    # This should work (dimensions can differ as long as charge structure matches)
-    # But let's test with mismatched directions
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    T2 = Tensor.random([idx1, idx3], itags=["i", "j"], seed=67)
-    
-    with pytest.raises(ValueError, match="opposite directions"):
-        eig(T2)
-
-
-def test_eig_non_2d_error():
-    """Test that eig raises error for non-2D tensors."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
-        Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    ]
-    
-    T = Tensor.random(indices, itags=["i", "j", "k"], seed=68)
-    
-    with pytest.raises(ValueError, match="square matrix"):
-        eig(T)
-
-
-def test_eig_complex_matrix():
-    """Test eigenvalue decomposition of complex matrix."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    
-    # Create a complex matrix
-    data = {(0, 0): torch.tensor([[1+1j, 2-1j], [2+1j, 3-2j]], dtype=torch.complex128)}
-    T = Tensor(
-        indices=(idx_out, idx_in),
-        itags=("i", "j"),
-        data=data,
-        dtype=torch.complex128
-    )
-    
-    U, D = eig(T)
-    
-    # Verify eigendecomposition
-    T_block = T.data[(0, 0)]
-    U_block = U.data[(0, 0)]
-    D_block = D[(0, 0)]
-    
-    # T @ U = U @ diag(D)
-    T_U = T_block @ U_block
-    U_D = U_block @ torch.diag(D_block)
-    
-    assert torch.allclose(T_U, U_D)
-
-
-def test_eig_charge_conservation():
-    """Test that eigenvalue decomposition preserves charge structure."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 3), Sector(2, 2)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 3), Sector(2, 2)))
-    
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=69)
-    
-    U, D = eig(T)
-    
-    # Check that U is charge-neutral
-    for key in U.data.keys():
-        q_row, q_bond = key
-        # For charge neutrality: q_row + q_bond = 0 (considering directions)
-        # Since U has (OUT, IN) structure, we expect q_row == q_bond
-        assert q_row == q_bond
-    
-    # Check that D has same structure
-    for key in D.keys():
-        q_left, q_right = key
-        assert q_left == q_right
-
-
-def test_eig_itag():
-    """Test that itag parameter customizes the bond index tag."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    
-    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=70)
-    
-    # Test with custom itag
-    U, D = eig(T, itag="eig_bond")
-    
-    assert U.itags[0] == "i"
-    assert U.itags[1] == "eig_bond"
-    
-    # Test with default itag
-    U_default, D_default = eig(T)
-    assert U_default.itags[1] == "_bond_eig"
-
-
-def test_eig_order_ascending_mixed_signs():
-    """Test ascending order with mixed positive and negative eigenvalues."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    
-    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
-    data = {(0, 0): torch.diag(torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    U, D = eig(T, order="ascend")
-    eigvals = torch.real(D[(0, 0)])
-    
-    # Should be sorted from smallest to largest
-    expected = torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_order_descending_mixed_signs():
-    """Test descending order with mixed positive and negative eigenvalues."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    
-    # Create diagonal matrix with known eigenvalues: [-5, -2, 0, 3, 7]
-    data = {(0, 0): torch.diag(torch.tensor([-5.0, -2.0, 0.0, 3.0, 7.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    U, D = eig(T, order="descend")
-    eigvals = torch.real(D[(0, 0)])
-    
-    # Should be sorted from largest to smallest
-    expected = torch.tensor([7.0, 3.0, 0.0, -2.0, -5.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_thresh_ascending_negative():
-    """Test thresh mode with ascending order for negative eigenvalues."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
-    
-    # Eigenvalues: [-8, -5, -3, -1, 2, 4]
-    data = {(0, 0): torch.diag(torch.tensor([-8.0, -5.0, -3.0, -1.0, 2.0, 4.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep eigenvalues <= -2 (should keep: -8, -5, -3)
-    U, D = eig(T, order="ascend", trunc={"thresh": -2.0})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([-8.0, -5.0, -3.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_thresh_descending_positive():
-    """Test thresh mode with descending order for positive eigenvalues."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
-    
-    # Eigenvalues: [-4, -2, 1, 3, 5, 8]
-    data = {(0, 0): torch.diag(torch.tensor([-4.0, -2.0, 1.0, 3.0, 5.0, 8.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep eigenvalues >= 2 (should keep: 8, 5, 3)
-    U, D = eig(T, order="descend", trunc={"thresh": 2.0})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([8.0, 5.0, 3.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_thresh_zero_boundary():
-    """Test thresh mode at zero boundary for filtering positive/negative."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 5),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    
-    # Eigenvalues: [-3, -1, 0, 2, 4]
-    data = {(0, 0): torch.diag(torch.tensor([-3.0, -1.0, 0.0, 2.0, 4.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep only non-negative eigenvalues (>= 0)
-    U_pos, D_pos = eig(T, order="descend", trunc={"thresh": 0.0})
-    eigvals_pos = torch.real(D_pos[(0, 0)])
-    assert torch.allclose(eigvals_pos, torch.tensor([4.0, 2.0, 0.0], dtype=eigvals_pos.dtype))
-    
-    # Keep only non-positive eigenvalues (<= 0)
-    U_neg, D_neg = eig(T, order="ascend", trunc={"thresh": 0.0})
-    eigvals_neg = torch.real(D_neg[(0, 0)])
-    assert torch.allclose(eigvals_neg, torch.tensor([-3.0, -1.0, 0.0], dtype=eigvals_neg.dtype))
-
-
-def test_eig_nkeep_ascending_ground_states():
-    """Test nkeep with ascending order to get ground states."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
-    
-    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
-    data = {(0, 0): torch.diag(torch.tensor([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep 3 smallest (ground state + 2 excited states)
-    U, D = eig(T, order="ascend", trunc={"nkeep": 3})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([-10.0, -5.0, -2.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_nkeep_descending_excited_states():
-    """Test nkeep with descending order to get highest excited states."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 6),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 6),))
-    
-    # Eigenvalues: [-10, -5, -2, 1, 3, 8]
-    data = {(0, 0): torch.diag(torch.tensor([-10.0, -5.0, -2.0, 1.0, 3.0, 8.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep 3 largest (highest excited states)
-    U, D = eig(T, order="descend", trunc={"nkeep": 3})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([8.0, 3.0, 1.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_combined_thresh_nkeep_ascending():
-    """Test combined thresh and nkeep with ascending order."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
-    
-    # Eigenvalues: [-10, -8, -6, -4, -2, 0, 2, 4]
-    data = {(0, 0): torch.diag(torch.tensor([-10.0, -8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep eigenvalues <= -3, then keep 2 smallest
-    # After thresh: [-10, -8, -6, -4]
-    # After nkeep: [-10, -8]
-    U, D = eig(T, order="ascend", trunc={"thresh": -3.0, "nkeep": 2})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([-10.0, -8.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_combined_thresh_nkeep_descending():
-    """Test combined thresh and nkeep with descending order."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 8),))
-    
-    # Eigenvalues: [-4, -2, 0, 2, 4, 6, 8, 10]
-    data = {(0, 0): torch.diag(torch.tensor([-4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 10.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep eigenvalues >= 3, then keep 2 largest
-    # After thresh: [10, 8, 6, 4]
-    # After nkeep: [10, 8]
-    U, D = eig(T, order="descend", trunc={"thresh": 3.0, "nkeep": 2})
-    eigvals = torch.real(D[(0, 0)])
-    
-    expected = torch.tensor([10.0, 8.0], dtype=eigvals.dtype)
-    assert torch.allclose(eigvals, expected)
-
-
-def test_eig_order_with_complex_eigenvalues():
-    """Test order parameter with complex eigenvalues (sorts by real part)."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3),))
-    
-    # Create a non-Hermitian matrix with complex eigenvalues
-    # Using a simple matrix that we know has complex eigenvalues
-    mat = torch.tensor([[0, 1, 0],
-                    [0, 0, 1],
-                    [1, 0, 0]], dtype=torch.complex128)
-    data = {(0, 0): mat}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.complex128)
-    
-    U_asc, D_asc = eig(T, order="ascend")
-    eigvals_asc = D_asc[(0, 0)]
-    
-    # Check that sorting is by real part (ascending)
-    real_parts_asc = torch.real(eigvals_asc)
-    assert torch.all(real_parts_asc[:-1] <= real_parts_asc[1:]).item()
-    
-    U_desc, D_desc = eig(T, order="descend")
-    eigvals_desc = D_desc[(0, 0)]
-    
-    # Check that sorting is by real part (descending)
-    real_parts_desc = torch.real(eigvals_desc)
-    assert torch.all(real_parts_desc[:-1] >= real_parts_desc[1:]).item()
-
-
-def test_eig_thresh_filters_all_eigenvalues():
-    """Test thresh mode when all eigenvalues are filtered out."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    
-    # Eigenvalues: [1, 2, 3, 4]
-    data = {(0, 0): torch.diag(torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float64))}
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Keep eigenvalues <= 0 (should filter all)
-    U, D = eig(T, order="ascend", trunc={"thresh": 0.0})
-    
-    # Should have no eigenvalues
-    assert len(D) == 0
-
-
-def test_eig_order_multiple_blocks():
-    """Test that order parameter works correctly with multiple charge blocks."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
-    
-    # Create blocks with known eigenvalues
-    # Block (0,0): eigenvalues [-2, 0, 5]
-    # Block (1,1): eigenvalues [-3, 1]
-    data = {
-        (0, 0): torch.diag(torch.tensor([-2.0, 0.0, 5.0], dtype=torch.float64)),
-        (1, 1): torch.diag(torch.tensor([-3.0, 1.0], dtype=torch.float64))
-    }
-    T = Tensor(indices=(idx_out, idx_in), itags=("i", "j"), data=data, dtype=torch.float64)
-    
-    # Test ascending - each block should be sorted independently
-    U_asc, D_asc = eig(T, order="ascend")
-    eigvals_asc_00 = torch.real(D_asc[(0, 0)])
-    eigvals_asc_11 = torch.real(D_asc[(1, 1)])
-    assert torch.allclose(eigvals_asc_00, torch.tensor([-2.0, 0.0, 5.0], dtype=eigvals_asc_00.dtype))
-    assert torch.allclose(eigvals_asc_11, torch.tensor([-3.0, 1.0], dtype=eigvals_asc_11.dtype))
-    
-    # Test descending - each block should be sorted independently
-    U_desc, D_desc = eig(T, order="descend")
-    eigvals_desc_00 = torch.real(D_desc[(0, 0)])
-    eigvals_desc_11 = torch.real(D_desc[(1, 1)])
-    assert torch.allclose(eigvals_desc_00, torch.tensor([5.0, 0.0, -2.0], dtype=eigvals_desc_00.dtype))
-    assert torch.allclose(eigvals_desc_11, torch.tensor([1.0, -3.0], dtype=eigvals_desc_11.dtype))
-    
-    # Test nkeep across blocks - should keep 3 smallest globally
-    U_nkeep, D_nkeep = eig(T, order="ascend", trunc={"nkeep": 3})
-    all_eigvals = torch.cat([torch.real(eigvals) for eigvals in D_nkeep.values()])
-    all_eigvals, _ = torch.sort(all_eigvals)
-    assert torch.allclose(all_eigvals, torch.tensor([-3.0, -2.0, 0.0], dtype=all_eigvals.dtype))
 
 
 # Multi-axis decomposition tests
@@ -2175,6 +1051,33 @@ def test_decomp_multi_axis_lv():
     # V should have bond and remaining axis
     assert len(V.indices) == 2
     assert 'd' in V.itags
+
+
+def test_decomp_multi_axis_qr():
+    """Test decomp with multiple axes in QR mode."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=401)
+    
+    # QR on axes [0, 2] (merges them into Q)
+    Q, R = decomp(T, axes=[0, 2], mode="QR")
+    
+    # Q should have 3 indices: (a, c, bond)
+    # R should have 3 indices: (bond, b, d)
+    assert len(Q.indices) == 3
+    assert len(R.indices) == 3
+    assert 'a' in Q.itags and 'c' in Q.itags
+    assert 'b' in R.itags and 'd' in R.itags
+    
+    # Reconstruct
+    reconstructed = contract(Q, R)
+    assert set(reconstructed.itags) == {'a', 'b', 'c', 'd'}
 
 
 def test_decomp_multi_axis_by_positions():
@@ -2447,3 +1350,537 @@ def test_decomp_truncation_combined_ur_mode():
     # Verify reconstruction works
     reconstructed = contract(U, R, axes=(1, 0))
     assert len(reconstructed.indices) == len(T.indices)
+
+
+# ===== High-Order Tensor Tests =====
+
+def test_high_order_tensor_multiple_charges():
+    """Test high-order tensor with multiple charge blocks."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1))),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(-2, 1), Sector(0, 2), Sector(2, 1)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1100)
+    
+    # Test LV mode
+    L, V = decomp(T, axes=0, mode="LV")
+    
+    # Check that we have multiple charge sectors
+    bond_charges = set(L.indices[1].charges())
+    assert len(bond_charges) > 1, "Should have multiple charge sectors"
+    
+    # Reconstruct
+    reconstructed = contract(L, V, axes=(1, 0))
+    
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-12
+
+
+def test_high_order_tensor_different_axis_sizes():
+    """Test high-order tensor with varying axis dimensions."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 5),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1200)
+    
+    # Decompose on axis 1 (separates axis 1 from axes 0,2,3)
+    U, S_blocks, Vh = svd(T, axis=1)
+    
+    # Bond dimension should be min(dim_axis1, dim_others)
+    # dim_axis1 = 5, dim_others = 2*3*4 = 24
+    # So bond_dim = min(5, 24) = 5
+    total_bond_dim = sum(len(s) for s in S_blocks.values())
+    assert total_bond_dim == 5
+    
+    # Verify singular values are sorted
+    for key, s_array in S_blocks.items():
+        assert torch.all(s_array[:-1] >= s_array[1:]).item(), "Singular values should be sorted descending"
+
+
+def test_high_order_tensor_all_modes():
+    """Test all decomp modes on high-order tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1300)
+    
+    # Test all three modes give equivalent results
+    U_ur, R = decomp(T, axes=1, mode="UR")
+    recon_ur = contract(U_ur, R, axes=(1, 0))
+    
+    U_svd, S, Vh_svd = decomp(T, axes=1, mode="SVD")
+    S_Vh = contract(S, Vh_svd, axes=(1, 0))
+    recon_svd = contract(U_svd, S_Vh, axes=(1, 0))
+    
+    L, V_lv = decomp(T, axes=1, mode="LV")
+    recon_lv = contract(L, V_lv, axes=(1, 0))
+    
+    # All reconstructions should match (after permuting to same order)
+    # Current order is (b, a, c, d), need (a, b, c, d)
+    recon_ur.permute([1, 0, 2, 3])
+    recon_svd.permute([1, 0, 2, 3])
+    recon_lv.permute([1, 0, 2, 3])
+    
+    assert (recon_ur - recon_svd).norm() / T.norm() < 1e-12
+    assert (recon_svd - recon_lv).norm() / T.norm() < 1e-12
+
+
+def test_high_order_tensor_bond_structure():
+    """Test bond index structure in high-order tensor decomposition."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1400)
+    
+    U, S_blocks, Vh = svd(T, axis=0)
+    
+    bond_index = U.indices[1]
+    
+    # Bond should have charges that appear in the tensor's first index
+    left_charges_in_data = set(key[0] for key in T.data.keys())
+    bond_charges = set(bond_index.charges())
+    
+    assert bond_charges == left_charges_in_data
+    
+    # Bond should have correct group
+    assert bond_index.group == indices[0].group
+    
+    # Bond direction should be opposite of left index
+    assert bond_index.direction == indices[0].direction.reverse()
+
+
+def test_high_order_tensor_thresh_truncation():
+    """Test threshold truncation on high-order tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3))),
+        Index(Direction.IN, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1500)
+    
+    # Apply threshold truncation
+    threshold = 1.0
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
+    
+    # All kept singular values should be >= threshold
+    for key, s_array in S_blocks.items():
+        assert torch.all(s_array >= threshold).item()
+    
+    # Verify we can still reconstruct (approximately)
+    U_full = decomp(T, axes=0, mode="UR", trunc={"thresh": threshold})[0]
+    assert len(U_full.indices) == 2
+    # Left index should be unchanged (sum of all sector dimensions)
+    expected_left_dim = sum(s.dim for s in indices[0].sectors)
+    assert U_full.indices[0].dim == expected_left_dim
+
+
+# ===== High-Order SVD-Related Mode Stress Tests =====
+
+def test_decomp_svd_ultra_high_order_complex_charges():
+    """Stress test: SVD mode with 6-index tensor and complex charge structure."""
+    group = U1Group()
+    # Create a very high-order tensor (6 indices)
+    indices = [
+        Index(Direction.OUT, group, sectors=(
+            Sector(-3, 1), Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 2), Sector(3, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 2), Sector(-1, 3), Sector(0, 4), Sector(1, 3), Sector(2, 2)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-3, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(3, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(0, 3), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 1), Sector(2, 1)
+        ))
+    ]
+    
+    T = Tensor.random(indices, itags=["w", "x", "y", "z", "u", "v"], seed=8000)
+    
+    # SVD decomposition on axes [0, 2, 4]
+    U, S, Vh = decomp(T, axes=[0, 2, 4], mode="SVD", flow=">>")
+    
+    # Verify structure
+    assert len(U.indices) == 4  # w, y, u, bond_L
+    assert len(S.data) > 0  # S is a dict-like with charge blocks
+    assert len(Vh.indices) == 4  # bond_R, x, z, v
+    assert 'w' in U.itags and 'y' in U.itags and 'u' in U.itags
+    assert 'x' in Vh.itags and 'z' in Vh.itags and 'v' in Vh.itags
+    
+    # Check bond directions for flow=">>"
+    assert U.indices[-1].direction == Direction.OUT
+    assert Vh.indices[0].direction == Direction.IN
+    
+    # Verify bond has many charge sectors
+    bond_charges_u = set(U.indices[-1].charges())
+    bond_charges_vh = set(Vh.indices[0].charges())
+    assert len(bond_charges_u) >= 4, f"Should have at least 4 charge sectors, got {len(bond_charges_u)}"
+    
+    # Verify that many blocks exist
+    assert len(U.data) >= 8, f"U should have at least 8 blocks, got {len(U.data)}"
+    assert len(Vh.data) >= 8, f"Vh should have at least 8 blocks, got {len(Vh.data)}"
+    assert len(S.data) >= 8, f"S should have at least 8 blocks, got {len(S.data)}"
+    
+    # Verify charge neutrality
+    assert_charge_neutral(U)
+    assert_charge_neutral(Vh)
+    
+    # Test with custom itags
+    U2, S2, Vh2 = decomp(T, axes=[0, 2, 4], mode="SVD", itag=("_bond_L_", "_bond_R_"))
+    assert "_bond_L_" in U2.itags
+    assert "_bond_R_" in Vh2.itags
+    
+    # Reconstruct using S as diagonal tensor and verify accuracy
+    from nicole import contract
+    # Use automatic contraction (bond tags match)
+    US = contract(U, S)
+    reconstructed = contract(US, Vh)
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Check reconstruction accuracy
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+
+
+def test_decomp_ur_ultra_high_order_complex_charges():
+    """Stress test: UR mode with 6-index tensor and complex charge structure."""
+    group = U1Group()
+    # Create a very high-order tensor (6 indices)
+    indices = [
+        Index(Direction.OUT, group, sectors=(
+            Sector(-3, 1), Sector(-2, 2), Sector(-1, 3), Sector(0, 3), Sector(1, 2), Sector(2, 1), Sector(3, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2), Sector(2, 2)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-3, 1), Sector(-1, 1), Sector(0, 3), Sector(1, 1), Sector(3, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 1), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        ))
+    ]
+    
+    T = Tensor.random(indices, itags=["p", "q", "r", "s", "t", "u"], seed=8100)
+    
+    # UR decomposition on axes [1, 3, 5] (specified axes go into U)
+    U, R = decomp(T, axes=[1, 3, 5], mode="UR", flow="<<")
+    
+    # Verify structure
+    assert len(U.indices) == 4  # q, s, u, bond_L
+    assert len(R.indices) == 4  # bond_R, p, r, t
+    assert 'q' in U.itags and 's' in U.itags and 'u' in U.itags
+    assert 'p' in R.itags and 'r' in R.itags and 't' in R.itags
+    
+    # Check bond directions for flow="<<"
+    assert U.indices[-1].direction == Direction.IN
+    assert R.indices[0].direction == Direction.OUT
+    
+    # Verify bond has many charge sectors
+    bond_charges_u = set(U.indices[-1].charges())
+    bond_charges_r = set(R.indices[0].charges())
+    assert bond_charges_u == bond_charges_r, "Bond charges should match"
+    assert len(bond_charges_u) >= 4, f"Should have at least 4 charge sectors, got {len(bond_charges_u)}"
+    
+    # Verify that many blocks exist
+    assert len(U.data) >= 8, f"U should have at least 8 blocks, got {len(U.data)}"
+    assert len(R.data) >= 8, f"R should have at least 8 blocks, got {len(R.data)}"
+    
+    # Verify charge neutrality
+    assert_charge_neutral(U)
+    assert_charge_neutral(R)
+    
+    # Test with truncation
+    U_trunc, R_trunc = decomp(T, axes=[1, 3, 5], mode="UR", trunc={"nkeep": 50})
+    bond_dim_trunc = sum(sector.dim for sector in U_trunc.indices[-1].sectors)
+    assert bond_dim_trunc <= 50, f"Truncated bond dimension should be <= 50, got {bond_dim_trunc}"
+    
+    # Reconstruct and verify accuracy
+    reconstructed = contract(U, R)
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Check reconstruction accuracy
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+    
+    # Spot-check a few blocks
+    block_count = 0
+    for key in T.data.keys():
+        if key in reconstructed.data and block_count < 5:
+            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+            block_count += 1
+
+
+def test_decomp_lv_ultra_high_order_complex_charges():
+    """Stress test: LV mode with 6-index tensor and complex charge structure."""
+    group = U1Group()
+    # Create a very high-order tensor (6 indices)
+    indices = [
+        Index(Direction.OUT, group, sectors=(
+            Sector(-3, 1), Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 3), Sector(2, 2), Sector(3, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-3, 1), Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2), Sector(2, 2), Sector(3, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(0, 3), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-3, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 1), Sector(3, 1)
+        ))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d", "e", "f"], seed=8200)
+    
+    # LV decomposition on axes [0, 2, 4] (specified go into L, complement into Vh)
+    L, Vh = decomp(T, axes=[0, 2, 4], mode="LV", flow=">>")
+    
+    # Verify structure
+    assert len(L.indices) == 4  # a, c, e, bond_L
+    assert len(Vh.indices) == 4  # bond_R, b, d, f
+    assert 'a' in L.itags and 'c' in L.itags and 'e' in L.itags
+    assert 'b' in Vh.itags and 'd' in Vh.itags and 'f' in Vh.itags
+    
+    # Check bond directions for flow=">>"
+    assert L.indices[-1].direction == Direction.OUT
+    assert Vh.indices[0].direction == Direction.IN
+    
+    # Verify bond has many charge sectors
+    bond_charges_l = set(L.indices[-1].charges())
+    bond_charges_vh = set(Vh.indices[0].charges())
+    assert bond_charges_l == bond_charges_vh, "Bond charges should match"
+    assert len(bond_charges_l) >= 4, f"Should have at least 4 charge sectors, got {len(bond_charges_l)}"
+    
+    # Verify that many blocks exist
+    assert len(L.data) >= 8, f"L should have at least 8 blocks, got {len(L.data)}"
+    assert len(Vh.data) >= 8, f"Vh should have at least 8 blocks, got {len(Vh.data)}"
+    
+    # Verify charge neutrality
+    assert_charge_neutral(L)
+    assert_charge_neutral(Vh)
+    
+    # Test different flow
+    L2, Vh2 = decomp(T, axes=[0, 2, 4], mode="LV", flow="<<")
+    assert L2.indices[-1].direction == Direction.IN
+    assert Vh2.indices[0].direction == Direction.OUT
+    
+    # Test with custom itag (single string)
+    L3, Vh3 = decomp(T, axes=[0, 2, 4], mode="LV", itag="_custom_lv_bond_")
+    assert "_custom_lv_bond_" in L3.itags
+    assert "_custom_lv_bond_" in Vh3.itags
+    
+    # Reconstruct and verify accuracy
+    reconstructed = contract(L, Vh)
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Check reconstruction accuracy
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+    
+    # Verify individual blocks match
+    block_count = 0
+    for key in T.data.keys():
+        if key in reconstructed.data and block_count < 5:
+            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+            block_count += 1
+
+
+# ===== High-Order QR Mode Stress Tests =====
+
+def test_decomp_qr_high_order_multi_charge_stress():
+    """Stress test: QR mode with high-order tensor and many charge sectors."""
+    group = U1Group()
+    # Create indices with many charge sectors
+    indices = [
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 2), Sector(-1, 3), Sector(0, 4), Sector(1, 3), Sector(2, 2)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-1, 2), Sector(0, 3), Sector(1, 2)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 1), Sector(2, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        ))
+    ]
+    
+    T = Tensor.random(indices, itags=["a", "b", "c", "d", "e"], seed=9000)
+    
+    # QR decomposition on axes [0, 2, 4] (3 axes into Q)
+    Q, R = decomp(T, axes=[0, 2, 4], mode="QR")
+    
+    # Verify structure
+    assert len(Q.indices) == 4  # a, c, e, bond
+    assert len(R.indices) == 3  # bond, b, d
+    assert 'a' in Q.itags and 'c' in Q.itags and 'e' in Q.itags
+    assert 'b' in R.itags and 'd' in R.itags
+    
+    # Check that we have multiple charge sectors in the bond
+    bond_charges = set(Q.indices[-1].charges())
+    assert len(bond_charges) >= 3, f"Should have at least 3 charge sectors, got {len(bond_charges)}"
+    
+    # Verify that blocks exist for different charges
+    assert len(Q.data) >= 5, f"Q should have at least 5 blocks, got {len(Q.data)}"
+    assert len(R.data) >= 5, f"R should have at least 5 blocks, got {len(R.data)}"
+    
+    # Verify charge neutrality
+    assert_charge_neutral(Q)
+    assert_charge_neutral(R)
+    
+    # Reconstruct and verify accuracy
+    reconstructed = contract(Q, R)
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Check reconstruction accuracy
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+    
+    # Verify individual blocks match
+    for key in T.data.keys():
+        if key in reconstructed.data:
+            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+
+
+def test_decomp_qr_ultra_high_order_complex_charges():
+    """Stress test: QR mode with 6-index tensor and complex charge structure."""
+    group = U1Group()
+    # Create a very high-order tensor (6 indices)
+    indices = [
+        Index(Direction.OUT, group, sectors=(
+            Sector(-3, 1), Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 2), Sector(3, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 2), Sector(-1, 3), Sector(0, 4), Sector(1, 3), Sector(2, 2)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-3, 1), Sector(-1, 2), Sector(0, 2), Sector(1, 2), Sector(3, 1)
+        )),
+        Index(Direction.OUT, group, sectors=(
+            Sector(-2, 1), Sector(0, 3), Sector(2, 1)
+        )),
+        Index(Direction.IN, group, sectors=(
+            Sector(-2, 1), Sector(-1, 1), Sector(0, 2), Sector(1, 1), Sector(2, 1)
+        ))
+    ]
+    
+    T = Tensor.random(indices, itags=["w", "x", "y", "z", "u", "v"], seed=9999)
+    
+    # QR decomposition with mixed axes [1, 3, 5] into R, rest into Q
+    Q, R = decomp(T, axes=[0, 2, 4], mode="QR", flow="<<")
+    
+    # Verify structure
+    assert len(Q.indices) == 4  # w, y, u, bond
+    assert len(R.indices) == 4  # bond, x, z, v
+    assert 'w' in Q.itags and 'y' in Q.itags and 'u' in Q.itags
+    assert 'x' in R.itags and 'z' in R.itags and 'v' in R.itags
+    
+    # Check bond directions for flow="<<" (bonds point inward)
+    assert Q.indices[-1].direction == Direction.IN
+    assert R.indices[0].direction == Direction.OUT
+    
+    # Verify bond has many charge sectors
+    bond_charges_q = set(Q.indices[-1].charges())
+    bond_charges_r = set(R.indices[0].charges())
+    assert bond_charges_q == bond_charges_r, "Bond charges should match"
+    assert len(bond_charges_q) >= 4, f"Should have at least 4 charge sectors, got {len(bond_charges_q)}"
+    
+    # Verify that many blocks exist
+    assert len(Q.data) >= 8, f"Q should have at least 8 blocks, got {len(Q.data)}"
+    assert len(R.data) >= 8, f"R should have at least 8 blocks, got {len(R.data)}"
+    
+    # Verify charge neutrality
+    assert_charge_neutral(Q)
+    assert_charge_neutral(R)
+    
+    # Test reconstruction with explicit custom itag
+    Q2, R2 = decomp(T, axes=[0, 2, 4], mode="QR", itag="_custom_qr_")
+    assert "_custom_qr_" in Q2.itags
+    assert "_custom_qr_" in R2.itags
+    
+    # Reconstruct and verify accuracy
+    reconstructed = contract(Q, R)
+    
+    # Permute to match original order
+    tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+    
+    # Check reconstruction accuracy
+    rel_error = (T - reconstructed).norm() / T.norm()
+    assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+    
+    # Spot-check a few blocks
+    block_count = 0
+    for key in T.data.keys():
+        if key in reconstructed.data and block_count < 5:
+            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+            block_count += 1

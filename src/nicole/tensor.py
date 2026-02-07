@@ -979,11 +979,11 @@ class Tensor:
         
         Examples
         --------
-        # Invert a single index at position 0
-        tensor.invert(0)
-        
-        # Invert multiple indices at positions 0 and 2
-        tensor.invert([0, 2])
+        >>> # Invert a single index at position 0
+        >>> tensor.invert(0)
+        >>> 
+        >>> # Invert multiple indices at positions 0 and 2
+        >>> tensor.invert([0, 2])
         """
         # Normalize to a sequence
         if isinstance(positions, int):
@@ -1038,15 +1038,15 @@ class Tensor:
         
         Examples
         --------
-        # Mode 1: Mapping (update specific tags by name)
-        tensor.retag({"a": "left", "b": "right"})
-        
-        # Mode 2: Full replacement (replace all tags)
-        tensor.retag(["left", "middle", "right"])
-        
-        # Mode 3: Selective update by position
-        tensor.retag([0, 2], ["left", "right"])
-        tensor.retag(0, "left")  # Single index and tag
+        >>> # Mode 1: Mapping (update specific tags by name)
+        >>> tensor.retag({"a": "left", "b": "right"})
+        >>> 
+        >>> # Mode 2: Full replacement (replace all tags)
+        >>> tensor.retag(["left", "middle", "right"])
+        >>> 
+        >>> # Mode 3: Selective update by position
+        >>> tensor.retag([0, 2], ["left", "right"])
+        >>> tensor.retag(0, "left")  # Single index and tag
         """
         # Parse and normalize input arguments depending on the mode
         if isinstance(mapping_or_axes, Mapping):

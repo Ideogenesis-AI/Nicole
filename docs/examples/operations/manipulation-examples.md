@@ -13,7 +13,7 @@ All manipulation operations maintain the block structure and charge labels — o
 
 ```python exec="1" session="manipulation" result=""
 from nicole import conj, permute, transpose, Tensor, Index, Sector, Direction, U1Group
-import numpy as np
+import torch
 ```
 
 ## Conjugation
@@ -23,7 +23,7 @@ group = U1Group()
 idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
 
 # Complex tensor
-T = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=np.complex128, seed=42)
+T = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=torch.complex128, seed=42)
 
 # Conjugate (flips directions + conjugates data)
 T_conj = conj(T)
@@ -77,7 +77,7 @@ print(f"New tensor: {T_functional.itags}")
 
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
 # For matrices: A† = (A*)ᵀ
-A = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=np.complex128, seed=11)
+A = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=torch.complex128, seed=11)
 
 # Method 1: conj then transpose
 A_dag1 = transpose(conj(A))

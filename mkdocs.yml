@@ -7,6 +7,9 @@ repo_url: https://github.com/Ideogenesis-AI/Nicole
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2025-2026 Changkai Zhang
 
+hooks:
+  - docs/hooks.py
+
 theme:
   name: material
   logo: images/nicole-font-awesome.png
@@ -81,14 +84,16 @@ nav:
     - Arithmetic:
       - Basic Operations: api/arithmetic/addition.md
       - Direct Sum (oplus): api/arithmetic/oplus.md
-      - diag: api/arithmetic/diag.md
-      - inv: api/arithmetic/inv.md
+      - Diagonal (diag): api/arithmetic/diag.md
+      - Inverse (inv): api/arithmetic/inv.md
     - Contraction:
       - contract: api/contraction/contract.md
       - trace: api/contraction/trace.md
     - Decomposition:
       - decomp: api/decomposition/decomp.md
-      - svd: api/decomposition/svd.md
+      - svd (linalg): api/decomposition/svd.md
+      - qr (linalg): api/decomposition/qr.md
+      - eig (linalg): api/decomposition/eig.md
     - Symmetry Groups:
       - Overview: api/symmetry/overview.md
       - U1Group: api/symmetry/u1-group.md
@@ -116,6 +121,8 @@ nav:
       - Build Operators: examples/advanced/build-operators.md
       - Load Space: examples/advanced/load-space-examples.md
       - Performance: examples/advanced/performance.md
+      - Autograd: examples/advanced/autograd.md
+      - GPU Acceleration: examples/advanced/gpu-acceleration.md
   # - Tutorials:
   #   - tutorials/index.md
 
@@ -213,9 +220,9 @@ extra:
     - icon: fontawesome/brands/python
       link: https://www.python.org
       name: Python
-    - icon: simple/numpy
-      link: https://numpy.org
-      name: NumPy
+    - icon: simple/pytorch
+      link: https://pytorch.org
+      name: PyTorch
   version:
     provider: mike
   analytics:

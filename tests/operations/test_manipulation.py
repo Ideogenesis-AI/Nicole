@@ -453,10 +453,10 @@ def test_retag_preserves_tensor_data():
     assert set(tensor.data.keys()) == original_keys
 
 
-# Flip tests
+# Invert tests
 
-def test_flip_single_index():
-    """Test flipping a single index."""
+def test_invert_single_index():
+    """Test inverting a single index."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))
@@ -484,8 +484,8 @@ def test_flip_single_index():
         assert torch.allclose(tensor.data[key], original_data[key])
 
 
-def test_flip_multiple_indices():
-    """Test flipping multiple indices at once."""
+def test_invert_multiple_indices():
+    """Test inverting multiple indices at once."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(-1, 3)))

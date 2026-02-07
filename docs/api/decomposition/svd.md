@@ -2,6 +2,11 @@
 
 Low-level SVD returning singular values as dictionary.
 
+::: nicole.decomp.svd
+    options:
+      show_source: false
+      heading_level: 2
+
 ## Description
 
 Performs block-wise SVD, returning:
@@ -22,6 +27,8 @@ from nicole.decomp import svd
 ## See Also
 
 - [decomp](decomp.md): High-level decomposition
+- [qr](qr.md): Low-level QR function
+- [eig](eig.md): Eigenvalue decomposition
 - [Examples: Decomposition](../../examples/operations/decomposition-examples.md)
 
 ## Notes

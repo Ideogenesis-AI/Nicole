@@ -7,14 +7,15 @@ Tensor decomposition factorizes a tensor into simpler components, preserving sym
 - **SVD**: Full singular value decomposition \(T = U \cdot S \cdot V^\dagger\)
 - **UR**: Left-orthogonal form \(T = U \cdot R\), where \(U^\dagger U = I\)
 - **LV**: Right-orthogonal form \(T = L \cdot V^\dagger\), where \(V V^\dagger = I\)
+- **QR**: QR decomposition \(T = Q \cdot R\), where \(Q^\dagger Q = I\) and \(R\) is upper triangular
 
 Each mode performs the decomposition **block-by-block**: sectors with different charges are decomposed independently. This block structure ensures that the decomposed factors maintain proper charge conservation and can be efficiently contracted in subsequent operations.
 
 **Truncation** allows you to compress tensors by keeping only the most important singular values, controlled by either a maximum count or threshold.
 
 ```python exec="1" session="decomposition" result=""
-from nicole import decomp, contract, Tensor, Index, Sector, Direction, U1Group
-from nicole.decomp import svd
+from nicole import decomp, contract, conj, Tensor, Index, Sector, Direction, U1Group
+from nicole.decomp import svd, qr
 ```
 
 ## Basic SVD
@@ -123,7 +124,37 @@ for key, s_values in S_dict.items():
     print(f"  Ratio: {s_values[0] / s_values[-1]:.2e}")
 ```
 
+## QR Decomposition
+
+QR decomposition factorizes a tensor into an orthogonal matrix Q and an upper triangular matrix R. Unlike SVD, no truncation is applied, making it useful for obtaining canonical forms without compression.
+
+```python exec="1" session="decomposition" result="console" idprefix="" source="material-block"
+# QR decomposition using high-level interface
+Q, R = decomp(T, axes=0, mode="QR")
+
+print(f"Q:\n{Q}\n\nR:\n{R}\n")
+
+# Verify reconstruction
+T_reconstructed_qr = contract(Q, R)
+error_qr = (T - T_reconstructed_qr).norm() / T.norm()
+print(f"Reconstruction error: {error_qr:.2e}")
+
+# Verify orthogonality: Q†Q = I
+QdagQ = contract(conj(Q), Q, excl=((1,),()))
+print(f"\nOrthogonality check (Q†Q should be identity-like):\n{QdagQ}")
+```
+
+Alternatively, use the low-level `qr()` function directly:
+
+```python exec="1" session="decomposition" result="console" idprefix="" source="material-block"
+# Low-level QR function
+Q_low, R_low = qr(T, axis=0)
+
+print(f"Q (low-level):\n{Q_low}\n\nR (low-level):\n{R_low}")
+```
+
 ## See Also
 
 - API Reference: [decomp](../../api/decomposition/decomp.md)
 - API Reference: [svd](../../api/decomposition/svd.md)
+- API Reference: [qr](../../api/decomposition/qr.md)

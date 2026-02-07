@@ -2,8 +2,8 @@
 #               .gitignore for Nicole                     #
 # ------------------------------------------------------- #
 
-refs/
-legacy/
+# Logging directory for Nicole
+.logging/
 
 
 
