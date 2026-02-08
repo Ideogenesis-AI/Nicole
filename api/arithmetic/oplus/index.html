@@ -1649,7 +1649,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1677,7 +1677,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1839,6 +1839,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1931,7 +1935,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2858,6 +2918,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2976,6 +3040,62 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
   
 
     
@@ -3119,7 +3239,7 @@
 
 
 <a href="#nicole.oplus" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">oplus</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">B</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">oplus</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">B</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3188,14 +3308,18 @@ must match exactly (same sectors, same dimensions).</p>
                 <code>axes</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="typing.Sequence">Sequence</span>[<span title="int">int</span>], <span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]]]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="int">int</span>, <span title="str">str</span>, <span title="typing.Sequence">Sequence</span>[<span title="int">int</span>], <span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]]]</code>
             </td>
             <td>
               <div class="doc-md-description">
                 <p>Axes to merge. Can be:
-- None: merge all axes (default)
-- Sequence of integers: axis positions (e.g., [0, 2])
-- Sequence of strings: itag names (e.g., ['i', 'k'])
+<ul>
+<li>None: merge all axes (default)</li>
+<li>Single integer: axis position (e.g., 0)</li>
+<li>Sequence of integers: axis positions (e.g., [0, 2])</li>
+<li>Single string: itag name (e.g., 'i')</li>
+<li>Sequence of strings: itag names (e.g., ['i', 'k'])</li>
+</ul>
 Axes not specified must have identical Index structure in A and B.</p>
               </div>
             </td>
@@ -3260,7 +3384,7 @@ Axes not specified must have identical Index structure in A and B.</p>
 
 <p><span class="doc-section-title">Examples:</span></p>
     <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">U1Group</span><span class="p">,</span> <span class="n">Direction</span><span class="p">,</span> <span class="n">Index</span><span class="p">,</span> <span class="n">Sector</span><span class="p">,</span> <span class="n">oplus</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">group</span> <span class="o">=</span> <span class="n">U1Group</span><span class="p">()</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span>
@@ -3283,7 +3407,7 @@ Axes not specified must have identical Index structure in A and B.</p>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">A2</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx_A0</span><span class="p">,</span> <span class="n">idx_A1_match</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;i&#39;</span><span class="p">,</span> <span class="s1">&#39;j&#39;</span><span class="p">])</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">B2</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx_B0</span><span class="p">,</span> <span class="n">idx_B1_match</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;i&#39;</span><span class="p">,</span> <span class="s1">&#39;j&#39;</span><span class="p">])</span>
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="gp">&gt;&gt;&gt; </span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">C2</span> <span class="o">=</span> <span class="n">oplus</span><span class="p">(</span><span class="n">A2</span><span class="p">,</span> <span class="n">B2</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># or axes=[&#39;i&#39;]</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">C2</span> <span class="o">=</span> <span class="n">oplus</span><span class="p">(</span><span class="n">A2</span><span class="p">,</span> <span class="n">B2</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># or axes=&#39;i&#39;, or axes=[0], or axes=[&#39;i&#39;]</span>
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># C2.indices[0] has sectors: [(0, 3), (1, 3), (2, 2)]  ← merged</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># C2.indices[1] has sectors: [(0, 5)]  ← unchanged (matched exactly)</span>
 </span></code></pre></div>
@@ -3303,10 +3427,12 @@ Axes not specified must have identical Index structure in A and B.</p>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
 <p>Creates a direct sum (block diagonal concatenation) of multiple tensors. All tensors must have:
-- Same number of indices
-- Matching directions for corresponding indices
-- Same symmetry groups
-- Matching tags</p>
+<ul>
+<li>Same number of indices</li>
+<li>Matching directions for corresponding indices</li>
+<li>Same symmetry groups</li>
+<li>Matching tags</li>
+</ul></p>
 <p>When charges collide, blocks are placed on the block diagonal.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3502,8 +3628,8 @@ Axes not specified must have identical Index structure in A and B.</p>
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>

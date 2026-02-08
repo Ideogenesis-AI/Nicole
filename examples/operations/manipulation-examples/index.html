@@ -1543,7 +1543,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1571,7 +1571,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1730,6 +1730,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1819,7 +1823,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2876,6 +2936,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2997,6 +3061,62 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
   
 
     
@@ -3177,7 +3297,7 @@
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">idx</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Complex tensor</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">T</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">T</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Conjugate (flips directions + conjugates data)</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">T_conj</span> <span class="o">=</span> <span class="n">conj</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
@@ -3242,7 +3362,7 @@
 </div>
 <h2 id="hermitian-conjugate">Hermitian Conjugate<a class="headerlink" href="#hermitian-conjugate" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># For matrices: A† = (A*)ᵀ</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">A</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">A</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Method 1: conj then transpose</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">A_dag1</span> <span class="o">=</span> <span class="n">transpose</span><span class="p">(</span><span class="n">conj</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
@@ -3298,7 +3418,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 15:00:45 UTC"><span class="timeago" datetime="2026-02-07T15:00:45+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 15:00:45 UTC">2026-02-07</span>
   </span>
 
     
@@ -3462,8 +3582,8 @@
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>

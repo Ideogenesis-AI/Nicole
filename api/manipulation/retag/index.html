@@ -1404,45 +1404,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" retag">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 1: Mapping (update specific tags by name)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 2: Full replacement (replace all tags)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-3-selective-update-by-position" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 3: Selective update by position
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1699,7 +1660,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1727,7 +1688,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1889,6 +1850,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1981,7 +1946,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2908,6 +2929,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -3039,6 +3064,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3088,45 +3169,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label=" retag">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 1: Mapping (update specific tags by name)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 2: Full replacement (replace all tags)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nicole.Tensor.retag--mode-3-selective-update-by-position" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mode 3: Selective update by position
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3248,9 +3290,11 @@
             <td>
               <div class="doc-md-description">
                 <p>Can be one of:
-- Mapping[str, str]: Dictionary mapping old tags to new tags
-- Sequence[str]: Complete list of new tags (must match number of indices)
-- Sequence[int] or int: Index position(s) to update (requires new_tags)</p>
+<ul>
+<li>Mapping[str, str]: Dictionary mapping old tags to new tags</li>
+<li>Sequence[str]: Complete list of new tags (must match number of indices)</li>
+<li>Sequence[int] or int: Index position(s) to update (requires new_tags)</li>
+</ul></p>
               </div>
             </td>
             <td>
@@ -3279,13 +3323,16 @@ Can be a single string or sequence of strings. Must match the length of mapping_
 
 
 <p><span class="doc-section-title">Examples:</span></p>
-    <h3 id="nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name">Mode 1: Mapping (update specific tags by name)<a class="headerlink" href="#nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name" title="Permanent link">&para;</a></h3>
-<p>tensor.retag({"a": "left", "b": "right"})</p>
-<h3 id="nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags">Mode 2: Full replacement (replace all tags)<a class="headerlink" href="#nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags" title="Permanent link">&para;</a></h3>
-<p>tensor.retag(["left", "middle", "right"])</p>
-<h3 id="nicole.Tensor.retag--mode-3-selective-update-by-position">Mode 3: Selective update by position<a class="headerlink" href="#nicole.Tensor.retag--mode-3-selective-update-by-position" title="Permanent link">&para;</a></h3>
-<p>tensor.retag([0, 2], ["left", "right"])
-tensor.retag(0, "left")  # Single index and tag</p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 1: Mapping (update specific tags by name)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">({</span><span class="s2">&quot;a&quot;</span><span class="p">:</span> <span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span> <span class="s2">&quot;right&quot;</span><span class="p">})</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 2: Full replacement (replace all tags)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">([</span><span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;middle&quot;</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">])</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 3: Selective update by position</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">])</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;left&quot;</span><span class="p">)</span>  <span class="c1"># Single index and tag</span>
+</span></code></pre></div>
 
 
     </div>
@@ -3492,8 +3539,8 @@ tensor.retag(0, "left")  # Single index and tag</p>
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>

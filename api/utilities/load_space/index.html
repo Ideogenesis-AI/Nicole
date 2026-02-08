@@ -1558,7 +1558,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1586,7 +1586,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1748,6 +1748,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1840,7 +1844,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2919,6 +2979,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -3037,6 +3101,62 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
   
 
     
@@ -3287,10 +3407,12 @@
             <td>
               <div class="doc-md-description">
                 <p>Symmetry to preserve:
-- "U1" for U(1) charge conservation
-- "Z2" for Z2 parity
-- "Z2,U1" for Z2 parity + U1 spin (Band only)
-- "U1,U1" for U1 particle number + U1 spin (Band only)</p>
+<ul>
+<li>"U1" for U(1) charge conservation</li>
+<li>"Z2" for Z2 parity</li>
+<li>"Z2,U1" for Z2 parity + U1 spin (Band only)</li>
+<li>"U1,U1" for U1 particle number + U1 spin (Band only)</li>
+</ul></p>
               </div>
             </td>
             <td>
@@ -3307,9 +3429,11 @@
             <td>
               <div class="doc-md-description">
                 <p>Additional options specific to the system:
-- For "Spin": {"J": float} where J is the total spin (half-integer)
-- For "Ferm": No options required for spinless fermions
-- For "Band": No options required for spinful fermions</p>
+<ul>
+<li>For "Spin": {"J": float} where J is the total spin (half-integer)</li>
+<li>For "Ferm": No options required for spinless fermions</li>
+<li>For "Band": No options required for spinful fermions</li>
+</ul></p>
               </div>
             </td>
             <td>
@@ -3362,22 +3486,28 @@
               <div class="doc-md-description">
                 <p>Dictionary of operators and indices.
 For spin systems: {"Sp", "Sm", "Sz", "vac"}
-- Sz: 2-index tensor (OUT, IN) - charge neutral
-- Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
-- Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
-- vac: Index representing trivial vacuum space with charge 0
+<ul>
+<li>Sz: 2-index tensor (OUT, IN) - charge neutral</li>
+<li>Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index</li>
+<li>Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index</li>
+<li>vac: Index representing trivial vacuum space with charge 0</li>
+</ul>
 For spinless fermion systems: {"F", "Z", "vac"}
-- F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
-- Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral
-- vac: Index representing trivial vacuum space with charge 0
+<ul>
+<li>F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral</li>
+<li>Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral</li>
+<li>vac: Index representing trivial vacuum space with charge 0</li>
+</ul>
 For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
-- F_up: 3-index tensor (IN, OUT, auxiliary) - spin-up annihilation operator
-- F_dn: 3-index tensor (IN, OUT, auxiliary) - spin-down annihilation operator
-- Z: 2-index tensor (IN, OUT) - Jordan-Wigner string
-- Sz: 2-index tensor (IN, OUT) - spin z-component
-- Sp: 3-index tensor (IN, OUT, auxiliary) - spin raising operator
-- Sm: 3-index tensor (IN, OUT, auxiliary) - spin lowering operator
-- vac: Index representing trivial vacuum space</p>
+<ul>
+<li>F_up: 3-index tensor (IN, OUT, auxiliary) - spin-up annihilation operator</li>
+<li>F_dn: 3-index tensor (IN, OUT, auxiliary) - spin-down annihilation operator</li>
+<li>Z: 2-index tensor (IN, OUT) - Jordan-Wigner string</li>
+<li>Sz: 2-index tensor (IN, OUT) - spin z-component</li>
+<li>Sp: 3-index tensor (IN, OUT, auxiliary) - spin raising operator</li>
+<li>Sm: 3-index tensor (IN, OUT, auxiliary) - spin lowering operator</li>
+<li>vac: Index representing trivial vacuum space</li>
+</ul></p>
               </div>
             </td>
           </tr>
@@ -3457,10 +3587,12 @@ For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">Spc</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>  <span class="c1"># 3 states: |-1⟩, |0⟩, |+1⟩</span>
 </span></code></pre></div>
 <p><strong>Operators returned:</strong>
-- <code>Sp</code>: Spin raising operator (S+)
-- <code>Sm</code>: Spin lowering operator (S-)
-- <code>Sz</code>: Spin z-component operator
-- <code>vac</code>: Vacuum index (trivial space)</p>
+<ul>
+<li><code>Sp</code>: Spin raising operator (S+)</li>
+<li><code>Sm</code>: Spin lowering operator (S-)</li>
+<li><code>Sz</code>: Spin z-component operator</li>
+<li><code>vac</code>: Vacuum index (trivial space)</li>
+</ul></p>
 <h3 id="spinless-fermion-systems-presetferm">Spinless Fermion Systems (<code>preset="Ferm"</code>)<a class="headerlink" href="#spinless-fermion-systems-presetferm" title="Permanent link">&para;</a></h3>
 <p>Fermions without spin degrees of freedom.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Spinless fermions with U(1) symmetry (particle number conservation)</span>
@@ -3469,9 +3601,11 @@ For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">Op</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>  <span class="c1"># [&#39;F&#39;, &#39;Z&#39;, &#39;vac&#39;]</span>
 </span></code></pre></div>
 <p><strong>Operators returned:</strong>
-- <code>F</code>: Annihilation operator (f)
-- <code>Z</code>: Jordan-Wigner string operator
-- <code>vac</code>: Vacuum index</p>
+<ul>
+<li><code>F</code>: Annihilation operator (f)</li>
+<li><code>Z</code>: Jordan-Wigner string operator</li>
+<li><code>vac</code>: Vacuum index</li>
+</ul></p>
 <h3 id="spinful-fermion-systems-presetband">Spinful Fermion Systems (<code>preset="Band"</code>)<a class="headerlink" href="#spinful-fermion-systems-presetband" title="Permanent link">&para;</a></h3>
 <p>Fermions with spin-up and spin-down degrees of freedom.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Spinful fermions with U(1)×U(1) symmetry (N_up and N_down conservation)</span>
@@ -3483,13 +3617,15 @@ For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">Spc</span><span class="p">,</span> <span class="n">Op</span> <span class="o">=</span> <span class="n">load_space</span><span class="p">(</span><span class="s2">&quot;Band&quot;</span><span class="p">,</span> <span class="s2">&quot;Z2,U1&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><strong>Operators returned:</strong>
-- <code>F_up</code>: Spin-up annihilation operator
-- <code>F_dn</code>: Spin-down annihilation operator
-- <code>Z</code>: Jordan-Wigner string operator
-- <code>Sz</code>: Spin z-component
-- <code>Sp</code>: Spin raising operator
-- <code>Sm</code>: Spin lowering operator
-- <code>vac</code>: Vacuum index</p>
+<ul>
+<li><code>F_up</code>: Spin-up annihilation operator</li>
+<li><code>F_dn</code>: Spin-down annihilation operator</li>
+<li><code>Z</code>: Jordan-Wigner string operator</li>
+<li><code>Sz</code>: Spin z-component</li>
+<li><code>Sp</code>: Spin raising operator</li>
+<li><code>Sm</code>: Spin lowering operator</li>
+<li><code>vac</code>: Vacuum index</li>
+</ul></p>
 <h2 id="symmetry-options">Symmetry Options<a class="headerlink" href="#symmetry-options" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>"U1"</code>: U(1) charge conservation</li>
@@ -3698,8 +3834,8 @@ For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>

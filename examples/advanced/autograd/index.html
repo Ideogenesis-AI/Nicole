@@ -12,13 +12,13 @@
         <meta name="author" content="Changkai Zhang">
       
       
-        <link rel="canonical" href="https://ideogenesis-ai.github.io/Nicole/examples/advanced/build-operators/">
+        <link rel="canonical" href="https://ideogenesis-ai.github.io/Nicole/examples/advanced/autograd/">
       
       
-        <link rel="prev" href="../../operations/manipulation-examples/">
+        <link rel="prev" href="../performance/">
       
       
-        <link rel="next" href="../load-space-examples/">
+        <link rel="next" href="../gpu-acceleration/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Build Operators - Nicole Documentation</title>
+        <title>Autograd - Nicole Documentation</title>
       
     
     
@@ -100,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#build-operators" class="md-skip">
+        <a href="#automatic-differentiation-autograd" class="md-skip">
           Skip to content
         </a>
       
@@ -139,7 +139,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Build Operators
+              Autograd
             
           </span>
         </div>
@@ -2870,37 +2870,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Build Operators
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../build-operators/" class="md-nav__link">
         
   
   
@@ -2916,92 +2889,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#identity-operator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Identity Operator
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fusion-isometry" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fusion Isometry
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#number-operator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Number Operator
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ladder-operators" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Ladder Operators
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spin-operators" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spin Operators
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3067,10 +2954,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../autograd/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3086,6 +3000,187 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enabling-gradient-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enabling Gradient Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enabling Gradient Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-requires_grad-flag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The requires_grad Flag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-gradient-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Gradient Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gradient-propagation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradient Propagation Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-gradient-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Gradient Computation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#computational-overhead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Computational Overhead
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-autograd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use Autograd
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Use Autograd">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#good-use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Good Use Cases:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not Recommended:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3161,10 +3256,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#identity-operator" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Identity Operator
+        Overview
       
     </span>
   </a>
@@ -3172,10 +3267,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fusion-isometry" class="md-nav__link">
+  <a href="#enabling-gradient-tracking" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fusion Isometry
+        Enabling Gradient Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Enabling Gradient Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-requires_grad-flag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The requires_grad Flag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-gradient-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Gradient Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gradient-propagation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradient Propagation Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-gradient-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Gradient Computation
       
     </span>
   </a>
@@ -3183,35 +3328,80 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#number-operator" class="md-nav__link">
+  <a href="#performance-considerations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Number Operator
+        Performance Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#computational-overhead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Computational Overhead
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#ladder-operators" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#memory-usage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Ladder Operators
+        Memory Usage
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#spin-operators" class="md-nav__link">
+  <a href="#when-to-use-autograd" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spin Operators
+        When to Use Autograd
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="When to Use Autograd">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#good-use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Good Use Cases:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not Recommended:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3243,7 +3433,7 @@
 
 
   
-    <a href="https://github.com/Ideogenesis-AI/Nicole/edit/main/docs/examples/advanced/build-operators.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/Ideogenesis-AI/Nicole/edit/main/docs/examples/advanced/autograd.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3252,190 +3442,350 @@
     
       
     
-    <a href="https://github.com/Ideogenesis-AI/Nicole/raw/main/docs/examples/advanced/build-operators.md" title="View source of this page" class="md-content__button md-icon">
+    <a href="https://github.com/Ideogenesis-AI/Nicole/raw/main/docs/examples/advanced/autograd.md" title="View source of this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
     </a>
   
 
 
-<h1 id="build-operators">Build Operators<a class="headerlink" href="#build-operators" title="Permanent link">&para;</a></h1>
-<p>Physical operators in quantum many-body systems must respect symmetries and charge conservation. This page demonstrates how to construct common operators—identity, isometry, and ladder operators—as symmetry-aware tensors.</p>
-<p><strong>Key operators:</strong></p>
+<h1 id="automatic-differentiation-autograd">Automatic Differentiation (Autograd)<a class="headerlink" href="#automatic-differentiation-autograd" title="Permanent link">&para;</a></h1>
+<p>Nicole supports PyTorch's automatic differentiation (autograd) for gradient-based optimization of tensor network states. This guide explains when and how to use autograd effectively with symmetric tensors.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>By default, Nicole <strong>disables</strong> autograd for performance, as most tensor network algorithms don't require gradients. However, you can enable gradient tracking for:</p>
 <ul>
-<li><strong>Identity</strong>: Diagonal operators mapping each state to itself</li>
-<li><strong>Isometry</strong>: Fusion tensors that combine multiple indices</li>
-<li><strong>Number operator</strong>: Diagonal operator returning charge values</li>
-<li><strong>Ladder operators</strong>: Creation and annihilation with auxiliary indices for charge conservation</li>
-<li><strong>Spin operators</strong>: <span class="arithmatex">\(S_z\)</span> (diagonal z-component)</li>
+<li>Variational optimization of tensor network states</li>
+<li>Optimizing parametric quantum states</li>
+<li>Gradient-based energy minimization</li>
+<li>Differentiable tensor network layers in neural networks</li>
 </ul>
-<p>Operators with <strong>auxiliary indices</strong> (like creation/annihilation or spin raising/lowering) need an extra index to ensure the total charge is conserved. These auxiliary indices have specific charges that balance the charge transfer between physical states.</p>
+<h2 id="enabling-gradient-tracking">Enabling Gradient Tracking<a class="headerlink" href="#enabling-gradient-tracking" title="Permanent link">&para;</a></h2>
+<p>PyTorch's autograd system has two components: <strong>per-tensor flags</strong> (<code>requires_grad</code>) and <strong>global gradient mode</strong> (context managers). Understanding both is essential for correct usage.</p>
+<h3 id="the-requires_grad-flag">The <code>requires_grad</code> Flag<a class="headerlink" href="#the-requires_grad-flag" title="Permanent link">&para;</a></h3>
+<p>The <code>requires_grad</code> attribute is a <strong>per-tensor property</strong> that marks whether a tensor is a variational parameter that should accumulate gradients. When set to <code>True</code>:</p>
+<ul>
+<li>The tensor becomes a "leaf" node in the computation graph</li>
+<li>Operations involving this tensor are recorded for backpropagation</li>
+<li>After calling <code>.backward()</code>, gradients accumulate in the tensor's <code>.grad</code> attribute</li>
+</ul>
 <p></p>
-<h2 id="identity-operator">Identity Operator<a class="headerlink" href="#identity-operator" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">group</span> <span class="o">=</span> <span class="n">U1Group</span><span class="p">()</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">idx</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Create identity operator</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">I</span> <span class="o">=</span> <span class="n">identity</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">))</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Identity has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">I</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2"> blocks</span><span class="se">\n</span><span class="si">{</span><span class="n">I</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Set at creation</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">T1</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> 
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                   <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Or set after creation</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">T2</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">,</span> <span class="s2">&quot;l&quot;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">43</span><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">T2</span><span class="o">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T1 requires grad: </span><span class="si">{</span><span class="n">T1</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T2 requires grad: </span><span class="si">{</span><span class="n">T2</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Identity has 2 blocks</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">T1 requires grad: True</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">T2 requires grad: True</span>
+</span></code></pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Storage Location</p>
+<p>In Nicole, <code>requires_grad</code> is propagated to the underlying PyTorch blocks in <code>Tensor.data</code>. Each block inherits the gradient tracking status from the parent Tensor.</p>
+</div>
+<h3 id="global-gradient-mode">Global Gradient Mode<a class="headerlink" href="#global-gradient-mode" title="Permanent link">&para;</a></h3>
+<p>The <strong>global gradient mode</strong> controls whether operations are recorded in the computation graph, regardless of tensor flags. This is controlled by context managers:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Check current mode</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">is_grad_enabled</span><span class="p">())</span>  <span class="c1"># False (Nicole disables by default)</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">False</span>
+</span></code></pre></div>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Disable gradient tracking globally (explicit, though already disabled in Nicole)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="c1"># No operations are tracked, even if tensors have requires_grad=True</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">T</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">T</span> <span class="o">+</span> <span class="n">T</span>  <span class="c1"># result.requires_grad will be False</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;In no_grad: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># False</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">In no_grad: False</span>
+</span></code></pre></div>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Enable gradient tracking explicitly (REQUIRED in Nicole)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">enable_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="c1"># Operations are tracked when explicitly enabled</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">T</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">T</span> <span class="o">+</span> <span class="n">T</span>  <span class="c1"># result.requires_grad will be True</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;In enable_grad: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">In enable_grad: True</span>
+</span></code></pre></div>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Set mode programmatically</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># Disable (Nicole&#39;s default)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Grad disabled: </span><span class="si">{</span><span class="ow">not</span><span class="w"> </span><span class="n">torch</span><span class="o">.</span><span class="n">is_grad_enabled</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># Enable for gradient tracking</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Grad enabled: </span><span class="si">{</span><span class="n">torch</span><span class="o">.</span><span class="n">is_grad_enabled</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Grad disabled: True</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Grad enabled: True</span>
+</span></code></pre></div>
+</div>
+<p></p>
+<h3 id="gradient-propagation-rules">Gradient Propagation Rules<a class="headerlink" href="#gradient-propagation-rules" title="Permanent link">&para;</a></h3>
+<p>The <code>requires_grad</code> flag of output tensors depends on <strong>both</strong> input tensor flags <strong>and</strong> the global gradient mode:</p>
+<table>
+<thead>
+<tr>
+<th>Global Mode</th>
+<th>Input <code>requires_grad</code></th>
+<th>Output <code>requires_grad</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Disabled (default in Nicole)</td>
+<td>Any value</td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td>Enabled (<code>enable_grad</code>)</td>
+<td>Any input is <code>True</code></td>
+<td><code>True</code></td>
+</tr>
+<tr>
+<td>Enabled (<code>enable_grad</code>)</td>
+<td>All inputs are <code>False</code></td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">contract</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">A</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">B</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx</span><span class="p">,</span> <span class="n">idx</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;j&quot;</span><span class="p">,</span> <span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Tensor A (requires_grad=True):&quot;</span><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Tensor B (requires_grad=False):&quot;</span><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Tensor A (requires_grad=True):</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">  info:  2x { 2 x 1 }  having &#39;A&#39;,   Tensor,  { i*, j }</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  data:  2-D float64 (40 B)    3 x 3 =&gt; 3 x 3  @ norm = 1.73205</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  data:  2-D float64 (40 B)    3 x 3 =&gt; 3 x 3  @ norm = 1.95727</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="go">     1.  2x2     |  1x1     [ 0 ; 0 ]    32 B</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     2.  1x1     |  1x1     [ 1 ; 1 ]       1.</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     2.  1x1     |  1x1     [ 1 ; 1 ]  0.9198.</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="go">Tensor B (requires_grad=False):</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="go">  info:  2x { 2 x 1 }  having &#39;A&#39;,   Tensor,  { j*, k }</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="go">  data:  2-D float64 (40 B)    3 x 3 =&gt; 3 x 3  @ norm = 2.60375</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="go">     1.  2x2     |  1x1     [ 0 ; 0 ]    32 B</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="go">     2.  1x1     |  1x1     [ 1 ; 1 ]  -0.5133.</span>
 </span></code></pre></div>
 </div>
-<h2 id="fusion-isometry">Fusion Isometry<a class="headerlink" href="#fusion-isometry" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Fuse two indices into one</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">idx1</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">idx2</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)))</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Create fusion tensor</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">iso</span> <span class="o">=</span> <span class="n">isometry</span><span class="p">(</span><span class="n">idx1</span><span class="p">,</span> <span class="n">idx2</span><span class="p">,</span> <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;j&quot;</span><span class="p">,</span> <span class="s2">&quot;ij&quot;</span><span class="p">))</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Isometry indices: </span><span class="si">{</span><span class="n">iso</span><span class="o">.</span><span class="n">itags</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Fused index dim: </span><span class="si">{</span><span class="n">iso</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">dim</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">iso</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Rule 1: Default mode in Nicole is DISABLED - gradients NOT tracked</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">C</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;C requires grad: </span><span class="si">{</span><span class="n">C</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># False (grad mode disabled by default)</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Isometry indices: (&#39;i&#39;, &#39;j&#39;, &#39;ij&#39;)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Fused index dim: 9</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  info:  3x { 4 x 1 }  having &#39;A&#39;,   Tensor,  { i*, j*, ij }</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">  data:  3-D float64 (264 B)    3 x 3 x 9 =&gt; 3 x 3 x 9  @ norm = 3</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     1.  2x1x2   |  1x1x1   [ 0 ; 0 ; 0 ]    32 B</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="go">     2.  2x2x5   |  1x1x1   [ 0 ; 1 ; 1 ]   160 B</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="go">     3.  1x1x5   |  1x1x1   [ 1 ; 0 ; 1 ]    40 B</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="go">     4.  1x2x2   |  1x1x1   [ 1 ; 1 ; 2 ]    32 B</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">C requires grad: False</span>
 </span></code></pre></div>
 </div>
-<h2 id="number-operator">Number Operator<a class="headerlink" href="#number-operator" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Diagonal operator that returns the charge value</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">idx_num</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Manually construct number operator</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">N_data</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">for</span> <span class="n">sector</span> <span class="ow">in</span> <span class="n">idx_num</span><span class="o">.</span><span class="n">sectors</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">charge</span> <span class="o">=</span> <span class="n">sector</span><span class="o">.</span><span class="n">charge</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">dim</span> <span class="o">=</span> <span class="n">sector</span><span class="o">.</span><span class="n">dim</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="c1"># Diagonal matrix with charge values</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">N_data</span><span class="p">[(</span><span class="n">charge</span><span class="p">,</span> <span class="n">charge</span><span class="p">)]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span> <span class="o">*</span> <span class="n">charge</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">N</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span><span class="n">indices</span><span class="o">=</span><span class="p">(</span><span class="n">idx_num</span><span class="p">,</span> <span class="n">idx_num</span><span class="o">.</span><span class="n">flip</span><span class="p">()),</span> <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="s2">&quot;in&quot;</span><span class="p">),</span> <span class="n">data</span><span class="o">=</span><span class="n">N_data</span><span class="p">)</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number operator:</span><span class="se">\n</span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Rule 2: Must explicitly enable grad mode for tracking</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">enable_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">D</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>  <span class="c1"># A has requires_grad=True</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;D requires grad: </span><span class="si">{</span><span class="n">D</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True (A propagates in enabled mode)</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Number operator:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">  info:  2x { 3 x 1 }  having &#39;A&#39;,   Tensor,  { out*, in }</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  data:  2-D float64 (12 B)    3 x 3 =&gt; 3 x 3  @ norm = 2.23607</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="go">     1.  1x1     |  1x1     [ 0 ; 0 ]       0.</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     2.  1x1     |  1x1     [ 1 ; 1 ]       1.</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="go">     3.  1x1     |  1x1     [ 2 ; 2 ]       2.</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">D requires grad: True</span>
 </span></code></pre></div>
 </div>
-<h2 id="ladder-operators">Ladder Operators<a class="headerlink" href="#ladder-operators" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Creation and annihilation operators for bosons</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># a†|n⟩ = √(n+1)|n+1⟩</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># a|n⟩ = √n|n-1⟩</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Need auxiliary indices to conserve total charge</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Rule 3: no_grad context also disables (redundant in Nicole, but explicit)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">E</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;E requires grad: </span><span class="si">{</span><span class="n">E</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># False (explicitly disabled)</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">E requires grad: False</span>
+</span></code></pre></div>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Rule 4: Nested contexts (inner takes precedence)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">enable_grad</span><span class="p">():</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">F</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;F requires grad: </span><span class="si">{</span><span class="n">F</span><span class="o">.</span><span class="n">requires_grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True (inner context wins)</span>
+</span></code></pre></div>
+<div class="result">
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">F requires grad: True</span>
+</span></code></pre></div>
+</div>
+<h2 id="basic-gradient-computation">Basic Gradient Computation<a class="headerlink" href="#basic-gradient-computation" title="Permanent link">&para;</a></h2>
+<p>Since Nicole disables autograd by default, you must explicitly enable it for gradient tracking:</p>
+<p></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Enable gradient tracking (REQUIRED in Nicole)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">enable_grad</span><span class="p">():</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="c1"># Forward pass: compute contraction</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">loss</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">A_grad</span><span class="p">,</span> <span class="n">B_grad</span><span class="p">)</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">n_max</span> <span class="o">=</span> <span class="mi">3</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">idx_ladder</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="c1"># Backward pass: compute gradients</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Auxiliary index with charge +1 for creation</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">idx_aux_plus</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),))</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Creation operator a†: (out, in, aux+1)</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">a_dag_data</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_max</span><span class="p">):</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="c1"># Connects |n⟩ to |n+1⟩, charge conserved: (n+1) + (-n) + (-1) = 0</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">a_dag_data</span><span class="p">[(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[[</span><span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))]]])</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">a_dag</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">indices</span><span class="o">=</span><span class="p">(</span><span class="n">idx_ladder</span><span class="p">,</span> <span class="n">idx_ladder</span><span class="o">.</span><span class="n">flip</span><span class="p">(),</span> <span class="n">idx_aux_plus</span><span class="o">.</span><span class="n">flip</span><span class="p">()),</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="s2">&quot;in&quot;</span><span class="p">,</span> <span class="s2">&quot;aux&quot;</span><span class="p">),</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">data</span><span class="o">=</span><span class="n">a_dag_data</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="p">)</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creation operator has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">a_dag</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2"> blocks</span><span class="se">\n</span><span class="si">{</span><span class="n">a_dag</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="c1"># Auxiliary index with charge -1 for annihilation</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="n">idx_aux_minus</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),))</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="c1"># Annihilation operator a: (out, in, aux-1)</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="n">a_data</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>    <span class="c1"># Connects |n⟩ to |n-1⟩, charge conserved: (n-1) + (-n) + (1) = 0</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>    <span class="n">a_data</span><span class="p">[(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[[</span><span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">n</span><span class="p">)))]]])</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="n">a</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>    <span class="n">indices</span><span class="o">=</span><span class="p">(</span><span class="n">idx_ladder</span><span class="p">,</span> <span class="n">idx_ladder</span><span class="o">.</span><span class="n">flip</span><span class="p">(),</span> <span class="n">idx_aux_minus</span><span class="o">.</span><span class="n">flip</span><span class="p">()),</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>    <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="s2">&quot;in&quot;</span><span class="p">,</span> <span class="s2">&quot;aux&quot;</span><span class="p">),</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>    <span class="n">data</span><span class="o">=</span><span class="n">a_data</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="p">)</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Annihilation operator has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2"> blocks</span><span class="se">\n</span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Access gradients (stored in PyTorch blocks)</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">A_grad</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">if</span> <span class="n">block</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gradient for block </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="si">{</span><span class="n">block</span><span class="o">.</span><span class="n">grad</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Creation operator has 3 blocks</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">  info:  3x { 3 x 1 }  having &#39;A&#39;,   Tensor,  { out*, in, aux }</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  data:  3-D float64 (12 B)    4 x 4 x 1 =&gt; 4 x 4 x 1  @ norm = 2.44949</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="go">     1.  1x1x1   |  1x1x1   [ 1 ; 0 ; 1 ]       1.</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     2.  1x1x1   |  1x1x1   [ 2 ; 1 ; 1 ]   1.414.</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="go">     3.  1x1x1   |  1x1x1   [ 3 ; 2 ; 1 ]   1.732.</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="go">Annihilation operator has 3 blocks</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="go">  info:  3x { 3 x 1 }  having &#39;A&#39;,   Tensor,  { out*, in, aux }</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="go">  data:  3-D float64 (12 B)    4 x 4 x 1 =&gt; 4 x 4 x 1  @ norm = 2.44949</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="go">     1.  1x1x1   |  1x1x1   [ 0 ; 1 ; -1 ]       1.</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="go">     2.  1x1x1   |  1x1x1   [ 1 ; 2 ; -1 ]   1.414.</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="go">     3.  1x1x1   |  1x1x1   [ 2 ; 3 ; -1 ]   1.732.</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Gradient for block (0, 0):</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">tensor([[ 0.3923, -0.3195],</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">        [-0.2236, -1.2050]], dtype=torch.float64)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">Gradient for block (1, 1):</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">tensor([[1.0445]], dtype=torch.float64)</span>
 </span></code></pre></div>
 </div>
-<h2 id="spin-operators">Spin Operators<a class="headerlink" href="#spin-operators" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Sz operator for spin-1/2</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># |↓⟩ has Sz = -1/2, |↑⟩ has Sz = +1/2</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Using units where 2*Sz is an integer</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">idx_spin</span> <span class="o">=</span> <span class="n">Index</span><span class="p">(</span><span class="n">Direction</span><span class="o">.</span><span class="n">OUT</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">sectors</span><span class="o">=</span><span class="p">(</span><span class="n">Sector</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">Sector</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)))</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Sz is diagonal</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">Sz_data</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="o">-</span><span class="mf">0.5</span><span class="p">]]),</span>  <span class="c1"># |↓⟩</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mf">0.5</span><span class="p">]]),</span>     <span class="c1"># |↑⟩</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">}</span>
+<div class="admonition warning">
+<p class="admonition-title">Remember to Enable Grad Mode</p>
+<p>Nicole sets <code>torch.set_grad_enabled(False)</code> on import. Always wrap gradient computations in <code>torch.enable_grad()</code> or call <code>torch.set_grad_enabled(True)</code> before variational optimization.</p>
+</div>
+<h2 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Permanent link">&para;</a></h2>
+<p>Enabling autograd comes with trade-offs. While it enables powerful gradient-based optimization, it adds both computational overhead and memory costs. Understanding these costs helps you make informed decisions about when to use gradients.</p>
+<h3 id="computational-overhead">Computational Overhead<a class="headerlink" href="#computational-overhead" title="Permanent link">&para;</a></h3>
+<p>Autograd adds overhead in two ways:</p>
+<ol>
+<li><strong>Graph Construction</strong>: Every operation must record its inputs and create nodes in the computation graph</li>
+<li><strong>Bookkeeping</strong>: PyTorch tracks tensor metadata (shapes, strides, version counters) to enable backpropagation</li>
+</ol>
+<p>The overhead scales with:</p>
+<ul>
+<li><strong>Depth of computation</strong>: Longer chains of operations accumulate more graph nodes</li>
+<li><strong>Number of operations</strong>: Each tensor operation adds bookkeeping cost</li>
+<li><strong>Tensor complexity</strong>: Symmetric tensors with many blocks require more metadata tracking</li>
+</ul>
+<p>For tensor networks, this overhead can be significant because contractions often form deep chains. Let's measure the impact on a realistic tensor network computation:</p>
+<p></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Create a chain of 10 tensors with sequential contractions</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">num_tensors</span> <span class="o">=</span> <span class="mi">10</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">tensors</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_tensors</span><span class="p">):</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">itag_in</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;i</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">itag_out</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;i</span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">T</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">([</span><span class="n">idx_large</span><span class="p">,</span> <span class="n">idx_large</span><span class="o">.</span><span class="n">flip</span><span class="p">()],</span> 
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                      <span class="n">itags</span><span class="o">=</span><span class="p">[</span><span class="n">itag_in</span><span class="p">,</span> <span class="n">itag_out</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">100</span><span class="o">+</span><span class="n">i</span><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">tensors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created chain of </span><span class="si">{</span><span class="n">num_tensors</span><span class="si">}</span><span class="s2"> tensors&quot;</span><span class="p">)</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">Sz</span> <span class="o">=</span> <span class="n">Tensor</span><span class="p">(</span><span class="n">indices</span><span class="o">=</span><span class="p">(</span><span class="n">idx_spin</span><span class="p">,</span> <span class="n">idx_spin</span><span class="o">.</span><span class="n">flip</span><span class="p">()),</span> <span class="n">itags</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="s2">&quot;in&quot;</span><span class="p">),</span> <span class="n">data</span><span class="o">=</span><span class="n">Sz_data</span><span class="p">)</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sz operator:</span><span class="se">\n</span><span class="si">{</span><span class="n">Sz</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Without gradients - contract all sequentially</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">20</span><span class="p">):</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">tensors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">time_no_grad</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># With gradients - same chain</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">:</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">T</span><span class="o">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">20</span><span class="p">):</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">tensors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>  <span class="c1"># Ensure computation</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>        <span class="k">pass</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="n">time_with_grad</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Sequential chain: T0 --[i1]-- T1 --[i2]-- ... --[i</span><span class="si">{</span><span class="n">num_tensors</span><span class="si">}</span><span class="s2">]-- T</span><span class="si">{</span><span class="n">num_tensors</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Without grad: </span><span class="si">{</span><span class="n">time_no_grad</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;With grad: </span><span class="si">{</span><span class="n">time_with_grad</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overhead: </span><span class="si">{</span><span class="p">(</span><span class="n">time_with_grad</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">time_no_grad</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Sz operator:</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Created chain of 10 tensors</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">  info:  2x { 2 x 1 }  having &#39;A&#39;,   Tensor,  { out*, in }</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">  data:  2-D float64 (8 B)    2 x 2 =&gt; 2 x 2  @ norm = 0.707107</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="go">     1.  1x1     |  1x1     [ -1 ; -1 ]    -0.5.</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">     2.  1x1     |  1x1     [  1 ;  1 ]     0.5.</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">Sequential chain: T0 --[i1]-- T1 --[i2]-- ... --[i10]-- T9</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">Without grad: 0.0100s</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">With grad: 0.0111s</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="go">Overhead: 11.8%</span>
 </span></code></pre></div>
 </div>
+<p></p>
+<p><strong>Key Observations:</strong></p>
+<ul>
+<li>The overhead is <strong>multiplicative</strong>, not additive: longer chains show proportionally larger slowdowns</li>
+<li>For typical tensor network algorithms (DMRG, TEBD, etc.), this overhead is often <strong>not worth it</strong> since they use specialized update schemes rather than gradient descent</li>
+<li>For variational optimization of small networks, the overhead may be acceptable if gradients provide faster convergence</li>
+</ul>
+<p><strong>When to worry about overhead:</strong></p>
+<ul>
+<li>✅ <strong>Don't worry</strong>: Single-shot computations, prototyping, small-scale optimization</li>
+<li>⚠️ <strong>Be cautious</strong>: Inner loops with thousands of iterations, production DMRG/TEBD</li>
+<li>❌ <strong>Avoid</strong>: Time-critical code where gradients aren't needed</li>
+</ul>
+<h3 id="memory-usage">Memory Usage<a class="headerlink" href="#memory-usage" title="Permanent link">&para;</a></h3>
+<p>Beyond computation time, autograd also increases memory consumption significantly. PyTorch must store:</p>
+<ol>
+<li><strong>Intermediate tensors</strong>: All results from the forward pass needed for backprop</li>
+<li><strong>Gradient buffers</strong>: Space to accumulate gradients for each parameter</li>
+<li><strong>Computation graph metadata</strong>: Nodes tracking operation types and connections</li>
+</ol>
+<p>For tensor networks, this can be problematic because:</p>
+<ul>
+<li><strong>Large bond dimensions</strong> create big intermediate tensors</li>
+<li><strong>Deep contraction trees</strong> accumulate many intermediates</li>
+<li><strong>Iterative algorithms</strong> repeatedly build and destroy graphs</li>
+</ul>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Memory-efficient: clear gradients regularly</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">([</span><span class="n">block</span> <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">psi</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">()])</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Enable gradient tracking for variational optimization</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>  <span class="c1"># Clear old gradients (REQUIRED!)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="c1"># Compute energy/observable and gradients</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">energy</span> <span class="o">=</span> <span class="n">compute_energy</span><span class="p">(</span><span class="n">psi</span><span class="p">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">energy</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="c1"># Free computation graph immediately</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">del</span> <span class="n">energy</span>
+</span></code></pre></div>
+<p><strong>Additional memory-saving techniques:</strong></p>
+<ul>
+<li><strong>Gradient checkpointing</strong>: Recompute intermediate values during backward instead of storing them (trade compute for memory)</li>
+<li><strong>Detach when possible</strong>: Use <code>.detach()</code> on tensors you don't need gradients for to break the computation graph</li>
+<li><strong>Context managers</strong>: Wrap non-differentiable computations in <code>torch.no_grad()</code> to avoid graph construction</li>
+<li><strong>Chunking</strong>: Break large contractions into smaller pieces to limit peak memory usage</li>
+</ul>
+<h2 id="when-to-use-autograd">When to Use Autograd<a class="headerlink" href="#when-to-use-autograd" title="Permanent link">&para;</a></h2>
+<h3 id="good-use-cases">Good Use Cases:<a class="headerlink" href="#good-use-cases" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Variational ground state search</li>
+<li>Training parametric tensor networks</li>
+<li>Optimization problems with smooth objectives</li>
+<li>Differentiable physics simulations</li>
+</ul>
+<h3 id="not-recommended">Not Recommended:<a class="headerlink" href="#not-recommended" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Standard DMRG (uses iterative eigensolver)</li>
+<li>Time evolution (uses analytical formulas)</li>
+<li>Sampling-based methods</li>
+<li>When gradients are not informative</li>
+</ul>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li>API Reference: <a href="../../../api/creation/identity/">identity</a></li>
-<li>API Reference: <a href="../../../api/creation/isometry/">isometry</a></li>
-<li>Next: <a href="../load-space-examples/">Load Space</a></li>
+<li><a href="../gpu-acceleration/">GPU Acceleration</a>: Combine with GPU for faster optimization</li>
+<li><a href="../performance/">Performance Tips</a>: General optimization strategies</li>
+<li><a href="../../../api/core/tensor/">API: Tensor.requires_grad</a>: Autograd property documentation</li>
 </ul>
 
 
@@ -3459,7 +3809,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 15:00:45 UTC"><span class="timeago" datetime="2026-02-07T15:00:45+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 15:00:45 UTC">2026-02-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 22:14:37 UTC"><span class="timeago" datetime="2026-02-07T22:14:37+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 22:14:37 UTC">2026-02-07</span>
   </span>
 
     
@@ -3469,7 +3819,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 15:01:02 UTC"><span class="timeago" datetime="2026-02-07T15:01:02+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 15:01:02 UTC">2026-02-07</span>
   </span>
 
     

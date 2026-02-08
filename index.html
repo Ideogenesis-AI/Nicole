@@ -1537,7 +1537,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1565,7 +1565,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1724,6 +1724,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1813,7 +1817,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2734,6 +2794,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2852,6 +2916,62 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
   
 
     
@@ -3030,13 +3150,15 @@
 <h1 id="nicole-a-symmetry-aware-tensor-library">Nicole: A Symmetry-Aware Tensor Library<a class="headerlink" href="#nicole-a-symmetry-aware-tensor-library" title="Permanent link">&para;</a></h1>
 <p>Welcome to the documentation for <strong>Nicole</strong>, a Python library for symmetry-aware tensor computations, specifically designed for quantum many-body physics and tensor network algorithms.</p>
 <h2 id="what-is-nicole">What is Nicole?<a class="headerlink" href="#what-is-nicole" title="Permanent link">&para;</a></h2>
-<p>Nicole provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations. Created as part of the Ideogenesis-AI effort in studying quantum many-body systems, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on NumPy, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.</p>
+<p>Nicole provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations. Created as part of the Ideogenesis-AI effort in studying quantum many-body systems, Nicole reimagines the block-symmetric tensor approach with a Python-native API built on PyTorch, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.</p>
 <h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Block-Sparse Tensors</strong>: Efficient representation of tensors with conserved quantum numbers</li>
 <li><strong>Abelian Symmetries</strong>: Built-in support for U(1), Z₂, and their product groups</li>
 <li><strong>Charge Conservation</strong>: Enforcement of selection rules through symmetry-aware indices</li>
-<li><strong>NumPy Backend</strong>: Implementation using NumPy for high-performance dense operations</li>
+<li><strong>PyTorch Backend</strong>: Implementation using PyTorch for high-performance dense operations</li>
+<li><strong>GPU Acceleration</strong>: Optional GPU support (CUDA/MPS) for accelerated computations</li>
+<li><strong>Autograd Control</strong>: Optional gradient tracking for efficient optimization tasks</li>
 <li><strong>Tensor Network Operations</strong>: Essential operations including contraction, trace, SVD, and more</li>
 <li><strong>Type-Safe API</strong>: Modern Python with type hints for better IDE support</li>
 <li><strong>Extensible Design</strong>: Clean abstractions for adding custom symmetry groups</li>
@@ -3072,15 +3194,19 @@
 <h2 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h2>
 <p>We welcome contributions from the community! Whether you're fixing bugs, adding features, implementing new symmetry groups, or improving documentation, your help is appreciated. You can also contribute by requesting new features or reporting performance bottlenecks.</p>
 <p><strong>Ways to contribute:</strong>
-- Report issues and request features via <a href="https://github.com/Ideogenesis-AI/Nicole/issues">GitHub Issues</a>
-- Submit pull requests with bug fixes or enhancements
-- Improve documentation and add examples
-- Share your use cases and provide constructive feedback</p>
+<ul>
+<li>Report issues and request features via <a href="https://github.com/Ideogenesis-AI/Nicole/issues">GitHub Issues</a></li>
+<li>Submit pull requests with bug fixes or enhancements</li>
+<li>Improve documentation and add examples</li>
+<li>Share your use cases and provide constructive feedback</li>
+</ul></p>
 <p><strong>Development guidelines:</strong>
-- Ensure all contributions include appropriate tests
-- Follow the existing code style (enforced by <code>ruff</code>)
-- Add type hints for new functions and classes
-- Update documentation for user-facing changes</p>
+<ul>
+<li>Ensure all contributions include appropriate tests</li>
+<li>Follow the existing code style (enforced by <code>ruff</code>)</li>
+<li>Add type hints for new functions and classes</li>
+<li>Update documentation for user-facing changes</li>
+</ul></p>
 <p><strong>Authors and Maintainers:</strong></p>
 <p>Nicole is created and maintained by <a href="https://chx-zh.cc">Changkai Zhang</a> as part of the Ideogenesis-AI effort in studying quantum many-body systems. If you have questions about contributing to the project or are interested in collaboration opportunities, please feel free to open an issue on GitHub or contact the maintainer directly.</p>
 <h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
@@ -3216,8 +3342,8 @@
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>

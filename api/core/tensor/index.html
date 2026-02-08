@@ -1694,7 +1694,7 @@
   <span class="md-ellipsis">
     
   
-    diag
+    Diagonal (diag)
   
 
     
@@ -1722,7 +1722,7 @@
   <span class="md-ellipsis">
     
   
-    inv
+    Inverse (inv)
   
 
     
@@ -1884,6 +1884,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1976,7 +1980,63 @@
   <span class="md-ellipsis">
     
   
-    svd
+    svd (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/qr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    qr (linalg)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../decomposition/eig/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eig (linalg)
   
 
     
@@ -2903,6 +2963,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -3021,6 +3085,62 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/autograd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autograd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/gpu-acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU Acceleration
   
 
     
@@ -3214,7 +3334,7 @@
   </span>
 
 <a href="#nicole.Tensor" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Tensor</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Index</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Tensor&#39;</span><span class="p">,</span> <span class="n">_sorted_keys</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">Tensor</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Index</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">data</span><span class="p">:</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">Tensor</span><span class="p">],</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Tensor&#39;</span><span class="p">,</span> <span class="n">_sorted_keys</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3223,7 +3343,7 @@
 
         <p>Block-sparse tensor backed by symmetry-aware indices and dense blocks.</p>
 <p>Each <code>Tensor</code> pairs an ordered tuple of <code>Index</code> instances with a mapping from
-block keys (one charge per axis) to dense NumPy arrays. Arithmetic operations
+block keys (one charge per axis) to dense PyTorch tensors. Arithmetic operations
 are defined in a way that preserves charge conservation, and helper methods
 provide convenient constructors and transformations.</p>
 
@@ -3268,18 +3388,18 @@ provide convenient constructors and transformations.</p>
           <tr class="doc-section-item">
             <td><code><span title="nicole.Tensor.data">data</span></code></td>
             <td>
-                  <code><span title="typing.MutableMapping">MutableMapping</span>[<span title="nicole.blocks.BlockKey">BlockKey</span>, <span title="numpy.ndarray">ndarray</span>]</code>
+                  <code><span title="typing.MutableMapping">MutableMapping</span>[<span title="nicole.blocks.BlockKey">BlockKey</span>, <span title="torch.Tensor">Tensor</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Mapping from block keys (one charge per axis) to dense NumPy arrays.</p>
+                <p>Mapping from block keys (one charge per axis) to dense PyTorch tensors.</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td><code><span title="nicole.Tensor.dtype">dtype</span></code></td>
             <td>
-                  <code><span title="numpy.dtype">dtype</span></code>
+                  <code><span title="torch.dtype">dtype</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -3295,6 +3415,22 @@ provide convenient constructors and transformations.</p>
             <td>
               <div class="doc-md-description">
                 <p>Human-readable label for the tensor. Defaults to "Tensor".</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            device
+
+
+  
+      property
+   (nicole.Tensor.device)" href="#nicole.Tensor.device">device</a></code></td>
+            <td>
+                  <code><span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Device where tensor blocks are stored (CPU or GPU).</p>
               </div>
             </td>
           </tr>
@@ -3338,6 +3474,35 @@ provide convenient constructors and transformations.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            from_scalar
+
+
+  
+      classmethod
+   (nicole.Tensor.from_scalar)" href="#nicole.Tensor.from_scalar">from_scalar</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Create a scalar (0D tensor) with a single value.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            is_scalar (nicole.Tensor.is_scalar)" href="#nicole.Tensor.is_scalar">is_scalar</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Check if this tensor is a scalar (0D).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            item (nicole.Tensor.item)" href="#nicole.Tensor.item">item</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Extract the scalar value from a 0D tensor.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
               <td><code><a class="autorefs autorefs-internal" title="            norm (nicole.Tensor.norm)" href="#nicole.Tensor.norm">norm</a></code></td>
               <td>
                 <div class="doc-md-description">
@@ -3370,7 +3535,7 @@ provide convenient constructors and transformations.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><span title="nicole.Tensor.trim_zero_sectors">trim_zero_sectors</span></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            trim_zero_sectors (nicole.Tensor.trim_zero_sectors)" href="#nicole.Tensor.trim_zero_sectors">trim_zero_sectors</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>In-place: Remove sectors where all data is below double precision.</p>
@@ -3378,7 +3543,71 @@ provide convenient constructors and transformations.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><span title="nicole.Tensor.group">group</span></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            device
+
+
+  
+      property
+   (nicole.Tensor.device)" href="#nicole.Tensor.device">device</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Property returning the device where tensor blocks are stored.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            to (nicole.Tensor.to)" href="#nicole.Tensor.to">to</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Move tensor to specified device (CPU, CUDA, MPS, etc.).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            cpu (nicole.Tensor.cpu)" href="#nicole.Tensor.cpu">cpu</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Move tensor to CPU.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            cuda (nicole.Tensor.cuda)" href="#nicole.Tensor.cuda">cuda</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Move tensor to CUDA device.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            requires_grad
+
+
+  
+      property
+      writable
+   (nicole.Tensor.requires_grad)" href="#nicole.Tensor.requires_grad">requires_grad</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Property for checking/setting gradient tracking.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            backward (nicole.Tensor.backward)" href="#nicole.Tensor.backward">backward</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Compute gradients by backpropagating through the computational graph (scalars only).</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            group
+
+
+  
+      property
+   (nicole.Tensor.group)" href="#nicole.Tensor.group">group</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Property returning the symmetry group of this tensor.</p>
@@ -3447,10 +3676,10 @@ provide convenient constructors and transformations.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><span title="nicole.Tensor.flip">flip</span></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            invert (nicole.Tensor.invert)" href="#nicole.Tensor.invert">invert</a></code></td>
               <td>
                 <div class="doc-md-description">
-                  <p>In-place: Flip the direction of specified index/indices (uses dual to maintain charge conservation).</p>
+                  <p>In-place: Invert the direction of specified index/indices.</p>
                 </div>
               </td>
             </tr>
@@ -3513,6 +3742,113 @@ new tensor instances, use the standalone functions from <code>nicole.operators</
 
 </div>
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nicole.Tensor.group" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">group</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#nicole.Tensor.group" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">group</span><span class="p">:</span> <span class="n">SymmetryGroup</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Fetch the symmetry group of this tensor.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nicole.Tensor.device" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">device</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#nicole.Tensor.device" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">device</span><span class="p">:</span> <span class="n">device</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the device of the tensor blocks.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nicole.Tensor.requires_grad" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">requires_grad</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+      <small class="doc doc-label doc-label-writable"><code>writable</code></small>
+  </span>
+
+<a href="#nicole.Tensor.requires_grad" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Check if this tensor tracks gradients.</p>
+<p>Returns True if all underlying blocks have requires_grad=True,
+False otherwise.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether this tensor tracks gradients</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>  <span class="c1"># False</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>  <span class="c1"># True</span>
+</span></code></pre></div>
+
+    </div>
+
+</div>
+
 
 <h3 id="nicole.Tensor-functions">Functions<a href="#nicole.Tensor-functions" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3528,13 +3864,122 @@ new tensor instances, use the standalone functions from <code>nicole.operators</
   </span>
 
 <a href="#nicole.Tensor.zeros" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">zeros</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Index</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">zeros</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Index</span><span class="p">],</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>Create a symmetry-aware tensor with admissible zero-filled blocks.</p>
 
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>indices</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            Index
+
+
+  
+      dataclass
+   (nicole.index.Index)" href="../index-class/#nicole.Index">Index</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sequence of Index objects defining the tensor structure</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>dtype</code>
+            </td>
+            <td>
+                  <code><span title="torch.dtype">dtype</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Data type for the tensor blocks (default: torch.float64)</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="torch.float64">float64</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>itags</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tags for each index (default: "<em>init</em>" for all)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>device</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> or <span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Device to place tensors on (default: current default device)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>requires_grad</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, enables gradient tracking for this tensor (default: False)</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
+to enable autograd for this tensor. Use torch.no_grad() context to temporarily
+disable gradient computation during operations.</p>
+<p>MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+these dtypes, they will be automatically downgraded to float32/complex64.</p>
+</details>
 
     </div>
 
@@ -3552,12 +3997,302 @@ new tensor instances, use the standalone functions from <code>nicole.operators</
   </span>
 
 <a href="#nicole.Tensor.random" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">random</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Index</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">random</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Index</span><span class="p">],</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">itags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>Create a tensor filled with random values for each admissible block.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>indices</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span>[<a class="autorefs autorefs-internal" title="            Index
+
+
+  
+      dataclass
+   (nicole.index.Index)" href="../index-class/#nicole.Index">Index</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sequence of Index objects defining the tensor structure</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>dtype</code>
+            </td>
+            <td>
+                  <code><span title="torch.dtype">dtype</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Data type for the tensor blocks (default: torch.float64)</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="torch.float64">float64</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>seed</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Random seed for reproducibility</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>itags</code>
+            </td>
+            <td>
+                  <code><span title="typing.Sequence">Sequence</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tags for each index (default: "<em>init</em>" for all)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>device</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> or <span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Device to place tensors on (default: current default device)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>requires_grad</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, enables gradient tracking for this tensor (default: False)</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Gradient tracking follows PyTorch's default behavior. Set requires_grad=True
+to enable autograd for this tensor. Use torch.no_grad() context to temporarily
+disable gradient computation during operations.</p>
+<p>MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+these dtypes, they will be automatically downgraded to float32/complex64.</p>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.from_scalar" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_scalar</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#nicole.Tensor.from_scalar" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_scalar</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">],</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Scalar&#39;</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">device</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Create a scalar (0D tensor) with a single value.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>value</code>
+            </td>
+            <td>
+                  <code>int, float, or complex</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scalar value</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>dtype</code>
+            </td>
+            <td>
+                  <code><span title="torch.dtype">dtype</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Data type (default: torch.float64)</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="torch.float64">float64</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>label</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Label for the scalar (default: "Scalar")</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;Scalar&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>device</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> or <span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Device to place tensor on (default: current default device)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>requires_grad</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, enables gradient tracking for this tensor (default: False)</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
+these dtypes, they will be automatically downgraded to float32/complex64.</p>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.is_scalar" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">is_scalar</span>
+
+
+<a href="#nicole.Tensor.is_scalar" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_scalar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Check if this tensor is a scalar (0D).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.item" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">item</span>
+
+
+<a href="#nicole.Tensor.item" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">item</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract the scalar value from a 0D tensor.</p>
 
 
     </div>
@@ -3707,10 +4442,43 @@ Must be in range [0, len(self.indices)].</p>
 <details class="note" open>
   <summary>Notes</summary>
   <p>This operation modifies the tensor in-place by:
-- Inserting a new index with a single sector (neutral charge, dimension 1)
-- Adding a singleton dimension to all data blocks at the corresponding axis
-- Updating block keys to include the neutral charge at the new position</p>
+<ul>
+<li>Inserting a new index with a single sector (neutral charge, dimension 1)</li>
+<li>Adding a singleton dimension to all data blocks at the corresponding axis</li>
+<li>Updating block keys to include the neutral charge at the new position</li>
+</ul></p>
 <p>The symmetry group for the new index is taken from the existing indices.</p>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.trim_zero_sectors" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">trim_zero_sectors</span>
+
+
+<a href="#nicole.Tensor.trim_zero_sectors" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">trim_zero_sectors</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remove sectors where all data elements have absolute value below double precision.</p>
+<p>This operation modifies the tensor in-place by:
+<ul>
+<li>Removing blocks from self.data where max(abs(values)) &lt; machine epsilon for float64</li>
+<li>Updating each index to only include sectors that still have data in remaining blocks</li>
+</ul></p>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
+Sectors are only removed if no blocks remain that reference their charges.</p>
 </details>
 
     </div>
@@ -3745,7 +4513,7 @@ Must be in range [0, len(self.indices)].</p>
 
 
 <a href="#nicole.Tensor.block" class="headerlink" title="Permanent link">&para;</a></h4>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">block</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">block</span><span class="p">(</span><span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -3874,9 +4642,11 @@ Must be in range [0, len(self.indices)].</p>
             <td>
               <div class="doc-md-description">
                 <p>Can be one of:
-- Mapping[str, str]: Dictionary mapping old tags to new tags
-- Sequence[str]: Complete list of new tags (must match number of indices)
-- Sequence[int] or int: Index position(s) to update (requires new_tags)</p>
+<ul>
+<li>Mapping[str, str]: Dictionary mapping old tags to new tags</li>
+<li>Sequence[str]: Complete list of new tags (must match number of indices)</li>
+<li>Sequence[int] or int: Index position(s) to update (requires new_tags)</li>
+</ul></p>
               </div>
             </td>
             <td>
@@ -3905,13 +4675,277 @@ Can be a single string or sequence of strings. Must match the length of mapping_
 
 
 <p><span class="doc-section-title">Examples:</span></p>
-    <h5 id="nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name">Mode 1: Mapping (update specific tags by name)<a class="headerlink" href="#nicole.Tensor.retag--mode-1-mapping-update-specific-tags-by-name" title="Permanent link">&para;</a></h5>
-<p>tensor.retag({"a": "left", "b": "right"})</p>
-<h5 id="nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags">Mode 2: Full replacement (replace all tags)<a class="headerlink" href="#nicole.Tensor.retag--mode-2-full-replacement-replace-all-tags" title="Permanent link">&para;</a></h5>
-<p>tensor.retag(["left", "middle", "right"])</p>
-<h5 id="nicole.Tensor.retag--mode-3-selective-update-by-position">Mode 3: Selective update by position<a class="headerlink" href="#nicole.Tensor.retag--mode-3-selective-update-by-position" title="Permanent link">&para;</a></h5>
-<p>tensor.retag([0, 2], ["left", "right"])
-tensor.retag(0, "left")  # Single index and tag</p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 1: Mapping (update specific tags by name)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">({</span><span class="s2">&quot;a&quot;</span><span class="p">:</span> <span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span> <span class="s2">&quot;right&quot;</span><span class="p">})</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 2: Full replacement (replace all tags)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">([</span><span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;middle&quot;</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">])</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Mode 3: Selective update by position</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">])</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">retag</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;left&quot;</span><span class="p">)</span>  <span class="c1"># Single index and tag</span>
+</span></code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.invert" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">invert</span>
+
+
+<a href="#nicole.Tensor.invert" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">invert</span><span class="p">(</span><span class="n">positions</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Invert the direction of specified index/indices while maintaining charge conservation.</p>
+<p>This operation flips both the direction and conjugates the charges using Index.dual(),
+effectively inverting the tensor's index structure at the specified positions.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>positions</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="int">int</span>, <span title="typing.Sequence">Sequence</span>[<span title="int">int</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Index position(s) to invert. Can be a single int or a sequence of ints.
+Positions are 0-indexed.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>This operation uses Index.dual() to flip both the direction and conjugate
+the charges, ensuring charge conservation is maintained. Both the index
+metadata and the block keys are updated to reflect the conjugated charges.
+The tensor data arrays themselves remain unchanged.</p>
+<p>This differs from Index.flip() which only reverses direction without
+conjugating charges. The tensor invert operation performs a complete
+inversion of the index structure (direction + charge conjugation).</p>
+</details>
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Invert a single index at position 0</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Invert multiple indices at positions 0 and 2</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">tensor</span><span class="o">.</span><span class="n">invert</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+</span></code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.to" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">to</span>
+
+
+<a href="#nicole.Tensor.to" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to</span><span class="p">(</span><span class="n">device</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">device</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s1">&#39;Tensor&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Move tensor to specified device.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>device</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> or <span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target device ('cpu', 'cuda', 'mps', etc.)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            Tensor
+
+
+  
+      dataclass
+   (nicole.tensor.Tensor)" href="#nicole.Tensor">Tensor</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>New tensor on the specified device</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>MPS (Apple Silicon) doesn't support float64/complex128. If moving a tensor with
+these dtypes to MPS, they will be automatically downgraded to float32/complex64.</p>
+</details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.cpu" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">cpu</span>
+
+
+<a href="#nicole.Tensor.cpu" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cpu</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s1">&#39;Tensor&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Move tensor to CPU.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.cuda" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">cuda</span>
+
+
+<a href="#nicole.Tensor.cuda" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cuda</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s1">&#39;Tensor&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Move tensor to CUDA device.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nicole.Tensor.backward" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">backward</span>
+
+
+<a href="#nicole.Tensor.backward" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">backward</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Compute gradients by backpropagating through the computational graph.</p>
+<p>This method can only be called on scalar tensors (0D tensors). It calls
+the backward() method on the underlying PyTorch tensor to compute gradients
+for all tensors in the computational graph that have requires_grad=True.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the tensor is not a scalar (has more than 0 dimensions)</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create tensors with gradient tracking</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">Tensor</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Perform operations</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span> <span class="o">=</span> <span class="n">contract</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>  <span class="c1"># Some operation resulting in a scalar</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Compute gradients</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Access gradients from underlying PyTorch tensors</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">block</span><span class="o">.</span><span class="n">grad</span><span class="p">)</span>
+</span></code></pre></div>
 
 
     </div>
@@ -3925,12 +4959,14 @@ tensor.retag(0, "left")  # Single index and tag</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>The <code>Tensor</code> class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense NumPy blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.</p>
+<p>The <code>Tensor</code> class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense PyTorch tensor blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.</p>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Block-sparse storage</strong>: Only admissible blocks are stored</li>
 <li><strong>Automatic charge conservation</strong>: Selection rules enforced by structure</li>
-<li><strong>NumPy-backed blocks</strong>: Dense operations within each symmetry sector</li>
+<li><strong>PyTorch-backed blocks</strong>: Dense operations within each symmetry sector</li>
+<li><strong>Device management</strong>: CPU and GPU (CUDA/MPS) support</li>
+<li><strong>Autograd control</strong>: Optional gradient tracking</li>
 <li><strong>Immutable indices</strong>: Index structure fixed at creation</li>
 </ul>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
@@ -3966,7 +5002,7 @@ tensor.retag(0, "left")  # Single index and tag</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 14:53:19 UTC"><span class="timeago" datetime="2026-02-07T14:53:19+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 14:53:19 UTC">2026-02-07</span>
   </span>
 
     
@@ -4130,8 +5166,8 @@ tensor.retag(0, "left")  # Single index and tag</p>
     
     
     
-    <a href="https://numpy.org" target="_blank" rel="noopener" title="NumPy" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10.315 4.876-4.01-2.024-4.401 2.196 4.118 2.068zm1.838.928 4.205 2.122-4.363 2.19L7.87 8.046zm5.615-2.922 4.32 2.166-3.863 1.94-4.213-2.125zM15.91 1.95 12.021 0 8.174 1.92l4.007 2.02zm-3.04 16.744V24l4.711-2.35-.005-5.31zm4.704-4.206-.005-5.253-4.699 2.336v5.254zm5.655-.984v5.327l-4.018 2.005-.002-5.303zm0-1.863v-5.22l-4.025 2.001.003 5.264zm-12.022-.07L8.033 9.976v6.895s-3.88-8.257-4.24-8.998c-.046-.096-.237-.201-.285-.227A358 358 0 0 0 .773 6.25V18.43l2.82 1.508V13.57s3.84 7.378 3.878 7.458c.04.08.425.858.837 1.132.548.363 2.899 1.776 2.899 1.776z"/></svg>
+    <a href="https://pytorch.org" target="_blank" rel="noopener" title="PyTorch" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.005 0 4.952 7.053a9.865 9.865 0 0 0 0 14.022 9.866 9.866 0 0 0 14.022 0c3.984-3.9 3.986-10.205.085-14.023l-1.744 1.743c2.904 2.905 2.904 7.634 0 10.538s-7.634 2.904-10.538 0-2.904-7.634 0-10.538l4.647-4.646.582-.665zm3.568 3.899a1.327 1.327 0 0 0-1.327 1.327 1.327 1.327 0 0 0 1.327 1.328A1.327 1.327 0 0 0 16.9 5.226 1.327 1.327 0 0 0 15.573 3.9z"/></svg>
     </a>
   
 </div>
