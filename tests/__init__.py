@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Test suite for the Nicole (TN) symmetry-aware tensor network library.
+"""Test suite for the Nicole symmetry-aware tensor network library.
 
 This package contains comprehensive unit tests and integration tests for all
 components of the Nicole library, organized into thematic subdirectories.

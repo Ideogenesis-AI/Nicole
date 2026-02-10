@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-"""Decomposition utilities for symmetry-aware Nicole (TN) tensors.
+"""Decomposition utilities for symmetry-aware Nicole tensors.
 
 This module provides functions for decomposing tensors into their singular
 value decomposition (SVD) components, QR decomposition, and eigen-decomposition.

@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-"""Abstract base classes for symmetry groups used by Nicole (TN)."""
+"""Abstract base classes for symmetry groups used by Nicole library."""
 
 from abc import ABC, abstractmethod
 from typing import Iterable

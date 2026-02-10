@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-"""Concrete Abelian symmetry groups shipped with Nicole (TN)."""
+"""Concrete Abelian symmetry groups shipped with Nicole library."""
 
 from dataclasses import dataclass
 from typing import Any

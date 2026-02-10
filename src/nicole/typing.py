@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-"""Shared typing utilities for Nicole (TN) symmetry-aware tensor machinery."""
+"""Shared typing utilities for Nicole symmetry-aware tensor machinery."""
 
 from dataclasses import dataclass
 from enum import IntEnum

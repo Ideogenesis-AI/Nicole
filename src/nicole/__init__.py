@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Nicole (TN) public API surface for symmetry-aware tensor utilities."""
+"""Nicole public API surface for symmetry-aware tensor utilities."""
 
 from .contract import contract, trace
 from .decomp import decomp
