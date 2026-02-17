@@ -83,25 +83,30 @@ class UnitaryGroup(SymmetryGroup, ABC):
     """Base class for non-Abelian unitary groups with multi-channel fusion."""
 
     @abstractmethod
-    def fuse_channels(self, q1: Charge, q2: Charge) -> Tuple[Charge, ...]:
-        """Fuse two charges pairwise, returning all allowed channels.
+    def fuse_channels(self, *qs: Charge) -> Tuple[Charge, ...]:
+        """Fuse multiple charges, returning all achievable total charge channels.
+        
+        Returns all total charge values achievable by fusing the given charges,
+        independent of the fusion tree structure. The specific fusion tree needed
+        to achieve each value is determined via Yuzuha protocol.
         
         Parameters
         ----------
-        q1, q2:
-            Two charges to fuse pairwise.
+        *qs:
+            One or more charges to fuse.
         
         Returns
         -------
         Tuple[Charge, ...]
-            Tuple of all allowed fusion channels satisfying the group's
-            fusion rules (e.g., triangular inequality for SU(2)).
+            Tuple of all achievable total charge channels satisfying the group's
+            fusion rules. For example, in SU(2) with the triangular inequality,
+            all values from the minimum to maximum in steps of 2.
         
         Notes
         -----
-        For non-Abelian groups, fusion is not associative in general,
-        so only pairwise fusion is supported. Multi-index fusion requires
-        an explicit fusion tree structure (handled via Yuzuha protocol).
+        The returned channels represent all possible outcomes regardless of
+        the fusion tree structure. The actual intermediate states and coupling
+        coefficients depend on the chosen tree (handled via Yuzuha protocol).
         """
         ...
 

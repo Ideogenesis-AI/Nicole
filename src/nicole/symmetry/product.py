@@ -187,8 +187,8 @@ class ProductGroup(SymmetryGroup):
         
         return tuple(result)
     
-    def fuse_channels(self, q1: Tuple[Any, ...], q2: Tuple[Any, ...]) -> Tuple[Tuple[Any, ...], ...]:
-        """Fuse two charge tuples pairwise, returning all fusion channels.
+    def fuse_channels(self, *qs: Tuple[Any, ...]) -> Tuple[Tuple[Any, ...], ...]:
+        """Fuse multiple charge tuples, returning all achievable fusion channels.
         
         When all components are Abelian, returns a single-element tuple.
         When a UnitaryGroup component is present (must be at the end), returns
@@ -196,13 +196,14 @@ class ProductGroup(SymmetryGroup):
         
         Parameters
         ----------
-        q1, q2:
-            Two charge tuples to fuse pairwise.
+        *qs:
+            One or more charge tuples to fuse.
         
         Returns
         -------
         Tuple[Tuple[Any, ...], ...]
-            Tuple of all allowed fusion channel tuples.
+            Tuple of all achievable fusion channel tuples, independent of
+            the fusion tree structure.
         
         Examples
         --------
@@ -211,31 +212,47 @@ class ProductGroup(SymmetryGroup):
         >>> group.fuse_channels((2, 1), (1, 0))
         ((3, 1),)
         
-        >>> # With UnitaryGroup: multiple channels
+        >>> # With UnitaryGroup: multiple channels (pairwise)
         >>> group = ProductGroup([U1Group(), SU2Group()])
         >>> group.fuse_channels((1, 1), (0, 1))
         ((1, 0), (1, 2))
+        
+        >>> # With UnitaryGroup: multiple charges
+        >>> group.fuse_channels((1, 1), (0, 1), (2, 1))
+        ((3, 1), (3, 3))
         """
-        self.validate_charge(q1)
-        self.validate_charge(q2)
+        if not qs:
+            return (self.neutral,)
+        
+        # Validate all charges
+        for q in qs:
+            self.validate_charge(q)
+        
+        # Single charge: return itself
+        if len(qs) == 1:
+            return (qs[0],)
         
         if not self._has_unitary:
             # All Abelian: single fusion outcome
-            return (self.fuse_unique(q1, q2),)
+            return (self.fuse_unique(*qs),)
         
         # Mixed case: Abelian components fuse uniquely, Unitary has channels
         # Fuse all Abelian components (all except last)
         abelian_results = []
         for i in range(len(self.components) - 1):
             comp = self.components[i]
-            abelian_results.append(comp.fuse_unique(q1[i], q2[i]))
+            # Extract i-th component from each charge tuple and fuse
+            comp_charges = tuple(q[i] for q in qs)
+            abelian_results.append(comp.fuse_unique(*comp_charges))
         
         # Last component is UnitaryGroup: get all fusion channels
         unitary_comp = self.components[-1]
         if not isinstance(unitary_comp, UnitaryGroup):
             raise RuntimeError("Internal error: expected last component to be UnitaryGroup")
         
-        unitary_channels = unitary_comp.fuse_channels(q1[-1], q2[-1])
+        # Extract last component from each charge tuple
+        unitary_charges = tuple(q[-1] for q in qs)
+        unitary_channels = unitary_comp.fuse_channels(*unitary_charges)
         
         # Combine: each unitary channel creates one ProductGroup charge
         results = []
