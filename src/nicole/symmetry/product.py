@@ -23,41 +23,50 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
 
-from .base import AbelianGroup, SymmetryGroup
+from .base import SymmetryGroup, AbelianGroup, UnitaryGroup
 
 
 @dataclass(frozen=True)
 class ProductGroup(SymmetryGroup):
     """Product of multiple independent symmetry groups.
     
-    Represents the direct product of multiple (currently Abelian) symmetry groups,
-    enabling tensors with multiple independent conserved quantities. Charges are
-    tuples where each component corresponds to one component group.
+    Represents the direct product of multiple symmetry groups, enabling tensors
+    with multiple independent conserved quantities. Charges are tuples where each
+    component corresponds to one component group.
+    
+    Supports Abelian groups and at most one UnitaryGroup (non-Abelian) component.
+    If a UnitaryGroup is present, it must be the last component.
     
     Attributes
     ----------
     components:
-        Tuple of component SymmetryGroup instances. Currently restricted to
-        AbelianGroup instances, but designed for future extension to non-Abelian.
+        Tuple of component SymmetryGroup instances. Can contain AbelianGroup
+        instances and at most one UnitaryGroup instance (placed at the end).
     
     Examples
     --------
-    >>> # U(1) particle number × U(1) spin
+    >>> # U(1) particle number × U(1) spin (all Abelian)
     >>> group = ProductGroup([U1Group(), U1Group()])
     >>> group.neutral
     (0, 0)
-    >>> group.fuse((2, 1), (1, -1))
+    >>> group.fuse_unique((2, 1), (1, -1))
     (3, 0)
     
-    >>> # U(1) × Z(2)
+    >>> # U(1) × Z(2) (all Abelian)
     >>> group = ProductGroup([U1Group(), Z2Group()])
     >>> group.neutral
     (0, 0)
-    >>> group.fuse((3, 1), (-1, 0))
+    >>> group.fuse_unique((3, 1), (-1, 0))
     (2, 1)
+    
+    >>> # U(1) × SU(2) (mixed: has UnitaryGroup)
+    >>> group = ProductGroup([U1Group(), SU2Group()])
+    >>> group.fuse_channels((1, Fraction(1,2)), (0, Fraction(1,2)))
+    ((1, 0), (1, 1))  # Two fusion channels from SU(2)
     """
     
     components: Tuple[SymmetryGroup, ...]
+    _has_unitary: bool
     
     def __init__(self, components: Sequence[SymmetryGroup]) -> None:
         """Initialize ProductGroup with component symmetry groups.
@@ -66,14 +75,16 @@ class ProductGroup(SymmetryGroup):
         ----------
         components:
             Sequence of SymmetryGroup instances. Must contain at least one group.
-            Currently restricted to AbelianGroup instances.
+            Can include AbelianGroup instances and at most one UnitaryGroup instance.
+            Nested ProductGroups are not allowed.
         
         Raises
         ------
         ValueError
-            If components is empty or contains non-Abelian groups.
+            If components is empty, contains multiple UnitaryGroups, or has
+            UnitaryGroup not at the last position.
         TypeError
-            If components contains non-SymmetryGroup instances.
+            If components contains non-SymmetryGroup instances or nested ProductGroups.
         """
         if not components:
             raise ValueError("ProductGroup requires at least one component")
@@ -85,16 +96,38 @@ class ProductGroup(SymmetryGroup):
                     f"Component {i} is not a SymmetryGroup instance: {type(comp)}"
                 )
         
-        # For now, restrict to Abelian groups only
+        # Reject nested ProductGroups and find UnitaryGroup components
+        unitary_indices = []
         for i, comp in enumerate(components):
-            if not isinstance(comp, AbelianGroup):
-                raise ValueError(
-                    f"Component {i} is not an AbelianGroup. "
-                    f"Non-Abelian groups are not yet supported in ProductGroup."
+            if isinstance(comp, ProductGroup):
+                raise TypeError(
+                    f"Component {i} is a ProductGroup. "
+                    f"Nested ProductGroups are not allowed."
                 )
+            elif isinstance(comp, UnitaryGroup):
+                unitary_indices.append(i)
+            elif not isinstance(comp, AbelianGroup):
+                raise TypeError(
+                    f"Component {i} must be AbelianGroup or UnitaryGroup, "
+                    f"got {type(comp).__name__}"
+                )
+        
+        # Validate: at most one UnitaryGroup, must be at end
+        if len(unitary_indices) > 1:
+            raise ValueError(
+                f"ProductGroup allows at most one UnitaryGroup component. "
+                f"Found at indices: {unitary_indices}"
+            )
+        
+        if unitary_indices and unitary_indices[0] != len(components) - 1:
+            raise ValueError(
+                f"UnitaryGroup component must be the last component. "
+                f"Found at index {unitary_indices[0]}, expected index {len(components) - 1}"
+            )
         
         # Use object.__setattr__ since dataclass is frozen
         object.__setattr__(self, 'components', tuple(components))
+        object.__setattr__(self, '_has_unitary', bool(unitary_indices))
     
     @property
     def name(self) -> str:
@@ -106,8 +139,11 @@ class ProductGroup(SymmetryGroup):
         """Return the neutral element as a tuple of component neutrals."""
         return tuple(comp.neutral for comp in self.components)
     
-    def fuse(self, *qs: Tuple[Any, ...]) -> Tuple[Any, ...]:
-        """Fuse multiple charge tuples component-wise.
+    def fuse_unique(self, *qs: Tuple[Any, ...]) -> Tuple[Any, ...]:
+        """Fuse multiple charge tuples component-wise (Abelian-only).
+        
+        This method is only available when all components are Abelian groups.
+        For ProductGroups containing a UnitaryGroup, use `fuse_channels` instead.
         
         Parameters
         ----------
@@ -117,14 +153,25 @@ class ProductGroup(SymmetryGroup):
         Returns
         -------
         Tuple
-            Fused charge tuple.
+            The unique fused charge tuple.
+        
+        Raises
+        ------
+        TypeError
+            If this ProductGroup contains a UnitaryGroup component.
         
         Examples
         --------
         >>> group = ProductGroup([U1Group(), Z2Group()])
-        >>> group.fuse((2, 1), (1, 0), (-1, 1))
+        >>> group.fuse_unique((2, 1), (1, 0), (-1, 1))
         (2, 0)
         """
+        if self._has_unitary:
+            raise TypeError(
+                f"ProductGroup {self.name} contains a non-Abelian component. "
+                f"Use fuse_channels() for pairwise fusion instead."
+            )
+        
         if not qs:
             return self.neutral
         
@@ -132,13 +179,70 @@ class ProductGroup(SymmetryGroup):
         for q in qs:
             self.validate_charge(q)
         
-        # Fuse each component independently
+        # Fuse each component independently (all are Abelian)
         result = []
         for i, comp in enumerate(self.components):
             component_charges = [q[i] for q in qs]
-            result.append(comp.fuse(*component_charges))
+            result.append(comp.fuse_unique(*component_charges))
         
         return tuple(result)
+    
+    def fuse_channels(self, q1: Tuple[Any, ...], q2: Tuple[Any, ...]) -> Tuple[Tuple[Any, ...], ...]:
+        """Fuse two charge tuples pairwise, returning all fusion channels.
+        
+        When all components are Abelian, returns a single-element tuple.
+        When a UnitaryGroup component is present (must be at the end), returns
+        multiple channels corresponding to the UnitaryGroup's fusion outcomes.
+        
+        Parameters
+        ----------
+        q1, q2:
+            Two charge tuples to fuse pairwise.
+        
+        Returns
+        -------
+        Tuple[Tuple[Any, ...], ...]
+            Tuple of all allowed fusion channel tuples.
+        
+        Examples
+        --------
+        >>> # All Abelian: single channel
+        >>> group = ProductGroup([U1Group(), Z2Group()])
+        >>> group.fuse_channels((2, 1), (1, 0))
+        ((3, 1),)
+        
+        >>> # With UnitaryGroup: multiple channels
+        >>> group = ProductGroup([U1Group(), SU2Group()])
+        >>> group.fuse_channels((1, Fraction(1,2)), (0, Fraction(1,2)))
+        ((1, 0), (1, 1))
+        """
+        self.validate_charge(q1)
+        self.validate_charge(q2)
+        
+        if not self._has_unitary:
+            # All Abelian: single fusion outcome
+            return (self.fuse_unique(q1, q2),)
+        
+        # Mixed case: Abelian components fuse uniquely, Unitary has channels
+        # Fuse all Abelian components (all except last)
+        abelian_results = []
+        for i in range(len(self.components) - 1):
+            comp = self.components[i]
+            abelian_results.append(comp.fuse_unique(q1[i], q2[i]))
+        
+        # Last component is UnitaryGroup: get all fusion channels
+        unitary_comp = self.components[-1]
+        if not isinstance(unitary_comp, UnitaryGroup):
+            raise RuntimeError("Internal error: expected last component to be UnitaryGroup")
+        
+        unitary_channels = unitary_comp.fuse_channels(q1[-1], q2[-1])
+        
+        # Combine: each unitary channel creates one ProductGroup charge
+        results = []
+        for uch in unitary_channels:
+            results.append(tuple(abelian_results + [uch]))
+        
+        return tuple(results)
     
     def equal(self, a: Tuple[Any, ...], b: Tuple[Any, ...]) -> bool:
         """Check if two charge tuples are equal component-wise.

@@ -42,7 +42,7 @@ class U1Group(AbelianGroup):
         self.validate_charge(q)
         return -q
 
-    def fuse(self, *qs: int) -> int:
+    def fuse_unique(self, *qs: int) -> int:
         s = 0
         for q in qs:
             self.validate_charge(q)
@@ -74,7 +74,7 @@ class Z2Group(AbelianGroup):
         self.validate_charge(q)
         return q & 1
 
-    def fuse(self, *qs: int) -> int:
+    def fuse_unique(self, *qs: int) -> int:
         acc = 0
         for q in qs:
             self.validate_charge(q)
