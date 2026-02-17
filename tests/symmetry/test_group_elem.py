@@ -91,6 +91,12 @@ def test_u1_name():
     assert group.name == "U1"
 
 
+def test_u1_is_abelian():
+    """Test U1Group is_abelian property."""
+    group = U1Group()
+    assert group.is_abelian is True
+
+
 # Z2Group tests
 
 def test_z2_neutral():
@@ -167,6 +173,12 @@ def test_z2_name():
     """Test Z2Group name property."""
     group = Z2Group()
     assert group.name == "Z2"
+
+
+def test_z2_is_abelian():
+    """Test Z2Group is_abelian property."""
+    group = Z2Group()
+    assert group.is_abelian is True
 
 
 # Cross-group tests

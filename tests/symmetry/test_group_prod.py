@@ -130,6 +130,28 @@ def test_product_group_creation_nested_fails():
         ProductGroup([inner_group, U1Group()])
 
 
+# is_abelian property tests
+
+def test_product_group_is_abelian_all_abelian():
+    """Test is_abelian returns True when all components are Abelian."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    assert group.is_abelian is True
+    
+    group2 = ProductGroup([U1Group(), U1Group(), Z2Group()])
+    assert group2.is_abelian is True
+
+
+def test_product_group_is_abelian_with_unitary():
+    """Test is_abelian returns False when a UnitaryGroup component is present."""
+    from nicole.symmetry.unitary import SU2Group
+    
+    group = ProductGroup([U1Group(), SU2Group()])
+    assert group.is_abelian is False
+    
+    group2 = ProductGroup([U1Group(), Z2Group(), SU2Group()])
+    assert group2.is_abelian is False
+
+
 # Neutral element tests
 
 def test_product_group_neutral_u1_u1():

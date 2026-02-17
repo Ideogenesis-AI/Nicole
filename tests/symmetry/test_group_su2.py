@@ -48,6 +48,12 @@ def test_su2_dual():
     assert group.dual(10) == 10  # spin-5
 
 
+def test_su2_is_abelian():
+    """Test SU2Group is_abelian property (should be False)."""
+    group = SU2Group()
+    assert group.is_abelian is False
+
+
 # Fusion channels tests
 
 def test_su2_fuse_channels_spin_half_spin_half():
