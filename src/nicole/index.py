@@ -162,7 +162,7 @@ def combine_indices(direction: Direction, *inds: Index) -> Index:
         dim = 1
         for ind, sector in zip(inds, sectors_tuple):
             contrib = sector.charge if ind.direction == Direction.IN else group.dual(sector.charge)
-            total_contrib = group.fuse(total_contrib, contrib)
+            total_contrib = group.fuse_unique(total_contrib, contrib)
             dim *= sector.dim
         
         # The fused index contains the result (outgoing)

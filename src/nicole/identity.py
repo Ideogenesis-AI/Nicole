@@ -136,7 +136,7 @@ def isometry(
             # Charges being fused (IN) contribute as-is, already fused (OUT) contribute dual
             contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
             contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
-            total_contrib = group.fuse(contrib_a, contrib_b)
+            total_contrib = group.fuse_unique(contrib_a, contrib_b)
             # Fused index: dual when direction is IN
             qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
             

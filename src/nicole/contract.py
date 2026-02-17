@@ -330,7 +330,7 @@ def contract(
                 # Validate charge conservation for the pair.
                 group, qa = _dir_weight(A.indices[ia], keyA[ia])
                 _, qb = _dir_weight(B.indices[ib], keyB[ib])
-                if not group.equal(group.fuse(qa, qb), group.neutral):
+                if not group.equal(group.fuse_unique(qa, qb), group.neutral):
                     ok = False
                     break
                 # Ensure matching dimensions.

@@ -110,7 +110,7 @@ class BlockSchema:
         # Traverse each leg, fusing charges with appropriate direction adjustments.
         for idx, charge in zip(indices, key):
             contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
-            total = group.fuse(total, contribution)
+            total = group.fuse_unique(total, contribution)
         return total
 
     @staticmethod
