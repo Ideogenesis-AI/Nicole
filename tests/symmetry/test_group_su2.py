@@ -137,6 +137,91 @@ def test_su2_fuse_channels_triangular_inequality():
         assert two_j_min <= two_j <= two_j_max
 
 
+# Multi-particle fusion tests
+
+def test_su2_fuse_channels_single_spin():
+    """Test fusing a single spin returns itself."""
+    group = SU2Group()
+    assert group.fuse_channels(0) == (0,)
+    assert group.fuse_channels(1) == (1,)
+    assert group.fuse_channels(5) == (5,)
+
+
+def test_su2_fuse_channels_three_spin_half():
+    """Test three spin-1/2: 1 ⊗ 1 ⊗ 1 → 1, 3 (spin-1/2, 3/2)."""
+    group = SU2Group()
+    channels = group.fuse_channels(1, 1, 1)
+    assert channels == (1, 3)
+
+
+def test_su2_fuse_channels_three_spin_1():
+    """Test three spin-1: 2 ⊗ 2 ⊗ 2 → 0, 2, 4, 6."""
+    group = SU2Group()
+    channels = group.fuse_channels(2, 2, 2)
+    assert channels == (0, 2, 4, 6)
+
+
+def test_su2_fuse_channels_four_spin_half():
+    """Test four spin-1/2: 1 ⊗ 1 ⊗ 1 ⊗ 1 → 0, 2, 4."""
+    group = SU2Group()
+    channels = group.fuse_channels(1, 1, 1, 1)
+    assert channels == (0, 2, 4)
+
+
+def test_su2_fuse_channels_mixed_spins():
+    """Test mixed spins: spin-1 ⊗ spin-1 ⊗ spin-1/2 (2 ⊗ 2 ⊗ 1)."""
+    group = SU2Group()
+    channels = group.fuse_channels(2, 2, 1)
+    # Max: 2+2+1 = 5, Min: |2 - (2+1)| = 1
+    assert channels == (1, 3, 5)
+
+
+def test_su2_fuse_channels_with_large_spin():
+    """Test fusion with one large spin dominates."""
+    group = SU2Group()
+    # Spin-5 ⊗ spin-1/2 ⊗ spin-1/2: (10 ⊗ 1 ⊗ 1)
+    channels = group.fuse_channels(10, 1, 1)
+    # Max: 10+1+1 = 12, Min: |10 - (1+1)| = 8
+    assert channels == (8, 10, 12)
+
+
+def test_su2_fuse_channels_empty():
+    """Test fusion with no spins returns neutral."""
+    group = SU2Group()
+    assert group.fuse_channels() == (0,)
+
+
+def test_su2_fuse_channels_many_bounds():
+    """Test that multi-particle fusion satisfies correct bounds."""
+    group = SU2Group()
+    
+    # General property: max = sum_all, min = largest value ≤ min_unconstrained with matching integrality
+    spins = [3, 2, 1, 2]  # Random collection, sum=8 (even → integer spins)
+    channels = group.fuse_channels(*spins)
+    
+    expected_max = sum(spins)
+    largest = max(spins)
+    sum_others = sum(spins) - largest
+    min_unconstrained = max(0, largest - sum_others)
+    
+    # Count down from max by 2s gives the actual min (matching integrality automatically)
+    num_channels = (expected_max - min_unconstrained) // 2 + 1
+    expected_min = expected_max - 2 * (num_channels - 1)
+    
+    assert max(channels) == expected_max
+    assert min(channels) == expected_min
+    
+    # All values should be in steps of 2
+    for i in range(len(channels) - 1):
+        assert channels[i+1] - channels[i] == 2
+    
+    # Check integrality consistency: all channels have same integrality (both integer or both half-integer)
+    # In 2j notation: all must have same integrality (even=integer, odd=half-integer)
+    integrality = expected_max % 2
+    for ch in channels:
+        assert ch % 2 == integrality
+
+
 # Equality tests
 
 def test_su2_equal():

@@ -203,6 +203,58 @@ def test_product_group_fuse_channels_all_abelian():
     assert result2 == ((3, 0),)
 
 
+def test_product_group_fuse_channels_multi_abelian():
+    """Test fuse_channels with multiple charges for all-Abelian groups."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    # Three charges
+    result = group.fuse_channels((2, 1), (3, 0), (1, 1))
+    assert result == ((6, 0),)  # (2+3+1, (1+0+1)%2)
+    
+    # Four charges
+    result2 = group.fuse_channels((1, 1), (2, 1), (-1, 0), (3, 1))
+    assert result2 == ((5, 1),)  # (1+2-1+3, (1+1+0+1)%2)
+
+
+def test_product_group_fuse_channels_with_su2():
+    """Test fuse_channels with SU2Group component."""
+    from nicole.symmetry.unitary import SU2Group
+    
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # Pairwise: U1 charge 1, SU2 spins 1⊗1 → (1,0) and (1,2)
+    result = group.fuse_channels((1, 1), (0, 1))
+    assert result == ((1, 0), (1, 2))
+    
+    # Three charges: U1 charges sum to 3, SU2 spins 1⊗1⊗1 → 1,3
+    result2 = group.fuse_channels((1, 1), (0, 1), (2, 1))
+    assert result2 == ((3, 1), (3, 3))
+    
+    # Check U1 component sums correctly
+    assert all(ch[0] == 3 for ch in result2)
+    # Check SU2 component gives correct channels
+    assert set(ch[1] for ch in result2) == {1, 3}
+
+
+def test_product_group_fuse_channels_single_charge():
+    """Test fuse_channels with single charge returns itself."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels((2, 1))
+    assert result == ((2, 1),)
+    
+    from nicole.symmetry.unitary import SU2Group
+    group2 = ProductGroup([U1Group(), SU2Group()])
+    result2 = group2.fuse_channels((3, 2))
+    assert result2 == ((3, 2),)
+
+
+def test_product_group_fuse_channels_empty():
+    """Test fuse_channels with no charges returns neutral."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels()
+    assert result == ((0, 0),)
+
+
 # Equal tests
 
 def test_product_group_equal_u1_u1():
