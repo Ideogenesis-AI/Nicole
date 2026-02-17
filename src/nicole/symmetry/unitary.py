@@ -88,57 +88,82 @@ class SU2Group(UnitaryGroup):
         self.validate_charge(two_j)
         return two_j
 
-    def fuse_channels(self, two_j1: int, two_j2: int) -> Tuple[int, ...]:
-        """Fuse two spins pairwise, returning all allowed fusion channels.
+    def fuse_channels(self, *two_js: int) -> Tuple[int, ...]:
+        """Fuse multiple spins, returning all possible total spin channels.
         
-        The fusion of two angular momenta follows the Clebsch-Gordan series
-        (triangular inequality). In the 2j convention:
+        Returns all total spin values achievable by fusing the given spins,
+        independent of the fusion tree structure. For SU(2), any value from
+        the minimum to maximum in steps of 2 can be achieved by some choice
+        of fusion tree.
         
-        2j1 ⊗ 2j2 → |2j1 - 2j2|, |2j1 - 2j2| + 2, ..., 2j1 + 2j2
+        In the 2j convention:
+        - For two spins: 2j1 ⊗ 2j2 → |2j1 - 2j2|, ..., 2j1 + 2j2 (step: 2)
+        - For n spins: 2j_min, 2j_min + 2, ..., 2j_max where:
+          - 2j_max = 2j1 + 2j2 + ... + 2jn (all aligned)
+          - 2j_min: largest value ≤ |2j_largest - sum_of_others| with matching integrality
         
-        All values from |2j1 - 2j2| to 2j1 + 2j2 in steps of 2 are allowed.
+        Integrality constraint: All achievable total spins must be either all
+        integer or all half-integer. In 2j notation, this means all returned
+        values have the same parity (even for integer, odd for half-integer).
         
         Parameters
         ----------
-        two_j1, two_j2:
-            Quantum numbers (2j1 and 2j2, where j1 and j2 are physical spins).
+        *two_js:
+            One or more quantum numbers (2j values) to fuse.
         
         Returns
         -------
         Tuple[int, ...]
-            Tuple of all allowed fusion channels (2j values), sorted from
-            smallest to largest.
+            Tuple of all achievable total spin channels (2j values), sorted
+            from smallest to largest. The actual fusion tree structure needed
+            to achieve each value is determined by external packages.
         
         Examples
         --------
         >>> group = SU2Group()
-        >>> # Spin-1/2 ⊗ spin-1/2 (represented as 1 ⊗ 1)
+        >>> # Spin-1/2 ⊗ spin-1/2 (1 ⊗ 1)
         >>> group.fuse_channels(1, 1)
         (0, 2)
         
-        >>> # Spin-1 ⊗ spin-1 (represented as 2 ⊗ 2)
+        >>> # Spin-1 ⊗ spin-1 (2 ⊗ 2)
         >>> group.fuse_channels(2, 2)
         (0, 2, 4)
         
-        >>> # Spin-2 ⊗ spin-1 (represented as 4 ⊗ 2)
-        >>> group.fuse_channels(4, 2)
-        (2, 4, 6)
+        >>> # Three spin-1/2 (1 ⊗ 1 ⊗ 1)
+        >>> group.fuse_channels(1, 1, 1)
+        (1, 3)
         
-        >>> # Spin-3/2 ⊗ spin-1/2 (represented as 3 ⊗ 1)
-        >>> group.fuse_channels(3, 1)
-        (2, 4)
+        >>> # Spin-1 ⊗ spin-1 ⊗ spin-1/2 (2 ⊗ 2 ⊗ 1)
+        >>> group.fuse_channels(2, 2, 1)
+        (1, 3, 5)
+        
+        >>> # Four spin-1/2 (1 ⊗ 1 ⊗ 1 ⊗ 1)
+        >>> group.fuse_channels(1, 1, 1, 1)
+        (0, 2, 4)
         """
-        self.validate_charge(two_j1)
-        self.validate_charge(two_j2)
+        if not two_js:
+            return (0,)
         
-        # Compute min and max allowed 2j values
-        two_j_min = abs(two_j1 - two_j2)
-        two_j_max = two_j1 + two_j2
+        # Validate all charges
+        for two_j in two_js:
+            self.validate_charge(two_j)
         
-        # Generate all 2j values from min to max in steps of 2
-        # Number of channels is (two_j_max - two_j_min) / 2 + 1
-        num_channels = (two_j_max - two_j_min) // 2 + 1
-        return tuple(two_j_min + 2 * i for i in range(num_channels))
+        # Single spin: return itself
+        if len(two_js) == 1:
+            return (two_js[0],)
+        
+        # Maximum: all spins aligned (parallel coupling)
+        two_j_max = sum(two_js)
+        
+        # Minimum: maximal cancellation occurs when largest spin opposes all others
+        largest = max(two_js)
+        sum_others = sum(two_js) - largest
+        two_j_min_unconstrained = max(0, largest - sum_others)
+        
+        # Count down from max by 2s until below min_unconstrained
+        # This automatically maintains correct integrality
+        num_channels = (two_j_max - two_j_min_unconstrained) // 2 + 1
+        return tuple(two_j_max - 2 * i for i in range(num_channels - 1, -1, -1))
 
     def equal(self, a: int, b: int) -> bool:
         """Check if two quantum numbers are equal.
