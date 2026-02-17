@@ -137,13 +137,13 @@ def test_validate_blocks_wrong_shape():
         BlockSchema.validate_blocks([idx1, idx2], blocks)
 
 
-def test_validate_blocks_not_numpy():
-    """Test BlockSchema.validate_blocks with non-numpy arrays."""
+def test_validate_blocks_not_torch():
+    """Test BlockSchema.validate_blocks with non-torch tensors."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     
     blocks = {
-        (0,): [[1, 2], [3, 4]]  # List, not numpy array
+        (0,): [[1, 2], [3, 4]]  # List, not torch tensor
     }
     
     with pytest.raises(TypeError, match="torch tensors"):

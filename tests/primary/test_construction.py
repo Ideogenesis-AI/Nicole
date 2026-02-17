@@ -876,7 +876,7 @@ def test_rand_fill_product_group():
 
 
 def test_rand_fill_different_dtypes():
-    """Test rand_fill works with different numpy dtypes."""
+    """Test rand_fill works with different torch dtypes."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))

@@ -100,7 +100,7 @@ def test_copy_shares_immutable_indices():
 
 
 def test_copy_data_arrays_are_independent():
-    """Test that numpy arrays in copy are different objects."""
+    """Test that torch tensors in copy are different objects."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=333, itags=["A", "B"])
