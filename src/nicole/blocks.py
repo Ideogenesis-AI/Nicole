@@ -28,7 +28,7 @@ charge conservation for a given block key.
 """
 
 from itertools import product
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Iterable, List, Mapping, Sequence, Tuple
 
 import torch
 
@@ -54,9 +54,9 @@ class BlockSchema:
     shape_for_key()
         Translate a block key into the per-leg dense dimensions.
     validate_blocks()
-        Ensure blocks are NumPy arrays of the correct shape.
+        Ensure blocks are torch tensors of the correct shape.
     charge_totals()
-        Accumulate net charges per symmetry group for a block key.
+        Compute the net fused charge for a block key.
     charges_conserved()
         Check whether a block key respects charge conservation.
     """
@@ -94,24 +94,32 @@ class BlockSchema:
                 raise ValueError(f"Block {key} has shape {arr.shape}, expected {expected}")
 
     @staticmethod
-    def charge_totals(indices: Sequence[Index], key: BlockKey) -> Dict[object, Charge]:
-        """Compute net charges per symmetry group for a given block key."""
-        totals: Dict[object, Charge] = {}
+    def charge_totals(indices: Sequence[Index], key: BlockKey) -> Charge:
+        """Compute net charge for a given block key.
+        
+        All indices must share the same symmetry group. Returns the fused
+        total charge with direction-aware contributions (OUT charges contribute
+        as-is, IN charges contribute as dual).
+        """
+        if not indices:
+            raise ValueError("Cannot compute charge totals for empty indices")
+        
+        group = indices[0].group
+        total = group.neutral
+        
         # Traverse each leg, fusing charges with appropriate direction adjustments.
         for idx, charge in zip(indices, key):
-            group = idx.group
-            acc = totals.get(group, group.neutral)
             contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
-            totals[group] = group.fuse(acc, contribution)
-        return totals
+            total = group.fuse(total, contribution)
+        return total
 
     @staticmethod
     def charges_conserved(indices: Sequence[Index], key: BlockKey) -> bool:
         """Return True if the block key satisfies charge conservation."""
-        totals = BlockSchema.charge_totals(indices, key)
-        for group, total in totals.items():
-            if not group.equal(total, group.neutral):
-                return False
-        return True
+        if not indices:
+            return True
+        group = indices[0].group
+        total = BlockSchema.charge_totals(indices, key)
+        return group.equal(total, group.neutral)
 
 

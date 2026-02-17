@@ -157,9 +157,9 @@ def test_charge_totals_neutral():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
     
     # Block (1, 1): OUT(1) + IN(1) = 1 + inverse(1) = 1 + (-1) = 0
-    totals = BlockSchema.charge_totals([idx1, idx2], (1, 1))
+    total = BlockSchema.charge_totals([idx1, idx2], (1, 1))
     
-    assert totals[group] == 0
+    assert total == 0
 
 
 def test_charge_totals_non_neutral():
@@ -169,9 +169,9 @@ def test_charge_totals_non_neutral():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 4)))
     
     # Block (1, 0): OUT(1) + IN(0) = 1 + 0 = 1 (not neutral)
-    totals = BlockSchema.charge_totals([idx1, idx2], (1, 0))
+    total = BlockSchema.charge_totals([idx1, idx2], (1, 0))
     
-    assert totals[group] == 1
+    assert total == 1
 
 
 def test_charge_totals_multiple_out():
@@ -182,9 +182,9 @@ def test_charge_totals_multiple_out():
     idx3 = Index(Direction.IN, group, sectors=(Sector(3, 4),))
     
     # OUT(1) + OUT(2) + IN(3) = 1 + 2 - 3 = 0
-    totals = BlockSchema.charge_totals([idx1, idx2, idx3], (1, 2, 3))
+    total = BlockSchema.charge_totals([idx1, idx2, idx3], (1, 2, 3))
     
-    assert totals[group] == 0
+    assert total == 0
 
 
 def test_charge_totals_z2():
@@ -194,9 +194,9 @@ def test_charge_totals_z2():
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
     
     # OUT(1) + IN(1) = 1 XOR 1 = 0
-    totals = BlockSchema.charge_totals([idx1, idx2], (1, 1))
+    total = BlockSchema.charge_totals([idx1, idx2], (1, 1))
     
-    assert totals[group] == 0
+    assert total == 0
 
 
 def test_charges_conserved_true():

@@ -65,10 +65,13 @@ def assert_charge_neutral(tensor: Tensor) -> None:
     tensor:
         Tensor to validate for charge neutrality.
     """
+    if not tensor.indices:
+        return
+    
+    group = tensor.indices[0].group
     for key in tensor.data:
-        totals = BlockSchema.charge_totals(tensor.indices, key)
-        for group, total in totals.items():
-            assert group.equal(total, group.neutral)
+        total = BlockSchema.charge_totals(tensor.indices, key)
+        assert group.equal(total, group.neutral)
 
 
 def assert_blocks_equal(a: Tensor, b: Tensor) -> None:
