@@ -39,6 +39,17 @@ class SymmetryGroup(ABC):
     def neutral(self) -> Charge:
         ...
 
+    @property
+    @abstractmethod
+    def is_abelian(self) -> bool:
+        """Return True if the group is Abelian, False otherwise.
+        
+        Abelian groups have unique fusion outcomes, while non-Abelian groups
+        (UnitaryGroup and ProductGroup with UnitaryGroup components) can have
+        multiple fusion channels.
+        """
+        ...
+
     @abstractmethod
     def dual(self, q: Charge) -> Charge:
         """Return the dual (contragredient) representation of a charge.
@@ -62,6 +73,11 @@ class SymmetryGroup(ABC):
 class AbelianGroup(SymmetryGroup, ABC):
     """Base class for Abelian symmetry groups with deterministic fusion."""
 
+    @property
+    def is_abelian(self) -> bool:
+        """Return True for all Abelian groups."""
+        return True
+
     @abstractmethod
     def fuse_unique(self, *qs: Charge) -> Charge:
         """Fuse charges deterministically (single unique result).
@@ -81,6 +97,11 @@ class AbelianGroup(SymmetryGroup, ABC):
 
 class UnitaryGroup(SymmetryGroup, ABC):
     """Base class for non-Abelian unitary groups with multi-channel fusion."""
+
+    @property
+    def is_abelian(self) -> bool:
+        """Return False for all non-Abelian unitary groups."""
+        return False
 
     @abstractmethod
     def fuse_channels(self, *qs: Charge) -> Tuple[Charge, ...]:

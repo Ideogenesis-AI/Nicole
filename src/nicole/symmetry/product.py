@@ -139,6 +139,15 @@ class ProductGroup(SymmetryGroup):
         """Return the neutral element as a tuple of component neutrals."""
         return tuple(comp.neutral for comp in self.components)
     
+    @property
+    def is_abelian(self) -> bool:
+        """Return True if all components are Abelian, False if any is non-Abelian.
+        
+        A ProductGroup is Abelian only when all its components are Abelian groups.
+        If it contains a UnitaryGroup component, it is non-Abelian.
+        """
+        return not self._has_unitary
+    
     def fuse_unique(self, *qs: Tuple[Any, ...]) -> Tuple[Any, ...]:
         """Fuse multiple charge tuples component-wise (Abelian-only).
         

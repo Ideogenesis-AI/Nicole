@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-"""Non-Abelian unitary symmetry groups with multi-channel fusion."""
+"""Special unitary symmetry groups (N>1) with multi-channel fusion."""
 
 from dataclasses import dataclass
 from typing import Any, Tuple
