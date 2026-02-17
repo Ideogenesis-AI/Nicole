@@ -19,13 +19,18 @@
 """Symmetry groups for block-symmetric tensors."""
 
 from .abelian import U1Group, Z2Group
-from .base import AbelianGroup, SymmetryGroup
+from .unitary import SU2Group
+from .base import SymmetryGroup
+from .base import AbelianGroup
+from .base import UnitaryGroup
 from .product import ProductGroup
 
 __all__ = [
     "SymmetryGroup",
     "AbelianGroup",
+    "UnitaryGroup",
     "U1Group",
     "Z2Group",
+    "SU2Group",
     "ProductGroup",
 ]

@@ -61,8 +61,8 @@ class ProductGroup(SymmetryGroup):
     
     >>> # U(1) × SU(2) (mixed: has UnitaryGroup)
     >>> group = ProductGroup([U1Group(), SU2Group()])
-    >>> group.fuse_channels((1, Fraction(1,2)), (0, Fraction(1,2)))
-    ((1, 0), (1, 1))  # Two fusion channels from SU(2)
+    >>> group.fuse_channels((1, 1), (0, 1))
+    ((1, 0), (1, 2))  # Two fusion channels from SU(2) (spin-1/2 ⊗ spin-1/2)
     """
     
     components: Tuple[SymmetryGroup, ...]
@@ -213,8 +213,8 @@ class ProductGroup(SymmetryGroup):
         
         >>> # With UnitaryGroup: multiple channels
         >>> group = ProductGroup([U1Group(), SU2Group()])
-        >>> group.fuse_channels((1, Fraction(1,2)), (0, Fraction(1,2)))
-        ((1, 0), (1, 1))
+        >>> group.fuse_channels((1, 1), (0, 1))
+        ((1, 0), (1, 2))
         """
         self.validate_charge(q1)
         self.validate_charge(q2)
