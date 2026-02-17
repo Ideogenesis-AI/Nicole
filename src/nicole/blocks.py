@@ -28,7 +28,7 @@ charge conservation for a given block key.
 """
 
 from itertools import product
-from typing import Iterable, List, Mapping, Sequence, Tuple
+from typing import Iterable, List, Mapping, Sequence, Tuple, Union
 
 import torch
 
@@ -46,6 +46,7 @@ class BlockSchema:
     - Generate all admissible charge keys permitted by a collection of indices.
     - Convert a block key into explicit dense shapes and allocate zero blocks.
     - Validate that supplied data matches the expected shapes and charge rules.
+    - Handle both Abelian (unique fusion) and non-Abelian (multi-channel) symmetries.
 
     Methods
     -------
@@ -56,9 +57,11 @@ class BlockSchema:
     validate_blocks()
         Ensure blocks are torch tensors of the correct shape.
     charge_totals()
-        Compute the net fused charge for a block key.
+        Compute the net fused charge for a block key (Abelian only).
+    charge_avail()
+        Compute all achievable total charges for a block key (non-Abelian only).
     charges_conserved()
-        Check whether a block key respects charge conservation.
+        Check whether a block key respects charge conservation (both types).
     """
 
     @staticmethod
@@ -114,12 +117,48 @@ class BlockSchema:
         return total
 
     @staticmethod
+    def charge_avail(indices: Sequence[Index], key: BlockKey) -> Tuple[Charge, ...]:
+        """Compute all achievable total charges for a given block key.
+        
+        Returns all achievable total charges from any fusion tree for non-Abelian groups.
+        All indices must share the same symmetry group. Charges are fused with
+        direction-aware contributions (OUT charges contribute as-is, IN charges
+        contribute as dual).
+        """
+        if not indices:
+            raise ValueError("Cannot compute charge totals for empty indices")
+        
+        group = indices[0].group
+        
+        # Collect all contributions with direction adjustments
+        contributions = []
+        for idx, charge in zip(indices, key):
+            contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
+            contributions.append(contribution)
+        
+        # Non-Abelian: multiple fusion channels
+        return group.fuse_channels(*contributions)
+
+    @staticmethod
     def charges_conserved(indices: Sequence[Index], key: BlockKey) -> bool:
-        """Return True if the block key satisfies charge conservation."""
+        """Return True if the block key satisfies charge conservation.
+        
+        For Abelian groups, checks if the unique total charge equals neutral.
+        For non-Abelian groups, checks if neutral is among the achievable channels.
+        """
         if not indices:
             return True
+        
         group = indices[0].group
-        total = BlockSchema.charge_totals(indices, key)
-        return group.equal(total, group.neutral)
+        
+        # Switch logic based on whether group is Abelian or non-Abelian
+        if group.is_abelian:
+            # Abelian: check if unique total equals neutral
+            total = BlockSchema.charge_totals(indices, key)
+            return group.equal(total, group.neutral)
+        else:
+            # Non-Abelian: check if neutral is among available channels
+            avail_charges = BlockSchema.charge_avail(indices, key)
+            return any(group.equal(charge, group.neutral) for charge in avail_charges)
 
 

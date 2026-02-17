@@ -21,7 +21,7 @@
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, U1Group, Z2Group
+from nicole import Direction, Index, Sector, U1Group, Z2Group, SU2Group
 from nicole.blocks import BlockSchema
 
 
@@ -255,4 +255,97 @@ def test_validate_blocks_empty_dict():
     
     # Should not raise
     BlockSchema.validate_blocks([idx], {})
+
+
+# charge_avail tests (new method for non-Abelian groups)
+
+def test_charge_avail_non_abelian_su2():
+    """Test BlockSchema.charge_avail with non-Abelian SU2 group."""
+    group = SU2Group()
+    # Two spin-1/2 indices (charge 1 in 2j notation)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # spin-1/2 ⊗ spin-1/2 → spin-0 or spin-1 (2j: 0 or 2)
+    avail = BlockSchema.charge_avail([idx1, idx2], (1, 1))
+    assert avail == (0, 2)  # Multiple channels
+
+
+def test_charge_avail_non_abelian_three_spins():
+    """Test BlockSchema.charge_avail with three spin-1/2 particles."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Three spin-1/2: 1⊗1⊗1 → {1, 3} (only half-integer spins)
+    avail = BlockSchema.charge_avail([idx1, idx2, idx3], (1, 1, 1))
+    assert avail == (1, 3)
+
+
+def test_charge_avail_with_directions():
+    """Test BlockSchema.charge_avail respects IN/OUT directions."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(2, 3),))  # spin-1
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))   # spin-1/2 (dual)
+    
+    # OUT: 2, IN: dual(1) = 1 (SU2 is self-dual)
+    # So: 2 ⊗ 1 → {1, 3}
+    avail = BlockSchema.charge_avail([idx1, idx2], (2, 1))
+    assert avail == (1, 3)
+
+
+# charges_conserved tests (uses is_abelian to switch logic)
+
+def test_charges_conserved_abelian_still_works():
+    """Test that charges_conserved still works for Abelian groups."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 1), Sector(2, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 1), Sector(2, 1)))
+    
+    # 2 + dual(2) = 2 + (-2) = 0 (conserved)
+    assert BlockSchema.charges_conserved([idx1, idx2], (2, 2)) is True
+    
+    # 1 + dual(2) = 1 + (-2) = -1 (not conserved)
+    assert BlockSchema.charges_conserved([idx1, idx2], (1, 2)) is False
+
+
+def test_charges_conserved_non_abelian_su2():
+    """Test charges_conserved with non-Abelian SU2 group."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # spin-1/2 ⊗ spin-1/2 → {0, 2}
+    # Neutral is 0, which is in the set → conserved
+    assert BlockSchema.charges_conserved([idx1, idx2], (1, 1)) is True
+
+
+def test_charges_conserved_non_abelian_not_conserved():
+    """Test charges_conserved returns False when neutral not in channels."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(2, 3),))  # spin-1
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))  # spin-1/2
+    
+    # spin-1 ⊗ spin-1/2 (2 ⊗ 1) → {1, 3}
+    # Neutral is 0, which is NOT in the set → not conserved
+    assert BlockSchema.charges_conserved([idx1, idx2], (2, 1)) is False
+
+
+def test_charges_conserved_non_abelian_three_spins():
+    """Test charges_conserved with three spin-1/2 particles."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Three spin-1/2: 1⊗1⊗1 → {1, 3}
+    # Neutral is 0, NOT in the set → not conserved
+    assert BlockSchema.charges_conserved([idx1, idx2, idx3], (1, 1, 1)) is False
+    
+    # But if we add one more spin-1/2 in IN direction:
+    idx4 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    # 1⊗1⊗1⊗dual(1) = 1⊗1⊗1⊗1 → {0, 2, 4}
+    # Neutral is 0, which IS in the set → conserved
+    assert BlockSchema.charges_conserved([idx1, idx2, idx3, idx4], (1, 1, 1, 1)) is True
 
