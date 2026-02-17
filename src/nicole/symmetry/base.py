@@ -21,7 +21,7 @@ from __future__ import annotations
 """Abstract base classes for symmetry groups used by Nicole library."""
 
 from abc import ABC, abstractmethod
-from typing import Iterable
+from typing import Tuple
 
 from ..typing import Charge
 
@@ -51,10 +51,6 @@ class SymmetryGroup(ABC):
         ...
 
     @abstractmethod
-    def fuse(self, *qs: Charge) -> Charge:
-        ...
-
-    @abstractmethod
     def equal(self, a: Charge, b: Charge) -> bool:
         ...
 
@@ -62,15 +58,51 @@ class SymmetryGroup(ABC):
     def validate_charge(self, q: Charge) -> None:
         ...
 
-    def fuse_many(self, qs: Iterable[Charge]) -> Charge:
-        """Fold a sequence of charges using repeated `fuse` applications."""
-        acc = self.neutral
-        for q in qs:
-            acc = self.fuse(acc, q)
-        return acc
-
 
 class AbelianGroup(SymmetryGroup, ABC):
-    """Marker base for Abelian groups."""
+    """Base class for Abelian symmetry groups with deterministic fusion."""
+
+    @abstractmethod
+    def fuse_unique(self, *qs: Charge) -> Charge:
+        """Fuse charges deterministically (single unique result).
+        
+        Parameters
+        ----------
+        *qs:
+            Variable number of charges to fuse sequentially.
+        
+        Returns
+        -------
+        Charge
+            The unique fusion result.
+        """
+        ...
+
+
+class UnitaryGroup(SymmetryGroup, ABC):
+    """Base class for non-Abelian unitary groups with multi-channel fusion."""
+
+    @abstractmethod
+    def fuse_channels(self, q1: Charge, q2: Charge) -> Tuple[Charge, ...]:
+        """Fuse two charges pairwise, returning all allowed channels.
+        
+        Parameters
+        ----------
+        q1, q2:
+            Two charges to fuse pairwise.
+        
+        Returns
+        -------
+        Tuple[Charge, ...]
+            Tuple of all allowed fusion channels satisfying the group's
+            fusion rules (e.g., triangular inequality for SU(2)).
+        
+        Notes
+        -----
+        For non-Abelian groups, fusion is not associative in general,
+        so only pairwise fusion is supported. Multi-index fusion requires
+        an explicit fusion tree structure (handled via Yuzuha protocol).
+        """
+        ...
 
 
