@@ -56,12 +56,12 @@ def test_product_group_creation_empty_fails():
         ProductGroup([])
 
 
-def test_product_group_creation_non_abelian_fails():
-    """Test that non-Abelian groups are rejected (for now)."""
-    # Create a mock non-Abelian group
-    from nicole.symmetry.base import SymmetryGroup
+def test_product_group_creation_non_abelian_at_end_allowed():
+    """Test that UnitaryGroup is allowed at the end."""
+    # Create a mock UnitaryGroup
+    from nicole.symmetry.base import UnitaryGroup
     
-    class MockNonAbelian(SymmetryGroup):
+    class MockUnitary(UnitaryGroup):
         @property
         def name(self):
             return "SU2"
@@ -71,10 +71,10 @@ def test_product_group_creation_non_abelian_fails():
             return 0
         
         def dual(self, q):
-            return -q
+            return q
         
-        def fuse(self, *qs):
-            return sum(qs)
+        def fuse_channels(self, q1, q2):
+            return (0, 1, 2)  # Mock: return some channels
         
         def equal(self, a, b):
             return a == b
@@ -82,9 +82,52 @@ def test_product_group_creation_non_abelian_fails():
         def validate_charge(self, q):
             pass
     
-    mock_group = MockNonAbelian()
-    with pytest.raises(ValueError, match="not an AbelianGroup"):
-        ProductGroup([mock_group])
+    # Should succeed: UnitaryGroup at end
+    group = ProductGroup([U1Group(), MockUnitary()])
+    assert group.num_components == 2
+
+
+def test_product_group_creation_non_abelian_not_at_end_fails():
+    """Test that UnitaryGroup not at end is rejected."""
+    from nicole.symmetry.base import UnitaryGroup
+    
+    class MockUnitary(UnitaryGroup):
+        @property
+        def name(self):
+            return "SU2"
+        
+        @property
+        def neutral(self):
+            return 0
+        
+        def dual(self, q):
+            return q
+        
+        def fuse_channels(self, q1, q2):
+            return (0, 1, 2)
+        
+        def equal(self, a, b):
+            return a == b
+        
+        def validate_charge(self, q):
+            pass
+    
+    # Should fail: UnitaryGroup not at end
+    with pytest.raises(ValueError, match="must be the last component"):
+        ProductGroup([MockUnitary(), U1Group()])
+
+
+def test_product_group_creation_nested_fails():
+    """Test that nested ProductGroups are rejected."""
+    inner_group = ProductGroup([U1Group(), Z2Group()])
+    
+    # Should fail: nested ProductGroup not allowed
+    with pytest.raises(TypeError, match="Nested ProductGroups are not allowed"):
+        ProductGroup([U1Group(), inner_group])
+    
+    # Should also fail even if inner is first
+    with pytest.raises(TypeError, match="Nested ProductGroups are not allowed"):
+        ProductGroup([inner_group, U1Group()])
 
 
 # Neutral element tests
@@ -121,33 +164,43 @@ def test_product_group_dual_u1_z2():
 
 # Fuse tests
 
-def test_product_group_fuse_two_u1_u1():
+def test_product_group_fuse_unique_two_u1_u1():
     """Test fusing two charges in U1×U1."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse((2, 3), (1, -1)) == (3, 2)
-    assert group.fuse((0, 0), (5, 7)) == (5, 7)
-    assert group.fuse((-2, 4), (2, -4)) == (0, 0)
+    assert group.fuse_unique((2, 3), (1, -1)) == (3, 2)
+    assert group.fuse_unique((0, 0), (5, 7)) == (5, 7)
+    assert group.fuse_unique((-2, 4), (2, -4)) == (0, 0)
 
 
-def test_product_group_fuse_many_u1_u1():
+def test_product_group_fuse_unique_many_u1_u1():
     """Test fusing multiple charges in U1×U1."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse((1, 2), (3, 4), (5, 6)) == (9, 12)
-    assert group.fuse((2, -1), (-1, 3), (-1, -2)) == (0, 0)
+    assert group.fuse_unique((1, 2), (3, 4), (5, 6)) == (9, 12)
+    assert group.fuse_unique((2, -1), (-1, 3), (-1, -2)) == (0, 0)
 
 
-def test_product_group_fuse_empty_u1_u1():
+def test_product_group_fuse_unique_empty_u1_u1():
     """Test fusing no charges returns neutral."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse() == (0, 0)
+    assert group.fuse_unique() == (0, 0)
 
 
-def test_product_group_fuse_u1_z2():
+def test_product_group_fuse_unique_u1_z2():
     """Test fusing charges in U1×Z2."""
     group = ProductGroup([U1Group(), Z2Group()])
-    assert group.fuse((2, 1), (3, 0)) == (5, 1)
-    assert group.fuse((1, 1), (2, 1)) == (3, 0)
-    assert group.fuse((-5, 0), (5, 1)) == (0, 1)
+    assert group.fuse_unique((2, 1), (3, 0)) == (5, 1)
+    assert group.fuse_unique((1, 1), (2, 1)) == (3, 0)
+    assert group.fuse_unique((-5, 0), (5, 1)) == (0, 1)
+
+
+def test_product_group_fuse_channels_all_abelian():
+    """Test fuse_channels returns single result for all-Abelian groups."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels((2, 1), (3, 0))
+    assert result == ((5, 1),)  # Single-element tuple
+    
+    result2 = group.fuse_channels((1, 1), (2, 1))
+    assert result2 == ((3, 0),)
 
 
 # Equal tests

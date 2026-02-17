@@ -39,28 +39,20 @@ def test_u1_dual():
     assert group.dual(0) == 0
 
 
-def test_u1_fuse_two():
-    """Test U1Group fuse with two charges."""
+def test_u1_fuse_unique_two():
+    """Test U1Group fuse_unique with two charges."""
     group = U1Group()
-    assert group.fuse(2, 3) == 5
-    assert group.fuse(-1, 4) == 3
-    assert group.fuse(0, 0) == 0
+    assert group.fuse_unique(2, 3) == 5
+    assert group.fuse_unique(-1, 4) == 3
+    assert group.fuse_unique(0, 0) == 0
 
 
-def test_u1_fuse_many():
-    """Test U1Group fuse with multiple charges."""
+def test_u1_fuse_unique_many():
+    """Test U1Group fuse_unique with multiple charges."""
     group = U1Group()
-    assert group.fuse(2, 3, -5) == 0
-    assert group.fuse(1, 2, 3, 4) == 10
-    assert group.fuse() == 0  # Empty fusion gives neutral
-
-
-def test_u1_fuse_many_method():
-    """Test U1Group fuse_many method."""
-    group = U1Group()
-    assert group.fuse_many([2, 3, -5]) == 0
-    assert group.fuse_many([1, 2, 3, 4]) == 10
-    assert group.fuse_many([]) == 0
+    assert group.fuse_unique(2, 3, -5) == 0
+    assert group.fuse_unique(1, 2, 3, 4) == 10
+    assert group.fuse_unique() == 0  # Empty fusion gives neutral
 
 
 def test_u1_equal():
@@ -114,32 +106,23 @@ def test_z2_dual():
     assert group.dual(1) == 1
 
 
-def test_z2_fuse_two():
-    """Test Z2Group fuse with two charges."""
+def test_z2_fuse_unique_two():
+    """Test Z2Group fuse_unique with two charges."""
     group = Z2Group()
-    assert group.fuse(0, 0) == 0
-    assert group.fuse(0, 1) == 1
-    assert group.fuse(1, 0) == 1
-    assert group.fuse(1, 1) == 0
+    assert group.fuse_unique(0, 0) == 0
+    assert group.fuse_unique(0, 1) == 1
+    assert group.fuse_unique(1, 0) == 1
+    assert group.fuse_unique(1, 1) == 0
 
 
-def test_z2_fuse_many():
-    """Test Z2Group fuse with multiple charges."""
+def test_z2_fuse_unique_many():
+    """Test Z2Group fuse_unique with multiple charges."""
     group = Z2Group()
-    assert group.fuse(1, 1) == 0
-    assert group.fuse(1, 0, 1) == 0
-    assert group.fuse(1, 1, 1) == 1
-    assert group.fuse(0, 0, 0) == 0
-    assert group.fuse() == 0
-
-
-def test_z2_fuse_many_method():
-    """Test Z2Group fuse_many method."""
-    group = Z2Group()
-    assert group.fuse_many([1, 1]) == 0
-    assert group.fuse_many([1, 0, 1]) == 0
-    assert group.fuse_many([1, 1, 1]) == 1
-    assert group.fuse_many([]) == 0
+    assert group.fuse_unique(1, 1) == 0
+    assert group.fuse_unique(1, 0, 1) == 0
+    assert group.fuse_unique(1, 1, 1) == 1
+    assert group.fuse_unique(0, 0, 0) == 0
+    assert group.fuse_unique() == 0
 
 
 def test_z2_equal():

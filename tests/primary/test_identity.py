@@ -152,7 +152,8 @@ def test_isometry_fused_charges():
     # Check fused index metadata
     fused_index = fused_tensor.indices[2]
     fused_charges = {sector.charge for sector in fused_index.sectors}
-    expected_charges = {idx_a.group.fuse(sa.charge, sb.charge) for sa in idx_a.sectors for sb in idx_b.sectors}
+    expected_charges = {idx_a.group.fuse_unique(sa.charge, sb.charge)
+        for sa in idx_a.sectors for sb in idx_b.sectors}
     assert fused_charges == expected_charges
 
 
