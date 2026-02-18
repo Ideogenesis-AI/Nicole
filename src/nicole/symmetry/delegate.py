@@ -27,7 +27,7 @@ which represents all valid fusion tree configurations.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import torch
 import yuzuha
@@ -149,6 +149,68 @@ class Bridge:
     def num_external(self) -> int:
         """Return the number of external edges in the CGSpec."""
         return self.cgspec.num_external()
+    
+    @property
+    def device(self) -> torch.device:
+        """Return the device where the weight matrix is stored."""
+        return self.weights.device
+    
+    def to(
+        self, 
+        device: Union[str, torch.device], 
+        dtype: Optional[torch.dtype] = None
+    ) -> Bridge:
+        """Move Bridge to a new device and optionally convert dtype.
+        
+        Parameters
+        ----------
+        device : str or torch.device
+            Target device ('cpu', 'cuda', 'mps', etc.)
+        dtype : torch.dtype, optional
+            Target dtype. If None, preserves current dtype.
+        
+        Returns
+        -------
+        Bridge
+            New Bridge instance with weights on the target device/dtype.
+            If already on target device with target dtype, returns self.
+        
+        Examples
+        --------
+        >>> bridge = Bridge(cgspec, weights)
+        >>> bridge_gpu = bridge.to('cuda')
+        >>> bridge_gpu.device.type
+        'cuda'
+        """
+        device = torch.device(device)
+        
+        # Check if already on target device/dtype
+        if dtype is None:
+            dtype = self.weights.dtype
+        
+        if device == self.device and dtype == self.weights.dtype:
+            return self
+        
+        # Move weights to new device/dtype
+        new_weights = self.weights.to(device, dtype=dtype)
+        return Bridge(cgspec=self.cgspec, weights=new_weights)
+    
+    def clone(self) -> Bridge:
+        """Create a deep copy of this Bridge with cloned weights.
+        
+        Returns
+        -------
+        Bridge
+            New Bridge instance with cloned weight matrix.
+        
+        Examples
+        --------
+        >>> bridge = Bridge(cgspec, weights)
+        >>> bridge_copy = bridge.clone()
+        >>> bridge_copy.weights is bridge.weights
+        False
+        """
+        return Bridge(cgspec=self.cgspec, weights=self.weights.clone())
     
     @staticmethod
     def from_block(
