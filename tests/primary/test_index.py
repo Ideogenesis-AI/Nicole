@@ -342,6 +342,67 @@ def test_combine_indices_product_group():
     assert actual_charges == expected_charges
 
 
+def test_combine_indices_product_group_dimension_check():
+    """Test combine_indices with ProductGroup verifies dimension accumulation."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    # First index: charges (1,0) dim 3, (2,1) dim 5
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((1, 0), 3), Sector((2, 1), 5)))
+    # Second index: charges (0,1) dim 7, (1,0) dim 11
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 7), Sector((1, 0), 11)))
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Both OUT, so use dual; output OUT, so no dual on result
+    # (1,0)_OUT + (0,1)_OUT → dual((1,0)) + dual((0,1)) = (-1,0) + (0,1) = (-1,1)
+    # (1,0)_OUT + (1,0)_OUT → dual((1,0)) + dual((1,0)) = (-1,0) + (-1,0) = (-2,0)
+    # (2,1)_OUT + (0,1)_OUT → dual((2,1)) + dual((0,1)) = (-2,1) + (0,1) = (-2,0)
+    # (2,1)_OUT + (1,0)_OUT → dual((2,1)) + dual((1,0)) = (-2,1) + (-1,0) = (-3,1)
+    
+    dim_map = combined.sector_dim_map()
+    
+    # Check dimension accumulation
+    assert dim_map[(-1, 1)] == 3 * 7  # One path
+    assert dim_map[(-2, 0)] == 3 * 11 + 5 * 7  # Two paths: accumulate!
+    assert dim_map[(-3, 1)] == 5 * 11  # One path
+    
+    # Verify total dimension
+    assert combined.dim == 3*7 + 3*11 + 5*7 + 5*11
+
+
+def test_combine_indices_product_group_stress():
+    """Stress test combine_indices with ProductGroup having many sectors."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    # First index: 8 sectors with varying U1 charges and Z2 parities
+    sectors1 = tuple(Sector((i, i % 2), i+1) for i in range(8))
+    idx1 = Index(Direction.OUT, group, sectors=sectors1)
+    
+    # Second index: 6 sectors
+    sectors2 = tuple(Sector((2*i, i % 2), i+2) for i in range(6))
+    idx2 = Index(Direction.OUT, group, sectors=sectors2)
+    
+    # 8*6 = 48 fusion operations
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Verify basic properties
+    assert combined.group == group
+    assert combined.direction == Direction.OUT
+    assert len(combined.sectors) > 0
+    
+    # All dimensions should be positive
+    for sector in combined.sectors:
+        assert sector.dim > 0
+    
+    # Total dimension should match sum of all products
+    expected_total = sum((i1+1)*(i2+2) for i1 in range(8) for i2 in range(6))
+    assert combined.dim == expected_total
+    
+    # Verify some charges are shared (dimension accumulation)
+    # With 48 combinations and limited charge range, many will overlap
+    assert len(combined.sectors) < 48
+
+
 def test_split_index_product_group():
     """Test splitting an index with ProductGroup."""
     group = ProductGroup([U1Group(), Z2Group()])
@@ -667,6 +728,101 @@ def test_combine_indices_su2_all_to_neutral():
     assert 0 in dim_map  # Neutral is present
 
 
+def test_combine_indices_product_su2_basic():
+    """Test combine_indices with ProductGroup containing SU(2)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # First index: U1 charge 0 with SU(2) spins 0, 1 (2j: 0, 2)
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((0, 2), 3),
+    ))
+    # Second index: U1 charge 1 with SU(2) spins 1, 2 (2j: 2, 4)
+    idx2 = Index(Direction.OUT, group, sectors=(
+        Sector((1, 2), 5),
+        Sector((1, 4), 7),
+    ))
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    assert combined.group == group
+    assert combined.direction == Direction.OUT
+    
+    # Both OUT, so use dual on inputs; output OUT, so no dual on result
+    # Fusion details:
+    # (0, 0) × (1, 2): dual(0,0)⊗dual(1,2) = (0,0)⊗(-1,2)
+    #   U1: 0+(-1)=-1, SU(2): 0⊗1 → {1} → 2j:{2} → charge (-1, 2) dim 2*5=10
+    # (0, 0) × (1, 4): dual(0,0)⊗dual(1,4) = (0,0)⊗(-1,4)
+    #   U1: 0+(-1)=-1, SU(2): 0⊗2 → {2} → 2j:{4} → charge (-1, 4) dim 2*7=14
+    # (0, 2) × (1, 2): dual(0,2)⊗dual(1,2) = (0,2)⊗(-1,2)
+    #   U1: 0+(-1)=-1, SU(2): 1⊗1 → {0,1,2} → 2j:{0,2,4} → charges (-1,0), (-1,2), (-1,4), each dim 3*5=15
+    # (0, 2) × (1, 4): dual(0,2)⊗dual(1,4) = (0,2)⊗(-1,4)
+    #   U1: 0+(-1)=-1, SU(2): 1⊗2 → {1,2,3} → 2j:{2,4,6} → charges (-1,2), (-1,4), (-1,6), each dim 3*7=21
+    
+    dim_map = combined.sector_dim_map()
+    assert dim_map[(-1, 0)] == 15                    # From (0,2)⊗(1,2)
+    assert dim_map[(-1, 2)] == 10 + 15 + 21          # From all three fusions
+    assert dim_map[(-1, 4)] == 14 + 15 + 21          # From all three fusions
+    assert dim_map[(-1, 6)] == 21                    # From (0,2)⊗(1,4)
+
+
+def test_combine_indices_product_su2_with_directions():
+    """Test combine_indices with ProductGroup(U1×SU2) using different directions."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # First index OUT: (1, 1) with dim 4, (2, 1) with dim 6
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector((1, 1), 4),
+        Sector((2, 1), 6),
+    ))
+    # Second index IN: (0, 2) with dim 5, (1, 0) with dim 7
+    idx2 = Index(Direction.IN, group, sectors=(
+        Sector((0, 2), 5),
+        Sector((1, 0), 7),
+    ))
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Fusion calculations (OUT uses dual, IN does not):
+    # (1,1)_OUT × (0,2)_IN: dual(1,1)⊗(0,2) = (-1,1)⊗(0,2)
+    #   U1: -1+0=-1, SU(2): 1/2⊗1 → {1/2, 3/2} → 2j: {1,3}
+    #   Charges: (-1,1) dim 4*5=20, (-1,3) dim 4*5=20
+    # (1,1)_OUT × (1,0)_IN: dual(1,1)⊗(1,0) = (-1,1)⊗(1,0)
+    #   U1: -1+1=0, SU(2): 1/2⊗0 → {1/2} → 2j: {1}
+    #   Charge: (0,1) dim 4*7=28
+    # (2,1)_OUT × (0,2)_IN: dual(2,1)⊗(0,2) = (-2,1)⊗(0,2)
+    #   U1: -2+0=-2, SU(2): 1/2⊗1 → {1/2, 3/2} → 2j: {1,3}
+    #   Charges: (-2,1) dim 6*5=30, (-2,3) dim 6*5=30
+    # (2,1)_OUT × (1,0)_IN: dual(2,1)⊗(1,0) = (-2,1)⊗(1,0)
+    #   U1: -2+1=-1, SU(2): 1/2⊗0 → {1/2} → 2j: {1}
+    #   Charge: (-1,1) dim 6*7=42
+    
+    dim_map = combined.sector_dim_map()
+    
+    # Check dimension accumulation
+    assert dim_map[(-1, 1)] == 20 + 42     # From (1,1)×(0,2) and (2,1)×(1,0)
+    assert dim_map[(-1, 3)] == 20          # From (1,1)×(0,2)
+    assert dim_map[(0, 1)] == 28           # From (1,1)×(1,0)
+    assert dim_map[(-2, 1)] == 30          # From (2,1)×(0,2)
+    assert dim_map[(-2, 3)] == 30          # From (2,1)×(0,2)
+    
+    # Verify total dim
+    expected_total = 20 + 20 + 28 + 30 + 30 + 42
+    assert combined.dim == expected_total
+
+
+def test_combine_indices_product_su2_more_than_two_raises():
+    """Test that combining more than two indices with ProductGroup(SU2) raises."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2),))
+    
+    with pytest.raises(ValueError, match="Non-Abelian.*pairwise"):
+        combine_indices(Direction.OUT, idx1, idx2, idx3)
+
+
 # Stress tests for robustness
 
 def test_combine_indices_su2_stress_many_sectors():
@@ -762,6 +918,103 @@ def test_combine_indices_su2_mixed_directions_complex():
     assert dim_map[2] == 5 + 8 + 15     # From 0⊗2, 1⊗1, 2⊗2
     assert dim_map[3] == 10 + 12        # From 1⊗2, 2⊗1
     assert dim_map[4] == 15             # From 2⊗2
+
+
+def test_combine_indices_product_su2_stress_many_sectors():
+    """Stress test combine_indices with ProductGroup(U1×SU2) having many sectors."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # First index: 5 U1 charges × 4 SU(2) spins = 20 sectors
+    sectors1 = tuple(
+        Sector((u1, two_j), u1 + two_j + 1)
+        for u1 in range(5)
+        for two_j in [0, 2, 4, 6]
+    )
+    idx1 = Index(Direction.OUT, group, sectors=sectors1)
+    
+    # Second index: 3 U1 charges × 3 SU(2) spins = 9 sectors
+    sectors2 = tuple(
+        Sector((u1, two_j), u1 * 2 + two_j + 2)
+        for u1 in range(3)
+        for two_j in [0, 2, 4]
+    )
+    idx2 = Index(Direction.OUT, group, sectors=sectors2)
+    
+    # 20 × 9 = 180 input sector pairs
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Verify basic properties
+    assert combined.group == group
+    assert combined.direction == Direction.OUT
+    assert len(combined.sectors) > 0
+    
+    # All dimensions should be positive
+    for sector in combined.sectors:
+        assert sector.dim > 0
+    
+    # Verify there's significant dimension accumulation
+    # (many input pairs fuse to same output charge)
+    total_combinations = 20 * 9
+    # Each SU(2) fusion can produce multiple channels,
+    # so output sectors > input combinations, but many U1 charges overlap
+    assert len(combined.sectors) < total_combinations
+    
+    # Verify total dimension matches expected
+    expected_total = 0
+    for s1 in sectors1:
+        u1_1, two_j_1 = s1.charge
+        for s2 in sectors2:
+            u1_2, two_j_2 = s2.charge
+            # Count fusion channels
+            two_j_max = two_j_1 + two_j_2
+            two_j_min = abs(two_j_1 - two_j_2)
+            num_channels = (two_j_max - two_j_min) // 2 + 1
+            expected_total += s1.dim * s2.dim * num_channels
+    
+    assert combined.dim == expected_total
+
+
+def test_combine_indices_product_su2_stress_z2():
+    """Stress test with ProductGroup(Z2×SU2)."""
+    group = ProductGroup([Z2Group(), SU2Group()])
+    
+    # First index: 2 Z2 values × 6 SU(2) spins = 12 sectors
+    sectors1 = tuple(
+        Sector((z2, two_j), z2 * 3 + two_j + 1)
+        for z2 in [0, 1]
+        for two_j in [0, 1, 2, 3, 4, 5]
+    )
+    idx1 = Index(Direction.OUT, group, sectors=sectors1)
+    
+    # Second index: 2 Z2 values × 5 SU(2) spins = 10 sectors
+    sectors2 = tuple(
+        Sector((z2, two_j), (1 - z2) * 2 + two_j + 2)
+        for z2 in [0, 1]
+        for two_j in [1, 2, 3, 4, 5]
+    )
+    idx2 = Index(Direction.OUT, group, sectors=sectors2)
+    
+    combined = combine_indices(Direction.OUT, idx1, idx2)
+    
+    # Verify properties
+    assert combined.group == group
+    assert combined.direction == Direction.OUT
+    
+    # All dimensions should be positive
+    for sector in combined.sectors:
+        assert sector.dim > 0
+    
+    # Z2 part has only 2 possible values, so significant overlap expected
+    # SU(2) fusions produce multiple channels
+    assert len(combined.sectors) > 0
+    
+    # Verify some dimension accumulation occurred
+    # Total possible Z2×SU(2) combinations is limited
+    max_possible_sectors = 2 * (max(5, 5+5) + 1)  # 2 Z2 values, max spin range
+    assert len(combined.sectors) <= max_possible_sectors
+    
+    # Sanity check on total dimension
+    assert combined.dim > 0
 
 
 # split_index tests for SU2
