@@ -108,6 +108,36 @@ def test_shape_for_key_missing_charge():
         BlockSchema.shape_for_key([idx], (1,))
 
 
+def test_shape_for_key_with_num_components():
+    """Test BlockSchema.shape_for_key with num_components parameter."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 4)))
+    
+    # Without num_components
+    shape1 = BlockSchema.shape_for_key([idx1, idx2], (0, 0))
+    assert shape1 == (2, 5)
+    
+    # With num_components
+    shape2 = BlockSchema.shape_for_key([idx1, idx2], (0, 0), num_components=3)
+    assert shape2 == (2, 5, 3)
+    
+    shape3 = BlockSchema.shape_for_key([idx1, idx2], (1, -1), num_components=1)
+    assert shape3 == (3, 4, 1)
+
+
+def test_shape_for_key_num_components_validation():
+    """Test BlockSchema.shape_for_key validates num_components > 0."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    with pytest.raises(ValueError, match="num_components must be at least 1"):
+        BlockSchema.shape_for_key([idx], (0,), num_components=0)
+    
+    with pytest.raises(ValueError, match="num_components must be at least 1"):
+        BlockSchema.shape_for_key([idx], (0,), num_components=-1)
+
+
 def test_validate_blocks_valid():
     """Test BlockSchema.validate_blocks with valid blocks."""
     group = U1Group()
@@ -148,6 +178,110 @@ def test_validate_blocks_not_torch():
     
     with pytest.raises(TypeError, match="torch tensors"):
         BlockSchema.validate_blocks([idx], blocks)
+
+
+def test_validate_blocks_with_intw_valid():
+    """Test BlockSchema.validate_blocks with valid intw for non-Abelian groups."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create Bridge with 2 components
+    bridge = dg.Bridge.from_block(group, (1, 1), [Direction.OUT, Direction.OUT], dtype=torch.float64)
+    # Block shape should be (2, 2, num_components)
+    blocks = {
+        (1, 1): torch.zeros((2, 2, bridge.num_components))
+    }
+    intw = {
+        (1, 1): bridge
+    }
+    
+    # Should not raise
+    BlockSchema.validate_blocks([idx1, idx2], blocks, intw)
+
+
+def test_validate_blocks_with_intw_wrong_shape():
+    """Test BlockSchema.validate_blocks raises when block shape doesn't match intw."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    bridge = dg.Bridge.from_block(group, (1, 1), [Direction.OUT, Direction.OUT], dtype=torch.float64)
+    # Wrong shape: missing trailing dimension
+    blocks = {
+        (1, 1): torch.zeros((2, 2))
+    }
+    intw = {
+        (1, 1): bridge
+    }
+    
+    with pytest.raises(ValueError, match="expected.*trailing reduced multiplicity"):
+        BlockSchema.validate_blocks([idx1, idx2], blocks, intw)
+
+
+def test_validate_blocks_with_intw_key_mismatch():
+    """Test BlockSchema.validate_blocks raises when intw keys don't match block keys."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    bridge = dg.Bridge.from_block(group, (1, 1), [Direction.OUT, Direction.OUT], dtype=torch.float64)
+    blocks = {
+        (1, 1): torch.zeros((2, 2, bridge.num_components))
+    }
+    # Wrong key in intw
+    intw = {
+        (0, 0): bridge
+    }
+    
+    with pytest.raises(ValueError, match="keys must match block keys"):
+        BlockSchema.validate_blocks([idx1, idx2], blocks, intw)
+
+
+def test_validate_blocks_with_intw_multiple_blocks():
+    """Test BlockSchema.validate_blocks with multiple blocks and intertwiners."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create bridges for different keys
+    bridge1 = dg.Bridge.from_block(group, (1, 1), [Direction.OUT, Direction.OUT], dtype=torch.float64)
+    bridge2 = dg.Bridge.from_block(group, (2, 1), [Direction.OUT, Direction.OUT], dtype=torch.float64)
+    
+    blocks = {
+        (1, 1): torch.zeros((2, 2, bridge1.num_components)),
+        (2, 1): torch.zeros((3, 2, bridge2.num_components))
+    }
+    intw = {
+        (1, 1): bridge1,
+        (2, 1): bridge2
+    }
+    
+    # Should not raise
+    BlockSchema.validate_blocks([idx1, idx2], blocks, intw)
+
+
+def test_validate_blocks_abelian_with_none_intw():
+    """Test BlockSchema.validate_blocks works for Abelian groups with intw=None."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(-1, 4)))
+    
+    blocks = {
+        (0, 0): torch.zeros((2, 5)),
+        (1, -1): torch.zeros((3, 4))
+    }
+    
+    # Abelian: intw=None, no trailing dimension
+    BlockSchema.validate_blocks([idx1, idx2], blocks, intw=None)
 
 
 def test_charge_totals_neutral():
