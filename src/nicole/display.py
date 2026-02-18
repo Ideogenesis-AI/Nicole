@@ -143,7 +143,7 @@ def tensor_summary(
     itags:
         Ordered tuple of human-readable labels for each index.
     data:
-        Mapping from block keys (one charge per leg) to dense NumPy arrays.
+        Mapping from block keys (one charge per index) to torch tensors.
     dtype:
         Data type of the tensor entries.
     label:
@@ -210,7 +210,7 @@ def tensor_summary(
     # -------------------------------------------------------------------
     sym_signature = _group_signature(indices, sample_components)
     itag_list = ", ".join(
-        f"{tag}{'*' if idx.direction > 0 else ''}" for tag, idx in zip(itags, indices)
+        f"{tag}{'*' if idx.direction == Direction.OUT else ''}" for tag, idx in zip(itags, indices)
     )
     info_line = (
         f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "
@@ -245,7 +245,7 @@ def tensor_summary(
         # Determine padding for charges across all keys and positions.
         components_per_position: List[List[str]] = []
         for key in data:
-            # `key` = tuple of charges, one per leg. Collect each component string.
+            # `key` = tuple of charges, one per index. Collect each component string.
             for pos, comps in enumerate(_charge_components(charge) for charge in key):
                 while len(components_per_position) <= pos:
                     components_per_position.append([])
