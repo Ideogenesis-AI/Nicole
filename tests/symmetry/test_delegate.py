@@ -23,7 +23,7 @@ import torch
 import yuzuha
 
 from nicole import Direction, ProductGroup, SU2Group, U1Group
-from nicole.symmetry.delegate import Bridge
+from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol
 
 
 def test_bridge_basic_instantiation():
@@ -347,3 +347,111 @@ def test_bridge_from_block_provided_weights_validation():
     # Wrong type
     with pytest.raises(TypeError, match="weights must be a torch.Tensor"):
         Bridge.from_block(group, key, directions, weights=[[1.0, 2.0]])
+
+
+def test_compute_xsymbol_basic():
+    """Test compute_xsymbol for basic contraction."""
+    group = SU2Group()
+    
+    # Bridge A: two spin-1/2 in, one spin-1 out
+    key_a = (1, 1, 2)
+    dirs_a = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge_a = Bridge.from_block(group, key_a, dirs_a)
+    
+    # Bridge B: one spin-1 in, one spin-1/2 in, one spin-1/2 out
+    key_b = (2, 1, 1)
+    dirs_b = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge_b = Bridge.from_block(group, key_b, dirs_b)
+    
+    # Contract spin-1 edges (A's edge 2 with B's edge 0)
+    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, [2], [0])
+    
+    # Check result properties
+    assert isinstance(x_symbol, torch.Tensor)
+    assert x_symbol.ndim == 3
+    assert x_symbol.shape[0] == bridge_a.om_dimension
+    assert x_symbol.shape[1] == bridge_b.om_dimension
+    assert x_symbol.shape[2] == spec_c.om_dimension()
+    
+    # Check output CGSpec
+    assert spec_c.num_external() == 4  # 2 from A + 2 from B (minus 2 contracted)
+
+
+def test_compute_xsymbol_multiple_edges():
+    """Test compute_xsymbol contracting multiple edges."""
+    group = SU2Group()
+    
+    # Bridge A: three spin-1 in, one spin-1 out
+    key_a = (2, 2, 2, 2)
+    dirs_a = [Direction.IN, Direction.IN, Direction.IN, Direction.OUT]
+    bridge_a = Bridge.from_block(group, key_a, dirs_a)
+    
+    # Bridge B: two spin-1 in, two spin-1 out
+    key_b = (2, 2, 2, 2)
+    dirs_b = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge_b = Bridge.from_block(group, key_b, dirs_b)
+    
+    # Contract two spin-1 edges
+    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, [0, 1], [2, 3])
+    
+    assert isinstance(x_symbol, torch.Tensor)
+    assert x_symbol.ndim == 3
+    assert spec_c.num_external() == 4  # 2 from A + 2 from B
+
+
+def test_compute_rsymbol_basic():
+    """Test compute_rsymbol for basic permutation."""
+    group = SU2Group()
+    
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Identity permutation
+    r_symbol, spec_perm = compute_rsymbol(bridge, [0, 1, 2])
+    
+    assert isinstance(r_symbol, torch.Tensor)
+    assert r_symbol.ndim == 2
+    assert r_symbol.shape[0] == bridge.om_dimension
+    assert r_symbol.shape[1] == spec_perm.om_dimension()
+    
+    # For identity permutation, R should be identity matrix
+    assert torch.allclose(r_symbol, torch.eye(bridge.om_dimension, dtype=r_symbol.dtype))
+
+
+def test_compute_rsymbol_swap():
+    """Test compute_rsymbol for edge swap."""
+    group = SU2Group()
+    
+    # Use a configuration with non-trivial OM space
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Swap first two edges
+    r_symbol, spec_perm = compute_rsymbol(bridge, [1, 0, 2, 3])
+    
+    assert isinstance(r_symbol, torch.Tensor)
+    assert r_symbol.shape[0] == bridge.om_dimension
+    assert r_symbol.shape[1] == spec_perm.om_dimension()
+    
+    # R-symbol should be unitary (R†R = I)
+    if r_symbol.shape[0] > 1:
+        identity = torch.matmul(r_symbol.T, r_symbol)
+        assert torch.allclose(identity, torch.eye(r_symbol.shape[1], dtype=r_symbol.dtype), atol=1e-10)
+
+
+def test_compute_rsymbol_invalid_permutation():
+    """Test compute_rsymbol raises on invalid permutation."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Wrong length
+    with pytest.raises(ValueError):
+        compute_rsymbol(bridge, [0, 1])
+    
+    # Duplicate index
+    with pytest.raises(ValueError):
+        compute_rsymbol(bridge, [0, 0, 2])
