@@ -25,8 +25,8 @@ from nicole import Direction, Sector
 
 def test_direction_values():
     """Test Direction enum values."""
-    assert Direction.IN == -1
-    assert Direction.OUT == 1
+    assert Direction.IN == 1
+    assert Direction.OUT == -1
 
 
 def test_direction_reverse():
