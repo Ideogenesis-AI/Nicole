@@ -21,7 +21,7 @@
 import torch
 import pytest
 
-from nicole import Direction, Tensor, U1Group, subsector, Index, Sector
+from nicole import Direction, Tensor, U1Group, SU2Group, subsector, Index, Sector
 
 
 # Copy tests
@@ -110,6 +110,42 @@ def test_copy_data_arrays_are_independent():
     # Each array should be a different object
     for key in tensor.data:
         assert copied.data[key] is not tensor.data[key]
+
+
+def test_copy_su2_clones_intw():
+    """Test that copy() deep copies intertwiner for SU2."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    copied = tensor.copy()
+    
+    # Verify intw exists and is deep copied
+    assert copied.intw is not None
+    assert copied.intw is not tensor.intw  # Different dict
+    
+    # Verify each Bridge is cloned
+    for key in tensor.intw.keys():
+        assert key in copied.intw
+        # Same cgspec (immutable)
+        assert copied.intw[key].cgspec == tensor.intw[key].cgspec
+        # Cloned weights (different tensor objects)
+        assert copied.intw[key].weights is not tensor.intw[key].weights
+        assert torch.allclose(copied.intw[key].weights, tensor.intw[key].weights)
+
+
+def test_copy_abelian_no_intw():
+    """Test that copy() preserves intw=None for Abelian."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2])
+    copied = tensor.copy()
+    
+    assert tensor.intw is None
+    assert copied.intw is None
 
 
 # Block access tests (sorted_keys, key, block)
