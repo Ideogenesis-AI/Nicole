@@ -92,6 +92,54 @@ def test_tensor_zeros_z2():
     assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
 
 
+def test_tensor_zeros_three_indices():
+    """Test Tensor.zeros with three indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(-1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], itags=["A", "B", "C"])
+    
+    assert_charge_neutral(tensor)
+    for block in tensor.data.values():
+        assert torch.allclose(block, torch.zeros_like(block))
+
+
+def test_tensor_zeros_su2():
+    """Test Tensor.zeros with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
+
+
+def test_tensor_zeros_abelian_no_intw():
+    """Test that Abelian tensors have no intertwiner (intw=None)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    
+    # Abelian groups should have no intertwiner
+    assert tensor.intw is None
+
+
 def test_tensor_random_basic():
     """Test Tensor.random with basic indices."""
     group = U1Group()
@@ -147,6 +195,28 @@ def test_tensor_random_no_itags():
     
     assert tensor.itags[0] == "_init_"
     assert tensor.itags[1] == "_init_"
+
+
+def test_tensor_random_su2():
+    """Test Tensor.random with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
 
 
 def test_tensor_norm_matches_manual():
@@ -224,6 +294,58 @@ def test_tensor_validation_rejects_single_index():
     
     with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor.random([idx], seed=1, itags=["A"])
+
+
+def test_tensor_validation_su2_missing_intw():
+    """Test that non-Abelian tensor without intertwiner raises error."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    with pytest.raises(ValueError, match="Non-Abelian tensors must have intertwiner"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=None, dtype=torch.float64)
+
+
+def test_tensor_validation_intw_keys_mismatch():
+    """Test that mismatched intertwiner keys vs data keys raises error."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    # Create intw with wrong keys
+    intw = {
+        (1, 2): dg.Bridge.from_block(group, (1, 2), [Direction.IN, Direction.OUT], dtype=torch.float64)
+    }
+    
+    with pytest.raises(ValueError, match="Intertwiner.*keys must match data keys"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=intw, dtype=torch.float64)
+
+
+def test_tensor_validation_bridge_wrong_num_external():
+    """Test that Bridge with wrong number of external edges raises error."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    # Create a valid Bridge with 3 edges: 1/2 ⊗ 1/2 ⊗ 1 → 0
+    bridge_3edges = dg.Bridge.from_block(
+        group, (1, 1, 2), [Direction.IN, Direction.IN, Direction.OUT], dtype=torch.float64
+    )
+    # Use it for a 2-edge tensor (mismatch)
+    intw = {(1, 1): bridge_3edges}
+    
+    with pytest.raises(ValueError, match="Bridge for key.*has 3 edges, expected 2"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=intw, dtype=torch.float64)
 
 
 # Scalar (0D tensor) tests
@@ -367,76 +489,6 @@ def test_tensor_construction_complex64():
     
     assert tensor.dtype == torch.complex64
     assert tensor.data[(0, 0)].dtype == torch.complex64
-
-
-def test_tensor_zeros_three_indices():
-    """Test Tensor.zeros with three indices."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(-1, 1)))
-    
-    tensor = Tensor.zeros([idx1, idx2, idx3], itags=["A", "B", "C"])
-    
-    assert_charge_neutral(tensor)
-    for block in tensor.data.values():
-        assert torch.allclose(block, torch.zeros_like(block))
-
-
-def test_tensor_zeros_su2():
-    """Test Tensor.zeros with SU2Group."""
-    group = SU2Group()
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
-    
-    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64, itags=["a", "b", "c"])
-    
-    # Verify intertwiner is populated
-    assert tensor.intw is not None
-    assert set(tensor.intw.keys()) == set(tensor.data.keys())
-    
-    # Verify each Bridge
-    for key, bridge in tensor.intw.items():
-        assert bridge.num_external == 3
-        assert bridge.num_components == 1
-        assert bridge.weights.dtype == torch.float64
-        assert bridge.om_dimension > 0
-        assert bridge.weights[0, 0] == 1.0
-
-
-def test_tensor_zeros_abelian_no_intw():
-    """Test that Abelian tensors have no intertwiner (intw=None)."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
-    
-    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
-    
-    # Abelian groups should have no intertwiner
-    assert tensor.intw is None
-
-
-def test_tensor_random_su2():
-    """Test Tensor.random with SU2Group."""
-    group = SU2Group()
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
-    
-    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42, itags=["a", "b", "c"])
-    
-    # Verify intertwiner is populated
-    assert tensor.intw is not None
-    assert set(tensor.intw.keys()) == set(tensor.data.keys())
-    
-    # Verify each Bridge
-    for key, bridge in tensor.intw.items():
-        assert bridge.num_external == 3
-        assert bridge.num_components == 1
-        assert bridge.weights.dtype == torch.float64
-        assert bridge.om_dimension > 0
-        assert bridge.weights[0, 0] == 1.0
 
 
 # ProductGroup integration tests
