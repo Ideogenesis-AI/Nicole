@@ -28,12 +28,16 @@ charge conservation for a given block key.
 """
 
 from itertools import product
-from typing import Iterable, List, Mapping, Sequence, Tuple, Union
+from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING
 
 import torch
 
 from .index import Index
 from .typing import Charge, Direction
+
+if TYPE_CHECKING:
+    from .symmetry.delegate import Bridge
 
 BlockKey = Tuple[Charge, ...]
 
@@ -72,8 +76,27 @@ class BlockSchema:
         return product(*charges_per_index)
 
     @staticmethod
-    def shape_for_key(indices: Sequence[Index], key: BlockKey) -> Tuple[int, ...]:
-        """Return the dense tensor shape associated with a block key."""
+    def shape_for_key(
+        indices: Sequence[Index], key: BlockKey, num_components: Optional[int] = None
+    ) -> Tuple[int, ...]:
+        """Return the dense tensor shape associated with a block key.
+        
+        Parameters
+        ----------
+        indices : Sequence[Index]
+            Tensor indices
+        key : BlockKey
+            Block key (one charge per index)
+        num_components : int, optional
+            If provided, appends this as a trailing reduced multiplicity dimension.
+            Used for non-Abelian groups to store multiple reduced tensor components.
+        
+        Returns
+        -------
+        Tuple[int, ...]
+            Shape tuple. For Abelian groups: (d1, d2, ..., dn).
+            For non-Abelian with num_components: (d1, d2, ..., dn, num_components).
+        """
         if len(key) != len(indices):
             raise ValueError("Key length does not match number of indices")
         shape: List[int] = []
@@ -83,18 +106,67 @@ class BlockSchema:
             if charge not in dim_map:
                 raise KeyError(f"Charge {charge} not present in index at position {i}")
             shape.append(dim_map[charge])
+        
+        # Append reduced multiplicity dimension for non-Abelian groups
+        if num_components is not None:
+            if num_components < 1:
+                raise ValueError(f"num_components must be at least 1, got {num_components}")
+            shape.append(num_components)
+        
         return tuple(shape)
 
     @staticmethod
-    def validate_blocks(indices: Sequence[Index], blocks: Mapping[BlockKey, torch.Tensor]) -> None:
-        """Verify that blocks are PyTorch tensors with shapes consistent with the indices."""
+    def validate_blocks(
+        indices: Sequence[Index], blocks: Mapping[BlockKey, torch.Tensor],
+        intw: Optional[Mapping[BlockKey, Bridge]] = None
+    ) -> None:
+        """Verify that blocks are PyTorch tensors with shapes consistent with the indices.
+        
+        Parameters
+        ----------
+        indices : Sequence[Index]
+            Tensor indices
+        blocks : Mapping[BlockKey, torch.Tensor]
+            Block data tensors
+        intw : Mapping[BlockKey, Bridge], optional
+            Intertwiner mapping for non-Abelian groups. If provided, validates
+            that block shapes include trailing reduced multiplicity dimension
+            matching Bridge.num_components.
+        
+        Raises
+        ------
+        TypeError
+            If blocks are not torch.Tensor instances
+        ValueError
+            If block shapes don't match expected dimensions, or if intw keys
+            don't match block keys for non-Abelian groups
+        """
         for arr in blocks.values():
             if not isinstance(arr, torch.Tensor):
                 raise TypeError("Blocks must be torch tensors")
+        
+        # Validate intw keys match block keys if provided
+        if intw is not None:
+            if set(intw.keys()) != set(blocks.keys()):
+                raise ValueError("Intertwiner (intw) keys must match block keys for non-Abelian groups")
+        
+        # Validate block shapes
         for key, arr in blocks.items():
-            expected = BlockSchema.shape_for_key(indices, key)
-            if arr.shape != expected:
-                raise ValueError(f"Block {key} has shape {arr.shape}, expected {expected}")
+            if intw is not None and key in intw:
+                # Non-Abelian: expect trailing reduced multiplicity dimension
+                bridge = intw[key]
+                base_shape = BlockSchema.shape_for_key(indices, key)
+                expected = base_shape + (bridge.num_components,)
+                if arr.shape != expected:
+                    raise ValueError(
+                        f"Block {key} has shape {arr.shape}, expected {expected} "
+                        f"(base shape {base_shape} + trailing reduced multiplicity {bridge.num_components})"
+                    )
+            else:
+                # Abelian: no trailing dimension
+                expected = BlockSchema.shape_for_key(indices, key)
+                if arr.shape != expected:
+                    raise ValueError(f"Block {key} has shape {arr.shape}, expected {expected}")
 
     @staticmethod
     def charge_totals(indices: Sequence[Index], key: BlockKey) -> Charge:
