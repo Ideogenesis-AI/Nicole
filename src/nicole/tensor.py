@@ -176,27 +176,27 @@ class Tensor:
             # Set default label for scalars if still using the default "Tensor" label
             if self.label == "Tensor":
                 object.__setattr__(self, 'label', "Scalar")
-        BlockSchema.validate_blocks(self.indices, self.data)
-        for key in self.data:
-            if not BlockSchema.charges_conserved(self.indices, key):
-                raise ValueError(
-                    f"Block {key} violates charge conservation for assigned index directions"
-                )
-        # Validate intertwiners (intw) for non-Abelian groups
+        # Validate intertwiners (intw) and block shapes for non-Abelian groups
         if len(self.indices) > 0:
             group = self.indices[0].group
             if not group.is_abelian:
                 if self.intw is None:
-                    raise ValueError("Non-Abelian tensors must have intertwiners populated")
-                if set(self.intw.keys()) != set(self.data.keys()):
-                    raise ValueError("Intertwiner keys must match data keys for non-Abelian groups")
-                # Validate each Bridge
+                    raise ValueError("Non-Abelian tensors must have intertwiner (intw) populated")
+                # Validate each Bridge has correct number of external edges
                 for key, bridge in self.intw.items():
                     if bridge.num_external != len(self.indices):
                         raise ValueError(
                             f"Bridge for key {key} has {bridge.num_external} edges, "
                             f"expected {len(self.indices)}"
                         )
+        
+        # Validate block shapes (includes intw validation for non-Abelian)
+        BlockSchema.validate_blocks(self.indices, self.data, self.intw)
+        for key in self.data:
+            if not BlockSchema.charges_conserved(self.indices, key):
+                raise ValueError(
+                    f"Block {key} violates charge conservation for assigned index directions"
+                )
 
     # ------------------------------------------------------------
     #   Constructors: zero and random tensors
@@ -251,24 +251,31 @@ class Tensor:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
+        
+        # Create intertwiner (intw) for non-Abelian groups first
+        intw = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in BlockSchema.iter_admissible_keys(indices_tuple):
+                if not BlockSchema.charges_conserved(indices_tuple, key):
+                    continue
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         data: Dict[BlockKey, torch.Tensor] = {}
         # Iterate over all admissible charge assignments for the provided indices.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
             # Determine the dense shape implied by the current key and allocate zeros.
-            shape = BlockSchema.shape_for_key(indices_tuple, key)
+            if intw is not None and key in intw:
+                # Non-Abelian: append trailing reduced multiplicity dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key, num_components=intw[key].num_components)
+            else: # Abelian: no trailing dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key)
             block = torch.zeros(shape, dtype=dtype, device=device, requires_grad=requires_grad)
             data[key] = block
-        
-        # Create intertwiners (intw) for non-Abelian groups
-        intw = None
-        if indices_tuple and not indices_tuple[0].group.is_abelian:
-            intw: MutableMapping[BlockKey, dg.Bridge] = {}
-            directions = [idx.direction for idx in indices_tuple]
-            for key in data.keys():
-                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
-                    key=key, directions=directions, dtype=dtype)
         
         # normalize indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
@@ -332,12 +339,30 @@ class Tensor:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
+        
+        # Create intertwiner (intw) for non-Abelian groups first
+        intw = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in BlockSchema.iter_admissible_keys(indices_tuple):
+                if not BlockSchema.charges_conserved(indices_tuple, key):
+                    continue
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         data: Dict[BlockKey, torch.Tensor] = {}
         # Walk through admissible blocks in the same fashion as `zeros`.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
-            shape = BlockSchema.shape_for_key(indices_tuple, key)
+            # Determine the dense shape implied by the current key
+            if intw is not None and key in intw:
+                # Non-Abelian: append trailing reduced multiplicity dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key, num_components=intw[key].num_components)
+            else: # Abelian: no trailing dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key)
+            
             if dtype.is_complex:
                 real = torch.randn(shape, generator=gen, device=device,
                     dtype=torch.float64 if dtype == torch.complex128 else torch.float32)
@@ -350,15 +375,6 @@ class Tensor:
                 arr = torch.randn(shape, generator=gen, device=device, dtype=dtype,
                     requires_grad=requires_grad)
             data[key] = arr
-        
-        # Create intertwiners (intw) for non-Abelian groups
-        intw = None
-        if indices_tuple and not indices_tuple[0].group.is_abelian:
-            intw: MutableMapping[BlockKey, dg.Bridge] = {}
-            directions = [idx.direction for idx in indices_tuple]
-            for key in data.keys():
-                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
-                    key=key, directions=directions, dtype=dtype)
         
         # Prune indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
