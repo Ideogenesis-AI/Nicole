@@ -349,6 +349,95 @@ def test_bridge_from_block_provided_weights_validation():
         Bridge.from_block(group, key, directions, weights=[[1.0, 2.0]])
 
 
+def test_bridge_device_property():
+    """Test Bridge.device property."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    assert bridge.device == torch.device('cpu')
+
+
+def test_bridge_clone():
+    """Test Bridge.clone() creates deep copy."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    cloned = bridge.clone()
+    
+    # Verify it's a different object
+    assert cloned is not bridge
+    assert cloned.weights is not bridge.weights
+    
+    # Verify cgspec is shared (immutable)
+    assert cloned.cgspec is bridge.cgspec
+    
+    # Verify values are identical
+    assert torch.allclose(cloned.weights, bridge.weights)
+    
+    # Verify independence
+    cloned.weights[0, 0] = 999.0
+    assert not torch.allclose(cloned.weights, bridge.weights)
+
+
+def test_bridge_to_same_device():
+    """Test Bridge.to() returns self when already on target device."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    moved = bridge.to('cpu')
+    assert moved is bridge  # Same object
+
+
+def test_bridge_to_different_dtype():
+    """Test Bridge.to() with dtype conversion."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    bridge_f32 = bridge.to('cpu', dtype=torch.float32)
+    
+    assert bridge_f32.weights.dtype == torch.float32
+    assert bridge.weights.dtype == torch.float64  # Original unchanged
+    assert torch.allclose(bridge_f32.weights, bridge.weights.to(dtype=torch.float32))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_bridge_to_cuda():
+    """Test Bridge.to() moves weights to CUDA."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    bridge_gpu = bridge.to('cuda')
+    
+    assert bridge_gpu.device.type == 'cuda'
+    assert bridge.device.type == 'cpu'  # Original unchanged
+    assert torch.allclose(bridge_gpu.weights.cpu(), bridge.weights)
+
+
 def test_compute_xsymbol_basic():
     """Test compute_xsymbol for basic contraction."""
     group = SU2Group()
