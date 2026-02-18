@@ -323,7 +323,7 @@ def test_tensor_validation_intw_keys_mismatch():
         (1, 2): dg.Bridge.from_block(group, (1, 2), [Direction.IN, Direction.OUT], dtype=torch.float64)
     }
     
-    with pytest.raises(ValueError, match="Intertwiner.*keys must match data keys"):
+    with pytest.raises(ValueError, match="Intertwiner.*keys must match block keys"):
         Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=intw, dtype=torch.float64)
 
 
