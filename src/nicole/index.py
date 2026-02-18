@@ -20,10 +20,10 @@ from __future__ import annotations
 
 """Index utilities for symmetry-aware tensor networks.
 
-The `Index` dataclass models a single tensor leg annotated with symmetry
-information. Each instance records whether the leg is incoming or outgoing,
+The `Index` dataclass models a single tensor index annotated with symmetry
+information. Each instance records whether the index is incoming or outgoing,
 the associated symmetry group, and the available sectors (charge, dimension
-pairs) on that leg. The helper functions `combine_indices` and `split_index`
+pairs) on that index. The helper functions `combine_indices` and `split_index`
 encapsulate a consistent way to fuse or validate indices while respecting the
 charge rules enforced by the symmetry group.
 
@@ -49,19 +49,19 @@ from .symmetry.product import ProductGroup
 @dataclass(frozen=True)
 class Index:
     """Symmetry-aware tensor index capturing direction, group, and charge sectors.
-    Keeps tensor legs self-consistent so fusion and splitting utilities can rely
+    Keeps tensor indices self-consistent so fusion and splitting utilities can rely
     on validated charges. The flipping pair streamline common tensor network rewrites.
 
     Attributes
     ----------
     direction:
-        Orientation of the index (e.g. bra vs ket leg). Flips determine how
+        Orientation of the index (e.g. bra vs ket index). Flips determine how
         charge conjugation is applied.
     group:
         Symmetry group object responsible for validating and fusing charges.
     sectors:
         Tuple of `(charge, dim)` pairs describing the block structure available
-        on this leg.
+        on this index.
     dim (property):
         Property returning the total dimension derived from `sectors`.
 
@@ -134,7 +134,7 @@ def combine_indices(direction: Direction, *inds: Index) -> Index:
     direction:
         Direction applied to the resulting index. This does not need to match
         any individual input index directions because the caller typically
-        controls the orientation of the fused leg.
+        controls the orientation of the fused index.
     *inds:
         Component indices, each using the same symmetry group.
         For non-Abelian groups, must be exactly 2 indices.
