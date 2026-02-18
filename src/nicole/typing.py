@@ -26,23 +26,25 @@ from typing import Hashable, Union
 
 import torch
 
-# Charge can be any hashable value. For single symmetry groups (U1Group, Z2Group),
-# charges are typically integers. For ProductGroup (multiple symmetries), charges
-# are tuples of hashable values, one per component group.
+# Charge can be any hashable value. For single symmetry groups (U1Group, Z2Group,
+# SU2Group), charges are typically integers. For ProductGroup (multiple symmetries),
+# charges are tuples of hashable values, one per component group.
 #
 # Examples:
 #   - U1Group charge: 2, -1, 0 (integers)
 #   - Z2Group charge: 0, 1 (integers 0 or 1)
+#   - SU2Group charge: 0, 1, 2, 3, ... (integers representing 2j values)
 #   - ProductGroup(U1, U1) charge: (2, -1), (0, 0) (tuples of integers)
 #   - ProductGroup(U1, Z2) charge: (3, 1), (-2, 0) (tuples: int, 0/1)
+#   - ProductGroup(U1, SU2) charge: (2, 4), (-1, 0) (tuples: U1 int, 2j int)
 Charge = Hashable
 
 
 class Direction(IntEnum):
     """Orientation flag used by tensor indices."""
 
-    IN = -1
-    OUT = 1
+    IN = +1
+    OUT = -1
 
     def reverse(self) -> Direction:
         """Return the opposite orientation (IN ↔ OUT)."""
