@@ -53,7 +53,7 @@ class BlockSchema:
     iter_admissible_keys()
         Yield the cartesian product of available charges for each index.
     shape_for_key()
-        Translate a block key into the per-leg dense dimensions.
+        Translate a block key into the per-index dense dimensions.
     validate_blocks()
         Ensure blocks are torch tensors of the correct shape.
     charge_totals()
@@ -67,9 +67,9 @@ class BlockSchema:
     @staticmethod
     def iter_admissible_keys(indices: Iterable[Index]) -> Iterable[BlockKey]:
         """Yield all charge combinations compatible with the provided indices."""
-        # Collect the charge list for each leg and build the cartesian product.
-        charges_per_leg = [idx.charges() for idx in indices]
-        return product(*charges_per_leg)
+        # Collect the charge list for each index and build the cartesian product.
+        charges_per_index = [idx.charges() for idx in indices]
+        return product(*charges_per_index)
 
     @staticmethod
     def shape_for_key(indices: Sequence[Index], key: BlockKey) -> Tuple[int, ...]:
@@ -110,7 +110,7 @@ class BlockSchema:
         group = indices[0].group
         total = group.neutral
         
-        # Traverse each leg, fusing charges with appropriate direction adjustments.
+        # Traverse each index, fusing charges with appropriate direction adjustments.
         for idx, charge in zip(indices, key):
             contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
             total = group.fuse_unique(total, contribution)
