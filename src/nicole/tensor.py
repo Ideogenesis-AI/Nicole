@@ -35,7 +35,8 @@ from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
 from .typing import normalize_dtype_for_device
-from .symmetry.base import SymmetryGroup
+from .symmetry import SymmetryGroup
+from .symmetry import delegate as dg
 
 # Disable autograd by default for performance (tensor networks rarely need gradients)
 torch.set_grad_enabled(False)
@@ -61,6 +62,8 @@ class Tensor:
         Ordered tuple of human-readable labels for each index.
     data:
         Mapping from block keys (one charge per axis) to dense PyTorch tensors.
+    intw:
+        Mapping from block keys to intertwiners delegated to Yuzuha protocol.
     dtype:
         Data type for the dense blocks. Defaults to double precision real values.
     label:
@@ -132,6 +135,7 @@ class Tensor:
     indices: Tuple[Index, ...]
     itags: Tuple[str, ...]
     data: MutableMapping[BlockKey, torch.Tensor]
+    intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = field(default=None)
     dtype: torch.dtype = torch.float64
     label: str = "Tensor"
     _sorted_keys: Optional[Tuple[BlockKey, ...]] = field(default=None, repr=False, compare=False)
@@ -178,6 +182,21 @@ class Tensor:
                 raise ValueError(
                     f"Block {key} violates charge conservation for assigned index directions"
                 )
+        # Validate intertwiners (intw) for non-Abelian groups
+        if len(self.indices) > 0:
+            group = self.indices[0].group
+            if not group.is_abelian:
+                if self.intw is None:
+                    raise ValueError("Non-Abelian tensors must have intertwiners populated")
+                if set(self.intw.keys()) != set(self.data.keys()):
+                    raise ValueError("Intertwiner keys must match data keys for non-Abelian groups")
+                # Validate each Bridge
+                for key, bridge in self.intw.items():
+                    if bridge.num_external != len(self.indices):
+                        raise ValueError(
+                            f"Bridge for key {key} has {bridge.num_external} edges, "
+                            f"expected {len(self.indices)}"
+                        )
 
     # ------------------------------------------------------------
     #   Constructors: zero and random tensors
@@ -215,6 +234,9 @@ class Tensor:
         
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
+        
+        For non-Abelian symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
             device = torch.get_default_device()
@@ -239,9 +261,18 @@ class Tensor:
             block = torch.zeros(shape, dtype=dtype, device=device, requires_grad=requires_grad)
             data[key] = block
         
+        # Create intertwiners (intw) for non-Abelian groups
+        intw = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in data.keys():
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         # normalize indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
-        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=dtype)
+        return cls(indices=normalized_indices, itags=itags_tuple, data=data, intw=intw, dtype=dtype)
 
     @classmethod
     def random(
@@ -278,6 +309,9 @@ class Tensor:
         
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
+        
+        For non-Abelian symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
             device = torch.get_default_device()
@@ -317,9 +351,18 @@ class Tensor:
                     requires_grad=requires_grad)
             data[key] = arr
         
+        # Create intertwiners (intw) for non-Abelian groups
+        intw = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in data.keys():
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         # Prune indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
-        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=dtype)
+        return cls(indices=normalized_indices, itags=itags_tuple, data=data, intw=intw, dtype=dtype)
 
     @staticmethod
     def _prune_unused_sectors(indices: Tuple[Index, ...], data: Dict[BlockKey, torch.Tensor]) -> Tuple[Index, ...]:
