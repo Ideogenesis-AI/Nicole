@@ -265,3 +265,123 @@ class Bridge:
             weights[0, 0] = 1.0
         
         return Bridge(cgspec, weights)
+
+
+def compute_xsymbol(
+    bridge_a: Bridge,
+    bridge_b: Bridge,
+    axes_a: Sequence[int],
+    axes_b: Sequence[int],
+) -> Tuple[torch.Tensor, yuzuha.CGSpec]:
+    """Compute X-symbol for contracting two CG tensors.
+    
+    The X-symbol encodes recoupling coefficients for contracting two CG tensors.
+    Given two Bridges with OM bases α and β, and a contraction specification,
+    this returns X^γ_{αβ} coefficients and the output CGSpec.
+    
+    Parameters
+    ----------
+    bridge_a : Bridge
+        First Bridge to contract.
+    bridge_b : Bridge
+        Second Bridge to contract.
+    axes_a : Sequence[int]
+        Edge indices from bridge_a to contract (0-indexed).
+    axes_b : Sequence[int]
+        Edge indices from bridge_b to contract (0-indexed).
+        Must have the same length as axes_a, with matching spins.
+    
+    Returns
+    -------
+    x_symbol : torch.Tensor
+        X-symbol array with shape (om_a, om_b, om_c) as a torch tensor.
+    spec_c : yuzuha.CGSpec
+        CGSpec for the output (uncontracted edges).
+    
+    Raises
+    ------
+    ValueError
+        If contraction is invalid (mismatched spins, invalid axes).
+    RuntimeError
+        On yuzuha internal errors (e.g., cache issues).
+    
+    Examples
+    --------
+    >>> from nicole import SU2Group, Direction
+    >>> from nicole.symmetry.delegate import Bridge, compute_xsymbol
+    >>> 
+    >>> group = SU2Group()
+    >>> 
+    >>> # Bridge A: two spin-1/2 in, one spin-1 out
+    >>> key_a = (1, 1, 2)
+    >>> dirs_a = [Direction.IN, Direction.IN, Direction.OUT]
+    >>> bridge_a = Bridge.from_block(group, key_a, dirs_a)
+    >>> 
+    >>> # Bridge B: one spin-1 in, one spin-1/2 in, one spin-1/2 out
+    >>> key_b = (2, 1, 1)
+    >>> dirs_b = [Direction.IN, Direction.IN, Direction.OUT]
+    >>> bridge_b = Bridge.from_block(group, key_b, dirs_b)
+    >>> 
+    >>> # Contract on spin-1 edges
+    >>> x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, [2], [0])
+    >>> x_symbol.shape
+    torch.Size([1, 1, 1])
+    """
+    contraction = yuzuha.Contraction(list(axes_a), list(axes_b))
+    x_array, spec_c = yuzuha.compute_xsymbol(bridge_a.cgspec, bridge_b.cgspec, contraction)
+    
+    x_symbol = torch.from_numpy(x_array)
+    return x_symbol, spec_c
+
+
+def compute_rsymbol(
+    bridge: Bridge,
+    permutation: Sequence[int],
+) -> Tuple[torch.Tensor, yuzuha.CGSpec]:
+    """Compute R-symbol for permuting external edges of a CG tensor.
+    
+    The R-symbol describes how OM indices transform when external edges are
+    permuted. Returns a unitary matrix R^β_α and the permuted CGSpec.
+    
+    Parameters
+    ----------
+    bridge : Bridge
+        Bridge whose edges to permute.
+    permutation : Sequence[int]
+        Permutation of edge indices. Must be a valid permutation of
+        [0, 1, ..., num_external-1], with each index appearing exactly once.
+    
+    Returns
+    -------
+    r_symbol : torch.Tensor
+        R-symbol array with shape (om_original, om_permuted) as a torch tensor.
+        For SU(2) this is real and unitary (R†R = I, RR† = I).
+    spec_permuted : yuzuha.CGSpec
+        CGSpec with edges permuted according to the permutation.
+    
+    Raises
+    ------
+    ValueError
+        If permutation is invalid (wrong length, duplicate indices, out of range).
+    RuntimeError
+        On yuzuha internal errors.
+    
+    Examples
+    --------
+    >>> from nicole import SU2Group, Direction
+    >>> from nicole.symmetry.delegate import Bridge, compute_rsymbol
+    >>> 
+    >>> group = SU2Group()
+    >>> key = (1, 1, 2)
+    >>> directions = [Direction.IN, Direction.IN, Direction.OUT]
+    >>> bridge = Bridge.from_block(group, key, directions)
+    >>> 
+    >>> # Swap first two edges
+    >>> r_symbol, spec_perm = compute_rsymbol(bridge, [1, 0, 2])
+    >>> r_symbol.shape
+    torch.Size([1, 1])
+    """
+    r_array, spec_permuted = yuzuha.compute_rsymbol(bridge.cgspec, list(permutation))
+    
+    r_symbol = torch.from_numpy(r_array)
+    return r_symbol, spec_permuted
