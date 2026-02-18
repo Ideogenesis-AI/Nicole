@@ -22,7 +22,7 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group
 from nicole.blocks import BlockSchema
 from nicole.symmetry.product import ProductGroup
 from ..utils import assert_charge_neutral
@@ -383,6 +383,62 @@ def test_tensor_zeros_three_indices():
         assert torch.allclose(block, torch.zeros_like(block))
 
 
+def test_tensor_zeros_su2():
+    """Test Tensor.zeros with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
+
+
+def test_tensor_zeros_abelian_no_intw():
+    """Test that Abelian tensors have no intertwiner (intw=None)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    
+    # Abelian groups should have no intertwiner
+    assert tensor.intw is None
+
+
+def test_tensor_random_su2():
+    """Test Tensor.random with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
+
+
 # ProductGroup integration tests
 
 def test_tensor_zeros_product_group_u1_u1():
@@ -451,6 +507,25 @@ def test_tensor_zeros_product_group_u1_z2():
     assert tensor.data[((1, 1), (1, 1))].shape == (1, 2)
 
 
+def test_tensor_zeros_product_group_su2():
+    """Test Tensor.zeros with ProductGroup containing SU2."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx1 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2), Sector((1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((0, 2), 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64)
+    
+    # Non-Abelian ProductGroup should have intertwiner
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify Bridge properties
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+
+
 def test_tensor_random_product_group():
     """Test Tensor.random with ProductGroup."""
     group = ProductGroup([U1Group(), U1Group()])
@@ -475,6 +550,26 @@ def test_tensor_random_product_group():
     # Check that blocks are not all zeros
     assert not torch.allclose(tensor.data[((0, 0), (0, 0))], torch.zeros_like(tensor.data[((0, 0), (0, 0))]))
     assert tensor.norm() > 0.0
+
+
+def test_tensor_random_product_group_su2():
+    """Test Tensor.random with ProductGroup containing SU2."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx1 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2), Sector((1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((0, 2), 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42)
+    
+    # Non-Abelian ProductGroup should have intertwiner
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify Bridge properties
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights[0, 0] == 1.0
 
 
 # ============================================================================
