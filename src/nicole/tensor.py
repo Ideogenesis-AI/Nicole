@@ -523,10 +523,16 @@ class Tensor:
             # Just move to new device
             new_data = {k: v.to(device) for k, v in self.data.items()}
         
+        # Move intertwiner to new device/dtype
+        new_intw = None
+        if self.intw is not None:
+            new_intw = {k: bridge.to(device, dtype=new_dtype) for k, bridge in self.intw.items()}
+        
         result = Tensor(
             indices=self.indices,
             itags=self.itags,
             data=new_data,
+            intw=new_intw,
             dtype=new_dtype,
             label=self.label,
         )
@@ -648,10 +654,17 @@ class Tensor:
     def copy(self) -> Tensor:
         """Create a deep copy of this tensor."""
         new_data = {k: v.clone() for k, v in self.data.items()}
+        
+        # Deep copy intertwiner
+        new_intw = None
+        if self.intw is not None:
+            new_intw = {k: bridge.clone() for k, bridge in self.intw.items()}
+        
         return Tensor(
             indices=self.indices,
             itags=self.itags,
             data=new_data,
+            intw=new_intw,
             dtype=self.dtype,
             label=self.label,
         )
