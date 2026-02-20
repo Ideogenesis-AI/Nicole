@@ -22,8 +22,9 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group
 from nicole.symmetry.product import ProductGroup
+import nicole.symmetry.delegate as dg
 from ..utils import assert_blocks_equal
 
 
@@ -607,3 +608,195 @@ def test_addition_empty_blocks():
     assert torch.allclose(C.data[(0, 0)], torch.ones((2, 2)))
     assert torch.allclose(C.data[(1, 1)], torch.ones((2, 2)) * 5)
 
+
+# SU(2) addition/subtraction tests
+
+def test_addition_su2_same_weights():
+    """Test SU(2) tensor addition with same weights (default)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create two tensors with default weights
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    C = A + B
+    
+    # Should use non-Abelian addition
+    assert C.intw is not None
+    
+    # Verify weights are unchanged (same as inputs)
+    for key in C.data.keys():
+        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
+        # Block shape should be unchanged (direct addition)
+        assert C.data[key].shape == A.data[key].shape
+        # Data should be sum of inputs
+        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+
+
+def test_addition_su2_different_weights():
+    """Test SU(2) tensor addition with different weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensors
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Modify weights of B to be different
+    key = (1, 1)
+    bridge_b = B.intw[key]
+    om_dim = bridge_b.om_dimension
+    new_weights_b = torch.randn(2, om_dim, dtype=torch.float64) * 0.5
+    new_bridge_b = dg.Bridge(cgspec=bridge_b.cgspec, weights=new_weights_b)
+    
+    # Update B with new weights and adjusted block shape
+    new_data_b = {key: torch.randn(2, 2, 2, dtype=torch.float64)}
+    new_intw_b = {key: new_bridge_b}
+    B_modified = Tensor(
+        indices=(idx1, idx2),
+        itags=("a", "b"),
+        data=new_data_b,
+        intw=new_intw_b,
+        dtype=torch.float64
+    )
+    
+    C = A + B_modified
+    
+    # Should concatenate along reduced multiplicity dimension
+    assert C.intw is not None
+    bridge_c = C.intw[key]
+    
+    # Weights should be concatenated
+    expected_weights = torch.cat([A.intw[key].weights, B_modified.intw[key].weights], dim=0)
+    assert torch.allclose(bridge_c.weights, expected_weights)
+    
+    # Block shape should have concatenated trailing dimension
+    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B_modified.data[key].shape[-1]
+    
+    # Data should be concatenated
+    expected_data = torch.cat([A.data[key], B_modified.data[key]], dim=-1)
+    assert torch.allclose(C.data[key], expected_data)
+
+
+def test_subtraction_su2_same_weights():
+    """Test SU(2) tensor subtraction with same weights (default)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create two tensors with default weights
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    C = A - B
+    
+    # Should use non-Abelian subtraction
+    assert C.intw is not None
+    
+    # Verify weights are unchanged (same as inputs)
+    for key in C.data.keys():
+        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
+        # Block shape should be unchanged (direct subtraction)
+        assert C.data[key].shape == A.data[key].shape
+        # Data should be difference of inputs
+        assert torch.allclose(C.data[key], A.data[key] - B.data[key])
+
+
+def test_subtraction_su2_different_weights():
+    """Test SU(2) tensor subtraction with different weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensors
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Modify weights of B to be different
+    key = (1, 1)
+    bridge_b = B.intw[key]
+    om_dim = bridge_b.om_dimension
+    new_weights_b = torch.randn(2, om_dim, dtype=torch.float64) * 0.5
+    new_bridge_b = dg.Bridge(cgspec=bridge_b.cgspec, weights=new_weights_b)
+    
+    # Update B with new weights and adjusted block shape
+    new_data_b = {key: torch.randn(2, 2, 2, dtype=torch.float64)}
+    new_intw_b = {key: new_bridge_b}
+    B_modified = Tensor(
+        indices=(idx1, idx2),
+        itags=("a", "b"),
+        data=new_data_b,
+        intw=new_intw_b,
+        dtype=torch.float64
+    )
+    
+    C = A - B_modified
+    
+    # Should concatenate along reduced multiplicity dimension
+    assert C.intw is not None
+    bridge_c = C.intw[key]
+    
+    # Weights should be concatenated
+    expected_weights = torch.cat([A.intw[key].weights, B_modified.intw[key].weights], dim=0)
+    assert torch.allclose(bridge_c.weights, expected_weights)
+    
+    # Block shape should have concatenated trailing dimension
+    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B_modified.data[key].shape[-1]
+    
+    # Data should be concatenated
+    expected_data = torch.cat([A.data[key], B_modified.data[key]], dim=-1)
+    assert torch.allclose(C.data[key], expected_data)
+
+
+def test_addition_su2_self_doubles():
+    """Test that A + A doubles the tensor for SU(2) with same weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    C = A + A
+    
+    # With same weights, should add directly
+    for key in C.data.keys():
+        assert torch.allclose(C.data[key], 2 * A.data[key])
+        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
+
+
+def test_subtraction_su2_self_gives_zero():
+    """Test that A - A gives zero for SU(2) tensors."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    C = A - A
+    
+    # Result should be zero
+    assert C.norm() < 1e-12
+
+
+def test_addition_su2_norm_conservation():
+    """Test that addition preserves norm properties for SU(2)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create two tensors with default weights (orthogonal in OM space)
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    C = A + B
+    
+    # For same weights, ||A + B||² should be related to ||A||² and ||B||²
+    # Since default weights are the same, this is just element-wise addition
+    norm_a = A.norm()
+    norm_b = B.norm()
+    norm_c = C.norm()
+    
+    # Verify norm is computed correctly (not exact triangle inequality due to structure)
+    assert norm_c > 0.0
+    assert norm_c >= abs(norm_a - norm_b)
