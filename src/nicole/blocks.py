@@ -232,5 +232,76 @@ class BlockSchema:
             # Non-Abelian: check if neutral is among available channels
             avail_charges = BlockSchema.charge_avail(indices, key)
             return any(group.equal(charge, group.neutral) for charge in avail_charges)
+    
+    @staticmethod
+    def bridge_collinear(
+        bridge_a: Bridge,
+        bridge_b: Bridge,
+        rtol: float = 1e-12,
+        atol: float = 1e-15
+    ) -> Tuple[bool, float]:
+        """Check if two Bridge weight matrices are compatible for direct addition/subtraction.
+        
+        Parameters
+        ----------
+        bridge_a, bridge_b : Bridge
+            Bridge objects to compare
+        rtol : float, optional
+            Relative tolerance for weight comparison. Default: 1e-12.
+        atol : float, optional
+            Absolute tolerance for weight comparison. Default: 1e-15.
+        
+        Returns
+        -------
+        compatible : bool
+            True if weights are identical or collinear (can add without concatenation)
+        scale_factor : float
+            Scalar α such that weights_b ≈ α * weights_a.
+            For identical weights, α = 1.0.
+            For collinear weights, α is the computed scale factor.
+            For incompatible weights, this value is unused.
+        
+        Notes
+        -----
+        Weights are compatible in two cases:
+        - Identical: same shape and match element-wise within tolerance (α = 1)
+        - Collinear: num_components == 1 and weight vectors are parallel (α ≠ 1)
+        
+        Collinearity uses squared cosine similarity: cos²(θ) = (w1·w2)² / (||w1||²·||w2||²).
+        If cos²(θ) ≈ 1, vectors are parallel, and α = (w1·w2) / (w1·w1).
+        """
+        weights_a = bridge_a.weights
+        weights_b = bridge_b.weights
+        
+        # Check for identical weights
+        if weights_a.shape == weights_b.shape:
+            if torch.allclose(weights_a, weights_b, rtol=rtol, atol=atol):
+                return (True, 1.0)
+        
+        # Check for collinear weights (only for single component case)
+        if bridge_a.num_components == 1 and bridge_b.num_components == 1:
+            wa_flat = weights_a.flatten()
+            wb_flat = weights_b.flatten()
+            
+            norm_a = torch.linalg.vector_norm(wa_flat)
+            norm_b = torch.linalg.vector_norm(wb_flat)
+            
+            # Check if either is zero
+            if norm_a < atol or norm_b < atol:
+                if norm_a < atol and norm_b < atol:
+                    return (True, 1.0)
+                else:
+                    return (False, 1.0)
+            
+            # Compute cosine similarity
+            dot = torch.dot(wa_flat, wb_flat)
+            cos_theta_sq = (dot / (norm_a * norm_b)) ** 2
+            
+            # Check if parallel (|cos(θ)| ≈ 1)
+            if torch.allclose(cos_theta_sq, torch.tensor(1.0, dtype=cos_theta_sq.dtype), rtol=rtol, atol=atol):
+                scale = (dot / torch.dot(wa_flat, wa_flat)).item()
+                return (True, scale)
+        
+        return (False, 1.0)
 
 
