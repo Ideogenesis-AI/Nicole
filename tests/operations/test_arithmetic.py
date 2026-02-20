@@ -271,6 +271,78 @@ def test_scalar_multiplication_zero():
         assert torch.allclose(block, torch.zeros_like(block))
 
 
+def test_scalar_multiplication_su2_preserves_intw():
+    """Test scalar multiplication with SU(2) preserves intertwiner."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    scalar = 2.5
+    B = A * scalar
+    
+    # Intertwiner should be preserved (not None)
+    assert B.intw is not None
+    assert set(B.intw.keys()) == set(A.intw.keys())
+    
+    # Weights should be unchanged
+    for key in A.intw.keys():
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+    
+    # Data should be scaled
+    for key in A.data.keys():
+        assert torch.allclose(B.data[key], A.data[key] * scalar)
+
+
+def test_scalar_multiplication_su2_norm_scaling():
+    """Test that norm scales correctly: ||α*T|| = |α| * ||T||."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    original_norm = A.norm()
+    
+    # Test with positive scalar
+    B = A * 3.0
+    assert math.isclose(B.norm(), 3.0 * original_norm, rel_tol=1e-10)
+    
+    # Test with negative scalar
+    C = A * (-2.0)
+    assert math.isclose(C.norm(), 2.0 * original_norm, rel_tol=1e-10)
+    
+    # Test with complex scalar
+    D = A * (1.0 + 1.0j)
+    expected_norm = abs(1.0 + 1.0j) * original_norm
+    assert math.isclose(D.norm(), expected_norm, rel_tol=1e-10)
+
+
+def test_scalar_multiplication_su2_four_indices():
+    """Test scalar multiplication with 4 indices (non-trivial OM)."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
+    
+    # Verify non-trivial OM
+    key = (1, 1, 1, 1)
+    if key in A.intw:
+        assert A.intw[key].om_dimension > 1
+    
+    scalar = 1.5
+    B = A * scalar
+    
+    # Weights preserved, data scaled
+    for key in A.intw.keys():
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+        assert torch.allclose(B.data[key], A.data[key] * scalar)
+
+
 # Norm tests
 
 def test_norm_positive():
