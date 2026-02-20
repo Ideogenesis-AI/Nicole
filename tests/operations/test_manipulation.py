@@ -24,7 +24,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
-from nicole import ProductGroup, U1Group, Z2Group
+from nicole import ProductGroup, U1Group, Z2Group, SU2Group
 from ..utils import assert_blocks_equal, assert_charge_neutral
 
 
@@ -1637,4 +1637,95 @@ def test_trim_zero_sectors_product_group():
     assert (0, 0) in charges
     assert (1, 0) in charges
     assert (0, 1) not in charges
+
+
+def test_trim_zero_sectors_su2_zero_data():
+    """Test trim with SU(2) when reduced tensor data is zero."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Set one block's data to near-zero
+    key = (1, 1)
+    if key in tensor.data:
+        tensor.data[key] = torch.zeros_like(tensor.data[key]) * 1e-20
+        
+        original_blocks = len(tensor.data)
+        tensor.trim_zero_sectors()
+        
+        # Block with zero data should be removed
+        assert key not in tensor.data
+        assert len(tensor.data) < original_blocks
+        
+        # Intertwiner for removed block should also be removed
+        assert key not in tensor.intw
+
+
+def test_trim_zero_sectors_su2_zero_weights():
+    """Test trim with SU(2) when weights are zero (T = R @ 0 = 0)."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Set one block's weights to near-zero (physical tensor becomes zero)
+    key = (1, 1)
+    if key in tensor.intw:
+        tensor.intw[key].weights[:] = 0.0
+        
+        original_blocks = len(tensor.data)
+        tensor.trim_zero_sectors()
+        
+        # Block with zero weights should be removed (even if data is non-zero)
+        assert key not in tensor.data
+        assert len(tensor.data) < original_blocks
+        assert key not in tensor.intw
+
+
+def test_trim_zero_sectors_su2_nonzero_preserved():
+    """Test trim with SU(2) preserves non-zero blocks."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    original_keys = set(tensor.data.keys())
+    original_blocks = len(tensor.data)
+    
+    tensor.trim_zero_sectors()
+    
+    # All blocks should remain (none are zero)
+    assert len(tensor.data) == original_blocks
+    assert set(tensor.data.keys()) == original_keys
+    
+    # All intertwiners should remain
+    assert set(tensor.intw.keys()) == original_keys
+
+
+def test_trim_zero_sectors_su2_three_indices_mixed():
+    """Test trim with SU(2) using 3 indices, some blocks zero."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    
+    # Zero out some blocks via weights
+    keys_to_zero = []
+    for i, key in enumerate(tensor.data.keys()):
+        if i % 2 == 0:  # Zero out every other block
+            tensor.intw[key].weights[:] = 0.0
+            keys_to_zero.append(key)
+    
+    tensor.trim_zero_sectors()
+    
+    # Zeroed blocks should be removed
+    for key in keys_to_zero:
+        assert key not in tensor.data
+        assert key not in tensor.intw
 
