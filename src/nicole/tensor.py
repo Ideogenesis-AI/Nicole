@@ -1079,6 +1079,74 @@ class Tensor:
     __rmul__ = __mul__
 
     # ------------------------------------------------------------
+    #   Compression: reduce redundant components
+    # ------------------------------------------------------------
+
+    def compress(
+        self, 
+        keys: Optional[Sequence[BlockKey]] = None, 
+        cutoff: float = 1e-14
+    ) -> None:
+        """Compress intertwiner weights by removing linearly dependent components (in-place).
+        
+        For non-Abelian groups, performs SVD on weight matrices and truncates
+        singular values below the cutoff threshold. This reduces the reduced
+        multiplicity dimension when weight rows are linearly dependent.
+        
+        The compression preserves the physical tensor: T = R @ W is decomposed as
+        R @ (U @ S @ Vh) ≈ (R @ U @ S) @ Vh, where small singular values are removed.
+        
+        This operation modifies the tensor in place.
+        
+        Parameters
+        ----------
+        keys : Sequence[BlockKey], optional
+            Block keys to compress. If None, compresses all blocks with num_components >= 2.
+        cutoff : float, optional
+            Singular value threshold for truncation. Default: 1e-14.
+        
+        Examples
+        --------
+        >>> # After adding tensors with different weights, compress redundancy
+        >>> C = A + B  # May have redundant components
+        >>> C.compress(cutoff=1e-12)  # Modifies C in place
+        """
+        # Abelian groups: no compression needed
+        if not self.indices or self.indices[0].group.is_abelian:
+            return
+        
+        # Determine which keys to compress
+        if keys is None:
+            # Compress all blocks with num_components >= 2
+            keys_to_compress = [k for k, bridge in self.intw.items() if bridge.num_components >= 2]
+        else:
+            keys_to_compress = list(keys)
+        
+        # If no blocks to compress, nothing to do
+        if not keys_to_compress:
+            return
+        
+        # Perform compression on specified keys
+        for key in keys_to_compress:
+            block = self.data[key]
+            bridge = self.intw[key]
+            
+            # Perform SVD compression
+            U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+            
+            # Truncate small singular values (keep at least 1)
+            k = max(1, (S >= cutoff).sum().item())
+            
+            if k < bridge.num_components:
+                # Compression: absorb U[:, :k] @ diag(S[:k]) into data, keep Vh[:k, :]
+                r_flat = block.flatten(0, -2)
+                r_new = (r_flat @ (U[:, :k] * S[:k])).reshape(block.shape[:-1] + (k,))
+                
+                # Update in place
+                self.data[key] = r_new
+                self.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=Vh[:k, :])
+
+    # ------------------------------------------------------------
     #   Tensor operations: conj, permute, transpose
     # ------------------------------------------------------------
 
