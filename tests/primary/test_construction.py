@@ -247,6 +247,144 @@ def test_tensor_norm_empty():
     assert tensor.norm() == 0.0
 
 
+def test_tensor_norm_su2_basic():
+    """Test Tensor.norm() for SU(2) tensors."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["A", "B"])
+    
+    # Compute norm manually using Gram matrix approach
+    manual_total_gram = 0.0
+    manual_total_direct = 0.0
+    for key, block in tensor.data.items():
+        bridge = tensor.intw[key]
+        weights = bridge.weights
+        r_flat = block.flatten(0, -2)
+        
+        # Method 1: Gram matrix approach
+        gram = r_flat.T.conj() @ r_flat
+        gw = gram @ weights
+        norm_sq_gram = torch.sum(weights.conj() * gw)
+        manual_total_gram += norm_sq_gram.real.item()
+        
+        # Method 2: Direct matrix norm approach
+        expanded = r_flat @ weights
+        norm_sq_direct = torch.linalg.matrix_norm(expanded, ord='fro') ** 2
+        manual_total_direct += norm_sq_direct.item()
+    
+    manual_norm_gram = math.sqrt(manual_total_gram)
+    manual_norm_direct = math.sqrt(manual_total_direct)
+    
+    # Both manual methods should match each other
+    assert math.isclose(tensor.norm(), manual_norm_direct, rel_tol=1e-9)
+    # And match the tensor.norm() result
+    assert math.isclose(tensor.norm(), manual_norm_gram, rel_tol=1e-9)
+
+
+def test_tensor_norm_su2_zero():
+    """Test Tensor.norm() for zero SU(2) tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["A", "B"])
+    
+    assert tensor.norm() == 0.0
+
+
+def test_tensor_norm_su2_custom_weights():
+    """Test Tensor.norm() for SU(2) tensor with custom weights."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensor with custom weights
+    tensor = Tensor.random([idx1, idx2], seed=99, itags=["A", "B"])
+    
+    # Modify weights for one block
+    key = (1, 1)
+    bridge = tensor.intw[key]
+    om_dim = bridge.om_dimension
+    
+    # Create custom weights with multiple components
+    new_weights = torch.randn(3, om_dim, dtype=torch.float64)
+    new_bridge = dg.Bridge(cgspec=bridge.cgspec, weights=new_weights)
+    
+    # Update block shape to match new num_components
+    old_block = tensor.data[key]
+    new_block = torch.randn(2, 2, 3, dtype=torch.float64)
+    
+    # Create new tensor with updated bridge and block
+    new_data = {key: new_block}
+    new_intw = {key: new_bridge}
+    tensor_custom = Tensor(
+        indices=(idx1, idx2),
+        itags=("A", "B"),
+        data=new_data,
+        intw=new_intw,
+        dtype=torch.float64
+    )
+    
+    # Verify norm is computed correctly using both approaches
+    r_flat = new_block.flatten(0, -2)
+    
+    # Method 1: Gram matrix approach
+    gram = r_flat.T.conj() @ r_flat
+    gw = gram @ new_weights
+    norm_sq_gram = torch.sum(new_weights.conj() * gw)
+    expected_norm_gram = math.sqrt(norm_sq_gram.real.item())
+    
+    # Method 2: Direct matrix norm approach
+    expanded = r_flat @ new_weights
+    norm_sq_direct = torch.linalg.matrix_norm(expanded, ord='fro') ** 2
+    expected_norm_direct = math.sqrt(norm_sq_direct.item())
+    
+    # Both manual methods should match each other
+    assert math.isclose(tensor_custom.norm(), expected_norm_direct, rel_tol=1e-9)
+    # And match the tensor.norm() result
+    assert math.isclose(tensor_custom.norm(), expected_norm_gram, rel_tol=1e-9)
+
+
+def test_tensor_norm_su2_product_group():
+    """Test Tensor.norm() for ProductGroup with SU(2) using default weights.
+    
+    With default weights (1 component, first OM channel = 1), the norm should
+    match the direct Frobenius norm of the reduced tensors.
+    """
+    from nicole import ProductGroup
+    
+    u1 = U1Group()
+    su2 = SU2Group()
+    group = ProductGroup([u1, su2])
+    
+    # Create 4-index tensor
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx4 = Index(Direction.IN, group, sectors=(Sector((0, 0), 1),))
+    
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=123, itags=["A", "B", "C", "D"])
+    
+    # Should use non-Abelian norm computation
+    assert tensor.intw is not None
+    
+    # Verify all bridges have default weights (1 component, first element = 1)
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_components == 1
+        assert bridge.weights.shape[0] == 1
+        assert math.isclose(bridge.weights[0, 0].item(), 1.0)
+    
+    # With default weights, SU(2) norm should match direct Frobenius norm of reduced tensors
+    direct_norm_sq = sum(torch.sum(torch.abs(block) ** 2).item() for block in tensor.data.values())
+    direct_norm = math.sqrt(direct_norm_sq)
+    
+    assert math.isclose(tensor.norm(), direct_norm, rel_tol=1e-9)
+
+
 def test_tensor_validation_mismatched_itags():
     """Test that Tensor rejects mismatched itag count."""
     group = U1Group()
