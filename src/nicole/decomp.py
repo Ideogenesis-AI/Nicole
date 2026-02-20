@@ -834,7 +834,7 @@ def decomp(
             # The merged index is at position 0 of U, and at last position of iso_conj
             iso_conj_last_idx = len(iso_conj.indices) - 1
             U_unmerged = contract(iso_conj, U, axes=(iso_conj_last_idx, 0))
-            U_unmerged.trim_zero_sectors()
+            U_unmerged.trim_zero_blocks()
             return U_unmerged, S, Vh
         else:  # mode == "UR", "LV", or "QR"
             first, second = result
@@ -843,7 +843,7 @@ def decomp(
             # The merged index is at position 0 of first, and at last position of iso_conj
             iso_conj_last_idx = len(iso_conj.indices) - 1
             first_unmerged = contract(iso_conj, first, axes=(iso_conj_last_idx, 0))
-            first_unmerged.trim_zero_sectors()
+            first_unmerged.trim_zero_blocks()
             return first_unmerged, second
     
     # Single axis: original behavior

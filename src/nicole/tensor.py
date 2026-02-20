@@ -91,8 +91,8 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
-    trim_zero_sectors()
-        In-place: Remove sectors where all data is below double precision.
+    trim_zero_blocks()
+        In-place: Remove blocks where all data is below double precision.
     device
         Property returning the device where tensor blocks are stored.
     to()
@@ -813,8 +813,8 @@ class Tensor:
         self.data = new_data
         self._invalidate_sorted_keys()
 
-    def trim_zero_sectors(self) -> None:
-        """Remove sectors where all data elements have absolute value below double precision.
+    def trim_zero_blocks(self) -> None:
+        """Remove blocks where all data elements have absolute value below double precision.
         
         This operation modifies the tensor in-place by:
         - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
@@ -825,7 +825,7 @@ class Tensor:
         -----
         Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
         For non-Abelian tensors T = R @ W, if W ≈ 0, then T ≈ 0 regardless of R.
-        Sectors are only removed if no blocks remain that reference their charges.
+        Index sectors are only removed if no blocks remain that reference their charges.
         """
         # Define threshold as double precision machine epsilon
         eps = torch.finfo(torch.float64).eps

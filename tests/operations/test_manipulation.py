@@ -1282,7 +1282,7 @@ def test_merge_axes_preserves_dtype():
 
 # Trim zero sectors tests
 
-def test_trim_zero_sectors_single_block():
+def test_trim_zero_blocks_single_block():
     """Test removing a single near-zero block."""
     group = U1Group()
     idx_in = Index(
@@ -1319,7 +1319,7 @@ def test_trim_zero_sectors_single_block():
     )
     
     # Apply trim
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Verify near-zero block is removed
     assert len(tensor.data) == 2
@@ -1340,7 +1340,7 @@ def test_trim_zero_sectors_single_block():
     assert 0 not in charges_out
 
 
-def test_trim_zero_sectors_multiple_blocks():
+def test_trim_zero_blocks_multiple_blocks():
     """Test removing multiple near-zero blocks."""
     group = U1Group()
     idx = Index(
@@ -1370,7 +1370,7 @@ def test_trim_zero_sectors_multiple_blocks():
         dtype=torch.float64
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Only two blocks should remain
     assert len(tensor.data) == 2
@@ -1384,7 +1384,7 @@ def test_trim_zero_sectors_multiple_blocks():
     assert set(charges) == {-1, 2}
 
 
-def test_trim_zero_sectors_no_removal():
+def test_trim_zero_blocks_no_removal():
     """Test that trim does nothing when all blocks are non-zero."""
     group = U1Group()
     idx = Index(
@@ -1409,14 +1409,14 @@ def test_trim_zero_sectors_no_removal():
     original_keys = set(tensor.data.keys())
     original_sectors = len(tensor.indices[0].sectors)
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Nothing should change
     assert set(tensor.data.keys()) == original_keys
     assert len(tensor.indices[0].sectors) == original_sectors
 
 
-def test_trim_zero_sectors_inplace():
+def test_trim_zero_blocks_inplace():
     """Test that trim modifies the tensor in-place."""
     group = U1Group()
     idx = Index(
@@ -1441,14 +1441,14 @@ def test_trim_zero_sectors_inplace():
     tensor_id = id(tensor)
     
     # Apply trim (returns None for in-place)
-    result = tensor.trim_zero_sectors()
+    result = tensor.trim_zero_blocks()
     
     assert result is None  # In-place methods return None
     assert id(tensor) == tensor_id  # Same object
     assert len(tensor.data) == 1  # But modified
 
 
-def test_trim_zero_sectors_negative_values():
+def test_trim_zero_blocks_negative_values():
     """Test trim with negative values in blocks."""
     group = U1Group()
     idx = Index(
@@ -1475,7 +1475,7 @@ def test_trim_zero_sectors_negative_values():
         dtype=torch.float64
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Near-zero block should be removed despite negative values
     assert len(tensor.data) == 2
@@ -1490,7 +1490,7 @@ def test_trim_zero_sectors_negative_values():
     )
 
 
-def test_trim_zero_sectors_mixed_signs():
+def test_trim_zero_blocks_mixed_signs():
     """Test trim with mixed positive and negative values in blocks."""
     group = U1Group()
     idx = Index(
@@ -1520,7 +1520,7 @@ def test_trim_zero_sectors_mixed_signs():
         dtype=torch.float64
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Block with all tiny values should be removed
     # Blocks with at least one large value should be kept
@@ -1537,7 +1537,7 @@ def test_trim_zero_sectors_mixed_signs():
     assert torch.max(torch.abs(tensor.data[(1, 1)])).item() >= 2.0  # Has the large value
 
 
-def test_trim_zero_sectors_complex_values():
+def test_trim_zero_blocks_complex_values():
     """Test trim with complex-valued data."""
     group = U1Group()
     idx = Index(
@@ -1562,7 +1562,7 @@ def test_trim_zero_sectors_complex_values():
         dtype=torch.complex128
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Near-zero complex block should be removed
     assert len(tensor.data) == 1
@@ -1570,7 +1570,7 @@ def test_trim_zero_sectors_complex_values():
     assert (0, 0) not in tensor.data
 
 
-def test_trim_zero_sectors_z2_symmetry():
+def test_trim_zero_blocks_z2_symmetry():
     """Test trim with Z2 symmetry group."""
     group = Z2Group()
     idx = Index(
@@ -1591,7 +1591,7 @@ def test_trim_zero_sectors_z2_symmetry():
         dtype=torch.float64
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     assert len(tensor.data) == 1
     assert (1, 1) in tensor.data
@@ -1602,7 +1602,7 @@ def test_trim_zero_sectors_z2_symmetry():
     assert charges == [1]
 
 
-def test_trim_zero_sectors_product_group():
+def test_trim_zero_blocks_product_group():
     """Test trim with ProductGroup symmetry."""
     group = ProductGroup([U1Group(), U1Group()])
     idx = Index(
@@ -1628,7 +1628,7 @@ def test_trim_zero_sectors_product_group():
         dtype=torch.float64
     )
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     assert len(tensor.data) == 2
     assert ((0, 1), (0, 1)) not in tensor.data
@@ -1639,7 +1639,7 @@ def test_trim_zero_sectors_product_group():
     assert (0, 1) not in charges
 
 
-def test_trim_zero_sectors_su2_zero_data():
+def test_trim_zero_blocks_su2_zero_data():
     """Test trim with SU(2) when reduced tensor data is zero."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -1653,7 +1653,7 @@ def test_trim_zero_sectors_su2_zero_data():
         tensor.data[key] = torch.zeros_like(tensor.data[key]) * 1e-20
         
         original_blocks = len(tensor.data)
-        tensor.trim_zero_sectors()
+        tensor.trim_zero_blocks()
         
         # Block with zero data should be removed
         assert key not in tensor.data
@@ -1663,7 +1663,7 @@ def test_trim_zero_sectors_su2_zero_data():
         assert key not in tensor.intw
 
 
-def test_trim_zero_sectors_su2_zero_weights():
+def test_trim_zero_blocks_su2_zero_weights():
     """Test trim with SU(2) when weights are zero (T = R @ 0 = 0)."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -1677,7 +1677,7 @@ def test_trim_zero_sectors_su2_zero_weights():
         tensor.intw[key].weights[:] = 0.0
         
         original_blocks = len(tensor.data)
-        tensor.trim_zero_sectors()
+        tensor.trim_zero_blocks()
         
         # Block with zero weights should be removed (even if data is non-zero)
         assert key not in tensor.data
@@ -1685,7 +1685,7 @@ def test_trim_zero_sectors_su2_zero_weights():
         assert key not in tensor.intw
 
 
-def test_trim_zero_sectors_su2_nonzero_preserved():
+def test_trim_zero_blocks_su2_nonzero_preserved():
     """Test trim with SU(2) preserves non-zero blocks."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -1696,7 +1696,7 @@ def test_trim_zero_sectors_su2_nonzero_preserved():
     original_keys = set(tensor.data.keys())
     original_blocks = len(tensor.data)
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # All blocks should remain (none are zero)
     assert len(tensor.data) == original_blocks
@@ -1706,7 +1706,7 @@ def test_trim_zero_sectors_su2_nonzero_preserved():
     assert set(tensor.intw.keys()) == original_keys
 
 
-def test_trim_zero_sectors_su2_three_indices_mixed():
+def test_trim_zero_blocks_su2_three_indices_mixed():
     """Test trim with SU(2) using 3 indices, some blocks zero."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -1722,7 +1722,7 @@ def test_trim_zero_sectors_su2_three_indices_mixed():
             tensor.intw[key].weights[:] = 0.0
             keys_to_zero.append(key)
     
-    tensor.trim_zero_sectors()
+    tensor.trim_zero_blocks()
     
     # Zeroed blocks should be removed
     for key in keys_to_zero:
