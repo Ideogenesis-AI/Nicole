@@ -1082,6 +1082,7 @@ class Tensor:
             indices=self.indices,
             itags=self.itags,
             data=new_data,
+            intw=self.intw,
             dtype=torch.promote_types(self.dtype, scalar_dtype),
             label=self.label,
         )
