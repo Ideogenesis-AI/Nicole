@@ -1007,3 +1007,248 @@ def test_compress_su2_preserves_tensor_value():
     # Verify norm is preserved (main check that physical tensor is unchanged)
     assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
 
+
+# Multi-index and multi-sector tests (non-trivial CG and OM)
+
+def test_addition_su2_three_indices_nontrivial_cg():
+    """Test SU(2) addition with 3 indices for non-trivial CG coupling."""
+    group = SU2Group()
+    # Three spin-1/2 indices
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # With default weights, should add directly
+    C = A + B
+    
+    # Verify structure
+    assert C.intw is not None
+    for key in C.data.keys():
+        # Same weights, so components unchanged
+        assert C.intw[key].num_components == A.intw[key].num_components
+        # Data should be sum
+        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+
+
+def test_addition_su2_four_indices_nontrivial_om():
+    """Test SU(2) addition with 4 indices for non-trivial outer multiplicity."""
+    group = SU2Group()
+    # Four spin-1/2 indices: creates non-trivial OM dimension
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
+    
+    # Check OM dimension is non-trivial
+    for key, bridge in A.intw.items():
+        # For (1,1,1,1) block, OM dimension should be > 1
+        if all(q == 1 for q in key):
+            assert bridge.om_dimension > 1, f"Expected non-trivial OM for {key}"
+    
+    # Addition with same weights
+    C = A + B
+    
+    # Verify structure preserved
+    assert C.intw is not None
+    for key in C.data.keys():
+        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+
+
+def test_addition_su2_multiple_sectors():
+    """Test SU(2) addition with multiple sectors creating multiple blocks."""
+    group = SU2Group()
+    # Multiple sectors in each index
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # Should have multiple blocks
+    assert len(A.data) > 1, "Expected multiple blocks"
+    
+    C = A + B
+    
+    # All blocks should be summed correctly
+    for key in C.data.keys():
+        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+
+
+def test_subtraction_su2_four_indices_different_weights():
+    """Test SU(2) subtraction with 4 indices and different weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
+    
+    # Modify B's weights to be different
+    key = (1, 1, 1, 1)
+    if key in B.intw:
+        bridge_b = B.intw[key]
+        om_dim = bridge_b.om_dimension
+        # Create different weights with 2 components
+        new_weights_b = torch.randn(2, om_dim, dtype=torch.float64)
+        B.intw[key] = dg.Bridge(cgspec=bridge_b.cgspec, weights=new_weights_b)
+        # Adjust data shape
+        B.data[key] = torch.randn(*B.data[key].shape[:-1], 2, dtype=torch.float64)
+    
+    C = A - B
+    
+    # Should concatenate weights
+    if key in C.intw:
+        assert C.intw[key].num_components == A.intw[key].num_components + 2
+
+
+def test_compress_su2_three_indices_multiple_sectors():
+    """Test compression with 3 indices and multiple sectors."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # Create different weights for some blocks
+    for key in B.intw.keys():
+        bridge_b = B.intw[key]
+        om_dim = bridge_b.om_dimension
+        # Add extra components with linearly dependent weights
+        base_weight = bridge_b.weights[0:1, :]  # First component
+        new_weights = torch.cat([
+            bridge_b.weights,
+            base_weight * 2.0,  # Linearly dependent
+            base_weight * 0.5   # Linearly dependent
+        ], dim=0)
+        B.intw[key] = dg.Bridge(cgspec=bridge_b.cgspec, weights=new_weights)
+        B.data[key] = torch.randn(*B.data[key].shape[:-1], new_weights.shape[0], dtype=torch.float64)
+    
+    C = A + B
+    
+    # Should have multiple blocks with increased components
+    assert len(C.data) > 1
+    original_norm = C.norm()
+    original_components = {key: bridge.num_components for key, bridge in C.intw.items()}
+    
+    # Compress
+    C.compress(cutoff=1e-12)
+    
+    # Norm should be preserved
+    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
+    
+    # At least some blocks should be compressed (linearly dependent weights removed)
+    compressed_components = {key: bridge.num_components for key, bridge in C.intw.items()}
+    compression_occurred = any(
+        compressed_components[key] < original_components[key] 
+        for key in original_components
+    )
+    assert compression_occurred, "Expected at least one block to be compressed"
+
+
+def test_compress_su2_four_indices_nontrivial_om():
+    """Test compression with 4 indices and non-trivial OM."""
+    group = SU2Group()
+    # Four spin-1/2 indices
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
+    
+    # Verify non-trivial OM dimension
+    key = (1, 1, 1, 1)
+    if key in A.intw:
+        assert A.intw[key].om_dimension > 1
+    
+    # Create scenario where weights have redundancy
+    if key in B.intw:
+        bridge_b = B.intw[key]
+        om_dim = bridge_b.om_dimension
+        
+        # Create weights where some rows are linear combinations
+        base1 = torch.randn(1, om_dim, dtype=torch.float64)
+        base2 = torch.randn(1, om_dim, dtype=torch.float64)
+        redundant_weights = torch.cat([
+            base1,
+            base2,
+            base1 * 0.5 + base2 * 0.3,  # Linear combination
+            base1 * 0.2 + base2 * 0.7   # Another linear combination
+        ], dim=0)
+        
+        B.intw[key] = dg.Bridge(cgspec=bridge_b.cgspec, weights=redundant_weights)
+        B.data[key] = torch.randn(*B.data[key].shape[:-1], 4, dtype=torch.float64)
+    
+    C = A + B
+    
+    original_norm = C.norm()
+    if key in C.intw:
+        original_components = C.intw[key].num_components
+    
+    # Compress
+    C.compress(cutoff=1e-12)
+    
+    # Norm should be preserved
+    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
+    
+    # Should reduce components (rank should be ~2)
+    if key in C.intw:
+        assert C.intw[key].num_components < original_components
+        assert C.intw[key].num_components >= 2  # Rank of the span
+
+
+def test_addition_subtraction_compress_workflow():
+    """Test realistic workflow: multiple additions/subtractions followed by compression."""
+    group = SU2Group()
+    # Three indices with multiple sectors
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    # Create several tensors
+    tensors = [Tensor.random([idx1, idx2, idx3], seed=s, itags=["a", "b", "c"]) 
+               for s in [10, 20, 30, 40]]
+    
+    # Modify some to have different weights
+    for i, t in enumerate(tensors[1:], 1):
+        for key in t.intw.keys():
+            if i % 2 == 1:  # Modify odd-indexed tensors
+                bridge = t.intw[key]
+                om_dim = bridge.om_dimension
+                new_weights = torch.randn(i + 1, om_dim, dtype=torch.float64) * 0.1
+                t.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=new_weights)
+                t.data[key] = torch.randn(*t.data[key].shape[:-1], i + 1, dtype=torch.float64)
+    
+    # Combine: (A + B) - (C + D)
+    AB = tensors[0] + tensors[1]
+    CD = tensors[2] + tensors[3]
+    result = AB - CD
+    
+    # Should have accumulated many components
+    max_components_before = max(bridge.num_components for bridge in result.intw.values())
+    assert max_components_before >= 2
+    
+    original_norm = result.norm()
+    
+    # Compress to remove redundancy
+    result.compress(cutoff=1e-13)
+    
+    # Norm preserved
+    assert math.isclose(result.norm(), original_norm, rel_tol=1e-10)
+    
+    # Components may be reduced
+    max_components_after = max(bridge.num_components for bridge in result.intw.values())
+    assert max_components_after <= max_components_before
+
