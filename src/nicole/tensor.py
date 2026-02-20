@@ -945,7 +945,11 @@ class Tensor:
                     new_intw[k] = bridge_a.clone()
                 else:
                     # Both have this block: check if weights match
-                    if torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15):
+                    weights_match = (
+                        bridge_a.weights.shape == bridge_b.weights.shape and
+                        torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15)
+                    )
+                    if weights_match:
                         # Same weights: add reduced tensors directly
                         new_data[k] = a + b
                         new_intw[k] = bridge_a.clone()
@@ -1023,7 +1027,11 @@ class Tensor:
                     new_intw[k] = bridge_a.clone()
                 else:
                     # Both have this block: check if weights match
-                    if torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15):
+                    weights_match = (
+                        bridge_a.weights.shape == bridge_b.weights.shape and
+                        torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15)
+                    )
+                    if weights_match:
                         # Same weights: subtract reduced tensors directly
                         new_data[k] = a - b
                         new_intw[k] = bridge_a.clone()
