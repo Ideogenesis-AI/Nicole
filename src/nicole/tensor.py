@@ -818,11 +818,13 @@ class Tensor:
         
         This operation modifies the tensor in-place by:
         - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
+        - For non-Abelian groups, also removes blocks where all weights are near-zero
         - Updating each index to only include sectors that still have data in remaining blocks
         
         Notes
         -----
         Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
+        For non-Abelian tensors T = R @ W, if W ≈ 0, then T ≈ 0 regardless of R.
         Sectors are only removed if no blocks remain that reference their charges.
         """
         # Define threshold as double precision machine epsilon
@@ -831,11 +833,21 @@ class Tensor:
         # Step 1: Identify and remove blocks with all near-zero values
         blocks_to_remove = []
         for key, arr in self.data.items():
-            if torch.max(torch.abs(arr)) < eps:
+            is_data_zero = torch.max(torch.abs(arr)) < eps
+            is_weights_zero = False
+            
+            # For non-Abelian: also check if weights are zero (T = R @ 0 = 0)
+            if self.intw is not None and key in self.intw:
+                weights = self.intw[key].weights
+                is_weights_zero = torch.max(torch.abs(weights)) < eps
+            
+            if is_data_zero or is_weights_zero:
                 blocks_to_remove.append(key)
         
         for key in blocks_to_remove:
             del self.data[key]
+            if self.intw is not None and key in self.intw:
+                del self.intw[key]
         
         # Step 2: Determine which charges are still present at each index position
         n_indices = len(self.indices)
