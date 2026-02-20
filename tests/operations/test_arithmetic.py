@@ -779,6 +779,64 @@ def test_subtraction_su2_self_gives_zero():
     assert C.norm() < 1e-12
 
 
+def test_addition_su2_collinear_weights():
+    """Test SU(2) addition with collinear weights (parallel but scaled)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Scale B's weights to make them collinear with A
+    key = (1, 1)
+    bridge_a = A.intw[key]
+    alpha = 3.0
+    scaled_weights = bridge_a.weights * alpha
+    B.intw[key] = dg.Bridge(cgspec=bridge_a.cgspec, weights=scaled_weights)
+    
+    # Store original data for manual verification
+    data_a = A.data[key].clone()
+    data_b = B.data[key].clone()
+    
+    C = A + B
+    
+    # Should detect collinearity and scale+add
+    # Result: (R_a + α*R_b) @ w_a
+    assert C.intw[key].num_components == 1  # Not concatenated
+    expected_data = data_a + data_b * alpha
+    assert torch.allclose(C.data[key], expected_data)
+
+
+def test_subtraction_su2_collinear_weights():
+    """Test SU(2) subtraction with collinear weights (parallel but scaled)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Scale B's weights to make them collinear with A
+    key = (1, 1)
+    bridge_a = A.intw[key]
+    alpha = -2.0  # Test negative scaling too
+    scaled_weights = bridge_a.weights * alpha
+    B.intw[key] = dg.Bridge(cgspec=bridge_a.cgspec, weights=scaled_weights)
+    
+    # Store original data for manual verification
+    data_a = A.data[key].clone()
+    data_b = B.data[key].clone()
+    
+    C = A - B
+    
+    # Should detect collinearity and scale+subtract
+    # Result: (R_a - α*R_b) @ w_a
+    assert C.intw[key].num_components == 1  # Not concatenated
+    expected_data = data_a - data_b * alpha
+    assert torch.allclose(C.data[key], expected_data)
+
+
 def test_addition_su2_norm_conservation():
     """Test that addition preserves norm properties for SU(2)."""
     group = SU2Group()
@@ -1079,6 +1137,105 @@ def test_addition_su2_multiple_sectors():
     # All blocks should be summed correctly
     for key in C.data.keys():
         assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+
+
+def test_addition_su2_three_indices_collinear_weights():
+    """Test SU(2) addition with 3 indices and collinear weights (parallel vectors)."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # Scale B's weights to be collinear with A's
+    alpha = 2.5
+    for key in B.intw.keys():
+        B.intw[key].weights[:] = A.intw[key].weights * alpha
+    
+    C = A + B
+    
+    # Collinear weights: should add with scaling, no OM expansion
+    for key in C.data.keys():
+        assert C.intw[key].num_components == 1, "Collinear should not expand OM"
+        # Verify weights match A's (reference weights)
+        assert torch.allclose(C.intw[key].weights, A.intw[key].weights)
+
+
+def test_addition_su2_four_indices_collinear_weights():
+    """Test SU(2) addition with 4 indices (non-trivial OM) and collinear weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
+    
+    # Scale B's weights to be collinear with A's
+    alpha = -1.5
+    for key in B.intw.keys():
+        B.intw[key].weights[:] = A.intw[key].weights * alpha
+    
+    C = A + B
+    
+    # Collinear weights: should add with scaling, no OM expansion
+    for key in C.data.keys():
+        assert C.intw[key].num_components == 1, "Collinear should not expand OM"
+        # Verify non-trivial OM dimension
+        if all(q == 1 for q in key):
+            assert C.intw[key].om_dimension > 1
+
+
+def test_addition_su2_multiple_sectors_collinear_weights():
+    """Test SU(2) addition with multiple sectors and collinear weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # Scale B's weights to be collinear with A's
+    alpha = 3.0
+    for key in B.intw.keys():
+        B.intw[key].weights[:] = A.intw[key].weights * alpha
+    
+    # Should have multiple blocks
+    assert len(A.data) > 1, "Expected multiple blocks"
+    
+    C = A + B
+    
+    # All blocks should use collinear addition (no OM expansion)
+    for key in C.data.keys():
+        assert C.intw[key].num_components == 1, "Collinear should not expand OM"
+
+
+def test_subtraction_su2_three_indices_collinear_weights():
+    """Test SU(2) subtraction with 3 indices and collinear weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
+    
+    # Scale B's weights to be collinear with A's
+    alpha = 0.75
+    for key in B.intw.keys():
+        B.intw[key].weights[:] = A.intw[key].weights * alpha
+    
+    C = A - B
+    
+    # Collinear weights: should subtract with scaling, no OM expansion
+    for key in C.data.keys():
+        assert C.intw[key].num_components == 1, "Collinear should not expand OM"
+        # Verify weights match A's
+        assert torch.allclose(C.intw[key].weights, A.intw[key].weights)
 
 
 def test_subtraction_su2_four_indices_different_weights():
