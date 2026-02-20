@@ -18,11 +18,13 @@
 
 """Tests for BlockSchema utility class."""
 
+import math
 import torch
 import pytest
 
 from nicole import Direction, Index, Sector, U1Group, Z2Group, SU2Group
 from nicole.blocks import BlockSchema
+import nicole.symmetry.delegate as dg
 
 
 def test_iter_admissible_keys_simple():
@@ -182,8 +184,6 @@ def test_validate_blocks_not_torch():
 
 def test_validate_blocks_with_intw_valid():
     """Test BlockSchema.validate_blocks with valid intw for non-Abelian groups."""
-    import nicole.symmetry.delegate as dg
-    
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
@@ -204,8 +204,6 @@ def test_validate_blocks_with_intw_valid():
 
 def test_validate_blocks_with_intw_wrong_shape():
     """Test BlockSchema.validate_blocks raises when block shape doesn't match intw."""
-    import nicole.symmetry.delegate as dg
-    
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
@@ -225,8 +223,6 @@ def test_validate_blocks_with_intw_wrong_shape():
 
 def test_validate_blocks_with_intw_key_mismatch():
     """Test BlockSchema.validate_blocks raises when intw keys don't match block keys."""
-    import nicole.symmetry.delegate as dg
-    
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
@@ -246,8 +242,6 @@ def test_validate_blocks_with_intw_key_mismatch():
 
 def test_validate_blocks_with_intw_multiple_blocks():
     """Test BlockSchema.validate_blocks with multiple blocks and intertwiners."""
-    import nicole.symmetry.delegate as dg
-    
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
@@ -482,4 +476,125 @@ def test_charges_conserved_non_abelian_three_spins():
     # 1⊗1⊗1⊗dual(1) = 1⊗1⊗1⊗1 → {0, 2, 4}
     # Neutral is 0, which IS in the set → conserved
     assert BlockSchema.charges_conserved([idx1, idx2, idx3, idx4], (1, 1, 1, 1)) is True
+
+
+# bridge_collinear tests
+
+def test_bridge_collinear_identical():
+    """Test bridge_collinear with identical weights."""
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.OUT, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    bridge_b = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    assert compatible is True
+    assert math.isclose(scale, 1.0)
+
+
+def test_bridge_collinear_parallel_vectors():
+    """Test bridge_collinear with parallel weight vectors (collinear)."""
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.OUT, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    # Create bridge_b with scaled weights
+    alpha = 2.5
+    weights_b = bridge_a.weights * alpha
+    bridge_b = dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_b)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    assert compatible is True
+    assert math.isclose(scale, alpha, rel_tol=1e-9)
+
+
+def test_bridge_collinear_antiparallel_vectors():
+    """Test bridge_collinear with antiparallel weight vectors (negative scale)."""
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.OUT, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    # Create bridge_b with negatively scaled weights
+    alpha = -1.5
+    weights_b = bridge_a.weights * alpha
+    bridge_b = dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_b)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    assert compatible is True
+    assert math.isclose(scale, alpha, rel_tol=1e-9)
+
+
+def test_bridge_collinear_different_directions():
+    """Test bridge_collinear with non-parallel weight vectors."""
+    group = SU2Group()
+    key = (1, 1, 1, 1)  # 4 indices for non-trivial OM
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    # Default weights from from_block are [1, 0, 0, ...]
+    # Create bridge_b with orthogonal weights [0, 1, 0, ...]
+    om_dim = bridge_a.om_dimension
+    weights_b = torch.zeros(1, om_dim, dtype=torch.float64)
+    if om_dim > 1:
+        weights_b[0, 1] = 1.0  # Orthogonal to default
+    else:
+        # om_dim == 1 edge case: use different scalar
+        weights_b[0, 0] = 2.0
+    bridge_b = dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_b)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    # Orthogonal or different vectors → incompatible
+    assert compatible is False
+
+
+def test_bridge_collinear_different_num_components():
+    """Test bridge_collinear with different num_components."""
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.OUT, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    # Create bridge_b with multiple components
+    om_dim = bridge_a.om_dimension
+    weights_b = torch.randn(3, om_dim, dtype=torch.float64)
+    bridge_b = dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_b)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    # Different shapes, not single component → incompatible
+    assert compatible is False
+
+
+def test_bridge_collinear_zero_weights():
+    """Test bridge_collinear with zero weight vectors."""
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.OUT, Direction.OUT]
+    
+    bridge_a = dg.Bridge.from_block(group, key, directions, dtype=torch.float64)
+    
+    # Create bridge with zero weights
+    om_dim = bridge_a.om_dimension
+    weights_zero = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge_zero = dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_zero)
+    
+    # Both zero
+    compatible, scale = BlockSchema.bridge_collinear(bridge_zero, bridge_zero)
+    assert compatible is True
+    
+    # One zero, one non-zero
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_zero)
+    assert compatible is False
 
