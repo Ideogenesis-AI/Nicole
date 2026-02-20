@@ -887,7 +887,12 @@ class Tensor:
         return self, other
 
     def __add__(self, other: Tensor) -> Tensor:
-        """Element-wise addition while preserving symmetry metadata."""
+        """Element-wise addition while preserving symmetry metadata.
+        
+        For non-Abelian groups (SU(2)), handles intertwiner weights:
+        - If weights match: adds reduced tensors directly
+        - If weights differ: concatenates along reduced multiplicity dimension
+        """
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
@@ -908,26 +913,64 @@ class Tensor:
         # Perform addition on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        for k in keys:
-            a = self.data.get(k)
-            b = other.data.get(k)
-            if a is None:
-                new_data[k] = (+b)
-            elif b is None:
-                new_data[k] = (+a)
-            else:
-                new_data[k] = a + b
+        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        
+        # Abelian groups: direct block addition
+        if not self.indices or self.indices[0].group.is_abelian:
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                if a is None:
+                    new_data[k] = (+b)
+                elif b is None:
+                    new_data[k] = (+a)
+                else:
+                    new_data[k] = a + b
+        else:
+            # Non-Abelian groups: handle intertwiners
+            new_intw = {}
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                bridge_a = self.intw.get(k) if a is not None else None
+                bridge_b = other.intw.get(k) if b is not None else None
+                
+                if a is None:
+                    # Only other has this block
+                    new_data[k] = (+b)
+                    new_intw[k] = bridge_b.clone()
+                elif b is None:
+                    # Only self has this block
+                    new_data[k] = (+a)
+                    new_intw[k] = bridge_a.clone()
+                else:
+                    # Both have this block: check if weights match
+                    if torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15):
+                        # Same weights: add reduced tensors directly
+                        new_data[k] = a + b
+                        new_intw[k] = bridge_a.clone()
+                    else:
+                        # Different weights: concatenate along reduced multiplicity dimension
+                        new_data[k] = torch.cat([a, b], dim=-1)
+                        new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
+                        new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
         
         return Tensor(
             indices=new_indices,
             itags=self.itags,
             data=new_data,
+            intw=new_intw,
             dtype=torch.promote_types(self.dtype, other.dtype),
             label=self.label,
         )
 
     def __sub__(self, other: Tensor) -> Tensor:
-        """Element-wise subtraction while preserving symmetry metadata."""
+        """Element-wise subtraction while preserving symmetry metadata.
+        
+        For non-Abelian groups (SU(2)), handles intertwiner weights:
+        - If weights match: subtracts reduced tensors directly
+        - If weights differ: concatenates along reduced multiplicity dimension
+        """
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
@@ -948,20 +991,53 @@ class Tensor:
         # Perform subtraction on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        for k in keys:
-            a = self.data.get(k)
-            b = other.data.get(k)
-            if a is None:
-                new_data[k] = -b
-            elif b is None:
-                new_data[k] = +a
-            else:
-                new_data[k] = a - b
+        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        
+        # Abelian groups: direct block subtraction
+        if not self.indices or self.indices[0].group.is_abelian:
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                if a is None:
+                    new_data[k] = -b
+                elif b is None:
+                    new_data[k] = +a
+                else:
+                    new_data[k] = a - b
+        else:
+            # Non-Abelian groups: handle intertwiners
+            new_intw = {}
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                bridge_a = self.intw.get(k) if a is not None else None
+                bridge_b = other.intw.get(k) if b is not None else None
+                
+                if a is None:
+                    # Only other has this block
+                    new_data[k] = -b
+                    new_intw[k] = bridge_b.clone()
+                elif b is None:
+                    # Only self has this block
+                    new_data[k] = +a
+                    new_intw[k] = bridge_a.clone()
+                else:
+                    # Both have this block: check if weights match
+                    if torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15):
+                        # Same weights: subtract reduced tensors directly
+                        new_data[k] = a - b
+                        new_intw[k] = bridge_a.clone()
+                    else:
+                        # Different weights: concatenate along reduced multiplicity dimension
+                        new_data[k] = torch.cat([a, b], dim=-1)
+                        new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
+                        new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
         
         return Tensor(
             indices=new_indices,
             itags=self.itags,
             data=new_data,
+            intw=new_intw,
             dtype=torch.promote_types(self.dtype, other.dtype),
             label=self.label,
         )
