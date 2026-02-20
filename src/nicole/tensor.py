@@ -944,17 +944,18 @@ class Tensor:
                     new_data[k] = (+a)
                     new_intw[k] = bridge_a.clone()
                 else:
-                    # Both have this block: check if weights match
-                    weights_match = (
-                        bridge_a.weights.shape == bridge_b.weights.shape and
-                        torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15)
+                    # Both have this block: check weight relationship
+                    compatible, scale = BlockSchema.bridge_collinear(
+                        bridge_a, bridge_b, rtol=1e-12, atol=1e-15
                     )
-                    if weights_match:
-                        # Same weights: add reduced tensors directly
-                        new_data[k] = a + b
+                    
+                    if compatible:
+                        # Compatible weights: scale and add
+                        # T1 + T2 = R1 @ w1 + R2 @ (α*w1) = (R1 + α*R2) @ w1
+                        new_data[k] = a + b * scale
                         new_intw[k] = bridge_a.clone()
                     else:
-                        # Different weights: concatenate along reduced multiplicity dimension
+                        # Incompatible weights: concatenate along reduced multiplicity dimension
                         new_data[k] = torch.cat([a, b], dim=-1)
                         new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
                         new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
@@ -1026,17 +1027,18 @@ class Tensor:
                     new_data[k] = +a
                     new_intw[k] = bridge_a.clone()
                 else:
-                    # Both have this block: check if weights match
-                    weights_match = (
-                        bridge_a.weights.shape == bridge_b.weights.shape and
-                        torch.allclose(bridge_a.weights, bridge_b.weights, rtol=1e-12, atol=1e-15)
+                    # Both have this block: check weight relationship
+                    compatible, scale = BlockSchema.bridge_collinear(
+                        bridge_a, bridge_b, rtol=1e-12, atol=1e-15
                     )
-                    if weights_match:
-                        # Same weights: subtract reduced tensors directly
-                        new_data[k] = a - b
+                    
+                    if compatible:
+                        # Compatible weights: scale and subtract
+                        # T1 - T2 = R1 @ w1 - R2 @ (α*w1) = (R1 - α*R2) @ w1
+                        new_data[k] = a - b * scale
                         new_intw[k] = bridge_a.clone()
                     else:
-                        # Different weights: concatenate along reduced multiplicity dimension
+                        # Incompatible weights: concatenate along reduced multiplicity dimension
                         new_data[k] = torch.cat([a, b], dim=-1)
                         new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
                         new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
