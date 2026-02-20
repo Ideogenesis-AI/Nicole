@@ -663,9 +663,21 @@ class Tensor:
         """Compute the Frobenius norm aggregated across all dense blocks."""
         if not self.data:
             return 0.0
-        return float(
-            torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
-        )
+        
+        # Abelian: direct Frobenius norm
+        if not self.indices or self.indices[0].group.is_abelian:
+            return float(
+                torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
+            )
+        else:
+            # Non-Abelian: ||T||² = Σ_blocks Tr(W† R† R W)
+            total = 0.0
+            for key, block in self.data.items():
+                r_flat = block.flatten(0, -2)  # (d₁...dₙ, r)
+                weights = self.intw[key].weights  # (r, μ)
+                gram = r_flat.T.conj() @ r_flat  # (r, r)
+                total += torch.sum(weights.conj() * (gram @ weights)).real
+            return float(torch.sqrt(total))
 
     def copy(self) -> Tensor:
         """Create a deep copy of this tensor."""
