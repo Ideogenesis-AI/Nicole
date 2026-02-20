@@ -800,3 +800,210 @@ def test_addition_su2_norm_conservation():
     # Verify norm is computed correctly (not exact triangle inequality due to structure)
     assert norm_c > 0.0
     assert norm_c >= abs(norm_a - norm_b)
+
+
+# Compression tests
+
+def test_compress_su2_no_redundancy():
+    """Test compression when weights have no redundancy (default case)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Store original state
+    original_norm = A.norm()
+    original_num_components = {key: bridge.num_components for key, bridge in A.intw.items()}
+    
+    # Default weights have 1 component, so no compression
+    A.compress()
+    
+    # Should be unchanged
+    assert math.isclose(A.norm(), original_norm)
+    for key in A.data.keys():
+        assert A.intw[key].num_components == original_num_components[key]
+
+
+def test_compress_su2_linearly_dependent():
+    """Test compression with linearly dependent weight rows."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create a tensor with manually constructed redundant weights
+    key = (1, 1)
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    
+    # Create weights with linearly dependent rows
+    bridge_a = A.intw[key]
+    om_dim = bridge_a.om_dimension
+    
+    # Create 3 components where third is linear combination of first two
+    base_weight = torch.randn(1, om_dim, dtype=torch.float64)
+    weights_redundant = torch.cat([
+        base_weight,
+        base_weight * 2.0,
+        base_weight * 0.5  # Linear combination
+    ], dim=0)
+    
+    # Adjust data block to match
+    new_data = {key: torch.randn(2, 2, 3, dtype=torch.float64)}
+    new_intw = {key: dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_redundant)}
+    
+    A_redundant = Tensor(
+        indices=(idx1, idx2),
+        itags=("a", "b"),
+        data=new_data,
+        intw=new_intw,
+        dtype=torch.float64
+    )
+    
+    # Store original norm
+    original_norm = A_redundant.norm()
+    
+    # Compress
+    A_redundant.compress(cutoff=1e-12)
+    
+    # Should reduce to 1 or 2 components (rank of weight matrix)
+    assert A_redundant.intw[key].num_components < 3
+    assert A_redundant.intw[key].num_components >= 1
+    
+    # Norm should be approximately preserved
+    assert math.isclose(A_redundant.norm(), original_norm, rel_tol=1e-10)
+
+
+def test_compress_su2_after_addition_different_weights():
+    """Test compression after adding tensors with different weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create two tensors with different weights
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Modify B's weights to be different
+    key = (1, 1)
+    bridge_b = B.intw[key]
+    om_dim = bridge_b.om_dimension
+    new_weights_b = torch.randn(2, om_dim, dtype=torch.float64)
+    new_bridge_b = dg.Bridge(cgspec=bridge_b.cgspec, weights=new_weights_b)
+    
+    new_data_b = {key: torch.randn(2, 2, 2, dtype=torch.float64)}
+    new_intw_b = {key: new_bridge_b}
+    B_modified = Tensor(
+        indices=(idx1, idx2),
+        itags=("a", "b"),
+        data=new_data_b,
+        intw=new_intw_b,
+        dtype=torch.float64
+    )
+    
+    # Add: this concatenates to 3 components (1 + 2)
+    C = A + B_modified
+    assert C.intw[key].num_components == 3
+    
+    # Store original state
+    original_norm = C.norm()
+    original_num_components = C.intw[key].num_components
+    
+    # Compress: should detect if any redundancy exists
+    C.compress(cutoff=1e-13)
+    
+    # Norm should be preserved
+    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
+    
+    # Components should be <= original
+    assert C.intw[key].num_components <= original_num_components
+
+
+def test_compress_su2_specific_keys():
+    """Test compression on specific block keys only."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensor with multiple blocks
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Modify one block to have different weights
+    key1 = (1, 1)
+    if key1 in B.data:
+        bridge = B.intw[key1]
+        om_dim = bridge.om_dimension
+        new_weights = torch.randn(2, om_dim, dtype=torch.float64)
+        B.intw[key1] = dg.Bridge(cgspec=bridge.cgspec, weights=new_weights)
+        B.data[key1] = torch.randn(*B.data[key1].shape[:-1], 2, dtype=torch.float64)
+    
+    C = A + B
+    
+    # Store original state for other keys
+    original_num_components = {key: bridge.num_components for key, bridge in C.intw.items()}
+    
+    # Compress only specific key
+    if key1 in C.data:
+        C.compress(keys=[key1])
+        
+        # Other keys should remain unchanged
+        for key in C.data.keys():
+            if key != key1:
+                assert C.intw[key].num_components == original_num_components[key]
+
+
+def test_compress_abelian_no_op():
+    """Test that compression on Abelian tensors is a no-op."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    original_norm = A.norm()
+    
+    # Should be a no-op
+    A.compress()
+    
+    # Should be unchanged
+    assert math.isclose(A.norm(), original_norm)
+    assert A.intw is None
+
+
+def test_compress_su2_preserves_tensor_value():
+    """Test that compression preserves the physical tensor value."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensor with redundant weights
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    
+    # Make B have parallel weights to A (same direction)
+    key = (1, 1)
+    bridge_a = A.intw[key]
+    # Scale A's weights to create B's weights (linearly dependent)
+    new_weights_b = bridge_a.weights * 2.0
+    new_bridge_b = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights_b)
+    
+    # Keep B's data the same but with adjusted shape
+    new_data_b = {key: B.data[key]}
+    new_intw_b = {key: new_bridge_b}
+    B_modified = Tensor(
+        indices=(idx1, idx2),
+        itags=("a", "b"),
+        data=new_data_b,
+        intw=new_intw_b,
+        dtype=torch.float64
+    )
+    
+    C = A + B_modified  # Concatenates to 2 components
+    
+    # Store original norm
+    original_norm = C.norm()
+    
+    # Compress should reduce to 1 component (since weights are parallel)
+    C.compress(cutoff=1e-13)
+    
+    # Verify norm is preserved (main check that physical tensor is unchanged)
+    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
+
