@@ -538,6 +538,261 @@ def test_identity_and_isometry_consistent():
     assert ident.indices[1] == idx.flip()
 
 
+# Isometry tensor tests - SU(2)
+
+def test_isometry_su2_basic():
+    """Test basic SU(2) isometry construction."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))  # spin-1/2
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))  # spin-1/2
+    
+    iso = isometry(idx1, idx2, itags=("a", "b", "fused"))
+    
+    # Should have 3 indices
+    assert len(iso.indices) == 3
+    assert iso.itags == ("a", "b", "fused")
+    
+    # Should have intw populated
+    assert iso.intw is not None
+    
+    # Fusion of 1/2 ⊗ 1/2 → 0, 2 (spin-0 and spin-1)
+    # Should have 2 blocks: (1,1,0) and (1,1,2)
+    assert (1, 1, 0) in iso.data
+    assert (1, 1, 2) in iso.data
+    
+    # Check block shapes: (dim1, dim2, dim_fused, 1)
+    # The fused dimension is from combine_indices, which accumulates dims
+    # Just check trailing dimension is 1
+    assert iso.data[(1, 1, 0)].shape[-1] == 1
+    assert iso.data[(1, 1, 2)].shape[-1] == 1
+    assert iso.data[(1, 1, 0)].shape[:2] == (2, 2)
+    assert iso.data[(1, 1, 2)].shape[:2] == (2, 2)
+    
+    # Check bridges exist
+    assert (1, 1, 0) in iso.intw
+    assert (1, 1, 2) in iso.intw
+    
+    # Weights should be √(irrep_dim(qf))
+    # For qf=0: irrep_dim=1, weight=1
+    assert math.isclose(iso.intw[(1, 1, 0)].weights[0, 0].item(), 1.0, rel_tol=1e-12)
+    # For qf=2: irrep_dim=3, weight=√3
+    assert math.isclose(iso.intw[(1, 1, 2)].weights[0, 0].item(), math.sqrt(3), rel_tol=1e-12)
+
+
+def test_isometry_su2_multiple_sectors():
+    """Test SU(2) isometry with multiple sectors and fusion channels."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    iso = isometry(idx1, idx2)
+    
+    # Should have multiple blocks from different fusion channels
+    # 1⊗1 → 0,2
+    # 2⊗1 → 1,3
+    assert len(iso.data) >= 4
+    assert iso.intw is not None
+    
+    # All blocks should have trailing dimension of 1
+    for key, block in iso.data.items():
+        assert block.shape[-1] == 1
+        assert key in iso.intw
+
+
+def test_isometry_su2_charge_neutral():
+    """Test that SU(2) isometry is charge neutral."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    
+    iso = isometry(idx1, idx2)
+    
+    assert_charge_neutral(iso)
+
+
+def test_isometry_su2_dtype_complex():
+    """Test SU(2) isometry with complex dtype."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    iso = isometry(idx1, idx2, dtype=torch.complex128)
+    
+    assert iso.dtype == torch.complex128
+    for key, block in iso.data.items():
+        assert block.dtype == torch.complex128
+        assert iso.intw[key].weights.dtype == torch.complex128
+
+
+def test_isometry_su2_fused_direction():
+    """Test SU(2) isometry with specified fused direction."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    
+    # Specify fused direction as OUT
+    iso = isometry(idx1, idx2, fused_direction=Direction.OUT)
+    
+    # Fused leg should have OUT direction
+    assert iso.indices[2].direction == Direction.OUT
+
+
+def test_isometry_su2_norm():
+    """Test norm of SU(2) isometry."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    
+    iso = isometry(idx1, idx2)
+    
+    # Calculate expected norm: norm² = Σ_blocks (sector_dims × irrep_dim(qf))
+    # For each block (qa, qb, qf), contribution is:
+    # dim_a × dim_b × dim_fused × irrep_dim(qf)
+    # But with identity-like structure, effectively: contribution per block element
+    
+    # Let me compute manually for fusion 1⊗1→0,2:
+    # Block (1,1,0): shape (2,2,1,1), weight=√1=1, reduced is identity-like
+    # Block (1,1,2): shape (2,2,3,1), weight=√3, reduced is identity-like
+    
+    # Actually, with identity-like reduced tensor:
+    # norm² = Σ (number of 1's in reduced) × weight²
+    # For each block: da*db ones, each contributes weight²
+    # (1,1,0): 2*2=4 ones, weight²=1, contribution = 4
+    # (1,1,2): 2*2=4 ones, weight²=3, contribution = 12
+    # Total norm² = 4 + 12 = 16, norm = 4
+    expected_norm = 4.0
+    assert math.isclose(iso.norm(), expected_norm, rel_tol=1e-12)
+
+
+def test_isometry_product_group_with_su2():
+    """Test isometry with ProductGroup containing SU(2)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    
+    iso = isometry(idx1, idx2)
+    
+    # Should have intw
+    assert iso.intw is not None
+    
+    # U1 part: 0⊗0→0, SU(2) part: 1⊗1→0,2
+    # Should have blocks for (0,1)⊗(0,1)→(0,0) and (0,1)⊗(0,1)→(0,2)
+    assert ((0, 1), (0, 1), (0, 0)) in iso.data
+    assert ((0, 1), (0, 1), (0, 2)) in iso.data
+
+
+def test_isometry_su2_multiple_pairs_same_fused():
+    """Test SU(2) isometry where multiple sector pairs fuse to same charge.
+    
+    This tests the offset mechanism: 1/2⊗1/2→0 and 1⊗1→0 both fuse to spin-0.
+    The fused dimension should accumulate contributions from both pairs.
+    """
+    group = SU2Group()
+    # Create indices with spin-1/2 and spin-1 sectors
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    iso = isometry(idx1, idx2)
+    
+    # Check that blocks exist for both pairs fusing to spin-0
+    # 1⊗1→0 (spin-1/2 ⊗ spin-1/2 → spin-0)
+    assert (1, 1, 0) in iso.data
+    assert (1, 1, 0) in iso.intw
+    
+    # 2⊗2→0 (spin-1 ⊗ spin-1 → spin-0)
+    assert (2, 2, 0) in iso.data
+    assert (2, 2, 0) in iso.intw
+    
+    # Verify weights are √(irrep_dim(0)) = √1 = 1 for both
+    assert math.isclose(iso.intw[(1, 1, 0)].weights[0, 0].item(), 1.0, rel_tol=1e-12)
+    assert math.isclose(iso.intw[(2, 2, 0)].weights[0, 0].item(), 1.0, rel_tol=1e-12)
+    
+    # Check fused dimension includes contributions from both pairs
+    # The fused index for charge 0 should have accumulated dimension from:
+    # - (1,1,0): contributes 2*2 = 4
+    # - (2,2,0): contributes 3*3 = 9
+    # Total dimension for fused charge 0 should be at least 4+9 = 13
+    fused_idx = iso.indices[2]
+    for sector in fused_idx.sectors:
+        if sector.charge == 0:
+            assert sector.dim >= 13, f"Expected fused dim >= 13 for charge 0, got {sector.dim}"
+    
+    # Verify block shapes reflect the accumulated dimension
+    # Both blocks should map to the same fused dimension
+    fused_dim_0 = iso.data[(1, 1, 0)].shape[2]
+    assert iso.data[(2, 2, 0)].shape[2] == fused_dim_0
+
+
+def test_isometry_su2_norm_multiple_fused_charges():
+    """Test norm calculation with multiple pairs fusing to various charges."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    iso = isometry(idx1, idx2)
+    
+    # Calculate expected norm manually
+    # norm² = Σ_blocks (number of 1's in reduced tensor) × weight²
+    # For identity-like reduced tensor: da*db ones per block
+    
+    expected_norm_sq = 0.0
+    for key, block in iso.data.items():
+        qa, qb, qf = key
+        da, db = block.shape[0], block.shape[1]
+        num_ones = da * db
+        weight = iso.intw[key].weights[0, 0].item()
+        expected_norm_sq += num_ones * (weight ** 2)
+    
+    expected_norm = math.sqrt(expected_norm_sq)
+    actual_norm = iso.norm()
+    
+    assert math.isclose(actual_norm, expected_norm, rel_tol=1e-10)
+
+
+def test_isometry_su2_three_sectors_comprehensive():
+    """Comprehensive test with 3 sectors creating many fusion channels."""
+    group = SU2Group()
+    # Spin-1/2, spin-1, and spin-3/2
+    idx1 = Index(Direction.OUT, group, sectors=(
+        Sector(1, 2),   # spin-1/2
+        Sector(2, 3),   # spin-1
+        Sector(3, 4),   # spin-3/2
+    ))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))  # spin-1/2
+    
+    iso = isometry(idx1, idx2)
+    
+    # Verify charge conservation
+    assert_charge_neutral(iso)
+    
+    # Check that multiple blocks exist
+    # 1⊗1 → 0,2
+    # 2⊗1 → 1,3
+    # 3⊗1 → 2,4
+    assert len(iso.data) >= 6
+    assert len(iso.intw) == len(iso.data)
+    
+    # Verify all weights follow √(irrep_dim(qf)) pattern
+    for key, bridge in iso.intw.items():
+        qa, qb, qf = key
+        expected_weight = math.sqrt(group.irrep_dim(qf))
+        assert math.isclose(bridge.weights[0, 0].item(), expected_weight, rel_tol=1e-12)
+    
+    # Verify norm is computed correctly
+    expected_norm_sq = 0.0
+    for key, block in iso.data.items():
+        qa, qb, qf = key
+        # Get sector dims from original indices
+        da = next(s.dim for s in idx1.sectors if s.charge == qa)
+        db = next(s.dim for s in idx2.sectors if s.charge == qb)
+        num_ones = da * db
+        weight_sq = iso.intw[key].weights[0, 0].item() ** 2
+        expected_norm_sq += num_ones * weight_sq
+    
+    expected_norm = math.sqrt(expected_norm_sq)
+    assert math.isclose(iso.norm(), expected_norm, rel_tol=1e-10)
+
+
 # Isometry_n tensor tests
 
 def test_isometry_n_basic():
