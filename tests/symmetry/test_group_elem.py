@@ -39,6 +39,15 @@ def test_u1_dual():
     assert group.dual(0) == 0
 
 
+def test_u1_irrep_dim():
+    """Test U1Group irrep_dim method (always 1 for Abelian)."""
+    group = U1Group()
+    assert group.irrep_dim(0) == 1
+    assert group.irrep_dim(1) == 1
+    assert group.irrep_dim(-5) == 1
+    assert group.irrep_dim(100) == 1
+
+
 def test_u1_fuse_unique_two():
     """Test U1Group fuse_unique with two charges."""
     group = U1Group()
@@ -110,6 +119,13 @@ def test_z2_dual():
     group = Z2Group()
     assert group.dual(0) == 0
     assert group.dual(1) == 1
+
+
+def test_z2_irrep_dim():
+    """Test Z2Group irrep_dim method (always 1 for Abelian)."""
+    group = Z2Group()
+    assert group.irrep_dim(0) == 1
+    assert group.irrep_dim(1) == 1
 
 
 def test_z2_fuse_unique_two():

@@ -48,6 +48,18 @@ def test_su2_dual():
     assert group.dual(10) == 10  # spin-5
 
 
+def test_su2_irrep_dim():
+    """Test SU2Group irrep_dim method (dimension = 2j+1)."""
+    group = SU2Group()
+    # Dimension of spin-j representation is 2j+1
+    assert group.irrep_dim(0) == 1    # spin-0: dim = 1
+    assert group.irrep_dim(1) == 2    # spin-1/2: dim = 2
+    assert group.irrep_dim(2) == 3    # spin-1: dim = 3
+    assert group.irrep_dim(3) == 4    # spin-3/2: dim = 4
+    assert group.irrep_dim(4) == 5    # spin-2: dim = 5
+    assert group.irrep_dim(10) == 11  # spin-5: dim = 11
+
+
 def test_su2_is_abelian():
     """Test SU2Group is_abelian property (should be False)."""
     group = SU2Group()

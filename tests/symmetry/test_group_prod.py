@@ -22,6 +22,7 @@ import pytest
 
 from nicole.symmetry.abelian import U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
+from nicole.symmetry.unitary import SU2Group
 
 
 # Basic ProductGroup creation tests
@@ -65,20 +66,23 @@ def test_product_group_creation_non_abelian_at_end_allowed():
         @property
         def name(self):
             return "SU2"
-        
+
         @property
         def neutral(self):
             return 0
-        
+
         def dual(self, q):
             return q
-        
+
+        def irrep_dim(self, q):
+            return 1  # Mock: return trivial dimension
+
         def fuse_channels(self, q1, q2):
             return (0, 1, 2)  # Mock: return some channels
-        
+
         def equal(self, a, b):
             return a == b
-        
+
         def validate_charge(self, q):
             pass
     
@@ -95,20 +99,23 @@ def test_product_group_creation_non_abelian_not_at_end_fails():
         @property
         def name(self):
             return "SU2"
-        
+
         @property
         def neutral(self):
             return 0
-        
+
         def dual(self, q):
             return q
-        
+
+        def irrep_dim(self, q):
+            return 1  # Mock: return trivial dimension
+
         def fuse_channels(self, q1, q2):
             return (0, 1, 2)
-        
+
         def equal(self, a, b):
             return a == b
-        
+
         def validate_charge(self, q):
             pass
     
@@ -182,6 +189,34 @@ def test_product_group_dual_u1_z2():
     assert group.dual((3, 1)) == (-3, 1)
     assert group.dual((-2, 0)) == (2, 0)
     assert group.dual((0, 1)) == (0, 1)
+
+
+# irrep_dim tests
+
+def test_product_group_irrep_dim_u1_u1():
+    """Test irrep_dim for U1×U1 (always 1×1=1 for Abelian)."""
+    group = ProductGroup([U1Group(), U1Group()])
+    assert group.irrep_dim((0, 0)) == 1
+    assert group.irrep_dim((2, 3)) == 1
+    assert group.irrep_dim((-5, 10)) == 1
+
+
+def test_product_group_irrep_dim_u1_su2():
+    """Test irrep_dim for U1×SU(2) (product of constituent dims)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    # U1 always contributes 1, SU(2) contributes 2j+1
+    assert group.irrep_dim((0, 0)) == 1 * 1  # U1(any) × spin-0
+    assert group.irrep_dim((1, 1)) == 1 * 2  # U1(any) × spin-1/2
+    assert group.irrep_dim((0, 2)) == 1 * 3  # U1(any) × spin-1
+    assert group.irrep_dim((-3, 3)) == 1 * 4  # U1(any) × spin-3/2
+    assert group.irrep_dim((5, 4)) == 1 * 5  # U1(any) × spin-2
+
+
+def test_product_group_irrep_dim_z2_su2():
+    """Test irrep_dim for Z2×SU(2)."""
+    group = ProductGroup([Z2Group(), SU2Group()])
+    assert group.irrep_dim((0, 1)) == 1 * 2  # Z2 × spin-1/2
+    assert group.irrep_dim((1, 2)) == 1 * 3  # Z2 × spin-1
 
 
 # Fuse tests
