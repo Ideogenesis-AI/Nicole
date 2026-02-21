@@ -56,6 +56,65 @@ def test_index_dim_property():
     assert idx.dim == 2 + 3 + 5
 
 
+def test_index_num_states_abelian():
+    """Test Index.num_states for Abelian group."""
+    group = U1Group()
+    sectors = (Sector(0, 2), Sector(1, 3), Sector(-1, 5))
+    idx = Index(Direction.OUT, group, sectors)
+    
+    # For Abelian groups, num_states equals dim (irrep_dim = 1)
+    assert idx.num_states == idx.dim
+    assert idx.num_states == 2 + 3 + 5
+
+
+def test_index_num_states_su2():
+    """Test Index.num_states for SU2 group."""
+    group = SU2Group()
+    # spin-0 (two_j=0): irrep_dim = 1, dim = 2
+    # spin-1 (two_j=2): irrep_dim = 3, dim = 4
+    # spin-3/2 (two_j=3): irrep_dim = 4, dim = 5
+    sectors = (Sector(0, 2), Sector(2, 4), Sector(3, 5))
+    idx = Index(Direction.OUT, group, sectors)
+    
+    # num_states = Σ (sector.dim × irrep_dim)
+    expected = 2 * 1 + 4 * 3 + 5 * 4
+    assert idx.num_states == expected
+    assert idx.num_states == 34
+    assert idx.dim == 2 + 4 + 5
+    assert idx.num_states != idx.dim
+
+
+def test_index_num_states_product_group_abelian():
+    """Test Index.num_states for ProductGroup with only Abelian components."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    sectors = (Sector((0, 0), 2), Sector((1, 1), 3))
+    idx = Index(Direction.OUT, group, sectors)
+    
+    # For Abelian ProductGroup, num_states equals dim
+    assert idx.num_states == idx.dim
+    assert idx.num_states == 2 + 3
+
+
+def test_index_num_states_product_group_with_su2():
+    """Test Index.num_states for ProductGroup with SU2."""
+    u1 = U1Group()
+    su2 = SU2Group()
+    group = ProductGroup([u1, su2])
+    # (U1 charge, SU2 two_j)
+    # (0, 0): irrep_dim = 1*1 = 1
+    # (1, 2): irrep_dim = 1*3 = 3
+    # (-1, 1): irrep_dim = 1*2 = 2
+    sectors = (Sector((0, 0), 2), Sector((1, 2), 4), Sector((-1, 1), 3))
+    idx = Index(Direction.OUT, group, sectors)
+    
+    # num_states = Σ (sector.dim × irrep_dim)
+    expected = 2 * 1 + 4 * 3 + 3 * 2
+    assert idx.num_states == expected
+    assert idx.num_states == 20
+    assert idx.dim == 2 + 4 + 3
+    assert idx.num_states != idx.dim
+
+
 def test_index_rejects_duplicate_charges():
     """Test that Index rejects duplicate charges."""
     group = U1Group()
