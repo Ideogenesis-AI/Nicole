@@ -43,7 +43,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
     """Return a 2-leg identity tensor between `index` and its conjugate leg.
     
     For Abelian groups, creates diagonal blocks with identity matrices.
-    For non-Abelian groups (e.g., SU(2)), creates blocks with trailing reduced
+    For generic groups (e.g., SU(2)), creates blocks with trailing reduced
     multiplicity dimension and intertwiner (Bridge) with proper normalization.
 
     Parameters
@@ -59,7 +59,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
     -------
     Tensor
         Tensor with two indices (original and flipped) whose blocks encode the
-        identity matrices for each sector. For non-Abelian groups, includes
+        identity matrices for each sector. For generic groups, includes
         intertwiner (intw) field with weights set to √(irrep_dim(q)).
     """
 
@@ -71,7 +71,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
 
     blocks: Dict[tuple[Charge, Charge], torch.Tensor] = {}
     
-    # Check if group is Abelian or non-Abelian
+    # Check if group is Abelian or generic (non-Abelian)
     group = left.group
     if group.is_abelian:
         # Abelian case: standard identity matrices
@@ -82,7 +82,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         
         return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
     else:
-        # Non-Abelian case: identity with intertwiner normalization
+        # Generic (non-Abelian) case: identity with intertwiner normalization
         intw: Dict[tuple[Charge, Charge], dg.Bridge] = {}
         
         for sector in left.sectors:
@@ -121,7 +121,7 @@ def isometry(
     """Return a 3-leg tensor that fuses ``first ⊗ second`` into a fused leg.
     
     For Abelian groups, creates a single block per charge combination.
-    For non-Abelian groups (e.g., SU(2)), creates multiple blocks corresponding
+    For generic groups (e.g., SU(2)), creates multiple blocks corresponding
     to different fusion channels, with intertwiner (Bridge) handling Clebsch-Gordan
     coefficients and proper normalization.
 
@@ -140,7 +140,7 @@ def isometry(
     -------
     Tensor
         Three-leg tensor whose third index represents the fusion of the first two.
-        For non-Abelian groups, includes intertwiner (intw) field with Bridge
+        For generic groups, includes intertwiner (intw) field with Bridge
         objects containing CG specifications and normalization weights.
 
     Raises
@@ -202,7 +202,7 @@ def isometry(
         return Tensor(indices=(first, second, fused), itags=itags, data=blocks, dtype=dtype)
     
     else:
-        # Non-Abelian case: multi-channel fusion with intertwiner
+        # Generic (non-Abelian) case: multi-channel fusion with intertwiner
         offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
         blocks: Dict[tuple[Charge, Charge, Charge], torch.Tensor] = {}
         intw: Dict[tuple[Charge, Charge, Charge], dg.Bridge] = {}
@@ -219,7 +219,7 @@ def isometry(
                 contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
                 contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
                 
-                # Non-Abelian: get all fusion channels
+                # Generic (non-Abelian) case: get all fusion channels
                 total_contribs = group.fuse_channels(contrib_a, contrib_b)
                 
                 for total_contrib in total_contribs:
