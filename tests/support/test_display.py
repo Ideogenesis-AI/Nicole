@@ -21,6 +21,7 @@
 import torch
 
 from nicole import Direction, Index, Tensor, U1Group, Sector
+from nicole.symmetry.unitary import SU2Group
 from nicole.display import (
     _charge_components,
     _format_bytes,
@@ -341,4 +342,114 @@ def test_tensor_summary_formatting_consistent():
     
     # Should be identical
     assert summary1 == summary2
+
+
+# SU2 tensor_summary tests
+
+def test_tensor_summary_su2_identity():
+    """Test tensor_summary with SU2 identity tensor."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    
+    tensor = identity(idx)
+    summary = str(tensor)
+    
+    # Check basic structure
+    assert "Tensor" in summary
+    
+    # Check CGC dims show irrep dimensions (2j+1)
+    # For spin-0 (two_j=0): irrep_dim = 1
+    # For spin-1 (two_j=2): irrep_dim = 3
+    assert "1x1" in summary  # spin-0 block
+    assert "3x3" in summary  # spin-1 block
+    
+    # Check multiplet and state counts
+    # idx.dim = 2 + 3 = 5 (multiplet count)
+    # idx.num_states = 2*1 + 3*3 = 11 (state count)
+    # Identity has two such indices
+    assert "5 x 5 => 11 x 11" in summary
+
+
+def test_tensor_summary_su2_isometry():
+    """Test tensor_summary with SU2 isometry tensor."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))  # spin-1/2
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3),))  # spin-1/2
+    
+    tensor = isometry(idx1, idx2)
+    summary = str(tensor)
+    
+    # Check basic structure
+    assert "Tensor" in summary
+    
+    # Check CGC dims show irrep dimensions
+    # idx1: spin-1/2 (two_j=1) -> irrep_dim = 2
+    # idx2: spin-1/2 (two_j=1) -> irrep_dim = 2
+    # Blocks should show pattern like "2x2xN" where N is fused irrep_dim
+    assert "2x2x" in summary  # First two indices have irrep_dim=2
+    
+    # Check multiplet and state counts
+    # idx1.dim = 2, idx1.num_states = 2 * 2 = 4
+    # idx2.dim = 3, idx2.num_states = 3 * 2 = 6
+    # For fused index: will depend on which charges appear
+    # 1/2 ⊗ 1/2 = 0 ⊕ 1, so fused could be 0 (dim 1, irrep 1) or 2 (dim varies, irrep 3)
+    assert "2 x 3" in summary  # multiplet counts for first two indices
+
+
+def test_tensor_summary_su2_random():
+    """Test tensor_summary with random SU2 tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(2, 2)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=1, itags=["left", "right"])
+    summary = str(tensor)
+    
+    # Check basic structure
+    assert "Tensor" in summary
+    assert "left" in summary
+    assert "right" in summary
+    
+    # Check CGC dims
+    # spin-0 (two_j=0): irrep_dim = 1
+    # spin-1 (two_j=2): irrep_dim = 3
+    assert "1x1" in summary  # (0,0) block
+    assert "3x3" in summary  # (2,2) block
+    
+    # Check multiplet and state counts
+    # idx1.dim = 2 + 1 = 3, idx1.num_states = 2*1 + 1*3 = 5
+    # idx2.dim = 3 + 2 = 5, idx2.num_states = 3*1 + 2*3 = 9
+    assert "3 x 5 => 5 x 9" in summary
+
+
+def test_tensor_summary_su2_trims_reduced_multiplicity():
+    """Test that tensor_summary trims trailing reduced multiplicity dimension."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = isometry(idx1, idx2)
+    summary = str(tensor)
+    
+    # The actual block shapes in data have trailing dimension for reduced multiplicity
+    # But display should trim it
+    # Should NOT see something like "2x2x4x1" (4-D with trailing 1)
+    # Should see "2x2x4" (3-D, trimmed)
+    
+    # Check that we see 3-D shapes (not 4-D)
+    assert "2x2x" in summary
+    # Verify it's not showing 4-D
+    lines = summary.split("\n")
+    for line in lines:
+        if "2x2x" in line:
+            # Should not have a 4th dimension shown
+            import re
+            # Look for pattern like "2x2xNxM" which would indicate 4 dimensions
+            assert not re.search(r'2x2x\d+x\d+', line), f"Found 4-D shape in: {line}"
 
