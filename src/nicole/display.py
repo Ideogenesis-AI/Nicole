@@ -127,9 +127,10 @@ def tensor_summary(
     indices: Sequence[Index],
     itags: Sequence[str],
     data: Mapping[Tuple[Charge, ...], torch.Tensor],
-    dtype: torch.dtype,
-    label: str,
-    norm: float,
+    intw = None,
+    dtype: torch.dtype = torch.float64,
+    label: str = "Tensor",
+    norm: float = 0.0,
     sorted_keys: Sequence[Tuple[Charge, ...]] = None,
     max_lines: Optional[int] = 9,
     block_numbers: Optional[Sequence[int]] = None,
@@ -160,6 +161,9 @@ def tensor_summary(
         Optional sequence of block numbers (1-indexed) to use for display.
         If provided, must match the length of sorted_keys. Used to preserve
         original block numbering when displaying a subset of blocks.
+    intw:
+        Optional mapping from block keys to Bridge objects for non-Abelian tensors.
+        Used to determine the reduced multiplicity dimension to trim from display.
 
     Returns
     -------
@@ -223,14 +227,7 @@ def tensor_summary(
     dtype_name = str(dtype).replace('torch.', '')
     multiplet_counts_list = [idx.dim for idx in indices]
     multiplet_counts = _format_count_list(multiplet_counts_list)
-    state_counts_list = []
-    for idx in indices:
-        if isinstance(idx.group, AbelianGroup):
-            state_counts_list.append(idx.dim)
-        else:
-            # TODO: For non-Abelian groups, this should be sector.dim x degeneracy
-            # when degeneracy is implemented. For now, use the same as Abelian.
-            state_counts_list.append(idx.dim)
+    state_counts_list = [idx.num_states for idx in indices]
     state_counts = _format_count_list(state_counts_list)
     data_line = (
         f"  data:  {order}-D {dtype_name} ({_format_bytes(total_bytes)})    "
@@ -269,9 +266,18 @@ def tensor_summary(
             display_numbers = list(range(1, len(blocks_to_show) + 1))
         
         for idx_num, (key, arr) in zip(display_numbers, blocks_to_show):
-            # Dense dims (state space) and trivial CGC placeholder (Abelian => all ones).
-            state_dims = "x".join(str(dim) for dim in arr.shape) or "1"
-            cgc_dims = "x".join("1" for _ in arr.shape) or "1"
+            # Dense dims (state space) and CGC dims (irrep dimensions).
+            # For non-Abelian tensors, trim the trailing reduced multiplicity dimension.
+            if intw is not None:
+                # Non-Abelian: trim last axis (reduced multiplicity)
+                state_shape = arr.shape[:-1]
+                cgc_dims_list = [str(indices[i].group.irrep_dim(key[i])) for i in range(len(key))]
+                cgc_dims = "x".join(cgc_dims_list) or "1"
+            else:
+                # Abelian: use full shape, all irrep_dims are 1
+                state_shape = arr.shape
+                cgc_dims = "x".join("1" for _ in arr.shape) or "1"
+            state_dims = "x".join(str(dim) for dim in state_shape) or "1"
 
             # Format charges, reusing global padding so columns line up across blocks.
             charge_components = [_charge_components(charge) for charge in key]
