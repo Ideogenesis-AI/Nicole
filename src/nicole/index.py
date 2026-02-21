@@ -92,6 +92,11 @@ class Index:
         """Total dimension of the index after summing over all sectors."""
         return sum(s.dim for s in self.sectors)
 
+    @property
+    def num_states(self) -> int:
+        """Total number of physical states accounting for irrep dimensions."""
+        return sum(s.dim * self.group.irrep_dim(s.charge) for s in self.sectors)
+
     def __str__(self) -> str:
         """Return a formatted multiline summary of the Index."""
         from .display import index_summary
