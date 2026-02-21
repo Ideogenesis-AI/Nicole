@@ -27,6 +27,7 @@ charge conservation across all generated blocks.
 """
 
 from typing import Dict, Optional, Sequence, Tuple
+import math
 
 import torch
 
@@ -35,6 +36,7 @@ from .symmetry.base import AbelianGroup
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
+from .symmetry import delegate as dg
 
 
 def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
@@ -63,13 +65,44 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         itags = ("_init_", "_init_")
 
     blocks: Dict[tuple[Charge, Charge], torch.Tensor] = {}
-    # Populate diagonal blocks keyed by identical charges.
-    for sector in left.sectors:
-        q = sector.charge
-        dim = sector.dim
-        blocks[(q, q)] = torch.eye(dim, dtype=dtype)
-
-    return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
+    
+    # Check if group is Abelian or non-Abelian
+    group = left.group
+    if group.is_abelian:
+        # Abelian case: standard identity matrices
+        for sector in left.sectors:
+            q = sector.charge
+            dim = sector.dim
+            blocks[(q, q)] = torch.eye(dim, dtype=dtype)
+        
+        return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
+    else:
+        # Non-Abelian case: identity with intertwiner normalization
+        intw: Dict[tuple[Charge, Charge], dg.Bridge] = {}
+        
+        for sector in left.sectors:
+            q = sector.charge
+            dim = sector.dim
+            
+            # Reduced tensor: identity matrix with trailing reduced multiplicity dimension
+            blocks[(q, q)] = torch.eye(dim, dtype=dtype).unsqueeze(-1)
+            
+            # Create Bridge with actual index directions
+            bridge = dg.Bridge.from_block(
+                group, (q, q),
+                [left.direction, right.direction],
+                dtype=dtype
+            )
+            
+            # Apply normalization: weights = √(irrep_dim)
+            # For 2 edges, om_dimension = 1, weights shape is (1, 1)
+            # This ensures norm² = Σ_sectors (sector.dim * irrep_dim)
+            irrep_dimension = group.irrep_dim(q)
+            bridge.weights[0, 0] = math.sqrt(irrep_dimension)
+            
+            intw[(q, q)] = bridge
+        
+        return Tensor(indices=(left, right), itags=itags, data=blocks, intw=intw, dtype=dtype)
 
 
 def isometry(
