@@ -41,6 +41,10 @@ from .symmetry import delegate as dg
 
 def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
     """Return a 2-leg identity tensor between `index` and its conjugate leg.
+    
+    For Abelian groups, creates diagonal blocks with identity matrices.
+    For non-Abelian groups (e.g., SU(2)), creates blocks with trailing reduced
+    multiplicity dimension and intertwiner (Bridge) with proper normalization.
 
     Parameters
     ----------
@@ -55,7 +59,8 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
     -------
     Tensor
         Tensor with two indices (original and flipped) whose blocks encode the
-        identity matrices for each sector.
+        identity matrices for each sector. For non-Abelian groups, includes
+        intertwiner (intw) field with weights set to √(irrep_dim(q)).
     """
 
     # Prepare the left leg and its flipped partner.
@@ -114,6 +119,11 @@ def isometry(
     fused_direction: Optional[Direction] = None,
 ) -> Tensor:
     """Return a 3-leg tensor that fuses ``first ⊗ second`` into a fused leg.
+    
+    For Abelian groups, creates a single block per charge combination.
+    For non-Abelian groups (e.g., SU(2)), creates multiple blocks corresponding
+    to different fusion channels, with intertwiner (Bridge) handling Clebsch-Gordan
+    coefficients and proper normalization.
 
     Parameters
     ----------
@@ -130,22 +140,20 @@ def isometry(
     -------
     Tensor
         Three-leg tensor whose third index represents the fusion of the first two.
+        For non-Abelian groups, includes intertwiner (intw) field with Bridge
+        objects containing CG specifications and normalization weights.
 
     Raises
     ------
     ValueError
         If the incoming indices do not belong to the same symmetry group.
-    NotImplementedError
-        When attempting to fuse non-Abelian indices (not yet supported).
     RuntimeError
         If internal bookkeeping detects a fusion shape mismatch.
     """
     if first.group != second.group:
         raise ValueError("Both indices must share the same symmetry group")
     group = first.group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Fusion currently supports only Abelian groups")
-
+    
     # Determine orientation of the fused leg; default to the dual of `first`.
     default_dir = first.direction.reverse()
     direction = fused_direction if fused_direction is not None else default_dir
@@ -153,43 +161,102 @@ def isometry(
     if itags is None:
         itags = ("_init_", "_init_", "_init_")
 
-    # Track how many columns have been written per fused charge.
-    offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
-    blocks: Dict[tuple[Charge, Charge, Charge], torch.Tensor] = {}
-    dim_fused_map = fused.sector_dim_map()
+    # Branch between Abelian and non-Abelian groups
+    if group.is_abelian:
+        # Abelian case: original implementation
+        offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
+        blocks: Dict[tuple[Charge, Charge, Charge], torch.Tensor] = {}
+        dim_fused_map = fused.sector_dim_map()
 
-    for sa in first.sectors:
-        qa = sa.charge
-        da = sa.dim
-        for sb in second.sectors:
-            qb = sb.charge
-            db = sb.dim
-            
-            # Compute fused charge in a direction-aware way (matching combine_indices logic)
-            # Charges being fused (IN) contribute as-is, already fused (OUT) contribute dual
-            contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
-            contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
-            total_contrib = group.fuse_unique(contrib_a, contrib_b)
-            # Fused index: dual when direction is IN
-            qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
-            
-            fused_dim = dim_fused_map[qf]
-            offset = offsets[qf]
-            arr = torch.zeros((da, db, fused_dim), dtype=dtype)
-            # Fill a set of identity matrices at appropriate column offsets.
-            for i in range(da):
-                base = offset + i * db
-                cols = slice(base, base + db)
-                arr[i, :, cols] = torch.eye(db, dtype=dtype)
-            blocks[(qa, qb, qf)] = arr
-            offsets[qf] = offset + da * db
+        for sa in first.sectors:
+            qa = sa.charge
+            da = sa.dim
+            for sb in second.sectors:
+                qb = sb.charge
+                db = sb.dim
+                
+                # Compute fused charge in a direction-aware way (matching combine_indices logic)
+                # Charges being fused (IN) contribute as-is, already fused (OUT) contribute dual
+                contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
+                contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
+                total_contrib = group.fuse_unique(contrib_a, contrib_b)
+                # Fused index: dual when direction is IN
+                qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
+                
+                fused_dim = dim_fused_map[qf]
+                offset = offsets[qf]
+                arr = torch.zeros((da, db, fused_dim), dtype=dtype)
+                # Fill a set of identity matrices at appropriate column offsets.
+                for i in range(da):
+                    base = offset + i * db
+                    cols = slice(base, base + db)
+                    arr[i, :, cols] = torch.eye(db, dtype=dtype)
+                blocks[(qa, qb, qf)] = arr
+                offsets[qf] = offset + da * db
 
-    # Ensure each fused sector is completely populated.
-    for q, offset in offsets.items():
-        if offset != dim_fused_map[q]:
-            raise RuntimeError("Fusion tensor construction mismatch")
+        # Ensure each fused sector is completely populated.
+        for q, offset in offsets.items():
+            if offset != dim_fused_map[q]:
+                raise RuntimeError("Fusion tensor construction mismatch")
 
-    return Tensor(indices=(first, second, fused), itags=itags, data=blocks, dtype=dtype)
+        return Tensor(indices=(first, second, fused), itags=itags, data=blocks, dtype=dtype)
+    
+    else:
+        # Non-Abelian case: multi-channel fusion with intertwiner
+        offsets: Dict[Charge, int] = {sector.charge: 0 for sector in fused.sectors}
+        blocks: Dict[tuple[Charge, Charge, Charge], torch.Tensor] = {}
+        intw: Dict[tuple[Charge, Charge, Charge], dg.Bridge] = {}
+        dim_fused_map = fused.sector_dim_map()
+
+        for sa in first.sectors:
+            qa = sa.charge
+            da = sa.dim
+            for sb in second.sectors:
+                qb = sb.charge
+                db = sb.dim
+                
+                # Compute fused charges using direction-aware contributions
+                contrib_a = qa if first.direction == Direction.IN else group.dual(qa)
+                contrib_b = qb if second.direction == Direction.IN else group.dual(qb)
+                
+                # Non-Abelian: get all fusion channels
+                total_contribs = group.fuse_channels(contrib_a, contrib_b)
+                
+                for total_contrib in total_contribs:
+                    # Apply direction transformation to get fused charge
+                    qf = group.dual(total_contrib) if direction == Direction.IN else total_contrib
+                    
+                    fused_dim = dim_fused_map[qf]
+                    offset = offsets[qf]
+                    
+                    # Reduced tensor: identity-like structure with trailing dimension
+                    arr = torch.zeros((da, db, fused_dim, 1), dtype=dtype)
+                    for i in range(da):
+                        base = offset + i * db
+                        cols = slice(base, base + db)
+                        arr[i, :, cols, 0] = torch.eye(db, dtype=dtype)
+                    blocks[(qa, qb, qf)] = arr
+                    
+                    # Create Bridge for CG fusion
+                    bridge = dg.Bridge.from_block(
+                        group, (qa, qb, qf),
+                        [first.direction, second.direction, direction],
+                        dtype=dtype
+                    )
+                    
+                    # Apply normalization: weights = √(irrep_dim) of fused charge
+                    irrep_dimension = group.irrep_dim(qf)
+                    bridge.weights[0, 0] = math.sqrt(irrep_dimension)
+                    
+                    intw[(qa, qb, qf)] = bridge
+                    offsets[qf] = offset + da * db
+
+        # Ensure each fused sector is completely populated.
+        for q, offset in offsets.items():
+            if offset != dim_fused_map[q]:
+                raise RuntimeError("Fusion tensor construction mismatch")
+
+        return Tensor(indices=(first, second, fused), itags=itags, data=blocks, intw=intw, dtype=dtype)
 
 
 def isometry_n(
