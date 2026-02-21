@@ -69,6 +69,15 @@ class SymmetryGroup(ABC):
     def validate_charge(self, q: Charge) -> None:
         ...
 
+    @abstractmethod
+    def irrep_dim(self, q: Charge) -> int:
+        """Return the dimension of the irreducible representation labeled by charge q.
+        
+        For Abelian groups, this is always 1. For non-Abelian groups like SU(2),
+        this is the dimension of the spin-j representation (2j+1).
+        """
+        ...
+
 
 class AbelianGroup(SymmetryGroup, ABC):
     """Base class for Abelian symmetry groups with deterministic fusion."""
@@ -77,6 +86,10 @@ class AbelianGroup(SymmetryGroup, ABC):
     def is_abelian(self) -> bool:
         """Return True for all Abelian groups."""
         return True
+
+    def irrep_dim(self, q: Charge) -> int:
+        """Return dimension of irreducible representation (always 1 for Abelian groups)."""
+        return 1
 
     @abstractmethod
     def fuse_unique(self, *qs: Charge) -> Charge:
@@ -102,6 +115,16 @@ class UnitaryGroup(SymmetryGroup, ABC):
     def is_abelian(self) -> bool:
         """Return False for all non-Abelian unitary groups."""
         return False
+
+    @abstractmethod
+    def irrep_dim(self, q: Charge) -> int:
+        """Return dimension of the irreducible representation labeled by charge q.
+        
+        For non-Abelian groups, this is the dimension of the representation space.
+        For example, in SU(2), charge q = 2j labels a spin-j representation with
+        dimension 2j+1.
+        """
+        ...
 
     @abstractmethod
     def fuse_channels(self, *qs: Charge) -> Tuple[Charge, ...]:

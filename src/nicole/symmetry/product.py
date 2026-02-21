@@ -337,6 +337,28 @@ class ProductGroup(SymmetryGroup):
         """
         self.validate_charge(q)
         return tuple(comp.dual(qi) for comp, qi in zip(self.components, q))
+
+    def irrep_dim(self, q: Tuple[Any, ...]) -> int:
+        """Return dimension of the irreducible representation.
+        
+        For ProductGroup, the irrep dimension is the product of constituent
+        irrep dimensions.
+        
+        Parameters
+        ----------
+        q:
+            Charge tuple.
+        
+        Returns
+        -------
+        int
+            Product of component irrep dimensions.
+        """
+        self.validate_charge(q)
+        dim = 1
+        for comp, qi in zip(self.components, q):
+            dim *= comp.irrep_dim(qi)
+        return dim
     
     @property
     def num_components(self) -> int:

@@ -88,6 +88,24 @@ class SU2Group(UnitaryGroup):
         self.validate_charge(two_j)
         return two_j
 
+    def irrep_dim(self, two_j: int) -> int:
+        """Return dimension of spin-j irreducible representation.
+        
+        For SU(2), the dimension of a spin-j representation is 2j+1.
+        
+        Parameters
+        ----------
+        two_j:
+            Quantum number (2j, where j is the physical spin).
+        
+        Returns
+        -------
+        int
+            Dimension of the representation: 2j + 1.
+        """
+        self.validate_charge(two_j)
+        return two_j + 1
+
     def fuse_channels(self, *two_js: int) -> Tuple[int, ...]:
         """Fuse multiple spins, returning all possible total spin channels.
         
