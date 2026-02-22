@@ -176,12 +176,12 @@ class Tensor:
             # Set default label for scalars if still using the default "Tensor" label
             if self.label == "Tensor":
                 object.__setattr__(self, 'label', "Scalar")
-        # Validate intertwiners (intw) and block shapes for non-Abelian groups
+        # Validate intertwiners (intw) and block shapes for generic groups
         if len(self.indices) > 0:
             group = self.indices[0].group
             if not group.is_abelian:
                 if self.intw is None:
-                    raise ValueError("Non-Abelian tensors must have intertwiner (intw) populated")
+                    raise ValueError("Generic (non-Abelian) tensors must have intertwiner (intw) populated")
                 # Validate each Bridge has correct number of external edges
                 for key, bridge in self.intw.items():
                     if bridge.num_external != len(self.indices):
@@ -190,7 +190,7 @@ class Tensor:
                             f"expected {len(self.indices)}"
                         )
         
-        # Validate block shapes (includes intw validation for non-Abelian)
+        # Validate block shapes (includes intw validation for generic groups)
         BlockSchema.validate_blocks(self.indices, self.data, self.intw)
         for key in self.data:
             if not BlockSchema.charges_conserved(self.indices, key):
@@ -235,7 +235,7 @@ class Tensor:
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
         
-        For non-Abelian symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        For generic symmetry groups (e.g., SU2), intertwiners (intw) are automatically
         populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
@@ -252,7 +252,7 @@ class Tensor:
         else:
             itags_tuple = tuple(itags)
         
-        # Create intertwiner (intw) for non-Abelian groups first
+        # Create intertwiner (intw) for generic groups first
         intw = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
             intw: MutableMapping[BlockKey, dg.Bridge] = {}
@@ -317,7 +317,7 @@ class Tensor:
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
         
-        For non-Abelian symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        For generic symmetry groups (e.g., SU2), intertwiners (intw) are automatically
         populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
@@ -340,7 +340,7 @@ class Tensor:
         else:
             itags_tuple = tuple(itags)
         
-        # Create intertwiner (intw) for non-Abelian groups first
+        # Create intertwiner (intw) for generic (non-Abelian) groups first
         intw = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
             intw: MutableMapping[BlockKey, dg.Bridge] = {}
@@ -670,7 +670,7 @@ class Tensor:
                 torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
             )
         else:
-            # Non-Abelian: ||T||² = Σ_blocks Tr(W† R† R W)
+            # Generic: ||T||² = Σ_blocks Tr(W† R† R W)
             total = 0.0
             for key, block in self.data.items():
                 r_flat = block.flatten(0, -2)  # (d₁...dₙ, r)
@@ -818,13 +818,13 @@ class Tensor:
         
         This operation modifies the tensor in-place by:
         - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
-        - For non-Abelian groups, also removes blocks where all weights are near-zero
+        - For generic groups, also removes blocks where all weights are near-zero
         - Updating each index to only include sectors that still have data in remaining blocks
         
         Notes
         -----
         Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
-        For non-Abelian tensors T = R @ W, if W ≈ 0, then T ≈ 0 regardless of R.
+        For generic tensors T = R @ W, if W ≈ 0, then T ≈ 0 regardless of R.
         Index sectors are only removed if no blocks remain that reference their charges.
         """
         # Define threshold as double precision machine epsilon
@@ -836,7 +836,7 @@ class Tensor:
             is_data_zero = torch.max(torch.abs(arr)) < eps
             is_weights_zero = False
             
-            # For non-Abelian: also check if weights are zero (T = R @ 0 = 0)
+            # For generic groups: also check if weights are zero (T = R @ 0 = 0)
             if self.intw is not None and key in self.intw:
                 weights = self.intw[key].weights
                 is_weights_zero = torch.max(torch.abs(weights)) < eps
@@ -901,7 +901,7 @@ class Tensor:
     def __add__(self, other: Tensor) -> Tensor:
         """Element-wise addition while preserving symmetry metadata.
         
-        For non-Abelian groups (SU(2)), handles intertwiner weights:
+        For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: adds reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
         """
@@ -984,7 +984,7 @@ class Tensor:
     def __sub__(self, other: Tensor) -> Tensor:
         """Element-wise subtraction while preserving symmetry metadata.
         
-        For non-Abelian groups (SU(2)), handles intertwiner weights:
+        For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: subtracts reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
         """
@@ -1022,7 +1022,7 @@ class Tensor:
                 else:
                     new_data[k] = a - b
         else:
-            # Non-Abelian groups: handle intertwiners
+            # Generic (non-Abelian) groups: handle intertwiners
             new_intw = {}
             for k in keys:
                 a = self.data.get(k)
@@ -1112,7 +1112,7 @@ class Tensor:
     ) -> None:
         """Compress intertwiner weights by removing linearly dependent components (in-place).
         
-        For non-Abelian groups, performs SVD on weight matrices and truncates
+        For generic groups, performs SVD on weight matrices and truncates
         singular values below the cutoff threshold. This reduces the reduced
         multiplicity dimension when weight rows are linearly dependent.
         
