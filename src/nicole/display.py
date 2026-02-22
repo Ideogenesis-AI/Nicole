@@ -33,7 +33,7 @@ Implementation approach
 1. Lightweight formatting helpers (_format_bytes, _format_single_value, _format_count_list)
    handle recurring presentation tasks so the main summariser stays readable.
 2. `_charge_components` and `_group_signature` normalise charge data regardless of whether
-   the tensor uses simple integers or tuple-based non-Abelian multiplet identifiers.
+   the tensor uses simple integers or tuple-based product group identifiers.
 3. `tensor_summary` orchestrates the process: it first builds the heading lines, then
    computes global padding for charges so every printed sector column aligns. Finally it
    assembles per-block information, truncating after a configurable number of lines for brevity.
@@ -84,7 +84,7 @@ def _group_signature(indices: Sequence[Index], components_per_charge: int) -> st
         # Other Abelian groups use their name
         return group.name
     else:
-        # Non-Abelian groups
+        # Generic groups
         gname = getattr(group, "name", "")
         label = gname.upper() if gname else "?"
         count = max(components_per_charge, 1)
@@ -145,6 +145,9 @@ def tensor_summary(
         Ordered tuple of human-readable labels for each index.
     data:
         Mapping from block keys (one charge per index) to torch tensors.
+    intw:
+        Optional mapping from block keys to Bridge objects for generic tensors.
+        Used to determine the reduced multiplicity dimension to trim from display.
     dtype:
         Data type of the tensor entries.
     label:
@@ -161,9 +164,6 @@ def tensor_summary(
         Optional sequence of block numbers (1-indexed) to use for display.
         If provided, must match the length of sorted_keys. Used to preserve
         original block numbering when displaying a subset of blocks.
-    intw:
-        Optional mapping from block keys to Bridge objects for non-Abelian tensors.
-        Used to determine the reduced multiplicity dimension to trim from display.
 
     Returns
     -------
@@ -267,9 +267,9 @@ def tensor_summary(
         
         for idx_num, (key, arr) in zip(display_numbers, blocks_to_show):
             # Dense dims (state space) and CGC dims (irrep dimensions).
-            # For non-Abelian tensors, trim the trailing reduced multiplicity dimension.
+            # For generic tensors, trim the trailing reduced multiplicity dimension.
             if intw is not None:
-                # Non-Abelian: trim last axis (reduced multiplicity)
+                # Generic: trim last axis (reduced multiplicity)
                 state_shape = arr.shape[:-1]
                 cgc_dims_list = [str(indices[i].group.irrep_dim(key[i])) for i in range(len(key))]
                 cgc_dims = "x".join(cgc_dims_list) or "1"
