@@ -544,3 +544,102 @@ def test_compute_rsymbol_invalid_permutation():
     # Duplicate index
     with pytest.raises(ValueError):
         compute_rsymbol(bridge, [0, 0, 2])
+
+
+# Bridge.conj() tests
+
+def test_bridge_conj_flips_directions():
+    """Test that Bridge.conj() flips all edge directions."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_conj = bridge.conj()
+    
+    # Verify all directions are flipped
+    orig_edges = bridge.cgspec.edges
+    conj_edges = bridge_conj.cgspec.edges
+    
+    for orig, conj in zip(orig_edges, conj_edges):
+        assert orig.dir == conj.dir.flip()
+        # Spins should remain the same
+        assert orig.j.twice() == conj.j.twice()
+
+
+def test_bridge_conj_shares_weights():
+    """Test that Bridge.conj() shares the same weight tensor."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_conj = bridge.conj()
+    
+    # Weights should be the same object (shared, not cloned)
+    assert bridge.weights is bridge_conj.weights
+
+
+def test_bridge_conj_double_application():
+    """Test that conjugating twice returns to original directions."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_double_conj = bridge.conj().conj()
+    
+    # Directions should match original
+    orig_edges = bridge.cgspec.edges
+    final_edges = bridge_double_conj.cgspec.edges
+    
+    for orig, final in zip(orig_edges, final_edges):
+        assert orig.dir == final.dir
+        assert orig.j.twice() == final.j.twice()
+    
+    # Weights should still be the same object
+    assert bridge.weights is bridge_double_conj.weights
+
+
+def test_bridge_conj_multiple_sectors():
+    """Test Bridge.conj() with multiple sectors."""
+    group = SU2Group()
+    key = (0, 2, 3, 1)
+    directions = [Direction.OUT, Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_conj = bridge.conj()
+    
+    # Verify all 4 edges have flipped directions
+    orig_edges = bridge.cgspec.edges
+    conj_edges = bridge_conj.cgspec.edges
+    
+    assert len(orig_edges) == 4
+    assert len(conj_edges) == 4
+    
+    for orig, conj in zip(orig_edges, conj_edges):
+        assert orig.dir == conj.dir.flip()
+
+
+def test_bridge_conj_with_custom_weights():
+    """Test Bridge.conj() with custom weight matrix."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    # Create bridge with custom weights
+    bridge = Bridge.from_block(group, key, directions)
+    custom_weights = torch.randn(3, bridge.om_dimension, dtype=torch.float64)
+    bridge_custom = Bridge(cgspec=bridge.cgspec, weights=custom_weights)
+    
+    bridge_conj = bridge_custom.conj()
+    
+    # Custom weights should be shared (same object)
+    assert bridge_custom.weights is bridge_conj.weights
+    
+    # Directions should be flipped
+    orig_edges = bridge_custom.cgspec.edges
+    conj_edges = bridge_conj.cgspec.edges
+    
+    for orig, conj in zip(orig_edges, conj_edges):
+        assert orig.dir == conj.dir.flip()
