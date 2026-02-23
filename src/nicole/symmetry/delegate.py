@@ -212,6 +212,43 @@ class Bridge:
         """
         return Bridge(cgspec=self.cgspec, weights=self.weights.clone())
     
+    def conj(self) -> Bridge:
+        """Return a new Bridge with flipped edge directions (conjugation).
+        
+        Creates a new Bridge instance where all edge directions in the CGSpec are
+        flipped (incoming <-> outgoing), while the weight matrix is shared (not cloned).
+        This corresponds to complex conjugation of the physical tensor in the sense
+        of flipping all index directions.
+        
+        Returns
+        -------
+        Bridge
+            New Bridge instance with flipped edge directions and the same weight tensor.
+        
+        Examples
+        --------
+        >>> bridge = Bridge(cgspec, weights)
+        >>> bridge_conj = bridge.conj()
+        >>> # All edge directions are flipped
+        >>> for orig, conj in zip(bridge.cgspec.edges, bridge_conj.cgspec.edges):
+        ...     assert orig.dir == conj.dir.flip()
+        >>> # Weights are the same object (shared)
+        >>> assert bridge.weights is bridge_conj.weights
+        """
+        # Flip all edge directions
+        flipped_edges = []
+        for edge in self.cgspec.edges:
+            if edge.dir.is_incoming():  # incoming
+                flipped_edges.append(yuzuha.Edge.outgoing(edge.j))
+            else:  # outgoing
+                flipped_edges.append(yuzuha.Edge.incoming(edge.j))
+        
+        # Create new CGSpec with flipped directions
+        new_cgspec = yuzuha.CGSpec.from_edges(flipped_edges)
+        
+        # Return new Bridge with flipped cgspec and same weights
+        return Bridge(cgspec=new_cgspec, weights=self.weights)
+    
     @staticmethod
     def from_block(
         group: SymmetryGroup,
