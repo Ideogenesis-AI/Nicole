@@ -49,7 +49,7 @@ symmetry/
 
 support/
     Utilities and secondary features:
-    - test_copy_access.py: Tensor copying and element access
+    - test_helpers.py: Tensor cloning and element access
     - test_display.py: Tensor display and formatting
     - test_types.py: Type definitions and enumerations
 
