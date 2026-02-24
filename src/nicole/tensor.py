@@ -253,7 +253,7 @@ class Tensor:
             itags_tuple = tuple(itags)
         
         # Create intertwiner (intw) for generic groups first
-        intw = None
+        intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
             intw: MutableMapping[BlockKey, dg.Bridge] = {}
             directions = [idx.direction for idx in indices_tuple]
@@ -341,7 +341,7 @@ class Tensor:
             itags_tuple = tuple(itags)
         
         # Create intertwiner (intw) for generic (non-Abelian) groups first
-        intw = None
+        intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
             intw: MutableMapping[BlockKey, dg.Bridge] = {}
             directions = [idx.direction for idx in indices_tuple]
@@ -540,7 +540,7 @@ class Tensor:
             new_data = {k: v.to(device) for k, v in self.data.items()}
         
         # Move intertwiner to new device/dtype
-        new_intw = None
+        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
             new_intw = {k: bridge.to(device, dtype=new_dtype) for k, bridge in self.intw.items()}
         
@@ -684,7 +684,7 @@ class Tensor:
         new_data = {k: v.clone() for k, v in self.data.items()}
         
         # Deep clone intertwiner
-        new_intw = None
+        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
             new_intw = {k: bridge.clone() for k, bridge in self.intw.items()}
         
@@ -1157,14 +1157,62 @@ class Tensor:
     #   Tensor operations: conj, permute, transpose
     # ------------------------------------------------------------
 
-    def conj(self) -> None:
-        """Complex conjugate every dense block if dtype is complex, and revert all index directions."""
-        # Only conjugate data if dtype is complex
+    def conj(self, in_place: bool = False) -> Tensor:
+        """Complex conjugate every dense block if dtype is complex, and revert all index directions.
+        
+        Parameters
+        ----------
+        in_place : bool, optional
+            If True, modifies this tensor in-place and returns self.
+            If False (default), returns a new Tensor instance with conjugated data
+            (as views for complex dtype) and flipped directions. The underlying torch
+            tensors are not cloned - torch.conj() returns a view for complex dtypes,
+            and real dtypes share the same tensors.
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        
+        Examples
+        --------
+        >>> # Functional style (default, efficient with sharing)
+        >>> t2 = t1.conj()
+        >>> t2 is not t1  # Different Tensor instances
+        >>> # But for complex dtype, t2.data shares storage with t1.data (as conjugate views)
+        >>> 
+        >>> # In-place style (allows chaining)
+        >>> result = t1.conj(in_place=True)
+        >>> result is t1  # Returns self for chaining
+        """
+        # Prepare conjugated data
         if self.dtype.is_complex:
-            for k in self.data:
-                self.data[k] = torch.conj(self.data[k])
+            new_data = {k: torch.conj(v) for k, v in self.data.items()}
+        else:
+            new_data = dict(self.data)  # Shallow copy: share tensors
+        
         # Flip all index directions
-        self.indices = tuple(idx.flip() for idx in self.indices)
+        new_indices = tuple(idx.flip() for idx in self.indices)
+        
+        # Update intw with flipped directions
+        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            for key, bridge in self.intw.items():
+                new_intw[key] = bridge.conj()
+        
+        if in_place:
+            # Modify in-place and return self for chaining
+            self.data = new_data
+            self.indices = new_indices
+            self.intw = new_intw
+            return self
+        else:
+            # Return new instance
+            return Tensor(
+                indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+                dtype=self.dtype, label=self.label
+            )
 
     def permute(self, order: Sequence[int]) -> None:
         """Permute tensor axes according to the provided reordering."""
