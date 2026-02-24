@@ -360,8 +360,8 @@ def test_operations_preserve_device():
     result = t1 * 2.0
     assert result.device == torch.device('cpu')
     
-    # Test copy preserves device
-    result = t1.copy()
+    # Test clone preserves device
+    result = t1.clone()
     assert result.device == torch.device('cpu')
 
 
@@ -386,8 +386,8 @@ def test_operations_on_cuda():
     result = t1 * 2.0
     assert result.device.type == 'cuda'
     
-    # Test copy on CUDA
-    result = t1.copy()
+    # Test clone on CUDA
+    result = t1.clone()
     assert result.device.type == 'cuda'
 
 

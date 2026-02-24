@@ -442,7 +442,7 @@ def test_tensor_validation_su2_missing_intw():
     
     data = {(1, 1): torch.zeros(2, 2)}
     
-    with pytest.raises(ValueError, match="Non-Abelian tensors must have intertwiner"):
+    with pytest.raises(ValueError, match="Generic.*tensors must have intertwiner"):
         Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=None, dtype=torch.float64)
 
 
@@ -550,14 +550,14 @@ def test_tensor_scalar_norm():
     assert math.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
 
 
-def test_tensor_scalar_copy():
-    """Test copying scalar tensors."""
+def test_tensor_scalar_clone():
+    """Test cloning scalar tensors."""
     s = Tensor.from_scalar(42.0)
-    s_copy = s.copy()
+    s_clone = s.clone()
     
-    assert s_copy.is_scalar()
-    assert s_copy.item() == s.item()
-    assert s_copy.data[()] is not s.data[()]  # Different array objects
+    assert s_clone.is_scalar()
+    assert s_clone.item() == s.item()
+    assert s_clone.data[()] is not s.data[()]  # Different array objects
 
 
 def test_tensor_scalar_display():

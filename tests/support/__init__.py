@@ -19,7 +19,7 @@
 """Tests for utilities and secondary features.
 
 This module contains tests for supporting functionality that enhances
-usability and developer experience, including copying behavior, display
+usability and developer experience, including cloning behavior, display
 formatting, and type definitions. While not central to tensor algebra,
 these features are important for practical use of the library.
 
@@ -34,10 +34,10 @@ test_autograd.py
     - Differentiable decompositions
     - Gradient checking and validation
 
-test_copy_access.py
-    Tests for tensor copying and element access:
-    - Deep copy vs. shallow copy behavior
-    - Copy semantics for tensors and indices
+test_helpers.py
+    Tests for tensor cloning and element access:
+    - Deep clone vs. shallow copy behavior
+    - Clone semantics for tensors and indices
     - Element-wise access to tensor blocks
     - Data sharing and mutation safety
     - Memory management and ownership
@@ -74,7 +74,7 @@ test_types.py
 Key Features Tested
 -------------------
 - Automatic differentiation and gradient flow
-- Copy semantics and data safety
+- Clone semantics and data safety
 - Device management and GPU acceleration
 - User-friendly tensor inspection
 - Clear error messages and diagnostics
@@ -86,7 +86,7 @@ Developer Experience
 These tests ensure that Nicole provides:
 - Seamless PyTorch integration with autograd support
 - Flexible device management for CPU/GPU workflows
-- Intuitive copying behavior without surprises
+- Intuitive cloning behavior without surprises
 - Clear visualization of tensor structure
 - Strong typing for better IDE support
 - Helpful error messages and debugging tools

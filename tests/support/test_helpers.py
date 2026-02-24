@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor copy and block access operations: copy, sorted_keys, key, block."""
+"""Tests for tensor clone and block access operations: clone, sorted_keys, key, block."""
 
 import torch
 import pytest
@@ -24,128 +24,128 @@ import pytest
 from nicole import Direction, Tensor, U1Group, SU2Group, subsector, Index, Sector
 
 
-# Copy tests
+# Clone tests
 
-def test_copy_returns_new_instance():
-    """Test that copy returns a new tensor instance."""
+def test_clone_returns_new_instance():
+    """Test that clone returns a new tensor instance."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, itags=["A", "B"])
 
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
-    assert copied is not tensor
+    assert cloned is not tensor
 
 
-def test_copy_has_identical_data():
-    """Test that copy has identical data values."""
+def test_clone_has_identical_data():
+    """Test that clone has identical data values."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=456, dtype=torch.complex128, itags=["A", "B"])
 
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
-    assert set(copied.data.keys()) == set(tensor.data.keys())
+    assert set(cloned.data.keys()) == set(tensor.data.keys())
     for key in tensor.data:
-        assert torch.equal(copied.data[key], tensor.data[key])
+        assert torch.equal(cloned.data[key], tensor.data[key])
 
 
-def test_copy_creates_independent_data():
-    """Test that modifying copy doesn't affect original."""
+def test_clone_creates_independent_data():
+    """Test that modifying a clone doesn't affect the original."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=789, itags=["X", "Y"])
 
     original_data = {k: v.clone() for k, v in tensor.data.items()}
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
-    # Modify the copy's data
-    for key in copied.data:
-        copied.data[key] *= 100.0
+    # Modify the clone's data
+    for key in cloned.data:
+        cloned.data[key] *= 100.0
 
     # Original should be unchanged
     for key in original_data:
         assert torch.equal(tensor.data[key], original_data[key])
 
 
-def test_copy_preserves_metadata():
-    """Test that copy preserves indices, itags, dtype, and label."""
+def test_clone_preserves_metadata():
+    """Test that clone preserves indices, itags, dtype, and label."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
     tensor = Tensor.random([idx_a, idx_b], seed=111, dtype=torch.complex128, itags=["left", "right"])
     tensor.label = "MyTensor"
 
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
-    assert copied.indices == tensor.indices
-    assert copied.itags == tensor.itags
-    assert copied.dtype == tensor.dtype
-    assert copied.label == tensor.label
+    assert cloned.indices == tensor.indices
+    assert cloned.itags == tensor.itags
+    assert cloned.dtype == tensor.dtype
+    assert cloned.label == tensor.label
 
 
-def test_copy_shares_immutable_indices():
-    """Test that copy shares the same Index objects (since they're immutable)."""
+def test_clone_shares_immutable_indices():
+    """Test that clone shares the same Index objects (since they're immutable)."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=222, itags=["A", "B"])
 
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
     # Index objects should be the same (shared) since they're immutable
-    for orig_idx, copy_idx in zip(tensor.indices, copied.indices):
-        assert orig_idx is copy_idx
+    for orig_idx, clone_idx in zip(tensor.indices, cloned.indices):
+        assert orig_idx is clone_idx
 
 
-def test_copy_data_arrays_are_independent():
-    """Test that torch tensors in copy are different objects."""
+def test_clone_data_arrays_are_independent():
+    """Test that torch tensors in a clone are different objects."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=333, itags=["A", "B"])
 
-    copied = tensor.copy()
+    cloned = tensor.clone()
 
     # Each array should be a different object
     for key in tensor.data:
-        assert copied.data[key] is not tensor.data[key]
+        assert cloned.data[key] is not tensor.data[key]
 
 
-def test_copy_su2_clones_intw():
-    """Test that copy() deep copies intertwiner for SU2."""
+def test_clone_su2_clones_intw():
+    """Test that clone() deep copies the intertwiner for SU2."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
     
     tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
-    copied = tensor.copy()
+    cloned = tensor.clone()
     
     # Verify intw exists and is deep copied
-    assert copied.intw is not None
-    assert copied.intw is not tensor.intw  # Different dict
+    assert cloned.intw is not None
+    assert cloned.intw is not tensor.intw  # Different dict
     
     # Verify each Bridge is cloned
     for key in tensor.intw.keys():
-        assert key in copied.intw
+        assert key in cloned.intw
         # Same cgspec (immutable)
-        assert copied.intw[key].cgspec == tensor.intw[key].cgspec
+        assert cloned.intw[key].cgspec == tensor.intw[key].cgspec
         # Cloned weights (different tensor objects)
-        assert copied.intw[key].weights is not tensor.intw[key].weights
-        assert torch.allclose(copied.intw[key].weights, tensor.intw[key].weights)
+        assert cloned.intw[key].weights is not tensor.intw[key].weights
+        assert torch.allclose(cloned.intw[key].weights, tensor.intw[key].weights)
 
 
-def test_copy_abelian_no_intw():
-    """Test that copy() preserves intw=None for Abelian."""
+def test_clone_abelian_no_intw():
+    """Test that clone() preserves intw=None for Abelian tensors."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
     
     tensor = Tensor.zeros([idx1, idx2])
-    copied = tensor.copy()
+    cloned = tensor.clone()
     
     assert tensor.intw is None
-    assert copied.intw is None
+    assert cloned.intw is None
 
 
 # Block access tests (sorted_keys, key, block)
