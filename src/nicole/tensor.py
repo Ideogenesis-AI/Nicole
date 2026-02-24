@@ -85,8 +85,8 @@ class Tensor:
         Extract the scalar value from a 0D tensor.
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
-    copy()
-        Create a deep copy of this tensor with independent block data.
+    clone()
+        Create a deep clone of this tensor with independent block data.
     rand_fill()
         In-place: Fill all data blocks with random values.
     insert_index()
@@ -656,7 +656,7 @@ class Tensor:
         block.backward()
 
     # ------------------------------------------------------------
-    #   Utility methods: norm, copy, and sector access
+    #   Utility methods: norm, clone, and sector access
     # ------------------------------------------------------------
 
     def norm(self) -> float:
@@ -679,8 +679,8 @@ class Tensor:
                 total += torch.sum(weights.conj() * (gram @ weights)).real
             return float(torch.sqrt(total))
 
-    def copy(self) -> Tensor:
-        """Create a deep copy of this tensor."""
+    def clone(self) -> Tensor:
+        """Create a deep clone of this tensor."""
         new_data = {k: v.clone() for k, v in self.data.items()}
         
         # Deep copy intertwiner
