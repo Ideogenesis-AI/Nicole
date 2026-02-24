@@ -48,6 +48,7 @@ from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
+from .symmetry import delegate as dg
 
 
 def conj(tensor: Tensor) -> Tensor:
@@ -64,18 +65,32 @@ def conj(tensor: Tensor) -> Tensor:
         A new tensor instance with:
         - Conjugated dense blocks (if dtype is complex)
         - All index directions flipped
+        - Intertwiners (if present) updated with flipped directions
         - All other attributes preserved
+    
+    Notes
+    -----
+    This functional version creates a fully independent tensor by cloning all data blocks.
+    For an efficient version that shares underlying tensors, use tensor.conj(in_place=False).
     """
-    # Only conjugate data if dtype is complex
+    # Clone data for complete isolation
     if tensor.dtype.is_complex:
-        new_data = {k: torch.conj(v) for k, v in tensor.data.items()}
+        new_data = {k: torch.conj(v).clone() for k, v in tensor.data.items()}
     else:
         new_data = {k: v.clone() for k, v in tensor.data.items()}
     
     # Flip all index directions
     new_indices = tuple(idx.flip() for idx in tensor.indices)
     
-    return Tensor(indices=new_indices, itags=tensor.itags, data=new_data, dtype=tensor.dtype, label=tensor.label)
+    # Update intw with flipped directions
+    new_intw = None
+    if tensor.intw is not None:
+        new_intw: Dict[BlockKey, dg.Bridge] = {}
+        for key, bridge in tensor.intw.items():
+            new_intw[key] = bridge.conj()
+    
+    return Tensor(indices=new_indices, itags=tensor.itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label)
 
 
 def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
