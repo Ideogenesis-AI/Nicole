@@ -683,18 +683,14 @@ class Tensor:
         """Create a deep clone of this tensor."""
         new_data = {k: v.clone() for k, v in self.data.items()}
         
-        # Deep copy intertwiner
+        # Deep clone intertwiner
         new_intw = None
         if self.intw is not None:
             new_intw = {k: bridge.clone() for k, bridge in self.intw.items()}
         
         return Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            intw=new_intw,
-            dtype=self.dtype,
-            label=self.label,
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=self.dtype, label=self.label
         )
 
     def _invalidate_sorted_keys(self) -> None:
@@ -973,12 +969,8 @@ class Tensor:
                         new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
         
         return Tensor(
-            indices=new_indices,
-            itags=self.itags,
-            data=new_data,
-            intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype),
-            label=self.label,
+            indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
         )
 
     def __sub__(self, other: Tensor) -> Tensor:
@@ -1056,12 +1048,8 @@ class Tensor:
                         new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
         
         return Tensor(
-            indices=new_indices,
-            itags=self.itags,
-            data=new_data,
-            intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype),
-            label=self.label,
+            indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
         )
 
     def __mul__(self, scalar: Union[int, float, complex]) -> Tensor:
@@ -1091,12 +1079,8 @@ class Tensor:
         else:  # int
             scalar_dtype = torch.int64
         return Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            intw=self.intw,
-            dtype=torch.promote_types(self.dtype, scalar_dtype),
-            label=self.label,
+            indices=self.indices, itags=self.itags, data=new_data, intw=self.intw,
+            dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
         )
 
     __rmul__ = __mul__
