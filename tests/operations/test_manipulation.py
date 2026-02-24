@@ -28,84 +28,301 @@ from nicole import ProductGroup, U1Group, Z2Group, SU2Group
 from ..utils import assert_blocks_equal, assert_charge_neutral
 
 
+# ============================================================================
 # Conjugation tests
+# ============================================================================
+# Three modes of conjugation:
+# 1. tensor.conj(in_place=False) - Method, default, shares data efficiently
+# 2. tensor.conj(in_place=True) - Method, in-place modification, returns self
+# 3. conj(tensor) - Functional, clones all data for full isolation
+# ============================================================================
 
-def test_conj_functional_returns_new_instance():
-    """Test that functional conj returns a new instance."""
+# --- Method: tensor.conj(in_place=False) - Default, efficient sharing ---
+
+def test_conj_method_basic():
+    """Test method conj(in_place=False) basic behavior."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
 
-    tensor_conj = conj(tensor)
+    tensor_conj = tensor.conj(in_place=False)
     
-    assert tensor_conj is not tensor  # Verify it's a new instance
-
-
-def test_conj_functional_conjugates_data():
-    """Test that functional conj conjugates the data."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
-
-    tensor_conj = conj(tensor)
+    # Returns new instance
+    assert tensor_conj is not tensor
     
+    # Conjugates data
     for key in tensor.data:
         assert torch.allclose(tensor_conj.data[key], torch.conj(tensor.data[key]))
-
-
-def test_conj_functional_flips_directions():
-    """Test that functional conj flips index directions."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    tensor = Tensor.random([idx_a, idx_b], seed=123, dtype=torch.complex128, itags=["A", "B"])
-
-    tensor_conj = conj(tensor)
     
+    # Flips directions
     for orig_idx, new_idx in zip(tensor.indices, tensor_conj.indices):
         assert new_idx.direction == orig_idx.direction.reverse()
 
 
-def test_conj_inplace_modifies_original():
-    """Test that in-place conj modifies the original tensor."""
+def test_conj_method_shares_data_real():
+    """Test that method conj(in_place=False) shares data for real dtype."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.float64, itags=["A", "B"])
+    
+    tensor_conj = tensor.conj(in_place=False)
+    
+    # Data blocks are shared (same object)
+    for key in tensor.data:
+        assert tensor_conj.data[key] is tensor.data[key]
+
+
+def test_conj_method_shares_views_complex():
+    """Test that method conj(in_place=False) creates conjugate views for complex dtype."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
+    
+    tensor_conj = tensor.conj(in_place=False)
+    
+    # torch.conj returns a view, not a clone
+    # Modify original and verify conj view reflects it
+    key = list(tensor.data.keys())[0]
+    original_value = tensor.data[key].clone()
+    tensor.data[key][:] = 0
+    
+    # Conjugate view should also be zero now
+    assert torch.allclose(tensor_conj.data[key], torch.zeros_like(original_value))
+
+
+def test_conj_method_double_application():
+    """Test method double conjugation restores original (involution)."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     original_direction = tensor.indices[0].direction
     
-    tensor.conj()
+    double_conj = tensor.conj().conj()
     
-    # Verify data was conjugated
+    # Data restored
+    for key in original_data:
+        assert torch.allclose(double_conj.data[key], original_data[key])
+    
+    # Directions restored
+    assert double_conj.indices[0].direction == original_direction
+
+
+def test_conj_method_su2_basic():
+    """Test method conj(in_place=False) basic behavior with SU2 group."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    tensor_conj = tensor.conj(in_place=False)
+    
+    # Returns new instance
+    assert tensor_conj is not tensor
+    
+    # Has intw
+    assert tensor_conj.intw is not None
+    assert len(tensor_conj.intw) == len(tensor.intw)
+    
+    # Flips directions
+    for orig_idx, new_idx in zip(tensor.indices, tensor_conj.indices):
+        assert new_idx.direction == orig_idx.direction.reverse()
+
+
+def test_conj_method_su2_shares_data_and_weights():
+    """Test that method conj(in_place=False) shares data and weights for SU2."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    
+    tensor = identity(idx)
+    tensor_conj = tensor.conj(in_place=False)
+    
+    # Data blocks are shared
+    for key in tensor.data:
+        assert tensor_conj.data[key] is tensor.data[key]
+    
+    # intw weights are shared
+    for key in tensor.intw:
+        assert tensor_conj.intw[key].weights is tensor.intw[key].weights
+
+
+def test_conj_method_su2_three_indices():
+    """Test method conj(in_place=False) with SU2 three-index tensor (isometry)."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(3, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(2, 2)))
+    
+    tensor = isometry(idx1, idx2)
+    assert tensor.intw is not None
+    
+    tensor_conj = tensor.conj(in_place=False)
+    
+    # All indices flipped
+    for orig_idx, new_idx in zip(tensor.indices, tensor_conj.indices):
+        assert new_idx.direction == orig_idx.direction.reverse()
+    
+    # intw updated for all blocks
+    assert len(tensor_conj.intw) == len(tensor.intw)
+    for key in tensor.intw:
+        assert key in tensor_conj.intw
+        
+        orig_bridge = tensor.intw[key]
+        new_bridge = tensor_conj.intw[key]
+        
+        # Weights shared
+        assert orig_bridge.weights is new_bridge.weights
+        
+        # Bridge directions flipped
+        orig_edges = orig_bridge.cgspec.edges
+        new_edges = new_bridge.cgspec.edges
+        
+        for orig_edge, new_edge in zip(orig_edges, new_edges):
+            assert orig_edge.dir == new_edge.dir.flip()
+            assert orig_edge.j.twice() == new_edge.j.twice()
+
+
+# --- Method: tensor.conj(in_place=True) - In-place modification ---
+
+def test_conj_inplace_modifies_and_returns_self():
+    """Test method conj(in_place=True) modifies in place and returns self."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_direction = tensor.indices[0].direction
+    
+    result = tensor.conj(in_place=True)
+    
+    # Returns self
+    assert result is tensor
+    
+    # Data conjugated
     for key in original_data:
         assert torch.allclose(tensor.data[key], torch.conj(original_data[key]))
     
-    # Verify direction was flipped
+    # Direction flipped
     assert tensor.indices[0].direction == original_direction.reverse()
 
 
-def test_conj_real_dtype_no_data_change():
-    """Test that conj on real dtype doesn't change data."""
+def test_conj_inplace_allows_chaining():
+    """Test that method conj(in_place=True) enables chaining."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    
+    # Chain double conjugation
+    result = tensor.conj(in_place=True).conj(in_place=True)
+    
+    # Returns self
+    assert result is tensor
+    
+    # Double conj restores original
+    for key in original_data:
+        assert torch.allclose(tensor.data[key], original_data[key])
+    assert tensor.indices[0].direction == Direction.OUT
+
+
+def test_conj_inplace_su2_modifies_and_returns_self():
+    """Test method conj(in_place=True) with SU2 modifies in place and returns self."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    original_directions = [idx.direction for idx in tensor.indices]
+    
+    result = tensor.conj(in_place=True)
+    
+    # Returns self
+    assert result is tensor
+    
+    # intw was updated
+    assert tensor.intw is not None
+    assert len(tensor.intw) == len(original_weights)
+    
+    # Weights unchanged
+    for key in original_weights:
+        assert torch.allclose(tensor.intw[key].weights, original_weights[key])
+    
+    # Directions flipped
+    for orig_dir, new_idx in zip(original_directions, tensor.indices):
+        assert new_idx.direction == orig_dir.reverse()
+    
+    # Bridge directions flipped
+    for key, bridge in tensor.intw.items():
+        edges = bridge.cgspec.edges
+        for i, edge in enumerate(edges):
+            if original_directions[i].value == 1:  # IN
+                assert edge.dir.is_outgoing()
+            else:  # OUT
+                assert edge.dir.is_incoming()
+
+
+# --- Functional: conj(tensor) - Full cloning for isolation ---
+
+def test_conj_functional_clones_data():
+    """Test functional conj() clones all data for independence."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.float64, itags=["A", "B"])
+    
+    tensor_conj = conj(tensor)
+    
+    # Returns new instance
+    assert tensor_conj is not tensor
+    
+    # Data blocks are cloned (different objects)
+    for key in tensor.data:
+        assert tensor_conj.data[key] is not tensor.data[key]
+    
+    # Directions flipped
+    for orig_idx, new_idx in zip(tensor.indices, tensor_conj.indices):
+        assert new_idx.direction == orig_idx.direction.reverse()
+
+
+def test_conj_functional_real_dtype():
+    """Test functional conj() with real dtype clones data."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.float64, itags=["A", "B"])
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    result = conj(tensor)
+    tensor_conj = conj(tensor)
     
-    # Data should be unchanged (just copied) for real dtype
+    # Data values unchanged for real dtype
     for key in original_data:
-        assert torch.allclose(result.data[key], original_data[key])
+        assert torch.allclose(tensor_conj.data[key], original_data[key])
+    
+    # But data is cloned
+    for key in tensor.data:
+        assert tensor_conj.data[key] is not tensor.data[key]
 
 
-def test_conj_double_application():
-    """Test that conjugating twice returns to original."""
+def test_conj_functional_double_application():
+    """Test functional conj() double application restores original (involution)."""
     group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     tensor = Tensor.random([idx, idx.flip()], seed=1, dtype=torch.complex128, itags=["A", "B"])
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
@@ -113,10 +330,115 @@ def test_conj_double_application():
     
     double_conj = conj(conj(tensor))
     
+    # Data restored
     for key in original_data:
         assert torch.allclose(double_conj.data[key], original_data[key])
     
+    # Directions restored
     assert double_conj.indices[0].direction == original_direction
+
+
+def test_conj_functional_su2_clones_and_updates_intw():
+    """Test functional conj() with SU2 clones data and updates intw."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    tensor_conj = conj(tensor)
+    
+    # Returns new instance
+    assert tensor_conj is not tensor
+    
+    # Data is cloned (functional version clones for isolation)
+    for key in tensor.data:
+        assert tensor_conj.data[key] is not tensor.data[key]
+    
+    # intw was updated
+    assert tensor_conj.intw is not None
+    assert len(tensor_conj.intw) == len(tensor.intw)
+    
+    # Directions were flipped in Bridge objects
+    for key in tensor.intw:
+        orig_bridge = tensor.intw[key]
+        new_bridge = tensor_conj.intw[key]
+        
+        # Weights are shared (Bridge.conj shares weights)
+        assert orig_bridge.weights is new_bridge.weights
+        
+        # CGSpec has flipped directions
+        orig_edges = orig_bridge.cgspec.edges
+        new_edges = new_bridge.cgspec.edges
+        
+        for orig_edge, new_edge in zip(orig_edges, new_edges):
+            assert orig_edge.dir == new_edge.dir.flip()
+            assert orig_edge.j.twice() == new_edge.j.twice()
+
+
+def test_conj_functional_su2_double_application():
+    """Test functional conj() double application with SU2 preserves intw."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
+    ))
+    
+    tensor = identity(idx)
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    original_directions = [idx.direction for idx in tensor.indices]
+    
+    double_conj = conj(conj(tensor))
+    
+    # Weights unchanged after double conjugation
+    for key in original_weights:
+        assert torch.allclose(double_conj.intw[key].weights, original_weights[key])
+    
+    # Directions restored
+    for orig_idx, final_idx in zip(tensor.indices, double_conj.indices):
+        assert orig_idx.direction == final_idx.direction
+
+
+def test_conj_functional_su2_three_indices():
+    """Test functional conj() with SU2 three-index tensor (isometry)."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(3, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(2, 2)))
+    
+    tensor = isometry(idx1, idx2)
+    assert tensor.intw is not None
+    
+    tensor_conj = conj(tensor)
+    
+    # All indices flipped
+    for orig_idx, new_idx in zip(tensor.indices, tensor_conj.indices):
+        assert new_idx.direction == orig_idx.direction.reverse()
+    
+    # intw updated for all blocks
+    assert len(tensor_conj.intw) == len(tensor.intw)
+    for key in tensor.intw:
+        assert key in tensor_conj.intw
+        
+        orig_bridge = tensor.intw[key]
+        new_bridge = tensor_conj.intw[key]
+        
+        # Weights shared
+        assert orig_bridge.weights is new_bridge.weights
+        
+        # Bridge directions flipped
+        orig_edges = orig_bridge.cgspec.edges
+        new_edges = new_bridge.cgspec.edges
+        
+        for orig_edge, new_edge in zip(orig_edges, new_edges):
+            assert orig_edge.dir == new_edge.dir.flip()
+            assert orig_edge.j.twice() == new_edge.j.twice()
 
 
 # Permutation tests
