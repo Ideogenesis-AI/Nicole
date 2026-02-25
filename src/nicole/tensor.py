@@ -1232,6 +1232,12 @@ class Tensor:
         Tensor
             Self if in_place=True, new Tensor instance if in_place=False.
         
+        Notes
+        -----
+        For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
+        the outer multiplicity (OM) indices. The weights are updated by matrix
+        multiplication with the R-symbol: new_weights = R @ old_weights.
+        
         Examples
         --------
         >>> # In-place style (default, allows chaining)
@@ -1250,23 +1256,50 @@ class Tensor:
         new_indices = tuple(self.indices[i] for i in order)
         new_itags = tuple(self.itags[i] for i in order)
         
-        # Create new data blocks
+        # Permute data blocks (always use trailing OM axis if present)
         new_data: MutableMapping[BlockKey, torch.Tensor] = {}
-        for key, arr in self.data.items():
-            new_key = tuple(key[i] for i in order)
-            new_data[new_key] = torch.permute(arr, order)
+        if self.intw is not None:
+            # Non-Abelian: data has trailing OM axis, permute all but last
+            order_with_om = tuple(order) + (len(order),)
+            for key, arr in self.data.items():
+                new_key = tuple(key[i] for i in order)
+                new_data[new_key] = torch.permute(arr, order_with_om)
+        else:
+            # Abelian: standard permutation
+            for key, arr in self.data.items():
+                new_key = tuple(key[i] for i in order)
+                new_data[new_key] = torch.permute(arr, order)
+        
+        # Update intw with R-symbols for non-Abelian case
+        new_intw = None
+        if self.intw is not None:
+            new_intw = {}
+            for key, bridge in self.intw.items():
+                # Compute R-symbol for this permutation
+                r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
+                
+                # Update weights: new_weights = R @ old_weights
+                # R has shape (om_original, om_permuted)
+                # weights has shape (num_components, om_original)
+                # Result: (num_components, om_permuted)
+                new_weights = bridge.weights @ r_symbol
+                
+                # Create new Bridge with permuted spec and updated weights
+                new_key = tuple(key[i] for i in order)
+                new_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
         
         if in_place:
             # Modify in-place and return self for chaining
             self.indices = new_indices
             self.itags = new_itags
             self.data = new_data
+            self.intw = new_intw
             self._invalidate_sorted_keys()
             return self
         else:
             # Return new instance
             return Tensor(
-                indices=new_indices, itags=new_itags, data=new_data,
+                indices=new_indices, itags=new_itags, data=new_data, intw=new_intw,
                 dtype=self.dtype, label=self.label
             )
 
