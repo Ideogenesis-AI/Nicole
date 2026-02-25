@@ -1214,28 +1214,82 @@ class Tensor:
                 dtype=self.dtype, label=self.label
             )
 
-    def permute(self, order: Sequence[int]) -> None:
-        """Permute tensor axes according to the provided reordering."""
+    def permute(self, order: Sequence[int], in_place: bool = True) -> Tensor:
+        """Permute tensor axes according to the provided reordering.
+        
+        Parameters
+        ----------
+        order : Sequence[int]
+            Sequence of integer axes specifying the new ordering. Must be a
+            permutation of range(len(self.indices)).
+        in_place : bool, optional
+            If True (default), modifies this tensor in-place and returns self.
+            If False, returns a new Tensor instance with permuted axes. The data
+            blocks share the same underlying storage (torch.permute creates views).
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        
+        Examples
+        --------
+        >>> # In-place style (default, allows chaining)
+        >>> result = t.permute([2, 0, 1])
+        >>> result is t  # Returns self for chaining
+        >>> 
+        >>> # Functional style (efficient with sharing)
+        >>> t2 = t.permute([2, 0, 1], in_place=False)
+        >>> t2 is not t  # Different Tensor instances
+        >>> # But t2.data blocks share storage with t.data (as permuted views)
+        """
         if sorted(order) != list(range(len(self.indices))):
             raise ValueError("Invalid permutation order")
         
-        # Update indices and itags
-        self.indices = tuple(self.indices[i] for i in order)
-        self.itags = tuple(self.itags[i] for i in order)
+        # Create new indices and itags
+        new_indices = tuple(self.indices[i] for i in order)
+        new_itags = tuple(self.itags[i] for i in order)
         
-        # Update data blocks
-        new_data = {}
+        # Create new data blocks
+        new_data: MutableMapping[BlockKey, torch.Tensor] = {}
         for key, arr in self.data.items():
             new_key = tuple(key[i] for i in order)
             new_data[new_key] = torch.permute(arr, order)
-        self.data = new_data
-        self._invalidate_sorted_keys()
+        
+        if in_place:
+            # Modify in-place and return self for chaining
+            self.indices = new_indices
+            self.itags = new_itags
+            self.data = new_data
+            self._invalidate_sorted_keys()
+            return self
+        else:
+            # Return new instance
+            return Tensor(
+                indices=new_indices, itags=new_itags, data=new_data,
+                dtype=self.dtype, label=self.label
+            )
 
-    def transpose(self, *order: int) -> None:
-        """Transpose tensor axes; defaults to reversing the index order."""
+    def transpose(self, *order: int, in_place: bool = True) -> Tensor:
+        """Transpose tensor axes; defaults to reversing the index order.
+        
+        Parameters
+        ----------
+        *order : int
+            Optional integer axes specifying the new ordering. If not provided,
+            reverses the index order.
+        in_place : bool, optional
+            If True (default), modifies this tensor in-place and returns self.
+            If False, returns a new Tensor instance with transposed axes.
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        """
         if not order:
             order = tuple(reversed(range(len(self.indices))))
-        self.permute(order)
+        return self.permute(order, in_place=in_place)
 
     def invert(self, positions: Union[int, Sequence[int]]) -> None:
         """Invert the direction of specified index/indices while maintaining charge conservation.
