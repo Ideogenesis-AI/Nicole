@@ -70,8 +70,9 @@ def conj(tensor: Tensor) -> Tensor:
     
     Notes
     -----
-    This functional version creates a fully independent tensor by cloning all data blocks.
-    For an efficient version that shares underlying tensors, use tensor.conj(in_place=False).
+    This functional version creates a fully independent tensor by cloning all
+    data blocks. For an efficient version that shares underlying tensors, use
+    tensor.conj(in_place=False).
     """
     # Clone data for complete isolation
     if tensor.dtype.is_complex:
@@ -89,12 +90,18 @@ def conj(tensor: Tensor) -> Tensor:
         for key, bridge in tensor.intw.items():
             new_intw[key] = bridge.conj()
     
-    return Tensor(indices=new_indices, itags=tensor.itags, data=new_data, intw=new_intw,
-        dtype=tensor.dtype, label=tensor.label)
+    return Tensor(
+        indices=new_indices, itags=tensor.itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label
+    )
 
 
 def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     """Return a new tensor with permuted axes according to the provided order.
+    
+    This functional version creates a fully independent tensor by cloning all
+    data blocks. For an efficient version that shares underlying tensors, use
+    tensor.permute(order, in_place=False).
     
     Parameters
     ----------
@@ -107,7 +114,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor instance with reordered indices and transposed blocks.
+        A new tensor instance with reordered indices and cloned permuted blocks.
     
     Raises
     ------
@@ -125,13 +132,16 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     
     new_indices = tuple(tensor.indices[i] for i in order)
     new_itags = tuple(tensor.itags[i] for i in order)
-    new_data = {}
+    new_data: Dict[BlockKey, torch.Tensor] = {}
     
     for key, arr in tensor.data.items():
         new_key = tuple(key[i] for i in order)
-        new_data[new_key] = torch.permute(arr, order)
+        new_data[new_key] = torch.permute(arr, order).clone()
     
-    return Tensor(indices=new_indices, itags=new_itags, data=new_data, dtype=tensor.dtype, label=tensor.label)
+    return Tensor(
+        indices=new_indices, itags=new_itags, data=new_data,
+        dtype=tensor.dtype, label=tensor.label
+    )
 
 
 def transpose(tensor: Tensor, *order: int) -> Tensor:
