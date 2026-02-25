@@ -121,6 +121,12 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     ValueError
         If order is not a valid permutation.
     
+    Notes
+    -----
+    For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
+    the outer multiplicity (OM) indices. The weights are updated by matrix
+    multiplication with the R-symbol: new_weights = R @ old_weights.
+    
     Examples
     --------
     >>> from nicole import permute, Tensor
@@ -134,12 +140,39 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     new_itags = tuple(tensor.itags[i] for i in order)
     new_data: Dict[BlockKey, torch.Tensor] = {}
     
-    for key, arr in tensor.data.items():
-        new_key = tuple(key[i] for i in order)
-        new_data[new_key] = torch.permute(arr, order).clone()
+    # Permute data blocks (clone for independence)
+    if tensor.intw is not None:
+        # Non-Abelian: data has trailing OM axis, permute all but last
+        order_with_om = tuple(order) + (len(order),)
+        for key, arr in tensor.data.items():
+            new_key = tuple(key[i] for i in order)
+            new_data[new_key] = torch.permute(arr, order_with_om).clone()
+    else:
+        # Abelian: standard permutation
+        for key, arr in tensor.data.items():
+            new_key = tuple(key[i] for i in order)
+            new_data[new_key] = torch.permute(arr, order).clone()
+    
+    # Update intw with R-symbols for non-Abelian case
+    new_intw = None
+    if tensor.intw is not None:
+        new_intw = {}
+        for key, bridge in tensor.intw.items():
+            # Compute R-symbol for this permutation
+            r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
+            
+            # Update weights: new_weights = R @ old_weights
+            # R has shape (om_original, om_permuted)
+            # weights has shape (num_components, om_original)
+            # Result: (num_components, om_permuted)
+            new_weights = bridge.weights @ r_symbol
+            
+            # Create new Bridge with permuted spec and updated weights
+            new_key = tuple(key[i] for i in order)
+            new_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
     
     return Tensor(
-        indices=new_indices, itags=new_itags, data=new_data,
+        indices=new_indices, itags=new_itags, data=new_data, intw=new_intw,
         dtype=tensor.dtype, label=tensor.label
     )
 
