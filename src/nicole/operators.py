@@ -222,7 +222,8 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     Tensor
         A new tensor instance containing only the specified blocks with unused sectors
         removed from the indices. Other attributes (itags, dtype, label) are preserved.
-    
+        For SU(2) tensors, the corresponding intertwiner (intw) data is also extracted.
+
     Raises
     ------
     IndexError
@@ -246,15 +247,17 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     
     new_data = {tensor.key(i): tensor.block(i).clone() for i in block_indices}
     
+    # Extract intw for SU(2) tensors
+    new_intw = None
+    if tensor.intw is not None:
+        new_intw = {tensor.key(i): tensor.intw[tensor.key(i)] for i in block_indices}
+
     # Prune unused sectors from indices
     pruned_indices = Tensor._prune_unused_sectors(tensor.indices, new_data)
     
     return Tensor(
-        indices=pruned_indices,
-        itags=tensor.itags,
-        data=new_data,
-        dtype=tensor.dtype,
-        label=tensor.label,
+        indices=pruned_indices, itags=tensor.itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label,
     )
 
 
