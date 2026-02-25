@@ -440,11 +440,155 @@ def test_conj_functional_su2_three_indices():
             assert orig_edge.dir == new_edge.dir.flip()
             assert orig_edge.j.twice() == new_edge.j.twice()
 
-
+# ============================================================================
 # Permutation tests
+# ============================================================================
+# Three modes of permutation:
+# 1. tensor.permute(order, in_place=True) - Method, default, modifies in-place
+# 2. tensor.permute(order, in_place=False) - Method, shares data efficiently
+# 3. permute(tensor, order) - Functional, clones all data for full isolation
+# ============================================================================
 
-def test_permute_functional_returns_new_instance():
-    """Test that functional permute returns a new instance."""
+# --- Method: tensor.permute(order, in_place=True) - Default, in-place ---
+
+def test_permute_method_inplace_basic():
+    """Test method permute(in_place=True) basic behavior."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 1),)),
+    ]
+    itags = ["a", "b", "c", "d"]
+    tensor = Tensor.random(indices, seed=10, itags=itags)
+    order = [2, 0, 3, 1]
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    
+    result = tensor.permute(order)
+    
+    # Returns self
+    assert result is tensor
+    
+    # itags reordered
+    assert list(tensor.itags) == [itags[i] for i in order]
+    
+    # Data blocks reordered
+    for key, block in original_data.items():
+        new_key = tuple(key[i] for i in order)
+        assert torch.allclose(tensor.data[new_key], torch.permute(block, order))
+
+
+def test_permute_method_inplace_allows_chaining():
+    """Test that method permute(in_place=True) enables chaining."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 1))),
+    ]
+    tensor = Tensor.random(indices, seed=10, itags=["a", "b", "c"])
+    
+    # Chain: [a,b,c] -> [c,a,b] -> [b,c,a]
+    result = tensor.permute([2, 0, 1]).permute([2, 0, 1])
+    
+    # Returns self
+    assert result is tensor
+    
+    # Final order
+    assert list(tensor.itags) == ["b", "c", "a"]
+
+
+def test_permute_method_inplace_identity():
+    """Test that identity permutation with in_place=True returns self."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    
+    result = tensor.permute([0, 1, 2])
+    
+    # Returns self
+    assert result is tensor
+    
+    # Data unchanged
+    assert list(tensor.itags) == ["a", "b", "c"]
+    for key in original_data:
+        assert torch.allclose(tensor.data[key], original_data[key])
+
+
+def test_permute_method_inplace_invalid_order():
+    """Test that invalid permutation raises error."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
+    
+    with pytest.raises(ValueError, match="Invalid permutation"):
+        tensor.permute([0, 0])
+    
+    with pytest.raises(ValueError, match="Invalid permutation"):
+        tensor.permute([0, 2])
+
+
+# --- Method: tensor.permute(order, in_place=False) - Efficient sharing ---
+
+def test_permute_method_shares_data():
+    """Test that method permute(in_place=False) shares data efficiently."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+    ]
+    tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
+    
+    tensor_perm = tensor.permute([1, 0], in_place=False)
+    
+    # Returns new instance
+    assert tensor_perm is not tensor
+    
+    # torch.permute creates views, so data is shared
+    # Modify original and verify permuted view reflects it
+    key = list(tensor.data.keys())[0]
+    original_value = tensor.data[key].clone()
+    tensor.data[key][:] = 0
+    
+    # Permuted view should also be zero now
+    new_key = (key[1], key[0])
+    assert torch.allclose(tensor_perm.data[new_key], torch.zeros_like(original_value).T)
+
+
+def test_permute_method_not_inplace_basic():
+    """Test method permute(in_place=False) basic behavior."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 1), Sector(0, 1))),
+    ]
+    tensor = Tensor.random(indices, seed=10, itags=["a", "b", "c"])
+    order = [2, 0, 1]
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_itags = list(tensor.itags)
+    
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # Returns new instance
+    assert tensor_perm is not tensor
+    
+    # Original unchanged
+    assert list(tensor.itags) == original_itags
+    
+    # New tensor has reordered itags
+    assert list(tensor_perm.itags) == [original_itags[i] for i in order]
+
+
+# --- Functional: permute(tensor, order) - Full cloning for isolation ---
+
+def test_permute_functional_clones_data():
+    """Test functional permute() clones all data for independence."""
     group = U1Group()
     indices = [
         Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
@@ -455,11 +599,17 @@ def test_permute_functional_returns_new_instance():
     
     permuted = permute(tensor, [2, 0, 1])
     
+    # Returns new instance
     assert permuted is not tensor
+    
+    # Data blocks are cloned (different objects)
+    for key in tensor.data:
+        new_key = tuple(key[i] for i in [2, 0, 1])
+        assert permuted.data[new_key] is not tensor.data[key]
 
 
-def test_permute_reorders_indices_and_blocks():
-    """Test that permute correctly reorders indices and blocks."""
+def test_permute_functional_reorders_correctly():
+    """Test that functional permute correctly reorders indices and blocks."""
     group = U1Group()
     indices = [
         Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2))),
@@ -468,44 +618,24 @@ def test_permute_reorders_indices_and_blocks():
         Index(Direction.IN, group, sectors=(Sector(0, 1),)),
     ]
     itags = ["a", "b", "c", "d"]
-
     tensor = Tensor.random(indices, seed=10, itags=itags)
     order = [2, 0, 3, 1]
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     permuted = permute(tensor, order)
-
+    
+    # itags reordered
     assert list(permuted.itags) == [itags[i] for i in order]
+    
+    # Data blocks reordered
     for key, block in original_data.items():
         new_key = tuple(key[i] for i in order)
-        assert torch.allclose(
-            permuted.data[new_key],
-            torch.permute(block, order),
-        )
+        assert torch.allclose(permuted.data[new_key], torch.permute(block, order))
 
 
-def test_permute_inplace():
-    """Test in-place permute method."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 1),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
-    ]
-    tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
-    
-    original_data = {k: v.clone() for k, v in tensor.data.items()}
-    
-    tensor.permute([1, 0])
-    
-    assert list(tensor.itags) == ["b", "a"]
-    for key, block in original_data.items():
-        new_key = (key[1], key[0])
-        assert torch.allclose(tensor.data[new_key], torch.permute(block, [1, 0]))
-
-
-def test_permute_identity():
-    """Test that identity permutation leaves tensor unchanged."""
+def test_permute_functional_identity():
+    """Test that functional identity permutation still clones data."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx, idx], seed=1, itags=["a", "b", "c"])
@@ -514,13 +644,23 @@ def test_permute_identity():
     
     permuted = permute(tensor, [0, 1, 2])
     
+    # Returns new instance
+    assert permuted is not tensor
+    
+    # itags unchanged
     assert list(permuted.itags) == ["a", "b", "c"]
+    
+    # Data values unchanged
     for key in original_data:
         assert torch.allclose(permuted.data[key], original_data[key])
+    
+    # But data is cloned
+    for key in tensor.data:
+        assert permuted.data[key] is not tensor.data[key]
 
 
-def test_permute_invalid_order():
-    """Test that invalid permutation raises error."""
+def test_permute_functional_invalid_order():
+    """Test that functional permute with invalid order raises error."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
@@ -532,21 +672,105 @@ def test_permute_invalid_order():
         permute(tensor, [0, 2])
 
 
+# ============================================================================
 # Transpose tests
+# ============================================================================
+# Three modes of transpose:
+# 1. tensor.transpose(*order, in_place=True) - Method, default, modifies in-place
+# 2. tensor.transpose(*order, in_place=False) - Method, shares data efficiently
+# 3. transpose(tensor, *order) - Functional, clones all data for full isolation
+# ============================================================================
 
-def test_transpose_functional_returns_new_instance():
-    """Test that functional transpose returns a new instance."""
+# --- Method: tensor.transpose(*order, in_place=True) - Default, in-place ---
+
+def test_transpose_method_inplace_default_reverses():
+    """Test method transpose(in_place=True) with default reverses order."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1))),
+    ]
+    itags = ["i0", "i1", "i2"]
+    tensor = Tensor.random(indices, seed=11, itags=itags)
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    
+    result = tensor.transpose()
+    
+    # Returns self
+    assert result is tensor
+    
+    # itags reversed
+    assert list(tensor.itags) == list(reversed(itags))
+    
+    # Data blocks transposed
+    for key, block in original_data.items():
+        new_key = tuple(reversed(key))
+        assert torch.allclose(tensor.data[new_key], torch.permute(block, (2, 1, 0)))
+
+
+def test_transpose_method_inplace_explicit_order():
+    """Test method transpose(in_place=True) with explicit order."""
     group = U1Group()
     indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
     
-    transposed = transpose(tensor)
+    result = tensor.transpose(1, 0, 2)
     
-    assert transposed is not tensor
+    # Returns self
+    assert result is tensor
+    
+    # itags reordered
+    assert list(tensor.itags) == ["b", "a", "c"]
 
 
-def test_transpose_default_reverses_order():
-    """Test that transpose with no args reverses order."""
+def test_transpose_method_inplace_allows_chaining():
+    """Test that method transpose(in_place=True) enables chaining."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
+    
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    
+    # Chain double transpose (should restore)
+    result = tensor.transpose().transpose()
+    
+    # Returns self
+    assert result is tensor
+    
+    # Double transpose restores original
+    assert list(tensor.itags) == ["a", "b"]
+    for key in original_data:
+        assert torch.allclose(tensor.data[key], original_data[key])
+
+
+# --- Method: tensor.transpose(*order, in_place=False) - Efficient sharing ---
+
+def test_transpose_method_not_inplace_basic():
+    """Test method transpose(in_place=False) basic behavior."""
+    group = U1Group()
+    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(2)]
+    tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
+    
+    original_itags = list(tensor.itags)
+    
+    tensor_T = tensor.transpose(in_place=False)
+    
+    # Returns new instance
+    assert tensor_T is not tensor
+    
+    # Original unchanged
+    assert list(tensor.itags) == original_itags
+    
+    # New tensor has reversed itags
+    assert list(tensor_T.itags) == list(reversed(original_itags))
+
+
+# --- Functional: transpose(tensor, *order) - Full cloning for isolation ---
+
+def test_transpose_functional_default_reverses():
+    """Test functional transpose() with default reverses order."""
     group = U1Group()
     indices = [
         Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1))),
@@ -559,42 +783,50 @@ def test_transpose_default_reverses_order():
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     transposed = transpose(tensor)
-
+    
+    # Returns new instance
+    assert transposed is not tensor
+    
+    # itags reversed
     assert list(transposed.itags) == list(reversed(itags))
+    
+    # Data blocks transposed
     for key, block in original_data.items():
         new_key = tuple(reversed(key))
-        assert torch.allclose(
-            transposed.data[new_key],
-            torch.permute(block, (2, 1, 0)),
-        )
+        assert torch.allclose(transposed.data[new_key], torch.permute(block, (2, 1, 0)))
 
 
-def test_transpose_with_explicit_order():
-    """Test transpose with explicit order."""
+def test_transpose_functional_explicit_order():
+    """Test functional transpose() with explicit order."""
     group = U1Group()
     indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
     
     transposed = transpose(tensor, 1, 0, 2)
     
+    # Returns new instance
+    assert transposed is not tensor
+    
+    # itags reordered
     assert list(transposed.itags) == ["b", "a", "c"]
 
 
-def test_transpose_inplace():
-    """Test in-place transpose method."""
+def test_transpose_functional_clones_data():
+    """Test that functional transpose() clones all data for independence."""
     group = U1Group()
     indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(2)]
     tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
     
-    original_itags = list(tensor.itags)
+    transposed = transpose(tensor)
     
-    tensor.transpose()
-    
-    assert list(tensor.itags) == list(reversed(original_itags))
+    # Data blocks are cloned
+    for key in tensor.data:
+        new_key = (key[1], key[0])
+        assert transposed.data[new_key] is not tensor.data[key]
 
 
-def test_transpose_double_application():
-    """Test that transposing twice returns to original."""
+def test_transpose_functional_double_application():
+    """Test that functional transpose twice restores original (involution)."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx], seed=1, itags=["a", "b"])
@@ -603,10 +835,12 @@ def test_transpose_double_application():
     
     double_transpose = transpose(transpose(tensor))
     
+    # itags restored
     assert list(double_transpose.itags) == ["a", "b"]
+    
+    # Data restored
     for key in original_data:
         assert torch.allclose(double_transpose.data[key], original_data[key])
-
 
 # Retag tests
 
