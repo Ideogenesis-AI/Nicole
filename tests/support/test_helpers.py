@@ -322,8 +322,8 @@ def test_subsector_contains_only_specified_blocks():
     assert set(sub.data.keys()) == expected_keys
 
 
-def test_subsector_data_is_copied():
-    """Test that subsector creates independent copies of data."""
+def test_subsector_data_is_cloned():
+    """Test that subsector creates independent cloned data."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
@@ -457,4 +457,121 @@ def test_subsector_raises_on_invalid_index():
 
     with pytest.raises(IndexError):
         subsector(tensor, num_blocks + 1)  # Out of range
+
+
+def test_subsector_su2_single_block():
+    """Test subsector with SU(2) single block extraction."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    # Extract block 2
+    sub = subsector(tensor, 2)
+    
+    # Should have only 1 block
+    assert len(sub.data) == 1
+    assert len(sub.intw) == 1
+    
+    # Block and intw should match original
+    key = tensor.key(2)
+    assert key in sub.data
+    assert key in sub.intw
+    assert torch.equal(sub.data[key], tensor.data[key])
+    assert torch.equal(sub.intw[key].weights, tensor.intw[key].weights)
+
+
+def test_subsector_su2_multiple_blocks():
+    """Test subsector with SU(2) multiple block extraction."""
+    group = SU2Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3))),
+        Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 2))),
+    ]
+    tensor = Tensor.random(indices, seed=42, itags=["a", "b", "c"])
+    
+    assert tensor.intw is not None
+    num_blocks = len(tensor.data)
+    
+    # Extract several blocks
+    block_indices = [1, 3, min(5, num_blocks)]
+    sub = subsector(tensor, block_indices)
+    
+    # Should have specified number of blocks
+    assert len(sub.data) == len(block_indices)
+    assert len(sub.intw) == len(block_indices)
+    
+    # Each block and intw should match original
+    for i in block_indices:
+        key = tensor.key(i)
+        assert key in sub.data
+        assert key in sub.intw
+        assert torch.equal(sub.data[key], tensor.data[key])
+        assert torch.equal(sub.intw[key].weights, tensor.intw[key].weights)
+
+
+def test_subsector_su2_preserves_cgspec():
+    """Test that subsector preserves CGSpec structure in intw."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert tensor.intw is not None
+    
+    # Extract block 1
+    sub = subsector(tensor, 1)
+    
+    key = tensor.key(1)
+    
+    # CGSpec should be identical (same edges)
+    orig_bridge = tensor.intw[key]
+    sub_bridge = sub.intw[key]
+    
+    assert orig_bridge.cgspec.num_external() == sub_bridge.cgspec.num_external()
+    assert orig_bridge.cgspec.om_dimension() == sub_bridge.cgspec.om_dimension()
+    
+    # Edges should match
+    orig_edges = orig_bridge.cgspec.edges
+    sub_edges = sub_bridge.cgspec.edges
+    for orig_e, sub_e in zip(orig_edges, sub_edges):
+        assert orig_e.j.twice() == sub_e.j.twice()
+        assert orig_e.dir == sub_e.dir
+
+
+def test_subsector_su2_clones_weights():
+    """Test that subsector clones weights for independence."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    assert tensor.intw is not None
+    
+    # Extract block 1
+    sub = subsector(tensor, 1)
+    
+    key = tensor.key(1)
+    
+    # Weights should be cloned (different objects)
+    orig_bridge = tensor.intw[key]
+    sub_bridge = sub.intw[key]
+    
+    assert sub_bridge.weights is not orig_bridge.weights
+    
+    # But values should match
+    assert torch.equal(sub_bridge.weights, orig_bridge.weights)
+    
+    # Verify independence: modify sub weights
+    original_value = orig_bridge.weights.clone()
+    sub_bridge.weights[:] = 0.0
+    
+    # Original should be unchanged
+    assert torch.equal(orig_bridge.weights, original_value)
 
