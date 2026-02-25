@@ -247,10 +247,10 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     
     new_data = {tensor.key(i): tensor.block(i).clone() for i in block_indices}
     
-    # Extract intw for SU(2) tensors
+    # Extract intw for SU(2) tensors (clone weights for independence)
     new_intw = None
     if tensor.intw is not None:
-        new_intw = {tensor.key(i): tensor.intw[tensor.key(i)] for i in block_indices}
+        new_intw = {tensor.key(i): tensor.intw[tensor.key(i)].clone() for i in block_indices}
 
     # Prune unused sectors from indices
     pruned_indices = Tensor._prune_unused_sectors(tensor.indices, new_data)
