@@ -672,6 +672,355 @@ def test_permute_functional_invalid_order():
         permute(tensor, [0, 2])
 
 
+# --- SU(2) permutation tests ---
+
+def test_permute_method_su2_basic():
+    """Test method permute with SU(2) tensor updates intw correctly."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    original_intw_keys = set(tensor.intw.keys())
+    
+    # Swap two identical indices
+    result = tensor.permute([1, 0], in_place=False)
+    
+    # Returns new instance
+    assert result is not tensor
+    
+    # intw keys should be swapped
+    assert len(result.intw) == len(original_intw_keys)
+    for key in original_intw_keys:
+        swapped_key = (key[1], key[0])
+        assert swapped_key in result.intw
+
+
+def test_permute_method_su2_three_indices():
+    """Test method permute with SU(2) three-index tensor (isometry)."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    
+    tensor = isometry(idx1, idx2)
+    assert tensor.intw is not None
+    
+    # Permute: [0, 1, 2] -> [2, 1, 0]
+    order = [2, 1, 0]
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # All indices permuted
+    for i, orig_idx in enumerate(tensor.indices):
+        assert tensor_perm.indices[order.index(i)].sectors == orig_idx.sectors
+    
+    # intw updated for all blocks
+    assert len(tensor_perm.intw) == len(tensor.intw)
+    for key in tensor.intw:
+        new_key = tuple(key[i] for i in order)
+        assert new_key in tensor_perm.intw
+
+
+def test_permute_method_su2_preserves_norm():
+    """Test that permute with SU(2) preserves tensor norm (unitarity of R-symbol)."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 2)))
+    
+    tensor = isometry(idx1, idx2)
+    original_norm = tensor.norm()
+    
+    # Permute
+    tensor_perm = tensor.permute([1, 2, 0], in_place=False)
+    perm_norm = tensor_perm.norm()
+    
+    # Norm should be preserved (R is unitary)
+    assert math.isclose(original_norm, perm_norm, rel_tol=1e-12, abs_tol=1e-15)
+
+
+def test_permute_functional_su2_clones_and_updates_intw():
+    """Test functional permute with SU(2) clones data and updates intw."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 2)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    tensor_perm = permute(tensor, [1, 0])
+    
+    # Returns new instance
+    assert tensor_perm is not tensor
+    
+    # Data is cloned (functional version clones for isolation)
+    for key in tensor.data:
+        swapped_key = (key[1], key[0])
+        assert tensor_perm.data[swapped_key] is not tensor.data[key]
+    
+    # intw was updated
+    assert tensor_perm.intw is not None
+    assert len(tensor_perm.intw) == len(tensor.intw)
+
+
+def test_permute_inplace_su2_modifies_and_returns_self():
+    """Test method permute(in_place=True) with SU(2) modifies in place."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3)
+    ))
+    
+    tensor = identity(idx)
+    assert tensor.intw is not None
+    
+    original_intw_keys = list(tensor.intw.keys())
+    
+    result = tensor.permute([1, 0])
+    
+    # Returns self
+    assert result is tensor
+    
+    # intw was updated
+    assert tensor.intw is not None
+    for key in original_intw_keys:
+        swapped_key = (key[1], key[0])
+        assert swapped_key in tensor.intw
+
+
+def test_permute_su2_four_indices():
+    """Test permute with SU(2) four-index tensor."""
+    group = SU2Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3))),
+        Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+    ]
+    tensor = Tensor.random(indices, seed=42, dtype=torch.float64, itags=["a", "b", "c", "d"])
+    
+    assert tensor.intw is not None
+    original_norm = tensor.norm()
+    
+    # Complex permutation: [0,1,2,3] -> [2,0,3,1]
+    order = [2, 0, 3, 1]
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # Norm preserved
+    perm_norm = tensor_perm.norm()
+    assert math.isclose(original_norm, perm_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # itags reordered
+    assert list(tensor_perm.itags) == ["c", "a", "d", "b"]
+    
+    # intw updated for all blocks
+    assert len(tensor_perm.intw) == len(tensor.intw)
+
+
+def test_permute_su2_inverse_restores_original():
+    """Test that permuting and then applying inverse permutation restores original."""
+    from nicole.identity import isometry
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3), Sector(3, 2)))
+    
+    tensor = isometry(idx1, idx2)
+    
+    # Store original data and weights
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    original_itags = list(tensor.itags)
+    
+    # Permute: [0, 1, 2] -> [2, 0, 1]
+    order = [2, 0, 1]
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # Inverse permutation to restore: [2, 0, 1] -> [0, 1, 2]
+    # If order[i] = j, then inverse_order[j] = i
+    inverse_order = [0] * len(order)
+    for i, j in enumerate(order):
+        inverse_order[j] = i
+    
+    tensor_restored = tensor_perm.permute(inverse_order, in_place=False)
+    
+    # itags restored
+    assert list(tensor_restored.itags) == original_itags
+    
+    # Data restored
+    for key in original_data:
+        assert key in tensor_restored.data
+        assert torch.allclose(tensor_restored.data[key], original_data[key], rtol=1e-12, atol=1e-15)
+    
+    # Weights restored
+    for key in original_weights:
+        assert key in tensor_restored.intw
+        assert torch.allclose(tensor_restored.intw[key].weights, original_weights[key], rtol=1e-12, atol=1e-15)
+
+
+def test_permute_su2_double_application_identity():
+    """Test that applying the same permutation twice may not restore original (not involution)."""
+    from nicole.identity import identity
+    
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(2, 2)
+    ))
+    
+    tensor = identity(idx)
+    original_norm = tensor.norm()
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    
+    # Permute twice with involution permutation: [0,1] -> [1,0] -> [0,1]
+    # This IS an involution (swap is its own inverse)
+    tensor_twice = tensor.permute([1, 0], in_place=False).permute([1, 0], in_place=False)
+    
+    # Should restore original
+    assert list(tensor_twice.itags) == list(tensor.itags)
+    assert math.isclose(tensor_twice.norm(), original_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # Data restored
+    for key in original_data:
+        assert key in tensor_twice.data
+        assert torch.allclose(tensor_twice.data[key], original_data[key], rtol=1e-12, atol=1e-15)
+    
+    # Weights restored
+    for key in original_weights:
+        assert key in tensor_twice.intw
+        assert torch.allclose(tensor_twice.intw[key].weights, original_weights[key], rtol=1e-12, atol=1e-15)
+    
+    # For consistency, test a cycle: [0,1,2] -> [1,2,0] -> [2,0,1] -> [0,1,2]
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    tensor3 = Tensor.random([idx3, idx3, idx3], seed=123, dtype=torch.float64, itags=["a", "b", "c"])
+    
+    original_norm3 = tensor3.norm()
+    original_data3 = {k: v.clone() for k, v in tensor3.data.items()}
+    original_weights3 = {k: v.weights.clone() for k, v in tensor3.intw.items()}
+    
+    # Apply cycle 3 times: should restore
+    cycle = [1, 2, 0]
+    tensor3_cycled = tensor3.permute(cycle, in_place=False).permute(cycle, in_place=False).permute(cycle, in_place=False)
+    
+    assert list(tensor3_cycled.itags) == ["a", "b", "c"]
+    assert math.isclose(tensor3_cycled.norm(), original_norm3, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # Data restored
+    for key in original_data3:
+        assert key in tensor3_cycled.data
+        assert torch.allclose(tensor3_cycled.data[key], original_data3[key], rtol=1e-12, atol=1e-15)
+    
+    # Weights restored
+    for key in original_weights3:
+        assert key in tensor3_cycled.intw
+        assert torch.allclose(tensor3_cycled.intw[key].weights, original_weights3[key], rtol=1e-12, atol=1e-15)
+
+
+def test_permute_su2_five_indices():
+    """Test permute with SU(2) five-index tensor."""
+    group = SU2Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+    ]
+    tensor = Tensor.random(indices, seed=99, dtype=torch.float64, itags=["a", "b", "c", "d", "e"])
+    
+    assert tensor.intw is not None
+    original_norm = tensor.norm()
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    
+    # Complex permutation: [0,1,2,3,4] -> [4,2,0,1,3]
+    order = [4, 2, 0, 1, 3]
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # Norm preserved
+    perm_norm = tensor_perm.norm()
+    assert math.isclose(original_norm, perm_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # itags reordered
+    assert list(tensor_perm.itags) == ["e", "c", "a", "b", "d"]
+    
+    # Verify we can permute back
+    inverse_order = [0] * len(order)
+    for i, j in enumerate(order):
+        inverse_order[j] = i
+    
+    tensor_restored = tensor_perm.permute(inverse_order, in_place=False)
+    assert list(tensor_restored.itags) == ["a", "b", "c", "d", "e"]
+    assert math.isclose(tensor_restored.norm(), original_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # Data restored
+    for key in original_data:
+        assert key in tensor_restored.data
+        assert torch.allclose(tensor_restored.data[key], original_data[key], rtol=1e-12, atol=1e-15)
+    
+    # Weights restored
+    for key in original_weights:
+        assert key in tensor_restored.intw
+        assert torch.allclose(tensor_restored.intw[key].weights, original_weights[key], rtol=1e-12, atol=1e-15)
+
+
+def test_permute_su2_multiple_sectors_per_index():
+    """Test permute with SU(2) tensor having multiple sectors per index."""
+    group = SU2Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(2, 3), Sector(3, 2))),
+        Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3), Sector(3, 2), Sector(4, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2), Sector(3, 3))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3), Sector(3, 2))),
+    ]
+    tensor = Tensor.random(indices, seed=777, dtype=torch.float64, itags=["i", "j", "k", "l"])
+    
+    assert tensor.intw is not None
+    original_norm = tensor.norm()
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    num_blocks = len(tensor.data)
+    
+    # Permute
+    order = [3, 1, 0, 2]
+    tensor_perm = tensor.permute(order, in_place=False)
+    
+    # Norm preserved
+    assert math.isclose(tensor_perm.norm(), original_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # Same number of blocks
+    assert len(tensor_perm.data) == num_blocks
+    assert len(tensor_perm.intw) == len(tensor.intw)
+    
+    # Inverse permutation restores
+    inverse_order = [0] * len(order)
+    for i, j in enumerate(order):
+        inverse_order[j] = i
+    
+    tensor_restored = tensor_perm.permute(inverse_order, in_place=False)
+    assert math.isclose(tensor_restored.norm(), original_norm, rel_tol=1e-12, abs_tol=1e-15)
+    
+    # Data restored
+    for key in original_data:
+        assert key in tensor_restored.data
+        assert torch.allclose(tensor_restored.data[key], original_data[key], rtol=1e-12, atol=1e-15)
+    
+    # Weights restored
+    for key in original_weights:
+        assert key in tensor_restored.intw
+        assert torch.allclose(tensor_restored.intw[key].weights, original_weights[key], rtol=1e-12, atol=1e-15)
+
+
 # ============================================================================
 # Transpose tests
 # ============================================================================
