@@ -936,37 +936,16 @@ class Tensor:
                     new_data[k] = a + b
         else:
             # Non-Abelian groups: handle intertwiners
-            new_intw = {}
+            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
             for k in keys:
                 a = self.data.get(k)
                 b = other.data.get(k)
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
-                if a is None:
-                    # Only other has this block
-                    new_data[k] = (+b)
-                    new_intw[k] = bridge_b.clone()
-                elif b is None:
-                    # Only self has this block
-                    new_data[k] = (+a)
-                    new_intw[k] = bridge_a.clone()
-                else:
-                    # Both have this block: check weight relationship
-                    compatible, scale = BlockSchema.bridge_collinear(
-                        bridge_a, bridge_b, rtol=1e-12, atol=1e-15
-                    )
-                    
-                    if compatible:
-                        # Compatible weights: scale and add
-                        # T1 + T2 = R1 @ w1 + R2 @ (α*w1) = (R1 + α*R2) @ w1
-                        new_data[k] = a + b * scale
-                        new_intw[k] = bridge_a.clone()
-                    else:
-                        # Incompatible weights: concatenate along reduced multiplicity dimension
-                        new_data[k] = torch.cat([a, b], dim=-1)
-                        new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
-                        new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
+                new_data[k], new_intw[k] = BlockSchema.block_add(
+                    a, bridge_a, b, bridge_b, rtol=1e-12, atol=1e-15
+                )
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
@@ -1015,37 +994,17 @@ class Tensor:
                     new_data[k] = a - b
         else:
             # Generic (non-Abelian) groups: handle intertwiners
-            new_intw = {}
+            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
             for k in keys:
                 a = self.data.get(k)
                 b = other.data.get(k)
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
-                if a is None:
-                    # Only other has this block
-                    new_data[k] = -b
-                    new_intw[k] = bridge_b.clone()
-                elif b is None:
-                    # Only self has this block
-                    new_data[k] = +a
-                    new_intw[k] = bridge_a.clone()
-                else:
-                    # Both have this block: check weight relationship
-                    compatible, scale = BlockSchema.bridge_collinear(
-                        bridge_a, bridge_b, rtol=1e-12, atol=1e-15
-                    )
-                    
-                    if compatible:
-                        # Compatible weights: scale and subtract
-                        # T1 - T2 = R1 @ w1 - R2 @ (α*w1) = (R1 - α*R2) @ w1
-                        new_data[k] = a - b * scale
-                        new_intw[k] = bridge_a.clone()
-                    else:
-                        # Incompatible weights: concatenate along reduced multiplicity dimension
-                        new_data[k] = torch.cat([a, b], dim=-1)
-                        new_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
-                        new_intw[k] = dg.Bridge(cgspec=bridge_a.cgspec, weights=new_weights)
+                new_data[k], new_intw[k] = BlockSchema.block_add(
+                    a, bridge_a, -b if b is not None else None, bridge_b,
+                    rtol=1e-12, atol=1e-15
+                )
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
