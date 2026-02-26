@@ -304,4 +304,94 @@ class BlockSchema:
         
         return (False, 1.0)
 
+    @staticmethod
+    def block_add(
+        data_a: Optional[torch.Tensor],
+        bridge_a: Optional[Bridge],
+        data_b: Optional[torch.Tensor],
+        bridge_b: Optional[Bridge],
+        rtol: float = 1e-12,
+        atol: float = 1e-15,
+    ) -> Tuple[torch.Tensor, Bridge]:
+        """Add two SU(2) tensor blocks with their intertwiner data.
+        
+        Computes the linear combination of two reduced tensor blocks by checking if 
+        their weight matrices are collinear. For subtraction, pass -data_b as the 
+        second data argument.
+        
+        Parameters
+        ----------
+        data_a : torch.Tensor or None
+            First reduced block with shape (...sectors..., om_dim). None if absent.
+        bridge_a : Bridge or None
+            First Bridge with weights shape (n_comp_a, om_dim). None if absent.
+        data_b : torch.Tensor or None
+            Second reduced block. Pass -data_b for subtraction. None if absent.
+        bridge_b : Bridge or None
+            Second Bridge with weights shape (n_comp_b, om_dim). None if absent.
+        rtol : float, optional
+            Relative tolerance for collinearity check. Default: 1e-12.
+        atol : float, optional
+            Absolute tolerance for collinearity check. Default: 1e-15.
+        
+        Returns
+        -------
+        data_added : torch.Tensor
+            Combined reduced tensor block.
+        bridge_added : Bridge
+            Combined intertwiner Bridge.
+        
+        Raises
+        ------
+        ValueError
+            If both blocks are absent.
+        
+        
+        Notes
+        -----
+        - If only one block is present, returns clones of that block and Bridge.
+        - If both blocks are present and weights are collinear:
+            - Combined data: data_a + scale * data_b
+            - Combined Bridge: clone of bridge_a
+        - If both blocks are present and weights are incompatible:
+            - Combined data: concatenated [data_a, data_b] along OM axis (last dimension)
+            - Combined Bridge: concatenated weights along reduced multiplicity dimension
+        
+        Examples
+        --------
+        >>> # Addition
+        >>> data_sum, bridge_sum = BlockSchema.block_add(data_a, bridge_a, data_b, bridge_b)
+        >>> # Subtraction
+        >>> data_diff, bridge_diff = BlockSchema.block_add(data_a, bridge_a, -data_b, bridge_b)
+        """
+        if data_a is None and data_b is None:
+            raise ValueError("At least one data block must be provided")
+        
+        if data_a is None:
+            # Only b has this block
+            return data_b.clone(), bridge_b.clone()
+        
+        if data_b is None:
+            # Only a has this block
+            return data_a.clone(), bridge_a.clone()
+        
+        # Both have this block: check weight relationship
+        compatible, scale = BlockSchema.bridge_collinear(
+            bridge_a, bridge_b, rtol=rtol, atol=atol
+        )
+        
+        if compatible:
+            # Compatible weights: scale and add
+            # T1 + T2 = R1 @ w1 + R2 @ (α*w1) = (R1 + α*R2) @ w1
+            data_added = data_a + data_b * scale
+            bridge_added = bridge_a.clone()
+        else:
+            # Incompatible weights: concatenate along reduced multiplicity dimension
+            from .symmetry.delegate import Bridge
+            data_added = torch.cat([data_a, data_b], dim=-1)
+            weights_added = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
+            bridge_added = Bridge(cgspec=bridge_a.cgspec, weights=weights_added)
+        
+        return data_added, bridge_added
+
 
