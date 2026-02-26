@@ -818,8 +818,8 @@ def test_subtraction_su2_different_weights():
     # Block shape should have concatenated trailing dimension
     assert C.data[key].shape[-1] == A.data[key].shape[-1] + B_modified.data[key].shape[-1]
     
-    # Data should be concatenated
-    expected_data = torch.cat([A.data[key], B_modified.data[key]], dim=-1)
+    # Data should be concatenated with negation: [a, -b]
+    expected_data = torch.cat([A.data[key], -B_modified.data[key]], dim=-1)
     assert torch.allclose(C.data[key], expected_data)
 
 
