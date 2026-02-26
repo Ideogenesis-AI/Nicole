@@ -21,6 +21,7 @@
 import math
 import torch
 import pytest
+import yuzuha
 
 from nicole import Direction, Index, Sector, U1Group, Z2Group, SU2Group
 from nicole.blocks import BlockSchema
@@ -597,4 +598,227 @@ def test_bridge_collinear_zero_weights():
     # One zero, one non-zero
     compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_zero)
     assert compatible is False
+
+
+# =============================================================================
+# block_add tests
+# =============================================================================
+
+
+def test_block_add_only_first_block():
+    """Test block_add when only the first block is present."""
+    # Create a data block and Bridge with om_dim > 1
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec_a = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec_a.om_dimension()
+    data_a = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    weights_a = torch.randn(1, om_dim, dtype=torch.float64)
+    bridge_a = dg.Bridge(cgspec=cgspec_a, weights=weights_a)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, None, None
+    )
+    
+    # Should return clones
+    assert torch.allclose(data_result, data_a)
+    assert data_result is not data_a
+    assert bridge_result.cgspec == bridge_a.cgspec
+    assert torch.allclose(bridge_result.weights, bridge_a.weights)
+    assert bridge_result is not bridge_a
+
+
+def test_block_add_only_second_block():
+    """Test block_add when only the second block is present."""
+    # Create a data block and Bridge with om_dim > 1
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec_b = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec_b.om_dimension()
+    data_b = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    weights_b = torch.randn(1, om_dim, dtype=torch.float64)
+    bridge_b = dg.Bridge(cgspec=cgspec_b, weights=weights_b)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        None, None, data_b, bridge_b
+    )
+    
+    # Should return clones
+    assert torch.allclose(data_result, data_b)
+    assert data_result is not data_b
+    assert bridge_result.cgspec == bridge_b.cgspec
+    assert torch.allclose(bridge_result.weights, bridge_b.weights)
+    assert bridge_result is not bridge_b
+
+
+def test_block_add_identical_weights():
+    """Test block_add with identical weights."""
+    # Create blocks with identical weights and om_dim > 1
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    weights = torch.randn(1, om_dim, dtype=torch.float64)
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights.clone())
+    
+    data_a = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    data_b = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, data_b, bridge_b
+    )
+    
+    # Should add data directly and return clone of bridge_a
+    expected_data = data_a + data_b
+    assert torch.allclose(data_result, expected_data)
+    assert bridge_result.cgspec == bridge_a.cgspec
+    assert torch.allclose(bridge_result.weights, bridge_a.weights)
+    assert bridge_result is not bridge_a
+
+
+def test_block_add_collinear_weights():
+    """Test block_add with collinear weights."""
+    # Create blocks with collinear weights (scaled) and om_dim > 1
+    # Use 6 spin-1/2 edges (even number of fermions)
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    weights_a = torch.randn(1, om_dim, dtype=torch.float64)
+    scale_factor = 2.5
+    weights_b = weights_a * scale_factor
+    
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights_a)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights_b)
+    
+    data_a = torch.randn(2, 3, 2, 2, 2, 2, om_dim, dtype=torch.float64)
+    data_b = torch.randn(2, 3, 2, 2, 2, 2, om_dim, dtype=torch.float64)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, data_b, bridge_b
+    )
+    
+    # Should add with scaling: data_a + data_b * scale_factor
+    expected_data = data_a + data_b * scale_factor
+    assert torch.allclose(data_result, expected_data)
+    assert bridge_result.cgspec == bridge_a.cgspec
+    assert torch.allclose(bridge_result.weights, bridge_a.weights)
+
+
+def test_block_add_incompatible_weights():
+    """Test block_add with incompatible weights."""
+    # Create blocks with different, non-collinear weights and om_dim > 1
+    # Use 6 spin-1/2 edges (even number of fermions)
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    weights_a = torch.randn(1, om_dim, dtype=torch.float64)
+    weights_b = torch.randn(2, om_dim, dtype=torch.float64)
+    
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights_a)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights_b)
+    
+    data_a = torch.randn(2, 3, 2, 2, 2, 2, om_dim, dtype=torch.float64)
+    data_b = torch.randn(2, 3, 2, 2, 2, 2, om_dim, dtype=torch.float64)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, data_b, bridge_b
+    )
+    
+    # Should concatenate along OM axis
+    expected_data = torch.cat([data_a, data_b], dim=-1)
+    assert torch.allclose(data_result, expected_data)
+    
+    # Weights should be concatenated along component axis
+    expected_weights = torch.cat([bridge_a.weights, bridge_b.weights], dim=0)
+    assert torch.allclose(bridge_result.weights, expected_weights)
+    assert bridge_result.cgspec == bridge_a.cgspec
+
+
+def test_block_add_subtraction():
+    """Test block_add for subtraction by negating data_b."""
+    # Create blocks with compatible weights and om_dim > 1
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    weights = torch.randn(1, om_dim, dtype=torch.float64)
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights.clone())
+    
+    data_a = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    data_b = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    
+    # For subtraction, negate data_b
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, -data_b, bridge_b
+    )
+    
+    # Should compute: data_a - data_b
+    expected_data = data_a - data_b
+    assert torch.allclose(data_result, expected_data)
+
+
+def test_block_add_both_none_raises():
+    """Test block_add raises ValueError when both blocks are absent."""
+    with pytest.raises(ValueError, match="At least one data block must be provided"):
+        BlockSchema.block_add(None, None, None, None)
+
+
+def test_block_add_clones_bridge():
+    """Test that block_add clones Bridge objects for independence."""
+    # Create blocks with identical weights and om_dim > 1
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1))
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    weights = torch.randn(1, om_dim, dtype=torch.float64)
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights.clone())
+    
+    data_a = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    data_b = torch.randn(2, 3, 2, 2, om_dim, dtype=torch.float64)
+    
+    data_result, bridge_result = BlockSchema.block_add(
+        data_a, bridge_a, data_b, bridge_b
+    )
+    
+    # Bridge should be cloned (not same object)
+    assert bridge_result is not bridge_a
+    assert bridge_result is not bridge_b
+    assert torch.allclose(bridge_result.weights, bridge_a.weights)
 
