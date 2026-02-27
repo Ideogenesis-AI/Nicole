@@ -44,7 +44,7 @@ from typing import Dict, Optional, Sequence, Tuple, Union
 
 import torch
 
-from .blocks import BlockKey
+from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
@@ -272,6 +272,10 @@ def oplus(
     axes and arranging blocks in a block-diagonal fashion. Axes not specified
     must match exactly (same sectors, same dimensions).
     
+    For generic tensors, blocks are padded with zeros and combined using
+    block_add, which properly handles intertwiner weights by concatenating
+    them along the reduced multiplicity dimension.
+    
     Parameters
     ----------
     A : Tensor
@@ -466,67 +470,141 @@ def oplus(
     # First, collect all possible charge keys from A and B
     all_charge_keys = set(A.data.keys()) | set(B.data.keys())
     
-    out_data = {}
+    out_data: Dict[BlockKey, torch.Tensor] = {}
+    out_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
     
-    for charge_key in all_charge_keys:
-        # Determine output shape for this charge combination
-        out_shape = []
-        for i, charge in enumerate(charge_key):
-            if i in merged_axes:
-                # Use merged dimension
-                _, _, dim_total = merged_sector_info[i][charge]
-                out_shape.append(dim_total)
-            else:
-                # Use exact dimension from A (same as B)
-                dim_map_A = A.indices[i].sector_dim_map()
-                out_shape.append(dim_map_A[charge])
-        
-        # Initialize output block with zeros
-        out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
-        
-        # Place block from A if it exists
-        if charge_key in A.data:
-            block_A = A.data[charge_key]
-            # Build slices for placing block_A
-            slices_A = []
+    # Check if we need to handle SU(2) symmetry
+    is_abelian = len(A.indices) == 0 or A.indices[0].group.is_abelian
+    
+    if is_abelian:
+        # Abelian case: direct block placement
+        for charge_key in all_charge_keys:
+            # Determine output shape for this charge combination
+            out_shape = []
             for i, charge in enumerate(charge_key):
                 if i in merged_axes:
-                    # Use offset 0:dim_A
-                    dim_A, _, _ = merged_sector_info[i][charge]
-                    slices_A.append(slice(0, dim_A))
+                    # Use merged dimension
+                    _, _, dim_total = merged_sector_info[i][charge]
+                    out_shape.append(dim_total)
                 else:
-                    # Use full dimension
-                    slices_A.append(slice(None))
+                    # Use exact dimension from A (same as B)
+                    dim_map_A = A.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge])
             
-            out_block[tuple(slices_A)] = block_A
+            # Initialize output block with zeros
+            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
+            
+            # Place block from A if it exists
+            if charge_key in A.data:
+                block_A = A.data[charge_key]
+                # Build slices for placing block_A
+                slices_A = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset 0:dim_A
+                        dim_A, _, _ = merged_sector_info[i][charge]
+                        slices_A.append(slice(0, dim_A))
+                    else:
+                        # Use full dimension
+                        slices_A.append(slice(None))
+                
+                out_block[tuple(slices_A)] = block_A
+            
+            # Place block from B if it exists
+            if charge_key in B.data:
+                block_B = B.data[charge_key]
+                # Build slices for placing block_B
+                slices_B = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset dim_A:dim_total
+                        dim_A, dim_B, dim_total = merged_sector_info[i][charge]
+                        slices_B.append(slice(dim_A, dim_total))
+                    else:
+                        # Use full dimension
+                        slices_B.append(slice(None))
+                
+                out_block[tuple(slices_B)] = block_B
+            
+            # Only add non-zero blocks
+            if torch.any(out_block != 0):
+                out_data[charge_key] = out_block
+    else:
+        # Generic (non-Abelian) case: pad blocks and use block_add
+        out_intw: Dict[BlockKey, dg.Bridge] = {}
         
-        # Place block from B if it exists
-        if charge_key in B.data:
-            block_B = B.data[charge_key]
-            # Build slices for placing block_B
-            slices_B = []
+        for charge_key in all_charge_keys:
+            # Determine output shape for this charge combination
+            out_shape = []
             for i, charge in enumerate(charge_key):
                 if i in merged_axes:
-                    # Use offset dim_A:dim_total
-                    dim_A, dim_B, dim_total = merged_sector_info[i][charge]
-                    slices_B.append(slice(dim_A, dim_total))
+                    # Use merged dimension (without OM axis yet)
+                    _, _, dim_total = merged_sector_info[i][charge]
+                    out_shape.append(dim_total)
                 else:
-                    # Use full dimension
-                    slices_B.append(slice(None))
+                    # Use exact dimension from A (same as B)
+                    dim_map_A = A.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge])
             
-            out_block[tuple(slices_B)] = block_B
-        
-        # Only add non-zero blocks
-        if torch.any(out_block != 0):
-            out_data[charge_key] = out_block
+            # Pad A's block if it exists
+            padded_A = None
+            bridge_A = None
+            if charge_key in A.data:
+                block_A = A.data[charge_key]
+                om_A = block_A.shape[-1]
+                # Create padded block with OM dimension from A
+                padded_shape = out_shape + [om_A]
+                padded_A = torch.zeros(padded_shape, dtype=A.dtype)
+                
+                # Build slices for placing block_A
+                slices_A = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset 0:dim_A
+                        dim_A, _, _ = merged_sector_info[i][charge]
+                        slices_A.append(slice(0, dim_A))
+                    else:
+                        # Use full dimension
+                        slices_A.append(slice(None))
+                slices_A.append(slice(None))  # OM axis
+                
+                padded_A[tuple(slices_A)] = block_A
+                bridge_A = A.intw[charge_key]
+            
+            # Pad B's block if it exists
+            padded_B = None
+            bridge_B = None
+            if charge_key in B.data:
+                block_B = B.data[charge_key]
+                om_B = block_B.shape[-1]
+                # Create padded block with OM dimension from B
+                padded_shape = out_shape + [om_B]
+                padded_B = torch.zeros(padded_shape, dtype=B.dtype)
+                
+                # Build slices for placing block_B
+                slices_B = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset dim_A:dim_total
+                        dim_A, dim_B, dim_total = merged_sector_info[i][charge]
+                        slices_B.append(slice(dim_A, dim_total))
+                    else:
+                        # Use full dimension
+                        slices_B.append(slice(None))
+                slices_B.append(slice(None))  # OM axis
+                
+                padded_B[tuple(slices_B)] = block_B
+                bridge_B = B.intw[charge_key]
+            
+            # Combine using block_add
+            out_data[charge_key], out_intw[charge_key] = BlockSchema.block_add(
+                padded_A, bridge_A, padded_B, bridge_B
+            )
     
     # Step 6: Create and return output tensor
     return Tensor(
-        indices=tuple(out_indices),
-        itags=A.itags,
-        data=out_data,
-        dtype=torch.promote_types(A.dtype, B.dtype),
-        label=A.label
+        indices=tuple(out_indices), itags=A.itags, data=out_data, intw=out_intw,
+        dtype=torch.promote_types(A.dtype, B.dtype), label=A.label
     )
 
 
