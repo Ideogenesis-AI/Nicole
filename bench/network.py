@@ -71,7 +71,7 @@ def canonical(
         raise ValueError(f"direction must be 'left' or 'right', got '{direction}'")
     
     # Create a copy to avoid modifying the original
-    mps_new = [tensor.copy() for tensor in mps]
+    mps_new = [tensor.clone() for tensor in mps]
     
     if direction == "right":
         # Convert left-canonical to right-canonical
