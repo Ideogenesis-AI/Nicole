@@ -620,6 +620,10 @@ def diag(
     from eig) and creates a diagonal matrix tensor where each 1D array becomes a
     diagonal matrix block.
     
+    For Abelian groups, creates standard diagonal blocks.
+    For generic groups (e.g., SU(2)), creates blocks with trailing reduced
+    multiplicity dimension and intertwiner (Bridge) with proper normalization.
+    
     Parameters
     ----------
     S_blocks : dict[BlockKey, torch.Tensor]
@@ -639,7 +643,8 @@ def diag(
     -------
     Tensor
         Diagonal matrix tensor with two indices (bond_index.flip(), bond_index).
-        Label is set to "Diagonal".
+        For generic groups, includes intertwiner (intw) field with weights set to
+        √(irrep_dim(q)). Label is set to "Diagonal".
     
     Raises
     ------
@@ -665,6 +670,15 @@ def diag(
     >>> # Can now use S_diag in contractions
     >>> result = contract(U, S_diag)  # Equivalent to U @ S
     
+    >>> # SU(2) case
+    >>> from nicole import SU2Group
+    >>> group = SU2Group()
+    >>> idx = Index(Direction.OUT, group, sectors=(Sector(1, 3),))
+    >>> S_blocks_su2 = {(1, 1): torch.tensor([2.0, 1.5, 0.5])}
+    >>> S_diag_su2 = diag(S_blocks_su2, idx)
+    >>> # S_diag_su2.data[(1, 1)].shape is (3, 3, 1) - includes OM dimension
+    >>> # S_diag_su2.intw[(1, 1)].weights is √(irrep_dim(1)) = √2
+    
     Notes
     -----
     This function is useful for converting the singular values dict S from svd() or
@@ -675,6 +689,7 @@ def diag(
     - Two indices: (bond_index.flip(), bond_index)
     - Block keys (q, q) for each charge q in S_blocks
     - Diagonal matrices as data blocks
+    - For non-Abelian groups: trailing OM dimension and Bridge weights = √(irrep_dim)
     - Label "Diagonal" (overriding default "Tensor")
     """
     # Validate all blocks are 1D
@@ -687,14 +702,14 @@ def diag(
     
     # Determine output itags
     if itags is None:
-        out_itags = ("_bond_L", "_bond_R")
+        diag_itags = ("_bond_L", "_bond_R")
     else:
         if not isinstance(itags, tuple) or len(itags) != 2:
             length = len(itags) if isinstance(itags, (tuple, list)) else 'N/A'
             raise ValueError(
                 f"itags must be a tuple of two strings, got {type(itags)} with length {length}"
             )
-        out_itags = itags
+        diag_itags = itags
     
     # Determine dtype
     if dtype is None:
@@ -705,21 +720,50 @@ def diag(
         else:
             dtype = torch.float64
     
-    # Convert each 1D block to diagonal matrix
-    diag_blocks: Dict[BlockKey, torch.Tensor] = {}
-    for key, vec_array in S_blocks.items():
-        # Create diagonal matrix from 1D array
-        diag_matrix = torch.diag(vec_array)
-        diag_blocks[key] = diag_matrix
+    # Check if group is Abelian or generic (non-Abelian)
+    group = bond_index.group
     
-    # Create output tensor with two indices
-    return Tensor(
-        indices=(bond_index.flip(), bond_index),
-        itags=out_itags,
-        data=diag_blocks,
-        dtype=dtype,
-        label="Diagonal"
-    )
+    if group.is_abelian:
+        # Abelian case: standard diagonal matrices
+        diag_blocks: Dict[BlockKey, torch.Tensor] = {}
+        for key, vec_array in S_blocks.items():
+            # Create diagonal matrix from 1D array
+            diag_matrix = torch.diag(vec_array)
+            diag_blocks[key] = diag_matrix
+        
+        # Create output tensor with two indices
+        return Tensor(
+            indices=(bond_index.flip(), bond_index), itags=diag_itags, data=diag_blocks,
+            dtype=dtype, label="Diagonal"
+        )
+    else:
+        # Generic (non-Abelian) case: diagonal with intertwiner normalization
+        diag_blocks: Dict[BlockKey, torch.Tensor] = {}
+        intw: Dict[BlockKey, dg.Bridge] = {}
+        
+        left = bond_index.flip()
+        right = bond_index
+        
+        for key, vec_array in S_blocks.items():
+            # Create diagonal matrix from 1D array with trailing reduced multiplicity dimension
+            diag_matrix = torch.diag(vec_array).unsqueeze(-1)
+            diag_blocks[key] = diag_matrix
+            
+            # Create Bridge with actual index directions
+            intw[key] = dg.Bridge.from_block(
+                group, key, [left.direction, right.direction], dtype=dtype
+            )
+            
+            # Apply normalization: weights = √(irrep_dim)
+            # For 2 edges, om_dimension = 1, weights shape is (1, 1)
+            irrep_dimension = group.irrep_dim(key[0])
+            # Use torch.sqrt to maintain dtype precision
+            intw[key].weights[0, 0] = torch.sqrt(torch.tensor(irrep_dimension, dtype=dtype))
+        
+        return Tensor(
+            indices=(left, right), itags=diag_itags, data=diag_blocks, intw=intw,
+            dtype=dtype, label="Diagonal"
+        )
 
 
 def inv(tensor: Tensor) -> Tensor:
