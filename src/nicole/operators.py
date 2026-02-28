@@ -40,7 +40,7 @@ merge_axes(tensor, axes, merged_tag=None, direction=OUT)
     the merged tensor and conjugate isometry for potential unfusing.
 """
 
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union, Optional
 
 import torch
 
@@ -84,7 +84,7 @@ def conj(tensor: Tensor) -> Tensor:
     new_indices = tuple(idx.flip() for idx in tensor.indices)
     
     # Update intw with flipped directions
-    new_intw = None
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
     if tensor.intw is not None:
         new_intw: Dict[BlockKey, dg.Bridge] = {}
         for key, bridge in tensor.intw.items():
@@ -154,9 +154,9 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
             new_data[new_key] = torch.permute(arr, order).clone()
     
     # Update intw with R-symbols for non-Abelian case
-    new_intw = None
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
     if tensor.intw is not None:
-        new_intw = {}
+        new_intw: Dict[BlockKey, dg.Bridge] = {}
         for key, bridge in tensor.intw.items():
             # Compute R-symbol for this permutation
             r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
@@ -248,7 +248,7 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     new_data = {tensor.key(i): tensor.block(i).clone() for i in block_indices}
     
     # Extract intw for SU(2) tensors (clone weights for independence)
-    new_intw = None
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
     if tensor.intw is not None:
         new_intw = {tensor.key(i): tensor.intw[tensor.key(i)].clone() for i in block_indices}
 

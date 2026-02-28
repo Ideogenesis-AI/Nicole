@@ -27,7 +27,7 @@ charge conservation dictated by the index metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional
 
 import torch
 
@@ -253,9 +253,9 @@ class Tensor:
             itags_tuple = tuple(itags)
         
         # Create intertwiner (intw) for generic groups first
-        intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
-            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            intw: Dict[BlockKey, dg.Bridge] = {}
             directions = [idx.direction for idx in indices_tuple]
             for key in BlockSchema.iter_admissible_keys(indices_tuple):
                 if not BlockSchema.charges_conserved(indices_tuple, key):
@@ -341,9 +341,9 @@ class Tensor:
             itags_tuple = tuple(itags)
         
         # Create intertwiner (intw) for generic (non-Abelian) groups first
-        intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if indices_tuple and not indices_tuple[0].group.is_abelian:
-            intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            intw: Dict[BlockKey, dg.Bridge] = {}
             directions = [idx.direction for idx in indices_tuple]
             for key in BlockSchema.iter_admissible_keys(indices_tuple):
                 if not BlockSchema.charges_conserved(indices_tuple, key):
@@ -381,7 +381,10 @@ class Tensor:
         return cls(indices=normalized_indices, itags=itags_tuple, data=data, intw=intw, dtype=dtype)
 
     @staticmethod
-    def _prune_unused_sectors(indices: Tuple[Index, ...], data: Dict[BlockKey, torch.Tensor]) -> Tuple[Index, ...]:
+    def _prune_unused_sectors(
+        indices: Tuple[Index, ...],
+        data: MutableMapping[BlockKey, torch.Tensor]
+    ) -> Tuple[Index, ...]:
         """Remove sectors from indices that don't appear in any block."""
         if not data:
             # No blocks, return empty indices
@@ -540,7 +543,7 @@ class Tensor:
             new_data = {k: v.to(device) for k, v in self.data.items()}
         
         # Move intertwiner to new device/dtype
-        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
             new_intw = {k: bridge.to(device, dtype=new_dtype) for k, bridge in self.intw.items()}
         
@@ -684,7 +687,7 @@ class Tensor:
         new_data = {k: v.clone() for k, v in self.data.items()}
         
         # Deep clone intertwiner
-        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
             new_intw = {k: bridge.clone() for k, bridge in self.intw.items()}
         
@@ -796,7 +799,7 @@ class Tensor:
         self.itags = tuple(itags_list)
         
         # Update data blocks: insert neutral charge in keys and add singleton dimension
-        new_data = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         for key, arr in self.data.items():
             # Insert neutral charge at the appropriate position in the key
             key_list = list(key)
@@ -921,7 +924,7 @@ class Tensor:
         # Perform addition on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         
         # Abelian groups: direct block addition
         if not self.indices or self.indices[0].group.is_abelian:
@@ -936,7 +939,7 @@ class Tensor:
                     new_data[k] = a + b
         else:
             # Non-Abelian groups: handle intertwiners
-            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
             for k in keys:
                 a = self.data.get(k)
                 b = other.data.get(k)
@@ -979,7 +982,7 @@ class Tensor:
         # Perform subtraction on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         
         # Abelian groups: direct block subtraction
         if not self.indices or self.indices[0].group.is_abelian:
@@ -994,7 +997,7 @@ class Tensor:
                     new_data[k] = a - b
         else:
             # Generic (non-Abelian) groups: handle intertwiners
-            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
             for k in keys:
                 a = self.data.get(k)
                 b = other.data.get(k)
@@ -1154,9 +1157,9 @@ class Tensor:
         new_indices = tuple(idx.flip() for idx in self.indices)
         
         # Update intw with flipped directions
-        new_intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
-            new_intw: MutableMapping[BlockKey, dg.Bridge] = {}
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
             for key, bridge in self.intw.items():
                 new_intw[key] = bridge.conj()
         
@@ -1216,7 +1219,7 @@ class Tensor:
         new_itags = tuple(self.itags[i] for i in order)
         
         # Permute data blocks (always use trailing OM axis if present)
-        new_data: MutableMapping[BlockKey, torch.Tensor] = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         if self.intw is not None:
             # Non-Abelian: data has trailing OM axis, permute all but last
             order_with_om = tuple(order) + (len(order),)
@@ -1230,9 +1233,9 @@ class Tensor:
                 new_data[new_key] = torch.permute(arr, order)
         
         # Update intw with R-symbols for non-Abelian case
-        new_intw = None
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
         if self.intw is not None:
-            new_intw = {}
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
             for key, bridge in self.intw.items():
                 # Compute R-symbol for this permutation
                 r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
@@ -1336,7 +1339,7 @@ class Tensor:
         self.indices = tuple(indices_list)
         
         # Update block keys: conjugate charges at flipped positions
-        new_data = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         for key, arr in self.data.items():
             key_list = list(key)
             for pos in positions:
