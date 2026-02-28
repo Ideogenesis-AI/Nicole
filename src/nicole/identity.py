@@ -27,7 +27,6 @@ charge conservation across all generated blocks.
 """
 
 from typing import Dict, Optional, Sequence, Tuple
-import math
 
 import torch
 
@@ -103,7 +102,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
             # For 2 edges, om_dimension = 1, weights shape is (1, 1)
             # This ensures norm² = Σ_sectors (sector.dim * irrep_dim)
             irrep_dimension = group.irrep_dim(q)
-            bridge.weights[0, 0] = math.sqrt(irrep_dimension)
+            bridge.weights[0, 0] = torch.sqrt(torch.tensor(irrep_dimension, dtype=dtype))
             
             intw[(q, q)] = bridge
         
@@ -246,7 +245,7 @@ def isometry(
                     
                     # Apply normalization: weights = √(irrep_dim) of fused charge
                     irrep_dimension = group.irrep_dim(qf)
-                    bridge.weights[0, 0] = math.sqrt(irrep_dimension)
+                    bridge.weights[0, 0] = torch.sqrt(torch.tensor(irrep_dimension, dtype=dtype))
                     
                     intw[(qa, qb, qf)] = bridge
                     offsets[qf] = offset + da * db
