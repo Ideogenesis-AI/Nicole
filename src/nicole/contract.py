@@ -32,11 +32,12 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import torch
 
-from .blocks import BlockKey
+from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .symmetry.base import SymmetryGroup
 from .symmetry.base import AbelianGroup
 from .symmetry.product import ProductGroup
+from .symmetry.delegate import compute_xsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
 
@@ -44,8 +45,6 @@ from .typing import Charge, Direction
 def _dir_weight(idx: Index, charge: Charge) -> Tuple[SymmetryGroup, Charge]:
     """Return the symmetry group and orientation-adjusted charge contribution."""
     group = idx.group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Only Abelian/Product contraction supported")
     return group, (charge if idx.direction == Direction.OUT else group.dual(charge))
 
 
@@ -321,6 +320,7 @@ def contract(
 
     # Allocate the output blocks.
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
+    out_intw: Optional[Dict[BlockKey, Bridge]] = {} if A.intw is not None else None
     # Iterate over all admissible blocks in the input tensors.
     for keyA, arrA in A.data.items():
         for keyB, arrB in B.data.items():
@@ -330,9 +330,19 @@ def contract(
                 # Validate charge conservation for the pair.
                 group, qa = _dir_weight(A.indices[ia], keyA[ia])
                 _, qb = _dir_weight(B.indices[ib], keyB[ib])
-                if not group.equal(group.fuse_unique(qa, qb), group.neutral):
-                    ok = False
-                    break
+                
+                # Check if fusion to neutral is allowed
+                if isinstance(group, AbelianGroup) or (isinstance(group, ProductGroup) and group.is_abelian):
+                    # Abelian: use fuse_unique
+                    if not group.equal(group.fuse_unique(qa, qb), group.neutral):
+                        ok = False
+                        break
+                else:
+                    # Non-Abelian: check if neutral is in fuse_channels
+                    if group.neutral not in group.fuse_channels(qa, qb):
+                        ok = False
+                        break
+                
                 # Ensure matching dimensions.
                 if arrA.shape[ia] != arrB.shape[ib]:
                     ok = False
@@ -342,26 +352,148 @@ def contract(
             # Perform the tensor contraction.
             axesA = [ia for ia, _ in axes_list]
             axesB = [ib for _, ib in axes_list]
-            res = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+            
             # Build the output charge key from the surviving axes.
             out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
                 keyB[i] for i in range(len(keyB)) if i not in contracted_B
             )
+            
+            # Handle Abelian vs non-Abelian contraction
+            if A.intw is None:
+                # Abelian: simple tensordot
+                res = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+                bridge_res = None
+            else:
+                # Non-Abelian (SU(2)): contract physical axes only, preserve component dimensions
+                # Block A: (...phys_A..., k_a), Block B: (...phys_B..., k_b)
+                # Contract ONLY physical axes, keeping component dimensions separate
+                
+                # Promote dtype if needed (tensordot requires matching dtypes)
+                dtype_result = torch.promote_types(arrA.dtype, arrB.dtype)
+                if arrA.dtype != dtype_result:
+                    arrA = arrA.to(dtype_result)
+                if arrB.dtype != dtype_result:
+                    arrB = arrB.to(dtype_result)
+                
+                res_phys = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+                
+                # After tensordot, the component dimensions are scattered in the result
+                # We need to identify their positions and move them to the end
+                
+                # Get bridges for this block
+                bridge_a = A.intw[keyA]
+                bridge_b = B.intw[keyB]
+                k_a = bridge_a.num_components
+                k_b = bridge_b.num_components
+                
+                # Number of physical axes (excluding component dim)
+                n_phys_a = len(A.indices)
+                n_phys_b = len(B.indices)
+                
+                # Number of kept physical axes from each tensor
+                n_kept_a = n_phys_a - len(axesA)
+                n_kept_b = n_phys_b - len(axesB)
+                
+                # Check if this is a full contraction (scalar result)
+                if n_kept_a == 0 and n_kept_b == 0:
+                    # Scalar result: no external edges left
+                    # Need to contract OM indices using weights
+                    # res_phys has shape (k_a, k_b)
+                    # weights_a: (k_a, om_a), weights_b: (k_b, om_b)
+                    # Full contraction: Σ_ij res_phys[i,j] × Σ_α weights_a[i,α] × weights_b[j,α]
+                    weights_a = bridge_a.weights
+                    weights_b = bridge_b.weights
+                    
+                    # Promote weights dtype if needed
+                    if weights_a.dtype != dtype_result:
+                        weights_a = weights_a.to(dtype_result)
+                    if weights_b.dtype != dtype_result:
+                        weights_b = weights_b.to(dtype_result)
+                    
+                    # Contract weights: (k_a, om) @ (om, k_b) = (k_a, k_b) if om_a == om_b
+                    # For scalar case, OM dimensions must match (same CGSpec)
+                    weight_overlap = weights_a @ weights_b.T  # (k_a, k_b)
+                    res = (res_phys * weight_overlap).sum().reshape(())
+                    bridge_res = None
+                else:
+                    # Non-scalar result: use X-symbol for recoupling
+                    k_c = k_a * k_b
+                    
+                    # Compute X-symbol and output CGSpec
+                    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, axesA, axesB)
+                    
+                    # Determine where k_a and k_b are in res_phys
+                    # tensordot keeps non-contracted axes in order:
+                    # [kept_axes_from_A (including k_a at original position), kept_axes_from_B (including k_b at original position)]
+                    
+                    # Component dimension positions in res_phys
+                    # k_a is at position n_kept_a (after all kept physical axes from A)
+                    # k_b is at position n_kept_a + 1 + n_kept_b (after k_a and all kept physical axes from B)
+                    pos_k_a = n_kept_a
+                    pos_k_b = n_kept_a + 1 + n_kept_b
+                    
+                    # Move both component dimensions to the end
+                    # First move k_a to position -2, then k_b to position -1
+                    res_phys = torch.moveaxis(res_phys, [pos_k_a, pos_k_b], [-2, -1])
+                    
+                    # Now res_phys has shape: (...out_phys..., k_a, k_b)
+                    # Reshape to: (...out_phys..., k_a * k_b)
+                    out_phys_shape = list(res_phys.shape[:-2])
+                    res = res_phys.reshape(out_phys_shape + [k_c])
+                    
+                    # Compute output weights from component combinations via X-symbol
+                    # weights_a: (k_a, om_a), weights_b: (k_b, om_b)
+                    # X-symbol: (om_a, om_b, om_c)
+                    # Output: (k_a * k_b, om_c)
+                    weights_a = bridge_a.weights  # (k_a, om_a)
+                    weights_b = bridge_b.weights  # (k_b, om_b)
+                    
+                    # Combine weights: (k_a, om_a) × (k_b, om_b) × (om_a, om_b, om_c) → (k_a, k_b, om_c)
+                    weights_c = torch.einsum('ia,jb,abc->ijc', weights_a, weights_b, x_symbol)
+                    
+                    # Reshape to (k_a * k_b, om_c)
+                    om_c = x_symbol.shape[2]
+                    weights_c = weights_c.reshape(k_c, om_c)
+                    
+                    # Create output bridge
+                    bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
+            
             # Add the result to the output blocks.
             if out_key in out_blocks:
-                out_blocks[out_key] = out_blocks[out_key] + res
+                if A.intw is None:
+                    # Abelian: simple addition
+                    out_blocks[out_key] = out_blocks[out_key] + res
+                elif bridge_res is None:
+                    # Non-Abelian scalar: simple addition
+                    out_blocks[out_key] = out_blocks[out_key] + res
+                else:
+                    # Non-Abelian: use block_add to combine blocks and weights
+                    out_blocks[out_key], out_intw[out_key] = BlockSchema.block_add(
+                        out_blocks[out_key], out_intw[out_key],
+                        res, bridge_res
+                    )
             else:
                 out_blocks[out_key] = res
+                if out_intw is not None and bridge_res is not None:
+                    out_intw[out_key] = bridge_res
     
     # For 0D scalars, ensure the result is a proper tensor
     # PyTorch maintains tensor type through operations, so this is less critical
     if len(out_indices) == 0 and () in out_blocks:
         out_blocks[()] = torch.as_tensor(out_blocks[()])
 
+    # For scalar results or when all bridges are None, set intw to None
+    if out_intw is not None:
+        if len(out_indices) == 0:  # Scalar result
+            out_intw = None
+        elif out_intw and all(v is None for v in out_intw.values()):
+            out_intw = None
+    
     result = Tensor(
         indices=out_indices,
         itags=out_itags,
         data=out_blocks,
+        intw=out_intw,
         dtype=torch.promote_types(A.dtype, B.dtype)
     )
 
