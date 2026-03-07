@@ -24,7 +24,7 @@ import pytest
 
 from nicole import Direction, Tensor, contract, identity, trace, permute, Index, Sector
 from nicole import U1Group, Z2Group, SU2Group, ProductGroup
-from ..utils import assert_charge_neutral
+from ..utils import assert_charge_neutral, populate_random_weights
 
 
 # Basic contraction tests
@@ -1210,6 +1210,8 @@ def test_contract_su2_basic_order2():
     
     A = Tensor.random([idx_a, idx_b], seed=100, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_c], seed=101, itags=["b", "c"])
+    populate_random_weights(A, seed=102)
+    populate_random_weights(B, seed=103)
     
     # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) via basic CG coefficients
     C = contract(A, B, axes=(1, 0))
@@ -1238,6 +1240,8 @@ def test_contract_su2_basic_order3():
     
     A = Tensor.random([idx_a, idx_b, idx_c], seed=110, itags=["a", "b", "c"])
     B = Tensor.random([idx_b.flip(), idx_d, idx_c.flip()], seed=111, itags=["b", "d", "c"])
+    populate_random_weights(A, seed=112)
+    populate_random_weights(B, seed=113)
     
     # A(a*, b, c*) ⊗ B(b*, d, c) → C(a*, d) via double contraction
     C = contract(A, B, axes=([1, 2], [0, 2]))
@@ -1268,6 +1272,8 @@ def test_contract_su2_basic_order5():
     
     A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=120, itags=["a", "b", "c", "d", "e"])
     B = Tensor.random([idx_b.flip(), idx_f, idx_c.flip()], seed=121, itags=["b", "f", "c"])
+    populate_random_weights(A, seed=122)
+    populate_random_weights(B, seed=123)
     
     # Contract two pairs: A's (b,c) with B's (b,c)
     C = contract(A, B, axes=([1, 2], [0, 2]))
@@ -1294,6 +1300,7 @@ def test_contract_su2_with_identity_order2():
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx_a, idx_b], seed=200, itags=["a", "b"])
+    populate_random_weights(A, seed=201)
     
     # I(a, c*) acts as a relabeling operator: a → c
     I = identity(idx_a.flip(), itags=["a", "c"])
@@ -1321,6 +1328,7 @@ def test_contract_su2_with_identity_order3():
     idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
     
     A = Tensor.random([idx_a, idx_b, idx_c], seed=210, itags=["a", "b", "c"])
+    populate_random_weights(A, seed=211)
     
     # I(a, a2*) relabels index a to a2
     I = identity(idx_a.flip(), itags=["a", "a2"])
@@ -1350,6 +1358,7 @@ def test_contract_su2_with_identity_order5():
     idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=220, itags=["a", "b", "c", "d", "e"])
+    populate_random_weights(A, seed=221)
     
     # I(a, a2*) relabels index a to a2
     I = identity(idx_a.flip(), itags=["a", "a2"])
@@ -1379,6 +1388,8 @@ def test_contract_su2_multiple_sectors_order2():
     
     A = Tensor.random([idx_a, idx_b], seed=300, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_c], seed=301, itags=["b", "c"])
+    populate_random_weights(A, seed=302)
+    populate_random_weights(B, seed=303)
     
     # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with multiple fusion channels
     C = contract(A, B, axes=(1, 0))
@@ -1406,6 +1417,8 @@ def test_contract_su2_multiple_sectors_order3():
     
     A = Tensor.random([idx_a, idx_b, idx_c], seed=310, itags=["a", "b", "c"])
     B = Tensor.random([idx_b.flip(), idx_d], seed=311, itags=["b", "d"])
+    populate_random_weights(A, seed=312)
+    populate_random_weights(B, seed=313)
     
     # A(a*, b, c*) ⊗ B(b*, d) → C(a*, c*, d) with rich sector structure
     C = contract(A, B, axes=(1, 0))
@@ -1435,6 +1448,8 @@ def test_contract_su2_multiple_sectors_order5():
     
     A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=320, itags=["a", "b", "c", "d", "e"])
     B = Tensor.random([idx_b.flip(), idx_f], seed=321, itags=["b", "f"])
+    populate_random_weights(A, seed=322)
+    populate_random_weights(B, seed=323)
     
     # A(a*, b, c*, d, e*) ⊗ B(b*, f) → C(a*, c*, d, e*, f) with high-order fusion
     C = contract(A, B, axes=(1, 0))
@@ -1461,6 +1476,8 @@ def test_contract_su2_charge_conservation():
     
     A = Tensor.random([idx_a, idx_b], seed=400, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_c], seed=401, itags=["b", "c"])
+    populate_random_weights(A, seed=402)
+    populate_random_weights(B, seed=403)
     
     # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with angular momentum conservation
     C = contract(A, B, axes=(1, 0))
@@ -1478,6 +1495,8 @@ def test_contract_su2_preserves_dtype():
     
     A = Tensor.random([idx_a, idx_b], seed=500, dtype=torch.float32, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=501, dtype=torch.float32, itags=["b", "a"])
+    populate_random_weights(A, seed=502)
+    populate_random_weights(B, seed=503)
     
     C = contract(A, B)
     
@@ -1497,6 +1516,8 @@ def test_contract_su2_promotes_dtype():
     
     A = Tensor.random([idx_a, idx_b], seed=600, dtype=torch.float32, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=601, dtype=torch.float64, itags=["b", "a"])
+    populate_random_weights(A, seed=602)
+    populate_random_weights(B, seed=603)
     
     C = contract(A, B)
     
@@ -1516,6 +1537,8 @@ def test_contract_su2_product_group():
     
     A = Tensor.random([idx_a, idx_b], seed=700, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_c], seed=701, itags=["b", "c"])
+    populate_random_weights(A, seed=702)
+    populate_random_weights(B, seed=703)
     
     # Contract b: SU(2) in product group should handle intw correctly
     C = contract(A, B, axes=(1, 0))
@@ -1540,6 +1563,9 @@ def test_contract_su2_associativity_order2():
     A = Tensor.random([idx_a, idx_b], seed=600, itags=["a", "b"])
     B = Tensor.random([idx_b.flip(), idx_c], seed=601, itags=["b", "c"])
     C = Tensor.random([idx_c.flip(), idx_e], seed=602, itags=["c", "e"])
+    populate_random_weights(A, seed=603)
+    populate_random_weights(B, seed=604)
+    populate_random_weights(C, seed=605)
     
     # Compute (A⊗B)⊗C
     AB = contract(A, B, axes=(1, 0))
@@ -1579,6 +1605,9 @@ def test_contract_su2_associativity_order3():
     A = Tensor.random([idx_a, idx_b, idx_c], seed=610, itags=["a", "b", "c"])
     B = Tensor.random([idx_b.flip(), idx_d, idx_e], seed=611, itags=["b", "d", "e"])
     C = Tensor.random([idx_e.flip(), idx_f], seed=612, itags=["e", "f"])
+    populate_random_weights(A, seed=613)
+    populate_random_weights(B, seed=614)
+    populate_random_weights(C, seed=615)
     
     # Compute (A⊗B)⊗C
     AB = contract(A, B, axes=(1, 0))
@@ -1620,6 +1649,9 @@ def test_contract_su2_associativity_order5():
     A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=620, itags=["a", "b", "c", "d", "e"])
     B = Tensor.random([idx_b.flip(), idx_f, idx_g], seed=621, itags=["b", "f", "g"])
     C = Tensor.random([idx_f.flip(), idx_h, idx_i], seed=622, itags=["f", "h", "i"])
+    populate_random_weights(A, seed=623)
+    populate_random_weights(B, seed=624)
+    populate_random_weights(C, seed=625)
     
     # Compute (A⊗B)⊗C
     AB = contract(A, B, axes=(1, 0))
@@ -1646,8 +1678,6 @@ def test_contract_su2_associativity_order5():
 
 def test_contract_su2_scalar_product():
     """Test SU(2) scalar product with 5th order tensors and multiple components."""
-    from nicole.symmetry.delegate import Bridge
-    
     group = SU2Group()
     
     # Create 5 indices with multiple sectors each
@@ -1660,37 +1690,12 @@ def test_contract_su2_scalar_product():
     indices = [idx1, idx2, idx3, idx4, idx5]
     itags = ["i1", "i2", "i3", "i4", "i5"]
     
-    # Start with randomly generated tensors
     A = Tensor.random(indices, seed=1000, itags=itags)
     B = Tensor.random(indices, seed=2000, itags=itags)
     
-    # Modify A and B to have multiple components by setting random weights
-    # Use local generator to avoid affecting global random state
-    gen = torch.Generator()
-    gen.manual_seed(3000)
-    
-    for key in A.data.keys():
-        # Expand to multiple components (3-5)
-        num_comp_a = torch.randint(3, 6, (1,), generator=gen).item()
-        num_comp_b = torch.randint(3, 6, (1,), generator=gen).item()
-        
-        # Expand A's block and weights
-        block_a = A.data[key]
-        phys_shape = list(block_a.shape[:-1])  # All dims except last (current component dim)
-        A.data[key] = torch.randn(phys_shape + [num_comp_a], dtype=torch.float64, generator=gen)
-        
-        bridge_a = A.intw[key]
-        weights_a = torch.randn(num_comp_a, bridge_a.om_dimension, dtype=torch.float64, generator=gen)
-        A.intw[key] = Bridge(bridge_a.cgspec, weights_a)
-        
-        # Expand B's block and weights
-        block_b = B.data[key]
-        phys_shape = list(block_b.shape[:-1])
-        B.data[key] = torch.randn(phys_shape + [num_comp_b], dtype=torch.float64, generator=gen)
-        
-        bridge_b = B.intw[key]
-        weights_b = torch.randn(num_comp_b, bridge_b.om_dimension, dtype=torch.float64, generator=gen)
-        B.intw[key] = Bridge(bridge_b.cgspec, weights_b)
+    # Expand to multiple components with random weights
+    populate_random_weights(A, seed=3000)
+    populate_random_weights(B, seed=3001)
     
     # Verify multiple components exist in all blocks
     for key in A.intw.keys():
@@ -1745,6 +1750,7 @@ def test_contract_su2_identity_preserves_norm_order2():
     # I(a*, a2*) ⊗ A(a, c*) → result(a2*, c*) with ||result|| = ||A||
     I = identity(idx_a, itags=["a", "a2"])
     A = Tensor.random([idx_a.flip(), idx_c], seed=800, itags=["a", "c"])
+    populate_random_weights(A, seed=801)
     
     result = contract(I, A)
     
@@ -1764,6 +1770,7 @@ def test_contract_su2_identity_preserves_norm_order3():
     # I(a*, a2*) ⊗ A(a, b, c*) → result(a2*, b, c*) with ||result|| = ||A||
     I = identity(idx_a, itags=["a", "a2"])
     A = Tensor.random([idx_a.flip(), idx_b, idx_c], seed=810, itags=["a", "b", "c"])
+    populate_random_weights(A, seed=811)
     
     result = contract(I, A)
     
@@ -1785,6 +1792,7 @@ def test_contract_su2_identity_preserves_norm_order5():
     # I(a*, a2*) ⊗ A(a, b, c*, d, e*) → result(a2*, b, c*, d, e*) with ||result|| = ||A||
     I = identity(idx_a, itags=["a", "a2"])
     A = Tensor.random([idx_a.flip(), idx_b, idx_c, idx_d, idx_e], seed=820, itags=["a", "b", "c", "d", "e"])
+    populate_random_weights(A, seed=821)
     
     result = contract(I, A)
     
@@ -1808,6 +1816,8 @@ def test_contract_su2_automatic_detection():
     # A(a*, b*, c*) and B(c, b, d) share itags "b" and "c"
     A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=900, itags=["a", "b", "c"])
     B = Tensor.random([idx_c_in, idx_b_in, idx_d], seed=901, itags=["c", "b", "d"])
+    populate_random_weights(A, seed=902)
+    populate_random_weights(B, seed=903)
     
     # Automatic detection should find matching itags (b, c) and contract them
     result = contract(A, B)
