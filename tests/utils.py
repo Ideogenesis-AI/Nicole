@@ -55,6 +55,7 @@ import torch
 
 from nicole import Tensor
 from nicole.blocks import BlockSchema
+from nicole.symmetry.delegate import Bridge
 
 
 def assert_charge_neutral(tensor: Tensor) -> None:
@@ -86,5 +87,43 @@ def assert_blocks_equal(a: Tensor, b: Tensor) -> None:
     assert set(a.data.keys()) == set(b.data.keys())
     for key in a.data:
         assert torch.allclose(a.data[key], b.data[key])
+
+
+def populate_random_weights(tensor: Tensor, seed: int, min_components: int = 3, max_components: int = 6) -> None:
+    """Populate SU(2) tensor with random component counts and weights.
+    
+    Expands each block to have multiple components (between min_components and max_components)
+    with randomized weights. Uses a local generator to avoid affecting global random state.
+
+    Parameters
+    ----------
+    tensor:
+        SU(2) tensor to populate with random weights. Must have intw populated.
+    seed:
+        Random seed for reproducibility.
+    min_components:
+        Minimum number of components per block (default: 3).
+    max_components:
+        Maximum number of components per block (exclusive, default: 6).
+    """
+    if tensor.intw is None:
+        raise ValueError("Tensor must have intw populated (non-Abelian tensor)")
+    
+    gen = torch.Generator()
+    gen.manual_seed(seed)
+    
+    for key in tensor.data.keys():
+        # Random component count for this block
+        num_comp = torch.randint(min_components, max_components, (1,), generator=gen).item()
+        
+        # Expand block to new component count
+        block = tensor.data[key]
+        phys_shape = list(block.shape[:-1])
+        tensor.data[key] = torch.randn(phys_shape + [num_comp], dtype=tensor.dtype, generator=gen)
+        
+        # Create new weights for this block
+        bridge = tensor.intw[key]
+        weights = torch.randn(num_comp, bridge.om_dimension, dtype=tensor.dtype, generator=gen)
+        tensor.intw[key] = Bridge(bridge.cgspec, weights)
 
 
