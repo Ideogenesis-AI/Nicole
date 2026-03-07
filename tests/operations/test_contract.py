@@ -22,8 +22,8 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Tensor, contract, identity, trace, U1Group, Z2Group, permute, Index, Sector
-from nicole.symmetry.product import ProductGroup
+from nicole import Direction, Tensor, contract, identity, trace, permute, Index, Sector
+from nicole import U1Group, Z2Group, SU2Group, ProductGroup
 from ..utils import assert_charge_neutral
 
 
@@ -951,7 +951,7 @@ def test_contract_trace_consistency_high_order():
         ), f"Block {key} values differ between direct and traced methods"
     
     # Also verify norms match
-    assert abs(direct_result.norm() - traced_result.norm()) < 1e-10
+    assert math.isclose(direct_result.norm(), traced_result.norm(), rel_tol=1e-10, abs_tol=1e-12)
 
 
 def test_trace_raises_with_both_axes_and_excl():
@@ -1196,4 +1196,623 @@ def test_trace_manual_pair_syntax():
     
     assert scalar.is_scalar()
     assert len(scalar.indices) == 0
+
+
+# SU(2) contraction tests
+
+def test_contract_su2_basic_order2():
+    """Test basic SU(2) contraction with 2nd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=100, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=101, itags=["b", "c"])
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) via basic CG coefficients
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 2
+    assert list(C.itags) == ["a", "c"]
+    assert_charge_neutral(C)
+    
+    # Each block has trailing OM dimension for fusion components
+    for key, block in C.data.items():
+        assert block.ndim == 3, f"Block should be 3D with OM dimension, got {block.ndim}D"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_basic_order3():
+    """Test basic SU(2) contraction with 3rd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=110, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d, idx_c.flip()], seed=111, itags=["b", "d", "c"])
+    
+    # A(a*, b, c*) ⊗ B(b*, d, c) → C(a*, d) via double contraction
+    C = contract(A, B, axes=([1, 2], [0, 2]))
+    
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 2
+    assert list(C.itags) == ["a", "d"]
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, f"Block should be 3D with OM dimension"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_basic_order5():
+    """Test basic SU(2) contraction with 5th order tensors (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=120, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f, idx_c.flip()], seed=121, itags=["b", "f", "c"])
+    
+    # Contract two pairs: A's (b,c) with B's (b,c)
+    C = contract(A, B, axes=([1, 2], [0, 2]))
+    
+    # Verify result structure
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 4
+    assert list(C.itags) == ["a", "d", "e", "f"]
+    assert_charge_neutral(C)
+    
+    # Check blocks have correct shape for high-order tensor
+    for key, block in C.data.items():
+        assert block.ndim == 5, f"Block should be 5D (4 physical + 1 OM dimension)"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_with_identity_order2():
+    """Test contracting 2nd order SU(2) tensor with identity (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=200, itags=["a", "b"])
+    
+    # I(a, c*) acts as a relabeling operator: a → c
+    I = identity(idx_a.flip(), itags=["a", "c"])
+    
+    # A(a*, b) ⊗ I(a, c*) → result(b, c*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 2
+    assert list(result.itags) == ["b", "c"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_with_identity_order3():
+    """Test contracting 3rd order SU(2) tensor with identity (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=210, itags=["a", "b", "c"])
+    
+    # I(a, a2*) relabels index a to a2
+    I = identity(idx_a.flip(), itags=["a", "a2"])
+    
+    # A(a*, b, c*) ⊗ I(a, a2*) → result(b, c*, a2*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 3
+    assert list(result.itags) == ["b", "c", "a2"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_with_identity_order5():
+    """Test contracting 5th order SU(2) tensor with identity (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=220, itags=["a", "b", "c", "d", "e"])
+    
+    # I(a, a2*) relabels index a to a2
+    I = identity(idx_a.flip(), itags=["a", "a2"])
+    
+    # A(a*, b, c*, d, e*) ⊗ I(a, a2*) → result(b, c*, d, e*, a2*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 5
+    assert list(result.itags) == ["b", "c", "d", "e", "a2"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_multiple_sectors_order2():
+    """Test SU(2) contraction with multiple sectors in 2nd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    # Index a has 3 sectors (j=0,1,2), b has 2 sectors (j=0,1)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=300, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=301, itags=["b", "c"])
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with multiple fusion channels
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, "Block should be 3D"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_multiple_sectors_order3():
+    """Test SU(2) contraction with multiple sectors in 3rd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    # Index a has 3 sectors, testing multiple fusion channels
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=310, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d], seed=311, itags=["b", "d"])
+    
+    # A(a*, b, c*) ⊗ B(b*, d) → C(a*, c*, d) with rich sector structure
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 4, "Block should be 4D (3 physical + 1 component)"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_multiple_sectors_order5():
+    """Test SU(2) contraction with multiple sectors in 5th order tensors (high-order CG)."""
+    group = SU2Group()
+    
+    # Rich sector structure: a has 3, d has 3, testing complex fusion trees
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=320, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f], seed=321, itags=["b", "f"])
+    
+    # A(a*, b, c*, d, e*) ⊗ B(b*, f) → C(a*, c*, d, e*, f) with high-order fusion
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 6, "Block should be 6D (5 physical + 1 component)"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_charge_conservation():
+    """Test that SU(2) contraction respects charge conservation."""
+    group = SU2Group()
+    
+    # Create tensors with specific charges that constrain fusion channels
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 4)))  # j=0, j=2
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 3),))  # j=1 only
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1),))  # j=0 only
+    
+    A = Tensor.random([idx_a, idx_b], seed=400, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=401, itags=["b", "c"])
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with angular momentum conservation
+    C = contract(A, B, axes=(1, 0))
+    
+    # Angular momentum conservation: j_a + j_b ≥ j_result and |j_a - j_b| ≤ j_result
+    assert_charge_neutral(C)
+
+
+def test_contract_su2_preserves_dtype():
+    """Test that SU(2) contraction preserves dtype correctly."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=500, dtype=torch.float32, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=501, dtype=torch.float32, itags=["b", "a"])
+    
+    C = contract(A, B)
+    
+    # Both blocks and weights should maintain float32
+    assert C.dtype == torch.float32, "Result should maintain float32 dtype"
+    
+    for bridge in C.intw.values() if C.intw else []:
+        assert bridge.weights.dtype == torch.float32
+
+
+def test_contract_su2_promotes_dtype():
+    """Test that SU(2) contraction promotes dtype when mixing float32 and float64."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=600, dtype=torch.float32, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=601, dtype=torch.float64, itags=["b", "a"])
+    
+    C = contract(A, B)
+    
+    assert C.dtype == torch.float64, "Result should be promoted to float64"
+
+
+def test_contract_su2_product_group():
+    """Test SU(2) contraction with ProductGroup (Z2 x SU2)."""
+    z2 = Z2Group()
+    su2 = SU2Group()
+    group = ProductGroup([z2, su2])
+    
+    # Charges are tuples (z2_charge, su2_spin)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((1, 1), 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=700, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=701, itags=["b", "c"])
+    
+    # Contract b: SU(2) in product group should handle intw correctly
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None, "ProductGroup with SU(2) should have intw"
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, "Block should be 3D with OM dimension"
+        assert key in C.intw
+
+
+def test_contract_su2_associativity_order2():
+    """Test associativity with 2nd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=600, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=601, itags=["b", "c"])
+    C = Tensor.random([idx_c.flip(), idx_e], seed=602, itags=["c", "e"])
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(1, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(1, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "e"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys()), \
+        "Both contractions should have same block keys"
+    
+    for key in ABC_left.data.keys():
+        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
+            f"Block {key} should match between (A⊗B)⊗C and A⊗(B⊗C)"
+        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
+                            rtol=1e-10, atol=1e-12), \
+            f"Weights for block {key} should match"
+
+
+def test_contract_su2_associativity_order3():
+    """Test associativity with 3rd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=610, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d, idx_e], seed=611, itags=["b", "d", "e"])
+    C = Tensor.random([idx_e.flip(), idx_f], seed=612, itags=["e", "f"])
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(3, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(2, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "c", "d", "f"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys())
+    
+    for key in ABC_left.data.keys():
+        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
+            f"Block {key} should match"
+        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
+                            rtol=1e-10, atol=1e-12), \
+            f"Weights for block {key} should match"
+
+
+def test_contract_su2_associativity_order5():
+    """Test associativity with 5th order SU(2) tensors (high-order CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_h = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=620, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f, idx_g], seed=621, itags=["b", "f", "g"])
+    C = Tensor.random([idx_f.flip(), idx_h, idx_i], seed=622, itags=["f", "h", "i"])
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(4, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(1, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "c", "d", "e", "g", "h", "i"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys())
+    
+    for key in ABC_left.data.keys():
+        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
+            f"Block {key} should match"
+        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
+                            rtol=1e-10, atol=1e-12), \
+            f"Weights for block {key} should match"
+
+
+def test_contract_su2_scalar_product():
+    """Test SU(2) scalar product with 5th order tensors and multiple components."""
+    from nicole.symmetry.delegate import Bridge
+    
+    group = SU2Group()
+    
+    # Create 5 indices with multiple sectors each
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 4)))
+    
+    indices = [idx1, idx2, idx3, idx4, idx5]
+    itags = ["i1", "i2", "i3", "i4", "i5"]
+    
+    # Start with randomly generated tensors
+    A = Tensor.random(indices, seed=1000, itags=itags)
+    B = Tensor.random(indices, seed=2000, itags=itags)
+    
+    # Modify A and B to have multiple components by setting random weights
+    # Use local generator to avoid affecting global random state
+    gen = torch.Generator()
+    gen.manual_seed(3000)
+    
+    for key in A.data.keys():
+        # Expand to multiple components (3-5)
+        num_comp_a = torch.randint(3, 6, (1,), generator=gen).item()
+        num_comp_b = torch.randint(3, 6, (1,), generator=gen).item()
+        
+        # Expand A's block and weights
+        block_a = A.data[key]
+        phys_shape = list(block_a.shape[:-1])  # All dims except last (current component dim)
+        A.data[key] = torch.randn(phys_shape + [num_comp_a], dtype=torch.float64, generator=gen)
+        
+        bridge_a = A.intw[key]
+        weights_a = torch.randn(num_comp_a, bridge_a.om_dimension, dtype=torch.float64, generator=gen)
+        A.intw[key] = Bridge(bridge_a.cgspec, weights_a)
+        
+        # Expand B's block and weights
+        block_b = B.data[key]
+        phys_shape = list(block_b.shape[:-1])
+        B.data[key] = torch.randn(phys_shape + [num_comp_b], dtype=torch.float64, generator=gen)
+        
+        bridge_b = B.intw[key]
+        weights_b = torch.randn(num_comp_b, bridge_b.om_dimension, dtype=torch.float64, generator=gen)
+        B.intw[key] = Bridge(bridge_b.cgspec, weights_b)
+    
+    # Verify multiple components exist in all blocks
+    for key in A.intw.keys():
+        assert A.intw[key].num_components >= 3, f"A should have multiple components for {key}"
+        assert B.intw[key].num_components >= 3, f"B should have multiple components for {key}"
+    
+    # Flip all indices to prepare for full contraction
+    A_flipped = Tensor(
+        indices=tuple(idx.flip() for idx in A.indices),
+        itags=A.itags,
+        data=A.data,
+        intw=A.intw,
+        dtype=A.dtype
+    )
+    
+    # Test <A|B> (general scalar product)
+    scalar_AB = contract(A_flipped, B)
+    assert scalar_AB.is_scalar(), "Full contraction should give scalar"
+    assert scalar_AB.intw is None, "Scalar should not have intw"
+    
+    # Test <A|A> = ||A||² (self inner product equals norm squared)
+    scalar_AA = contract(A_flipped, A)
+    norm_sq_A = A.norm() ** 2
+    scalar_AA_val = scalar_AA.data[()].item()
+    
+    assert math.isclose(scalar_AA_val, norm_sq_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"<A|A> should equal ||A||² for 5-index tensor with multiple components: {scalar_AA_val} vs {norm_sq_A}"
+    
+    # Test <B|B> = ||B||² (verify with different tensor)
+    B_flipped = Tensor(
+        indices=tuple(idx.flip() for idx in B.indices),
+        itags=B.itags,
+        data=B.data,
+        intw=B.intw,
+        dtype=B.dtype
+    )
+    scalar_BB = contract(B_flipped, B)
+    norm_sq_B = B.norm() ** 2
+    scalar_BB_val = scalar_BB.data[()].item()
+    
+    assert math.isclose(scalar_BB_val, norm_sq_B, rel_tol=1e-10, abs_tol=1e-12), \
+        f"<B|B> should equal ||B||² for 5-index tensor with multiple components: {scalar_BB_val} vs {norm_sq_B}"
+
+
+def test_contract_su2_identity_preserves_norm_order2():
+    """Test that 2nd order SU(2) contraction with identity preserves norm (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    # I(a*, a2*) ⊗ A(a, c*) → result(a2*, c*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_c], seed=800, itags=["a", "c"])
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_identity_preserves_norm_order3():
+    """Test that 3rd order SU(2) contraction with identity preserves norm (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    # I(a*, a2*) ⊗ A(a, b, c*) → result(a2*, b, c*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_b, idx_c], seed=810, itags=["a", "b", "c"])
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_identity_preserves_norm_order5():
+    """Test that 5th order SU(2) contraction with identity preserves norm (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # I(a*, a2*) ⊗ A(a, b, c*, d, e*) → result(a2*, b, c*, d, e*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_b, idx_c, idx_d, idx_e], seed=820, itags=["a", "b", "c", "d", "e"])
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_automatic_detection():
+    """Test automatic contraction pair detection for SU(2) tensors."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    
+    # A(a*, b*, c*) and B(c, b, d) share itags "b" and "c"
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=900, itags=["a", "b", "c"])
+    B = Tensor.random([idx_c_in, idx_b_in, idx_d], seed=901, itags=["c", "b", "d"])
+    
+    # Automatic detection should find matching itags (b, c) and contract them
+    result = contract(A, B)
+    
+    assert list(result.itags) == ["a", "d"]
+    assert_charge_neutral(result)
+    assert result.intw is not None
 
