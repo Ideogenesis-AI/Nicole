@@ -652,318 +652,6 @@ def test_contract_excl_with_permutation():
     assert_charge_neutral(result)
 
 
-# Trace tests
-
-def test_trace_automatic():
-    """Test trace with automatic pairing and verify numeric correctness."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
-    # Automatic mode: should trace both pairs
-    traced = trace(tensor)
-    assert len(traced.indices) == 0
-    assert traced.is_scalar()
-    
-    # Verify by contracting with identity tensors (sequential)
-    # For identical tags, automatic contraction works correctly
-    id_x = identity(idx_a, itags=("x", "x"))
-    contracted_x = contract(tensor, id_x)
-    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
-    contracted_both = contract(contracted_x, id_y)
-    
-    # Automatic trace should match identity contraction
-    assert math.isclose(traced.item(), contracted_both.item())
-
-
-def test_trace_explicit_multi_pair():
-    """Test explicit multi-pair trace and verify order independence."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
-    ))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
-    
-    # Multi-pair trace with explicit axes
-    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
-    assert traced_multi.is_scalar()
-    
-    # Sequential trace in order: first (0,1), then (0,1) [indices shift after first trace]
-    traced_seq1 = trace(trace(tensor, axes=(0, 1)), axes=(0, 1))
-    assert traced_seq1.is_scalar()
-    
-    # Sequential trace in different order: first (2,3), then (0,1) [indices shift after first trace]
-    traced_seq2 = trace(trace(tensor, axes=(2, 3)), axes=(0, 1))
-    assert traced_seq2.is_scalar()
-    
-    # All three methods should give identical results
-    assert math.isclose(traced_multi.item(), traced_seq1.item())
-    assert math.isclose(traced_multi.item(), traced_seq2.item())
-
-
-def test_trace_manual_single_pair():
-    """Test trace with manually specified single pair."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
-    ))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
-    # Manual mode: trace only axes (0, 1)
-    traced = trace(tensor, axes=(0, 1))
-    assert traced.indices == (idx_c, idx_d)
-
-    manual = {}
-    for (qa, qb, qc, qd), block in tensor.data.items():
-        if qa == qb:
-            # torch.diagonal moves diagonal to last axis, sum over it to get trace
-            diag = torch.diagonal(block, dim1=0, dim2=1).sum(dim=-1)
-            key = (qc, qd)
-            if key in manual:
-                manual[key] += diag
-            else:
-                manual[key] = diag
-
-    assert set(traced.data.keys()) == set(manual.keys())
-    for key, expected in manual.items():
-        assert torch.allclose(traced.data[key], expected)
-
-
-def test_trace_exclusion_by_index():
-    """Test trace with exclusion by integer index."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
-    # Exclude first pair (0, 1), should trace only second pair (2, 3)
-    traced = trace(tensor, excl=[0, 1])
-    assert len(traced.indices) == 2
-    assert traced.indices == (idx_a, idx_b)
-
-
-def test_trace_manual_multiple_pairs():
-    """Test trace with multiple manually specified pairs and identity verification."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
-    ))
-
-    # Use matching itags for identity verification
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
-    traced = trace(tensor, axes=[(0, 1), (2, 3)])
-    
-    # Result should be scalar (all indices traced)
-    assert len(traced.indices) == 0
-    assert traced.is_scalar()
-    
-    # Verify with identity contraction (sequential)
-    id_x = identity(idx_a, itags=("x", "x"))
-    contracted_x = contract(tensor, id_x)
-    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
-    contracted_all = contract(contracted_x, id_y)
-    
-    # Both methods should give the same result
-    assert math.isclose(traced.item(), contracted_all.item())
-
-
-def test_trace_exclusion_by_tag():
-    """Test trace with exclusion by itag name and verify numeric correctness."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
-    # Exclude "x" tags, should trace only "y" pair
-    traced = trace(tensor, excl="x")
-    assert len(traced.indices) == 2
-    assert traced.indices == (idx_a, idx_b)
-    
-    # Verify numeric correctness: only y pair should be traced
-    manual = {}
-    for (qa, qb, qc, qd), block in tensor.data.items():
-        if qc == qd:
-            # Trace over y pair (axes 2, 3 -> axes 2, 3 in block)
-            diag = torch.diagonal(block, dim1=2, dim2=3).sum(dim=-1)
-            key = (qa, qb)
-            if key in manual:
-                manual[key] += diag
-            else:
-                manual[key] = diag
-    
-    assert set(traced.data.keys()) == set(manual.keys())
-    for key, expected in manual.items():
-        assert torch.allclose(traced.data[key], expected)
-
-
-def test_trace_exclusion_single_int():
-    """Test trace with single integer exclusion."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
-    # Exclude axis 0, so pair (0,1) cannot form, only (2,3) should be traced
-    traced = trace(tensor, excl=0)
-    assert len(traced.indices) == 2
-    assert traced.indices == (idx_a, idx_b)
-
-
-def test_trace_exclusion_multiple():
-    """Test trace with multiple exclusions."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
-    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
-    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 1),))
-
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e, idx_f], 
-                           seed=601, itags=["x", "x", "y", "y", "z", "z"])
-    # Exclude pairs x and y, should trace only z pair
-    traced = trace(tensor, excl=[0, 1, 2, 3])
-    assert len(traced.indices) == 4
-    assert traced.indices == (idx_a, idx_b, idx_c, idx_d)
-
-
-def test_contract_trace_consistency_high_order():
-    """Test consistency: direct 3-index contraction vs 2-index contraction + trace.
-    
-    Two 5-index tensors contracted on 3 indices can be computed in two ways:
-    1. Direct 3-index contraction: contract all 3 pairs at once
-    2. Sequential: contract 2 pairs first, then trace the remaining pair
-    
-    Both approaches should give identical results.
-    """
-    group = U1Group()
-    
-    # A: 5 indices (a, b, c, d, e) - will contract b, c, d with B
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
-    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
-    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_d_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 2)))
-    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
-    
-    # B: 5 indices (b, c, d, f, g) - will contract b, c, d with A
-    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
-    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    idx_d_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 2)))
-    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
-    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
-    
-    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d_out, idx_e], 
-                      seed=4001, itags=["a", "b", "c", "d", "e"])
-    B = Tensor.random([idx_b_in, idx_c_in, idx_d_in, idx_f, idx_g], 
-                      seed=4002, itags=["b", "c", "d", "f", "g"])
-    
-    # Method 1: Direct 3-index contraction
-    # Contract b, c, d all at once using automatic detection
-    direct_result = contract(A, B)
-    
-    assert set(direct_result.itags) == {"a", "e", "f", "g"}
-    assert_charge_neutral(direct_result)
-    
-    # Method 2: Contract 2 indices first, then trace the third
-    # First contract only b and c (using manual axes to avoid contracting d)
-    # A indices: 0=a, 1=b, 2=c, 3=d, 4=e
-    # B indices: 0=b, 1=c, 2=d, 3=f, 4=g
-    partial_result = contract(A, B, axes=([1, 2], [0, 1]))  # Contract b and c only
-    
-    # After contracting b and c, we have:
-    # - From A: a, d_out, e (d_out not contracted)
-    # - From B: d_in, f, g (d_in not contracted)
-    # Result should have: a, d_out, e, d_in, f, g
-    # where d_out and d_in have matching tags "d" but weren't contracted
-    
-    # Now trace over the remaining d pair using automatic detection
-    traced_result = trace(partial_result)
-    
-    assert set(traced_result.itags) == {"a", "e", "f", "g"}
-    assert_charge_neutral(traced_result)
-    
-    # Verify both methods give identical results
-    # Compare block keys
-    assert set(direct_result.data.keys()) == set(traced_result.data.keys()), \
-        f"Block keys mismatch: direct has {set(direct_result.data.keys())}, traced has {set(traced_result.data.keys())}"
-    
-    # Compare block values
-    for key in direct_result.data.keys():
-        # err_msg not supported in PyTorch
-        assert torch.allclose(
-            direct_result.data[key], 
-            traced_result.data[key], 
-            rtol=1e-10, 
-            atol=1e-12
-        ), f"Block {key} values differ between direct and traced methods"
-    
-    # Also verify norms match
-    assert math.isclose(direct_result.norm(), traced_result.norm(), rel_tol=1e-10, abs_tol=1e-12)
-
-
-def test_trace_raises_with_both_axes_and_excl():
-    """Test that trace raises error when both axes and excl are specified."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
-    
-    with pytest.raises(ValueError, match="Cannot specify both"):
-        trace(tensor, axes=(0, 1), excl=0)
-
-
 # ProductGroup integration tests for contraction
 
 def test_contract_product_group():
@@ -1019,76 +707,6 @@ def test_contract_product_group_manual_pairs():
     assert_charge_neutral(C)
 
 
-def test_trace_product_group():
-    """Test trace operation with ProductGroup and verify numeric correctness."""
-    group = ProductGroup([U1Group(), Z2Group()])
-    
-    left = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 3),
-        Sector((1, 1), 2),
-        Sector((-1, 1), 1),
-        Sector((2, 0), 2),
-    ))
-    right = Index(Direction.IN, group, sectors=(
-        Sector((0, 0), 3),
-        Sector((1, 1), 2),
-        Sector((-1, 1), 1),
-        Sector((2, 0), 2),
-    ))
-    
-    T = Tensor.random([left, right], seed=99, itags=["x", "x"])
-    
-    # Trace over both indices (automatic mode)
-    result = trace(T)
-    
-    assert result.is_scalar()
-    assert len(result.indices) == 0
-    assert_charge_neutral(result)
-    
-    # Verify numeric correctness
-    manual_scalar = 0.0
-    for (ql, qr), block in T.data.items():
-        if ql == qr:
-            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
-    
-    assert math.isclose(result.item(), manual_scalar.item())
-
-
-# Scalar result tests
-
-def test_trace_produces_scalar():
-    """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
-    ))
-    
-    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["x", "x"])
-    
-    # Trace all indices (automatic mode)
-    scalar = trace(tensor)
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
-    assert len(scalar.itags) == 0
-    assert () in scalar.data
-    
-    # Verify it's a valid scalar value
-    value = scalar.item()
-    assert isinstance(value, (int, float, complex))
-    
-    # Verify numeric correctness
-    manual_scalar = 0.0
-    for (qa, qb), block in tensor.data.items():
-        if qa == qb:
-            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
-    
-    assert math.isclose(value, manual_scalar.item())
-
-
 def test_contract_produces_scalar():
     """Test that full contraction produces a scalar."""
     group = U1Group()
@@ -1105,58 +723,6 @@ def test_contract_produces_scalar():
     assert len(scalar.indices) == 0
     assert len(scalar.itags) == 0
     assert () in scalar.data
-
-
-def test_trace_multiple_pairs_produces_scalar():
-    """Test that tracing multiple pairs can produce a scalar with numeric verification."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
-    
-    # Trace all pairs (automatic mode)
-    scalar = trace(tensor)
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
-    
-    # Verify by contracting with identity tensors (sequential)
-    # For identical tags, automatic contraction works correctly
-    id_x = identity(idx_a, itags=("x", "x"))
-    contracted_x = contract(tensor, id_x)
-    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
-    contracted_both = contract(contracted_x, id_y)
-    
-    # Also verify with multi-pair trace
-    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
-    
-    # All three methods should match: automatic trace, identity contraction, and multi-pair trace
-    assert math.isclose(scalar.item(), traced_multi.item())
-    assert math.isclose(scalar.item(), contracted_both.item())
-
-
-def test_trace_ambiguous_raises():
-    """Test that ambiguous automatic pairing raises an error."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    
-    # Create tensor with 3 indices with same tag "x": 2 OUT, 1 IN
-    # This is ambiguous: which OUT should pair with the IN?
-    tensor = Tensor.random([idx, idx, idx.flip()], seed=42, itags=["x", "x", "x"])
-    
-    with pytest.raises(ValueError, match="Ambiguous automatic trace"):
-        trace(tensor)
 
 
 def test_scalar_result_operations():
@@ -1181,21 +747,6 @@ def test_scalar_result_operations():
     
     s_scaled = s1 * 2.0
     assert s_scaled.is_scalar()
-
-
-def test_trace_manual_pair_syntax():
-    """Test trace with single pair using tuple syntax."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    
-    tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
-    
-    # Trace using single pair tuple syntax
-    scalar = trace(tensor, axes=(0, 1))
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
 
 
 # SU(2) contraction tests
@@ -1825,4 +1376,455 @@ def test_contract_su2_automatic_detection():
     assert list(result.itags) == ["a", "d"]
     assert_charge_neutral(result)
     assert result.intw is not None
+
+
+# Trace tests
+
+def test_trace_automatic():
+    """Test trace with automatic pairing and verify numeric correctness."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Automatic mode: should trace both pairs
+    traced = trace(tensor)
+    assert len(traced.indices) == 0
+    assert traced.is_scalar()
+    
+    # Verify by contracting with identity tensors (sequential)
+    # For identical tags, automatic contraction works correctly
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_both = contract(contracted_x, id_y)
+    
+    # Automatic trace should match identity contraction
+    assert math.isclose(traced.item(), contracted_both.item())
+
+
+def test_trace_explicit_multi_pair():
+    """Test explicit multi-pair trace and verify order independence."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["a", "b", "c", "d"])
+    
+    # Multi-pair trace with explicit axes
+    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
+    assert traced_multi.is_scalar()
+    
+    # Sequential trace in order: first (0,1), then (0,1) [indices shift after first trace]
+    traced_seq1 = trace(trace(tensor, axes=(0, 1)), axes=(0, 1))
+    assert traced_seq1.is_scalar()
+    
+    # Sequential trace in different order: first (2,3), then (0,1) [indices shift after first trace]
+    traced_seq2 = trace(trace(tensor, axes=(2, 3)), axes=(0, 1))
+    assert traced_seq2.is_scalar()
+    
+    # All three methods should give identical results
+    assert math.isclose(traced_multi.item(), traced_seq1.item())
+    assert math.isclose(traced_multi.item(), traced_seq2.item())
+
+
+def test_trace_manual_single_pair():
+    """Test trace with manually specified single pair."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 3), Sector(-1, 1), Sector(2, 2)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
+    # Manual mode: trace only axes (0, 1)
+    traced = trace(tensor, axes=(0, 1))
+    assert traced.indices == (idx_c, idx_d)
+
+    manual = {}
+    for (qa, qb, qc, qd), block in tensor.data.items():
+        if qa == qb:
+            # torch.diagonal moves diagonal to last axis, sum over it to get trace
+            diag = torch.diagonal(block, dim1=0, dim2=1).sum(dim=-1)
+            key = (qc, qd)
+            if key in manual:
+                manual[key] += diag
+            else:
+                manual[key] = diag
+
+    assert set(traced.data.keys()) == set(manual.keys())
+    for key, expected in manual.items():
+        assert torch.allclose(traced.data[key], expected)
+
+
+def test_trace_exclusion_by_index():
+    """Test trace with exclusion by integer index."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude first pair (0, 1), should trace only second pair (2, 3)
+    traced = trace(tensor, excl=[0, 1])
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
+
+
+def test_trace_manual_multiple_pairs():
+    """Test trace with multiple manually specified pairs and identity verification."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 2), Sector(2, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 2), Sector(-1, 2), Sector(-2, 1)
+    ))
+
+    # Use matching itags for identity verification
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
+    traced = trace(tensor, axes=[(0, 1), (2, 3)])
+    
+    # Result should be scalar (all indices traced)
+    assert len(traced.indices) == 0
+    assert traced.is_scalar()
+    
+    # Verify with identity contraction (sequential)
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_all = contract(contracted_x, id_y)
+    
+    # Both methods should give the same result
+    assert math.isclose(traced.item(), contracted_all.item())
+
+
+def test_trace_exclusion_by_tag():
+    """Test trace with exclusion by itag name and verify numeric correctness."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude "x" tags, should trace only "y" pair
+    traced = trace(tensor, excl="x")
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
+    
+    # Verify numeric correctness: only y pair should be traced
+    manual = {}
+    for (qa, qb, qc, qd), block in tensor.data.items():
+        if qc == qd:
+            # Trace over y pair (axes 2, 3 -> axes 2, 3 in block)
+            diag = torch.diagonal(block, dim1=2, dim2=3).sum(dim=-1)
+            key = (qa, qb)
+            if key in manual:
+                manual[key] += diag
+            else:
+                manual[key] = diag
+    
+    assert set(traced.data.keys()) == set(manual.keys())
+    for key, expected in manual.items():
+        assert torch.allclose(traced.data[key], expected)
+
+
+def test_trace_exclusion_single_int():
+    """Test trace with single integer exclusion."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["x", "x", "y", "y"])
+    # Exclude axis 0, so pair (0,1) cannot form, only (2,3) should be traced
+    traced = trace(tensor, excl=0)
+    assert len(traced.indices) == 2
+    assert traced.indices == (idx_a, idx_b)
+
+
+def test_trace_exclusion_multiple():
+    """Test trace with multiple exclusions."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e, idx_f], 
+                           seed=601, itags=["x", "x", "y", "y", "z", "z"])
+    # Exclude pairs x and y, should trace only z pair
+    traced = trace(tensor, excl=[0, 1, 2, 3])
+    assert len(traced.indices) == 4
+    assert traced.indices == (idx_a, idx_b, idx_c, idx_d)
+
+
+def test_trace_raises_with_both_axes_and_excl():
+    """Test that trace raises error when both axes and excl are specified."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
+    
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        trace(tensor, axes=(0, 1), excl=0)
+
+
+
+def test_trace_product_group():
+    """Test trace operation with ProductGroup and verify numeric correctness."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    left = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
+    ))
+    right = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
+    ))
+    
+    T = Tensor.random([left, right], seed=99, itags=["x", "x"])
+    
+    # Trace over both indices (automatic mode)
+    result = trace(T)
+    
+    assert result.is_scalar()
+    assert len(result.indices) == 0
+    assert_charge_neutral(result)
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (ql, qr), block in T.data.items():
+        if ql == qr:
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
+    
+    assert math.isclose(result.item(), manual_scalar.item())
+
+
+
+def test_trace_produces_scalar():
+    """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["x", "x"])
+    
+    # Trace all indices (automatic mode)
+    scalar = trace(tensor)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert len(scalar.itags) == 0
+    assert () in scalar.data
+    
+    # Verify it's a valid scalar value
+    value = scalar.item()
+    assert isinstance(value, (int, float, complex))
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (qa, qb), block in tensor.data.items():
+        if qa == qb:
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
+    
+    assert math.isclose(value, manual_scalar.item())
+
+
+def test_trace_multiple_pairs_produces_scalar():
+    """Test that tracing multiple pairs can produce a scalar with numeric verification."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
+    
+    # Trace all pairs (automatic mode)
+    scalar = trace(tensor)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    
+    # Verify by contracting with identity tensors (sequential)
+    # For identical tags, automatic contraction works correctly
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_both = contract(contracted_x, id_y)
+    
+    # Also verify with multi-pair trace
+    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
+    
+    # All three methods should match: automatic trace, identity contraction, and multi-pair trace
+    assert math.isclose(scalar.item(), traced_multi.item())
+    assert math.isclose(scalar.item(), contracted_both.item())
+
+
+def test_trace_ambiguous_raises():
+    """Test that ambiguous automatic pairing raises an error."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # Create tensor with 3 indices with same tag "x": 2 OUT, 1 IN
+    # This is ambiguous: which OUT should pair with the IN?
+    tensor = Tensor.random([idx, idx, idx.flip()], seed=42, itags=["x", "x", "x"])
+    
+    with pytest.raises(ValueError, match="Ambiguous automatic trace"):
+        trace(tensor)
+
+
+def test_trace_manual_pair_syntax():
+    """Test trace with single pair using tuple syntax."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
+    
+    # Trace using single pair tuple syntax
+    scalar = trace(tensor, axes=(0, 1))
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+
+
+# Contract/trace consistency tests
+
+def test_contract_trace_consistency_high_order():
+    """Test consistency: direct 3-index contraction vs 2-index contraction + trace.
+    
+    Two 5-index tensors contracted on 3 indices can be computed in two ways:
+    1. Direct 3-index contraction: contract all 3 pairs at once
+    2. Sequential: contract 2 pairs first, then trace the remaining pair
+    
+    Both approaches should give identical results.
+    """
+    group = U1Group()
+    
+    # A: 5 indices (a, b, c, d, e) - will contract b, c, d with B
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2), Sector(-1, 2)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    # B: 5 indices (b, c, d, f, g) - will contract b, c, d with A
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_d_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(2, 2)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 2)))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d_out, idx_e], 
+                      seed=4001, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b_in, idx_c_in, idx_d_in, idx_f, idx_g], 
+                      seed=4002, itags=["b", "c", "d", "f", "g"])
+    
+    # Method 1: Direct 3-index contraction
+    # Contract b, c, d all at once using automatic detection
+    direct_result = contract(A, B)
+    
+    assert set(direct_result.itags) == {"a", "e", "f", "g"}
+    assert_charge_neutral(direct_result)
+    
+    # Method 2: Contract 2 indices first, then trace the third
+    # First contract only b and c (using manual axes to avoid contracting d)
+    # A indices: 0=a, 1=b, 2=c, 3=d, 4=e
+    # B indices: 0=b, 1=c, 2=d, 3=f, 4=g
+    partial_result = contract(A, B, axes=([1, 2], [0, 1]))  # Contract b and c only
+    
+    # After contracting b and c, we have:
+    # - From A: a, d_out, e (d_out not contracted)
+    # - From B: d_in, f, g (d_in not contracted)
+    # Result should have: a, d_out, e, d_in, f, g
+    # where d_out and d_in have matching tags "d" but weren't contracted
+    
+    # Now trace over the remaining d pair using automatic detection
+    traced_result = trace(partial_result)
+    
+    assert set(traced_result.itags) == {"a", "e", "f", "g"}
+    assert_charge_neutral(traced_result)
+    
+    # Verify both methods give identical results
+    # Compare block keys
+    assert set(direct_result.data.keys()) == set(traced_result.data.keys()), \
+        f"Block keys mismatch: direct has {set(direct_result.data.keys())}, traced has {set(traced_result.data.keys())}"
+    
+    # Compare block values
+    for key in direct_result.data.keys():
+        # err_msg not supported in PyTorch
+        assert torch.allclose(
+            direct_result.data[key], 
+            traced_result.data[key], 
+            rtol=1e-10, 
+            atol=1e-12
+        ), f"Block {key} values differ between direct and traced methods"
+    
+    # Also verify norms match
+    assert math.isclose(direct_result.norm(), traced_result.norm(), rel_tol=1e-10, abs_tol=1e-12)
 
