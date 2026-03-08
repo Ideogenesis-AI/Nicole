@@ -332,7 +332,7 @@ def contract(
                 _, qb = _dir_weight(B.indices[ib], keyB[ib])
                 
                 # Check if fusion to neutral is allowed
-                if isinstance(group, AbelianGroup) or (isinstance(group, ProductGroup) and group.is_abelian):
+                if group.is_abelian:
                     # Abelian: use fuse_unique
                     if not group.equal(group.fuse_unique(qa, qb), group.neutral):
                         ok = False
@@ -380,80 +380,42 @@ def contract(
                 # After tensordot, the component dimensions are scattered in the result
                 # We need to identify their positions and move them to the end
                 
-                # Get bridges for this block
                 bridge_a = A.intw[keyA]
                 bridge_b = B.intw[keyB]
                 k_a = bridge_a.num_components
                 k_b = bridge_b.num_components
+                n_kept_a = len(A.indices) - len(axesA)
+                n_kept_b = len(B.indices) - len(axesB)
                 
-                # Number of physical axes (excluding component dim)
-                n_phys_a = len(A.indices)
-                n_phys_b = len(B.indices)
-                
-                # Number of kept physical axes from each tensor
-                n_kept_a = n_phys_a - len(axesA)
-                n_kept_b = n_phys_b - len(axesB)
-                
-                # Check if this is a full contraction (scalar result)
                 if n_kept_a == 0 and n_kept_b == 0:
-                    # Scalar result: no external edges left
-                    # Need to contract OM indices using weights
-                    # res_phys has shape (k_a, k_b)
-                    # weights_a: (k_a, om_a), weights_b: (k_b, om_b)
-                    # Full contraction: Σ_ij res_phys[i,j] × Σ_α weights_a[i,α] × weights_b[j,α]
-                    weights_a = bridge_a.weights
-                    weights_b = bridge_b.weights
-                    
-                    # Promote weights dtype if needed
-                    if weights_a.dtype != dtype_result:
-                        weights_a = weights_a.to(dtype_result)
-                    if weights_b.dtype != dtype_result:
-                        weights_b = weights_b.to(dtype_result)
-                    
-                    # Contract weights: (k_a, om) @ (om, k_b) = (k_a, k_b) if om_a == om_b
-                    # For scalar case, OM dimensions must match (same CGSpec)
-                    weight_overlap = weights_a @ weights_b.T  # (k_a, k_b)
+                    # Scalar: contract components using weight overlap matrix
+                    # res_phys: (k_a, k_b), weights: (k_a, om) @ (om, k_b).T → scalar
+                    weights_a = bridge_a.weights.to(dtype_result)
+                    weights_b = bridge_b.weights.to(dtype_result)
+                    weight_overlap = weights_a @ weights_b.T
                     res = (res_phys * weight_overlap).sum().reshape(())
                     bridge_res = None
                 else:
-                    # Non-scalar result: use X-symbol for recoupling
+                    # Non-scalar: recouple k_a × k_b → k_c via X-symbol
                     k_c = k_a * k_b
                     
                     # Compute X-symbol and output CGSpec
                     x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, axesA, axesB)
                     
-                    # Determine where k_a and k_b are in res_phys
-                    # tensordot keeps non-contracted axes in order:
-                    # [kept_axes_from_A (including k_a at original position), kept_axes_from_B (including k_b at original position)]
-                    
-                    # Component dimension positions in res_phys
-                    # k_a is at position n_kept_a (after all kept physical axes from A)
-                    # k_b is at position n_kept_a + 1 + n_kept_b (after k_a and all kept physical axes from B)
+                    # Component dims are at positions n_kept_a and (n_kept_a + 1 + n_kept_b)
+                    # Move them to end: (...phys..., k_a, k_b) → (...phys..., k_c)
                     pos_k_a = n_kept_a
                     pos_k_b = n_kept_a + 1 + n_kept_b
-                    
-                    # Move both component dimensions to the end
-                    # First move k_a to position -2, then k_b to position -1
                     res_phys = torch.moveaxis(res_phys, [pos_k_a, pos_k_b], [-2, -1])
+                    res = res_phys.reshape(list(res_phys.shape[:-2]) + [k_c])
                     
-                    # Now res_phys has shape: (...out_phys..., k_a, k_b)
-                    # Reshape to: (...out_phys..., k_a * k_b)
-                    out_phys_shape = list(res_phys.shape[:-2])
-                    res = res_phys.reshape(out_phys_shape + [k_c])
-                    
-                    # Compute output weights from component combinations via X-symbol
-                    # weights_a: (k_a, om_a), weights_b: (k_b, om_b)
-                    # X-symbol: (om_a, om_b, om_c)
-                    # Output: (k_a * k_b, om_c)
-                    weights_a = bridge_a.weights  # (k_a, om_a)
-                    weights_b = bridge_b.weights  # (k_b, om_b)
-                    
-                    # Combine weights: (k_a, om_a) × (k_b, om_b) × (om_a, om_b, om_c) → (k_a, k_b, om_c)
+                    # Combine weights: (k_a, om_a) ⊗ (k_b, om_b) × X(om_a, om_b, om_c) → (k_c, om_c)
+                    weights_a = bridge_a.weights
+                    weights_b = bridge_b.weights
                     weights_c = torch.einsum('ia,jb,abc->ijc', weights_a, weights_b, x_symbol)
                     
                     # Reshape to (k_a * k_b, om_c)
-                    om_c = x_symbol.shape[2]
-                    weights_c = weights_c.reshape(k_c, om_c)
+                    weights_c = weights_c.reshape(k_c, x_symbol.shape[2])
                     
                     # Create output bridge
                     bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
