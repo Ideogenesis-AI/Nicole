@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-"""Standalone tensor operators for maneuver, structural, and algebraic operations.
+"""Standalone tensor maneuvers for structural and/or algebraic operations.
 
-This module provides functional tensor operators covering conjugation, axis
+This module provides functional tensor maneuvers covering conjugation, axis
 reordering, block selection, direct sums, diagonal matrix construction, matrix
 inversion, and axis merging.
 
