@@ -39,7 +39,7 @@ operations/
     - test_contract.py: Tensor contractions and traces
     - test_decomp.py: SVD, eigendecomposition, and other decompositions
     - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
-    - test_manipulation.py: Permutation, transposition, conjugation, merging
+    - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
 
 symmetry/

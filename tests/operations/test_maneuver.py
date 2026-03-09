@@ -16,7 +16,11 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor manipulation operations: conj, permute, transpose, retag."""
+"""Tests for typical tensor maneuvers:
+    - conj, permute, transpose
+    - retag, invert, insert_index
+    - merge_axes, trim_zero_blocks
+"""
 
 import math
 import torch

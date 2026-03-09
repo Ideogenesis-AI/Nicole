@@ -57,14 +57,16 @@ test_diag_inv.py
     - Charge structure preservation
     - Numerical stability and error handling
 
-test_manipulation.py
-    Tests for tensor manipulation and reshaping:
+test_maneuver.py
+    Tests for tensor maneuver operations:
+    - conj(): Complex conjugation with direction flip
     - permute(): Axis permutation
     - transpose(): Simple two-axis swap
-    - conj(): Complex conjugation with direction flip
-    - merge_axes(): Combining multiple axes
     - retag(): Changing index tags
-    - subsector(): Extracting charge subspaces
+    - invert(): Index direction inversion
+    - insert_index(): Inserting a new index
+    - merge_axes(): Combining multiple axes
+    - trim_zero_blocks(): Removing zero-valued blocks
 
 test_oplus.py
     Tests for direct sum operations:
