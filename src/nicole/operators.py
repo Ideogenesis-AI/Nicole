@@ -18,12 +18,11 @@
 
 from __future__ import annotations
 
-"""Standalone tensor operators for functional-style tensor manipulation.
+"""Standalone tensor operators for maneuver, structural, and algebraic operations.
 
-This module provides functional versions of tensor operations that return new
-Tensor instances rather than modifying tensors in-place. These functions are
-useful for functional programming patterns and for cases where immutability
-is desired.
+This module provides functional tensor operators covering conjugation, axis
+reordering, block selection, direct sums, diagonal matrix construction, matrix
+inversion, and axis merging.
 
 Functions
 ---------
@@ -33,8 +32,14 @@ permute(tensor, order)
     Return a new tensor with permuted axes according to the provided order.
 transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
-getsub(tensor, block_indices)
-    Return a new tensor containing only the specified blocks.
+subsector(tensor, block_indices)
+    Return a new tensor containing only the specified blocks with pruned sectors.
+oplus(A, B, axes=None)
+    Direct sum of two tensors with selective axis merging.
+diag(S_blocks, bond_index, itags=None, dtype=None)
+    Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
+inv(tensor)
+    Invert a diagonal matrix tensor.
 merge_axes(tensor, axes, merged_tag=None, direction=OUT)
     Merge multiple tensor axes into one using isometry fusion, returning both
     the merged tensor and conjugate isometry for potential unfusing.
