@@ -129,7 +129,7 @@ class Tensor:
     Notes
     -----
     For functional (non-mutating) versions of conj, permute, and transpose that return
-    new tensor instances, use the standalone functions from `nicole.operators`.
+    new tensor instances, use the standalone functions from `nicole.maneuver`.
     """
 
     indices: Tuple[Index, ...]
