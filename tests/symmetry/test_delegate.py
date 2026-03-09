@@ -567,38 +567,51 @@ def test_bridge_conj_flips_directions():
         assert orig.j.twice() == conj.j.twice()
 
 
-def test_bridge_conj_shares_weights():
-    """Test that Bridge.conj() shares the same weight tensor."""
+def test_bridge_conj_weights_scaled_by_phase():
+    """Test that Bridge.conj() scales weights by the FS phase."""
     group = SU2Group()
+
+    # (in, in, out) → phase = +1
     key = (1, 1, 2)
     directions = [Direction.IN, Direction.IN, Direction.OUT]
     bridge = Bridge.from_block(group, key, directions)
-    
     bridge_conj = bridge.conj()
-    
-    # Weights should be the same object (shared, not cloned)
-    assert bridge.weights is bridge_conj.weights
+    phase, _ = yuzuha.compute_conjugate(bridge.cgspec)
+    assert phase == 1.0
+    assert bridge_conj.weights is not bridge.weights
+    assert torch.allclose(bridge_conj.weights, bridge.weights * phase)
+
+    # (out, in, out) → phase = -1
+    directions_neg = [Direction.OUT, Direction.IN, Direction.OUT]
+    bridge_neg = Bridge.from_block(group, key, directions_neg)
+    bridge_neg_conj = bridge_neg.conj()
+    phase_neg, _ = yuzuha.compute_conjugate(bridge_neg.cgspec)
+    assert phase_neg == -1.0
+    assert bridge_neg_conj.weights is not bridge_neg.weights
+    assert torch.allclose(bridge_neg_conj.weights, bridge_neg.weights * phase_neg)
 
 
 def test_bridge_conj_double_application():
-    """Test that conjugating twice returns to original directions."""
+    """Test that conjugating twice returns to original directions and weights."""
     group = SU2Group()
     key = (1, 1, 2)
-    directions = [Direction.IN, Direction.IN, Direction.OUT]
-    bridge = Bridge.from_block(group, key, directions)
-    
-    bridge_double_conj = bridge.conj().conj()
-    
-    # Directions should match original
-    orig_edges = bridge.cgspec.edges
-    final_edges = bridge_double_conj.cgspec.edges
-    
-    for orig, final in zip(orig_edges, final_edges):
-        assert orig.dir == final.dir
-        assert orig.j.twice() == final.j.twice()
-    
-    # Weights should still be the same object
-    assert bridge.weights is bridge_double_conj.weights
+
+    for directions in (
+        [Direction.IN, Direction.IN, Direction.OUT],   # phase = +1
+        [Direction.OUT, Direction.IN, Direction.OUT],  # phase = -1
+    ):
+        bridge = Bridge.from_block(group, key, directions)
+        bridge_double_conj = bridge.conj().conj()
+
+        # Directions should match original
+        orig_edges = bridge.cgspec.edges
+        final_edges = bridge_double_conj.cgspec.edges
+        for orig, final in zip(orig_edges, final_edges):
+            assert orig.dir == final.dir
+            assert orig.j.twice() == final.j.twice()
+
+        # Double conjugation always yields phase^2 = +1, so weights are numerically equal
+        assert torch.allclose(bridge.weights, bridge_double_conj.weights)
 
 
 def test_bridge_conj_multiple_sectors():
@@ -622,24 +635,30 @@ def test_bridge_conj_multiple_sectors():
 
 
 def test_bridge_conj_with_custom_weights():
-    """Test Bridge.conj() with custom weight matrix."""
+    """Test Bridge.conj() with custom weight matrix, covering both FS phases."""
     group = SU2Group()
     key = (1, 1, 2)
-    directions = [Direction.IN, Direction.IN, Direction.OUT]
-    
-    # Create bridge with custom weights
-    bridge = Bridge.from_block(group, key, directions)
-    custom_weights = torch.randn(3, bridge.om_dimension, dtype=torch.float64)
-    bridge_custom = Bridge(cgspec=bridge.cgspec, weights=custom_weights)
-    
-    bridge_conj = bridge_custom.conj()
-    
-    # Custom weights should be shared (same object)
-    assert bridge_custom.weights is bridge_conj.weights
-    
-    # Directions should be flipped
-    orig_edges = bridge_custom.cgspec.edges
-    conj_edges = bridge_conj.cgspec.edges
-    
-    for orig, conj in zip(orig_edges, conj_edges):
-        assert orig.dir == conj.dir.flip()
+
+    for directions, expected_phase in (
+        ([Direction.IN, Direction.IN, Direction.OUT], 1.0),   # phase = +1
+        ([Direction.OUT, Direction.IN, Direction.OUT], -1.0), # phase = -1
+    ):
+        bridge = Bridge.from_block(group, key, directions)
+        custom_weights = torch.randn(3, bridge.om_dimension, dtype=torch.float64)
+        bridge_custom = Bridge(cgspec=bridge.cgspec, weights=custom_weights)
+
+        bridge_conj = bridge_custom.conj()
+
+        # Verify assumed phase matches yuzuha
+        phase, _ = yuzuha.compute_conjugate(bridge_custom.cgspec)
+        assert phase == expected_phase
+
+        # Weights should be a new tensor scaled by the FS phase (±1)
+        assert bridge_conj.weights is not bridge_custom.weights
+        assert torch.allclose(bridge_conj.weights, bridge_custom.weights * phase)
+
+        # Directions should be flipped
+        orig_edges = bridge_custom.cgspec.edges
+        conj_edges = bridge_conj.cgspec.edges
+        for orig, conj in zip(orig_edges, conj_edges):
+            assert orig.dir == conj.dir.flip()
