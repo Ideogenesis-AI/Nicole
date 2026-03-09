@@ -21,6 +21,7 @@
 import math
 import torch
 import pytest
+import yuzuha
 
 from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
@@ -137,7 +138,7 @@ def test_conj_method_su2_basic():
 
 
 def test_conj_method_su2_shares_data_and_weights():
-    """Test that method conj(in_place=False) shares data and weights for SU2."""
+    """Test that method conj(in_place=False) shares data and scales intw weights for SU2."""
     from nicole.identity import identity
     
     group = SU2Group()
@@ -150,9 +151,12 @@ def test_conj_method_su2_shares_data_and_weights():
     for key in tensor.data:
         assert tensor_conj.data[key] is tensor.data[key]
     
-    # intw weights are shared
+    # intw weights are scaled by the FS phase (±1)
     for key in tensor.intw:
-        assert tensor_conj.intw[key].weights is tensor.intw[key].weights
+        orig_bridge = tensor.intw[key]
+        new_bridge = tensor_conj.intw[key]
+        phase, _ = yuzuha.compute_conjugate(orig_bridge.cgspec)
+        assert torch.allclose(new_bridge.weights, orig_bridge.weights * phase)
 
 
 def test_conj_method_su2_three_indices():
@@ -180,8 +184,9 @@ def test_conj_method_su2_three_indices():
         orig_bridge = tensor.intw[key]
         new_bridge = tensor_conj.intw[key]
         
-        # Weights shared
-        assert orig_bridge.weights is new_bridge.weights
+        # Weights scaled by the FS phase (±1)
+        phase, _ = yuzuha.compute_conjugate(orig_bridge.cgspec)
+        assert torch.allclose(new_bridge.weights, orig_bridge.weights * phase)
         
         # Bridge directions flipped
         orig_edges = orig_bridge.cgspec.edges
@@ -368,8 +373,9 @@ def test_conj_functional_su2_clones_and_updates_intw():
         orig_bridge = tensor.intw[key]
         new_bridge = tensor_conj.intw[key]
         
-        # Weights are shared (Bridge.conj shares weights)
-        assert orig_bridge.weights is new_bridge.weights
+        # Weights are scaled by the FS phase (±1)
+        phase, _ = yuzuha.compute_conjugate(orig_bridge.cgspec)
+        assert torch.allclose(new_bridge.weights, orig_bridge.weights * phase)
         
         # CGSpec has flipped directions
         orig_edges = orig_bridge.cgspec.edges
@@ -429,8 +435,9 @@ def test_conj_functional_su2_three_indices():
         orig_bridge = tensor.intw[key]
         new_bridge = tensor_conj.intw[key]
         
-        # Weights shared
-        assert orig_bridge.weights is new_bridge.weights
+        # Weights scaled by the FS phase (±1)
+        phase, _ = yuzuha.compute_conjugate(orig_bridge.cgspec)
+        assert torch.allclose(new_bridge.weights, orig_bridge.weights * phase)
         
         # Bridge directions flipped
         orig_edges = orig_bridge.cgspec.edges
