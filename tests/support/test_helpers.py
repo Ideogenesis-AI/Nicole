@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor clone and block access operations: clone, sorted_keys, key, block."""
+"""Tests for tensor helper operations: clone, sorted_keys, key, block, display, subsector."""
 
 import torch
 import pytest
