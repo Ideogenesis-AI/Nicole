@@ -216,14 +216,16 @@ class Bridge:
         """Return a new Bridge with flipped edge directions (conjugation).
         
         Creates a new Bridge instance where all edge directions in the CGSpec are
-        flipped (incoming <-> outgoing), while the weight matrix is shared (not cloned).
-        This corresponds to complex conjugation of the physical tensor in the sense
-        of flipping all index directions.
+        flipped (incoming <-> outgoing). The cumulated Frobenius-Schur phase
+        returned by ``yuzuha.compute_conjugate`` is multiplied into the weight
+        matrix, so the resulting weights may differ from the original by a
+        global factor of ±1.
         
         Returns
         -------
         Bridge
-            New Bridge instance with flipped edge directions and the same weight tensor.
+            New Bridge instance with flipped edge directions and weights scaled
+            by the cumulated FS phase (±1).
         
         Examples
         --------
@@ -232,22 +234,10 @@ class Bridge:
         >>> # All edge directions are flipped
         >>> for orig, conj in zip(bridge.cgspec.edges, bridge_conj.cgspec.edges):
         ...     assert orig.dir == conj.dir.flip()
-        >>> # Weights are the same object (shared)
-        >>> assert bridge.weights is bridge_conj.weights
         """
-        # Flip all edge directions
-        flipped_edges = []
-        for edge in self.cgspec.edges:
-            if edge.dir.is_incoming():  # incoming
-                flipped_edges.append(yuzuha.Edge.outgoing(edge.j))
-            else:  # outgoing
-                flipped_edges.append(yuzuha.Edge.incoming(edge.j))
-        
-        # Create new CGSpec with flipped directions
-        new_cgspec = yuzuha.CGSpec.from_edges(flipped_edges)
-        
-        # Return new Bridge with flipped cgspec and same weights
-        return Bridge(cgspec=new_cgspec, weights=self.weights)
+        phase, conj_spec = yuzuha.compute_conjugate(self.cgspec)
+        new_weights = self.weights * phase
+        return Bridge(cgspec=conj_spec, weights=new_weights)
     
     @staticmethod
     def from_block(
