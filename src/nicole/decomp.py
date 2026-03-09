@@ -801,7 +801,7 @@ def decomp(
       decomposed, and then the U tensor is unmerged back to the original axes
     """
     # Import merge_axes here to avoid circular dependency
-    from .operators import merge_axes
+    from .maneuver import merge_axes
     from .contract import contract
     
     # Check if axes is a sequence (multiple axes)
