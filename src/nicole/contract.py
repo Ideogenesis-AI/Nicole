@@ -399,6 +399,12 @@ def contract(
                     weights_b = bridge_b.weights.to(dtype_result)
                     weight_overlap = weights_a @ weights_b.T
                     res = (res_phys * weight_overlap).sum().reshape(())
+                    
+                    # Apply conjugation phase correction for SU(2) coupling tree
+                    # The phase from bridge_a accounts for the Frobenius-Schur signs
+                    phase = bridge_a.conj_phase()
+                    res = res * phase
+                    
                     bridge_res = None
                 else:
                     # Non-scalar: recouple k_a × k_b → k_c via X-symbol
