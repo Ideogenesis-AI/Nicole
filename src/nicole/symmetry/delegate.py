@@ -239,6 +239,28 @@ class Bridge:
         new_weights = self.weights * phase
         return Bridge(cgspec=conj_spec, weights=new_weights)
     
+    def conj_phase(self) -> float:
+        """Return the conjugation phase for this Bridge.
+        
+        Computes and returns the cumulated Frobenius-Schur phase (±1) between
+        the conjugate of a CG basis and the canonical basis. This phase arises
+        from the coupling tree structure and is essential for correct scalar
+        contractions of SU(2) tensors.
+        
+        Returns
+        -------
+        float
+            The cumulated FS phase, either +1.0 or -1.0.
+        
+        Examples
+        --------
+        >>> bridge = Bridge(cgspec, weights)
+        >>> phase = bridge.conj_phase()
+        >>> assert phase in [1.0, -1.0]
+        """
+        phase, _ = yuzuha.compute_conjugate(self.cgspec)
+        return phase
+    
     @staticmethod
     def from_block(
         group: SymmetryGroup,
