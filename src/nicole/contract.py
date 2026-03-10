@@ -358,6 +358,11 @@ def contract(
                 keyB[i] for i in range(len(keyB)) if i not in contracted_B
             )
             
+            # For generic (non-Abelian) tensors, check if output block satisfies charge conservation
+            if A.intw is not None:
+                if not BlockSchema.charges_conserved(out_indices, out_key):
+                    continue
+            
             # Handle Abelian vs non-Abelian contraction
             if A.intw is None:
                 # Abelian: simple tensordot
