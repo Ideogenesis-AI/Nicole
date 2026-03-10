@@ -22,10 +22,9 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Tensor, identity, isometry, isometry_n, U1Group, Z2Group, contract, permute
-from nicole import Index, Sector, SU2Group
-from nicole.symmetry.product import ProductGroup
-from nicole.symmetry import delegate as dg
+from nicole import Direction, Tensor, Index, Sector
+from nicole import identity, isometry, isometry_n, contract
+from nicole import U1Group, Z2Group, SU2Group, ProductGroup
 from ..utils import assert_charge_neutral
 
 
@@ -290,30 +289,6 @@ def test_identity_product_group_su2_norm():
     # norm² = 2*2 + 3*3 = 4 + 9 = 13
     expected_norm = math.sqrt(13)
     assert math.isclose(ident.norm(), expected_norm, rel_tol=1e-12)
-
-
-@pytest.mark.skip(reason="SU(2) contraction not yet implemented")
-def test_identity_su2_contraction_preserves_tensor():
-    """Test that contracting SU(2) tensor with identity preserves it."""
-    group = SU2Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    
-    # Create random SU(2) tensor
-    T = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
-    original_norm = T.norm()
-    
-    # Create identity
-    ident = identity(idx, itags=("b", "c"))
-    
-    # Contract T's second index with ident's first index
-    result = contract(T, ident)
-    
-    # Result should preserve the tensor (up to numerical precision)
-    assert len(result.indices) == 2
-    assert_charge_neutral(result)
-    
-    # Norm should be preserved
-    assert math.isclose(result.norm(), original_norm, rel_tol=1e-10)
 
 
 def test_identity_product_group_with_su2():
