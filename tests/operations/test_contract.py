@@ -24,7 +24,7 @@ import pytest
 
 from nicole import Direction, Tensor, contract, identity, trace, permute, Index, Sector
 from nicole import U1Group, Z2Group, SU2Group, ProductGroup
-from ..utils import assert_charge_neutral, populate_random_weights
+from ..utils import assert_charge_neutral, populate_random_weights, assert_physical_tensors_equal
 
 
 # Basic contraction tests
@@ -1779,4 +1779,122 @@ def test_contract_trace_consistency_high_order():
     
     # Also verify norms match
     assert math.isclose(direct_result.norm(), traced_result.norm(), rel_tol=1e-10, abs_tol=1e-12)
+
+
+# ── SU(2) trace tests ─────────────────────────────────────────────────────────
+
+def test_trace_su2_basic():
+    """Test that tracing a pair of SU(2) legs returns a tensor with correct structure."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8001, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=8001)
+
+    # Trace over the matching pair (a, b)
+    result = trace(T, axes=[(0, 1)])
+
+    assert len(result.indices) == 2
+    assert result.intw is not None
+    assert_charge_neutral(result)
+
+    # The trace is equivalent to contracting T with the reversed identity on the traced legs.
+    # idx_a.flip() gives the IN direction, so identity(idx_a.flip()) has edges (IN, OUT),
+    # which pair with T's (OUT, IN) in an opposite-direction contraction.
+    I_ab = identity(idx_a.flip(), itags=["a", "b"])
+    expected = contract(I_ab, T, axes=([0, 1], [0, 1]))
+
+    assert set(result.data.keys()) == set(expected.data.keys())
+    assert_physical_tensors_equal(result, expected)
+
+
+def test_trace_su2_produces_scalar():
+    """Test that tracing all SU(2) indices produces a correct scalar."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b], seed=8002, itags=["a", "a"])
+    populate_random_weights(T, seed=8002)
+
+    result = trace(T)
+
+    assert result.is_scalar()
+    assert len(result.indices) == 0
+
+    # Must match contracting T with the reversed identity (IN, OUT edges pair with T's OUT, IN).
+    I = identity(idx_a.flip(), itags=["a", "a"])
+    expected = contract(I, T, axes=([0, 1], [0, 1]))
+
+    assert math.isclose(result.item(), expected.item(), rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_trace_su2_4th_order_produces_scalar():
+    """Test that tracing both pairs of a 4-leg SU(2) tensor produces a correct scalar."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8005, itags=["a", "a", "c", "c"])
+    populate_random_weights(T, seed=8005)
+
+    result = trace(T)
+
+    assert result.is_scalar()
+    assert len(result.indices) == 0
+
+    # Must match contracting T with reversed identities on both traced pairs.
+    I_a = identity(idx_a.flip(), itags=["a", "a"])
+    I_c = identity(idx_c.flip(), itags=["c", "c"])
+    expected = contract(contract(I_a, T, axes=([0, 1], [0, 1])), I_c, axes=([0, 1], [0, 1]))
+
+    assert math.isclose(result.item(), expected.item(), rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_trace_su2_consistency_with_contract():
+    """Test SU(2): contracting 3 legs at once equals contracting 2 then tracing 1."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    idx_b_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_c_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_d_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_a    = Index(Direction.OUT, group, sectors=sectors)
+    idx_e    = Index(Direction.IN,  group, sectors=sectors)
+
+    idx_b_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_c_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_d_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_f    = Index(Direction.OUT, group, sectors=sectors)
+    idx_g    = Index(Direction.IN,  group, sectors=sectors)
+
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d_out, idx_e],
+                      seed=8003, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b_in, idx_c_in, idx_d_in, idx_f, idx_g],
+                      seed=8004, itags=["b", "c", "d", "f", "g"])
+    populate_random_weights(A, seed=8003)
+    populate_random_weights(B, seed=8004)
+
+    # Method 1: contract all 3 pairs at once
+    direct = contract(A, B, axes=([1, 2, 3], [0, 1, 2]))
+
+    # Method 2: contract 2, then trace the third
+    partial = contract(A, B, axes=([1, 2], [0, 1]))
+    # After contracting A's [b,c] with B's [b,c], the result has [a, d_out, e, d_in, f, g]
+    # d_out is at position 1 (OUT), d_in is at position 3 (IN)
+    traced  = trace(partial, axes=[(1, 3)])
+
+    assert set(direct.data.keys()) == set(traced.data.keys())
+    assert_physical_tensors_equal(direct, traced)
 
