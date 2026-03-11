@@ -22,7 +22,7 @@ Tests verify unitarity properties of SU(2) operations:
 - Isometry unitarity: V† V = I
 - Isometry fusion-unfusion roundtrips
 - Isometry linearity
-- Conjugate self-contraction properties
+- Conjugate norm consistency
 """
 
 import math
@@ -269,6 +269,76 @@ def test_contract_su2_isometry_fusion_unfusion_roundtrip_5th_order():
     # Verify physical tensor R@W equality
     assert_physical_tensors_equal(A, unfused, rtol=1e-9, atol=1e-11, 
                                   msg="fusion-unfusion roundtrip")
+
+
+# isometry_n fusion-unfusion tests
+
+def test_contract_su2_isometry_n_fusion_unfusion_roundtrip_3rd_order():
+    """Test that fusion with isometry_n then unfusion preserves tensor properties (3 fused indices)."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.OUT, group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN, group, sectors=sectors)
+
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=5000, itags=["a", "b", "c", "d"])
+    populate_random_weights(A, seed=5001)
+
+    # Create isometry_n V(a*, b*, c*, f) that fuses a⊗b⊗c → f
+    # V's unfused legs have opposite directions to inputs, so they contract naturally with A
+    V = isometry_n([idx_a, idx_b, idx_c], itags=["a", "b", "c", "f"])
+
+    # Fuse: V(a*, b*, c*, f) ⊗ A(a, b, c, d) → fused(f, d)
+    fused = contract(V, A, axes=([0, 1, 2], [0, 1, 2]))
+
+    assert len(fused.indices) == 2
+    assert fused.intw is not None
+    assert_charge_neutral(fused)
+
+    # Unfuse: V†(a, b, c, f*) ⊗ fused(f, d) → unfused(a, b, c, d)
+    unfused = contract(V.conj(), fused, axes=(3, 0))
+
+    assert len(unfused.indices) == 4
+    assert_charge_neutral(unfused)
+
+    assert_physical_tensors_equal(A, unfused, rtol=1e-9, atol=1e-11,
+                                  msg="isometry_n fusion-unfusion roundtrip")
+
+
+def test_contract_su2_isometry_n_fusion_unfusion_roundtrip_4th_order():
+    """Test that fusion with isometry_n then unfusion preserves tensor properties (4 fused indices)."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.OUT, group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.OUT, group, sectors=sectors)
+    idx_e = Index(Direction.IN, group, sectors=sectors)
+
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=5010, itags=["a", "b", "c", "d", "e"])
+    populate_random_weights(A, seed=5011)
+
+    # Create isometry_n V(a*, b*, c*, d*, f) that fuses a⊗b⊗c⊗d → f
+    V = isometry_n([idx_a, idx_b, idx_c, idx_d], itags=["a", "b", "c", "d", "f"])
+
+    # Fuse: V(a*, b*, c*, d*, f) ⊗ A(a, b, c, d, e) → fused(f, e)
+    fused = contract(V, A, axes=([0, 1, 2, 3], [0, 1, 2, 3]))
+
+    assert len(fused.indices) == 2
+    assert fused.intw is not None
+    assert_charge_neutral(fused)
+
+    # Unfuse: V†(a, b, c, d, f*) ⊗ fused(f, e) → unfused(a, b, c, d, e)
+    unfused = contract(V.conj(), fused, axes=(4, 0))
+
+    assert len(unfused.indices) == 5
+    assert_charge_neutral(unfused)
+
+    assert_physical_tensors_equal(A, unfused, rtol=1e-9, atol=1e-11,
+                                  msg="isometry_n fusion-unfusion roundtrip")
 
 
 # Isometry linearity tests
