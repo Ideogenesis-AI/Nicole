@@ -30,7 +30,7 @@ import torch
 from nicole import Direction, Tensor, Index, Sector
 from nicole import contract, isometry, conj
 from nicole import SU2Group
-from .utils import (
+from ..utils import (
     assert_charge_neutral,
     populate_random_weights,
     assert_data_weights_equal,
