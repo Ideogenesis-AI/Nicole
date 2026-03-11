@@ -31,8 +31,6 @@ from typing import Dict, Optional, Sequence, Tuple
 import torch
 
 from .index import Index, combine_indices
-from .symmetry.base import AbelianGroup
-from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
 from .symmetry import delegate as dg
@@ -300,8 +298,6 @@ def isometry_n(
     ValueError
         If fewer than 2 indices are provided, if indices don't share the same
         symmetry group, or if `itags` length doesn't match `len(indices) + 1`.
-    NotImplementedError
-        When attempting to fuse non-Abelian indices (not yet supported).
     """
     # Avoid circular import by importing contract here
     from .contract import contract
@@ -319,10 +315,6 @@ def isometry_n(
                 f"All indices must share the same symmetry group. "
                 f"Index 0 has group {group}, but index {i} has group {idx.group}"
             )
-
-    # Check group is Abelian or ProductGroup
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Fusion currently supports only Abelian groups")
 
     # Validate itags length if provided
     if itags is not None:
