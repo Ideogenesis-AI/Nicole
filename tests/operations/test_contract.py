@@ -24,7 +24,10 @@ import pytest
 
 from nicole import Direction, Tensor, contract, identity, trace, permute, Index, Sector
 from nicole import U1Group, Z2Group, SU2Group, ProductGroup
-from ..utils import assert_charge_neutral, populate_random_weights, assert_physical_tensors_equal
+from ..utils import (
+    assert_charge_neutral, assert_blocks_equal, assert_data_weights_equal,
+    assert_physical_tensors_equal, populate_random_weights,
+)
 
 
 # Basic contraction tests
@@ -255,8 +258,7 @@ def test_contract_named_vs_positional():
     positional = contract(A, B, axes=([2, 1], [0, 1]))
 
     assert list(named.itags) == list(positional.itags)
-    for key in named.data:
-        assert torch.allclose(named.data[key], positional.data[key])
+    assert_blocks_equal(named, positional)
 
 
 def test_contract_with_perm():
@@ -296,8 +298,7 @@ def test_contract_three_tensor_associativity():
     right = contract(A, contract(B, C))
 
     assert list(left.itags) == list(right.itags)
-    for key in left.data:
-        assert torch.allclose(left.data[key], right.data[key])
+    assert_blocks_equal(left, right)
 
 
 def test_contract_with_identity():
@@ -319,8 +320,7 @@ def test_contract_with_identity():
     direct = contract(A, B)
 
     assert list(bridge.itags) == list(direct.itags)
-    for key in bridge.data:
-        assert torch.allclose(bridge.data[key], direct.data[key])
+    assert_blocks_equal(bridge, direct)
 
 
 def test_contract_after_permuting():
@@ -340,8 +340,7 @@ def test_contract_after_permuting():
     res2 = contract(A, permuted_B)  # Automatic detection
 
     assert list(res1.itags) == list(res2.itags)
-    for key in res1.data:
-        assert torch.allclose(res1.data[key], res2.data[key])
+    assert_blocks_equal(res1, res2)
 
 
 # Edge cases and error handling
@@ -450,8 +449,7 @@ def test_contract_excl_exclude_from_A():
     # Verify equivalence with manual axes
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
-    for key in result.data:
-        assert torch.allclose(result.data[key], manual_result.data[key])
+    assert_blocks_equal(result, manual_result)
 
 
 def test_contract_excl_exclude_from_B():
@@ -478,8 +476,7 @@ def test_contract_excl_exclude_from_B():
     # Verify equivalence with manual axes
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
-    for key in result.data:
-        assert torch.allclose(result.data[key], manual_result.data[key])
+    assert_blocks_equal(result, manual_result)
 
 
 def test_contract_excl_exclude_from_both():
@@ -526,8 +523,7 @@ def test_contract_excl_empty_exclusion():
     result_auto = contract(A, B)
     
     assert result_excl.itags == result_auto.itags
-    for key in result_excl.data:
-        assert torch.allclose(result_excl.data[key], result_auto.data[key])
+    assert_blocks_equal(result_excl, result_auto)
 
 
 def test_contract_excl_single_contraction():
@@ -578,8 +574,7 @@ def test_contract_axes_single_pair_concise_syntax():
     
     # Both should give same result
     assert result_concise.itags == result_verbose.itags
-    for key in result_concise.data:
-        assert torch.allclose(result_concise.data[key], result_verbose.data[key])
+    assert_blocks_equal(result_concise, result_verbose)
 
 
 def test_contract_axes_concise_with_permutation():
@@ -1131,15 +1126,7 @@ def test_contract_su2_associativity_2nd_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys()), \
-        "Both contractions should have same block keys"
-    
-    for key in ABC_left.data.keys():
-        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
-            f"Block {key} should match between (A⊗B)⊗C and A⊗(B⊗C)"
-        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
-                            rtol=1e-10, atol=1e-12), \
-            f"Weights for block {key} should match"
+    assert_data_weights_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_associativity_3rd_order():
@@ -1173,14 +1160,7 @@ def test_contract_su2_associativity_3rd_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys())
-    
-    for key in ABC_left.data.keys():
-        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
-            f"Block {key} should match"
-        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
-                            rtol=1e-10, atol=1e-12), \
-            f"Weights for block {key} should match"
+    assert_data_weights_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_associativity_5th_order():
@@ -1217,14 +1197,7 @@ def test_contract_su2_associativity_5th_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert set(ABC_left.data.keys()) == set(ABC_right.data.keys())
-    
-    for key in ABC_left.data.keys():
-        assert torch.allclose(ABC_left.data[key], ABC_right.data[key], rtol=1e-10, atol=1e-12), \
-            f"Block {key} should match"
-        assert torch.allclose(ABC_left.intw[key].weights, ABC_right.intw[key].weights, 
-                            rtol=1e-10, atol=1e-12), \
-            f"Weights for block {key} should match"
+    assert_data_weights_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_identity_preserves_norm_2nd_order():
@@ -1763,22 +1736,7 @@ def test_contract_trace_consistency_high_order():
     assert_charge_neutral(traced_result)
     
     # Verify both methods give identical results
-    # Compare block keys
-    assert set(direct_result.data.keys()) == set(traced_result.data.keys()), \
-        f"Block keys mismatch: direct has {set(direct_result.data.keys())}, traced has {set(traced_result.data.keys())}"
-    
-    # Compare block values
-    for key in direct_result.data.keys():
-        # err_msg not supported in PyTorch
-        assert torch.allclose(
-            direct_result.data[key], 
-            traced_result.data[key], 
-            rtol=1e-10, 
-            atol=1e-12
-        ), f"Block {key} values differ between direct and traced methods"
-    
-    # Also verify norms match
-    assert math.isclose(direct_result.norm(), traced_result.norm(), rel_tol=1e-10, abs_tol=1e-12)
+    assert_blocks_equal(direct_result, traced_result)
 
 
 # ── SU(2) trace tests ─────────────────────────────────────────────────────────
@@ -1809,7 +1767,6 @@ def test_trace_su2_basic():
     I_ab = identity(idx_a.flip(), itags=["a", "b"])
     expected = contract(I_ab, T, axes=([0, 1], [0, 1]))
 
-    assert set(result.data.keys()) == set(expected.data.keys())
     assert_physical_tensors_equal(result, expected)
 
 
