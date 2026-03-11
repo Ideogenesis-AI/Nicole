@@ -701,7 +701,18 @@ def trace(
     
     # Base case: single pair to trace
     a, b = pairs[0]
-    
+
+    # Validate the pair upfront before touching any block data
+    if T.indices[a].direction == T.indices[b].direction:
+        raise ValueError(
+            f"Trace axes {a} and {b} have the same direction "
+            f"({T.indices[a].direction}). Traced pairs must have opposite directions."
+        )
+
+    group = T.indices[a].group
+    if not isinstance(group, (AbelianGroup, ProductGroup)):
+        raise NotImplementedError("Only Abelian/Product trace supported")
+
     contracted = {a, b}
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
@@ -709,15 +720,10 @@ def trace(
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     for key, arr in T.data.items():
-        group = T.indices[a].group
-        if not isinstance(group, (AbelianGroup, ProductGroup)):
-            raise NotImplementedError("Only Abelian/Product trace supported")
         qa = key[a]
         qb = key[b]
         
-        # Check constraints for this pair
-        if T.indices[a].direction == T.indices[b].direction:
-            continue
+        # Skip blocks where charges don't match or dimensions are incompatible
         if not group.equal(qa, qb):
             continue
         if arr.shape[a] != arr.shape[b]:
