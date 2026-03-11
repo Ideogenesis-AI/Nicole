@@ -34,9 +34,7 @@ import torch
 
 from .blocks import BlockKey, BlockSchema
 from .index import Index
-from .symmetry.base import SymmetryGroup
-from .symmetry.base import AbelianGroup
-from .symmetry.product import ProductGroup
+from .symmetry import SymmetryGroup
 from .symmetry.delegate import compute_xsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
@@ -710,43 +708,99 @@ def trace(
         )
 
     group = T.indices[a].group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Only Abelian/Product trace supported")
 
     contracted = {a, b}
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
     out_itags = tuple(T.itags[i] for i in keep_axes)
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
-    
+    out_intw: Optional[Dict[BlockKey, Bridge]] = {} if T.intw is not None else None
+
     for key, arr in T.data.items():
         qa = key[a]
         qb = key[b]
-        
+
         # Skip blocks where charges don't match or dimensions are incompatible
         if not group.equal(qa, qb):
             continue
         if arr.shape[a] != arr.shape[b]:
             continue
-        
-        # Trace this pair
-        # torch.trace() only works for 2D tensors, use diagonal() for multi-dimensional
-        # torch.diagonal moves the diagonal to the last axis, sum over it
+
+        # Data part: identical for Abelian and non-Abelian.
+        # torch.diagonal moves the traced diagonal to the last axis; summing collapses it.
+        # For non-Abelian blocks arr has a trailing component axis k that is preserved.
         diag = torch.diagonal(arr, dim1=a, dim2=b).sum(dim=-1)
         
         # Ensure diag is a proper tensor (not a scalar)
         if not isinstance(diag, torch.Tensor):
             diag = torch.tensor(diag)
-        
+
         out_key = tuple(key[i] for i in keep_axes)
-        if out_key in out_blocks:
-            result_block = out_blocks[out_key] + diag
-            if not isinstance(result_block, torch.Tensor):
-                result_block = torch.tensor(result_block)
-            out_blocks[out_key] = result_block
+
+        if T.intw is None:
+            # Abelian: plain accumulation.
+            if out_key in out_blocks:
+                result_block = out_blocks[out_key] + diag
+                if not isinstance(result_block, torch.Tensor):
+                    result_block = torch.tensor(result_block)
+                out_blocks[out_key] = result_block
+            else:
+                out_blocks[out_key] = diag
         else:
-            out_blocks[out_key] = diag
-    
-    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
+            # Non-Abelian (SU(2) / ProductGroup with SU(2)).
+            # Tracing axes a and b is equivalent to contracting with a 2-leg identity
+            # tensor on those legs.  Build bridge_I at charge q = qa = qb with directions
+            # reversed from T's traced legs and weight √(irrep_dim(q)), exactly as
+            # identity() does, then get the X-symbol for that virtual contraction.
+            q = qa
+            irrep_dim = group.irrep_dim(q)
+            w_I = torch.full((1, 1), float(irrep_dim ** 0.5), dtype=T.dtype)
+            bridge_I = Bridge.from_block(
+                group, (q, q),
+                [T.indices[a].direction.reverse(), T.indices[b].direction.reverse()],
+                weights=w_I,
+            )
+            bridge_T = T.intw[key]
+
+            if len(keep_axes) == 0:
+                # Scalar output: yuzuha cannot build a 0-edge CGSpec, so use the
+                # weight-overlap formula directly (mirrors the scalar path in contract()).
+                weight_overlap = bridge_I.weights @ bridge_T.weights.T  # (1, k_T)
+                scalar_contrib = (diag.unsqueeze(0) * weight_overlap).sum()
+                scalar_contrib = (scalar_contrib * bridge_I.conj_phase()).reshape(())
+                if () in out_blocks:
+                    out_blocks[()] = out_blocks[()] + scalar_contrib
+                else:
+                    out_blocks[()] = scalar_contrib
+                # out_intw is set to None after the loop for scalar results
+            else:
+                # Skip blocks whose remaining charges cannot form a neutral tensor;
+                # their trace contribution is zero by SU(2) selection rules.
+                if not BlockSchema.charges_conserved(out_indices, out_key):
+                    continue
+
+                # Non-scalar: recouple via X-symbol.
+                x_symbol, spec_c = compute_xsymbol(bridge_T, bridge_I, [a, b], [0, 1])
+
+                # Combine weights: (k_T, om_T) ⊗ (1, 1) × X(om_T, 1, om_c) → (k_T, om_c)
+                weights_c = torch.einsum(
+                    'ia,jb,abc->ijc', bridge_T.weights, bridge_I.weights, x_symbol
+                ).reshape(bridge_T.num_components, x_symbol.shape[2])
+                bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
+
+                if out_key in out_blocks:
+                    out_blocks[out_key], out_intw[out_key] = BlockSchema.block_add(
+                        out_blocks[out_key], out_intw[out_key],
+                        diag, bridge_res,
+                    )
+                else:
+                    out_blocks[out_key] = diag
+                    out_intw[out_key] = bridge_res
+
+    # Scalar non-Abelian results carry no intertwiner.
+    if out_intw is not None and len(out_indices) == 0:
+        out_intw = None
+
+    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw, dtype=T.dtype)
 
 
