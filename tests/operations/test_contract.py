@@ -1552,6 +1552,22 @@ def test_trace_raises_with_both_axes_and_excl():
         trace(tensor, axes=(0, 1), excl=0)
 
 
+def test_trace_raises_same_direction_manual_axes():
+    """Test that trace raises ValueError when manually specified axes share the same direction.
+
+    Previously, same-direction pairs were silently skipped in block iteration,
+    producing an empty tensor instead of signalling the error. Now an explicit
+    ValueError must be raised upfront.
+    """
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    # Two OUT indices — cannot be a valid trace pair
+    tensor = Tensor.random([idx_out, idx_out, idx_out.flip()], seed=7, itags=["a", "a", "b"])
+
+    with pytest.raises(ValueError, match="same direction"):
+        trace(tensor, axes=(0, 1))
+
 
 def test_trace_product_group():
     """Test trace operation with ProductGroup and verify numeric correctness."""
