@@ -19,6 +19,7 @@
 """Unitarity tests for SU(2) tensor operations.
 
 Tests verify unitarity properties of SU(2) operations:
+- Isometry unitarity: V† V = I
 - Isometry fusion-unfusion roundtrips
 - Isometry linearity
 - Conjugate self-contraction properties
@@ -28,7 +29,7 @@ import math
 import torch
 
 from nicole import Direction, Tensor, Index, Sector
-from nicole import contract, isometry, conj
+from nicole import contract, isometry, isometry_n, conj, identity
 from nicole import SU2Group
 from ..utils import (
     assert_charge_neutral,
@@ -36,6 +37,130 @@ from ..utils import (
     assert_data_weights_equal,
     assert_physical_tensors_equal,
 )
+
+
+# Isometry unitarity tests (U† U = I)
+
+def test_contract_su2_isometry_orthonormality():
+    """Test that contracting isometry with its conjugate gives identity: V†(a, b, f'*) ⊗ V(a*, b*, f) = I(f'*, f)."""
+    group = SU2Group()
+    
+    # Test all 4 combinations of input directions
+    for dir_a in [Direction.OUT, Direction.IN]:
+        for dir_b in [Direction.OUT, Direction.IN]:
+            # Create isometry V that fuses a⊗b → f
+            idx_a = Index(dir_a, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+            idx_b = Index(dir_b, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+            
+            V = isometry(idx_a, idx_b, itags=["a", "b", "f"])
+            
+            # Contract: V†(a, b, f'*) ⊗ V(a*, b*, f) → result(f'*, f)
+            # This should give identity on f
+            result = contract(V.conj(), V, axes=([0, 1], [0, 1]))
+            
+            assert len(result.indices) == 2, f"Failed for directions ({dir_a}, {dir_b})"
+            assert result.intw is not None, f"Failed for directions ({dir_a}, {dir_b})"
+            assert_charge_neutral(result)
+            
+            # Create expected identity on the fused index
+            # V.conj() has fused index flipped, so result is I(f'*, f)
+            I_expected = identity(V.indices[2], itags=["f'", "f"])
+            
+            # Result should match identity (exactly for data and weights)
+            assert_data_weights_equal(result, I_expected, 
+                                     msg=f"isometry conjugate gives identity for directions ({dir_a}, {dir_b})")
+
+
+# isometry_n unitarity tests (V† V = I)
+
+def test_contract_isometry_n_orthonormality_3rd_order():
+    """Test that contracting isometry_n with its conjugate gives identity: V†(a,b,c,f'*) ⊗ V(a*,b*,c*,f) = I(f'*,f) for 3 input indices."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
+
+    for dir_a in [Direction.OUT, Direction.IN]:
+        for dir_b in [Direction.OUT, Direction.IN]:
+            for dir_c in [Direction.OUT, Direction.IN]:
+                idx_a = Index(dir_a, group, sectors=sectors)
+                idx_b = Index(dir_b, group, sectors=sectors)
+                idx_c = Index(dir_c, group, sectors=sectors)
+
+                V = isometry_n([idx_a, idx_b, idx_c], itags=["a", "b", "c", "f"])
+
+                # Contract: V†(a,b,c,f'*) ⊗ V(a*,b*,c*,f) → result(f'*, f)
+                result = contract(V.conj(), V, axes=([0, 1, 2], [0, 1, 2]))
+
+                dirs = (dir_a, dir_b, dir_c)
+                assert len(result.indices) == 2, f"Failed for directions {dirs}"
+                assert result.intw is not None, f"Failed for directions {dirs}"
+                assert_charge_neutral(result)
+
+                I_expected = identity(V.indices[3], itags=["f'", "f"])
+                assert_physical_tensors_equal(result, I_expected,
+                                         msg=f"isometry_n conjugate gives identity for directions {dirs}")
+
+
+def test_contract_isometry_n_orthonormality_4th_order():
+    """Test that contracting isometry_n with its conjugate gives identity: V†V = I for 4 input indices."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    # Test a representative selection of direction combinations
+    dir_combos = [
+        (Direction.OUT, Direction.OUT, Direction.OUT, Direction.OUT),
+        (Direction.OUT, Direction.IN,  Direction.OUT, Direction.IN),
+        (Direction.IN,  Direction.OUT, Direction.IN,  Direction.OUT),
+        (Direction.IN,  Direction.IN,  Direction.IN,  Direction.IN),
+    ]
+
+    for dir_a, dir_b, dir_c, dir_d in dir_combos:
+        idx_a = Index(dir_a, group, sectors=sectors)
+        idx_b = Index(dir_b, group, sectors=sectors)
+        idx_c = Index(dir_c, group, sectors=sectors)
+        idx_d = Index(dir_d, group, sectors=sectors)
+
+        V = isometry_n([idx_a, idx_b, idx_c, idx_d], itags=["a", "b", "c", "d", "f"])
+
+        # Contract: V†(a,b,c,d,f'*) ⊗ V(a*,b*,c*,d*,f) → result(f'*, f)
+        result = contract(V.conj(), V, axes=([0, 1, 2, 3], [0, 1, 2, 3]))
+
+        dirs = (dir_a, dir_b, dir_c, dir_d)
+        assert len(result.indices) == 2, f"Failed for directions {dirs}"
+        assert result.intw is not None, f"Failed for directions {dirs}"
+        assert_charge_neutral(result)
+
+        I_expected = identity(V.indices[4], itags=["f'", "f"])
+        assert_physical_tensors_equal(result, I_expected,
+                                  msg=f"isometry_n conjugate gives identity for directions {dirs}")
+
+
+def test_contract_isometry_n_orthonormality_5th_order():
+    """Test that contracting isometry_n with its conjugate gives identity: V†V = I for 5 input indices."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    # Test a representative selection of direction combinations
+    dir_combos = [
+        (Direction.OUT, Direction.OUT, Direction.OUT, Direction.OUT, Direction.OUT),
+        (Direction.OUT, Direction.IN,  Direction.OUT, Direction.IN,  Direction.OUT),
+        (Direction.IN,  Direction.IN,  Direction.IN,  Direction.IN,  Direction.IN),
+    ]
+
+    for dirs in dir_combos:
+        indices = [Index(d, group, sectors=sectors) for d in dirs]
+
+        V = isometry_n(indices, itags=["a", "b", "c", "d", "e", "f"])
+
+        # Contract: V†(a,b,c,d,e,f'*) ⊗ V(a*,b*,c*,d*,e*,f) → result(f'*, f)
+        result = contract(V.conj(), V, axes=([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]))
+
+        assert len(result.indices) == 2, f"Failed for directions {dirs}"
+        assert result.intw is not None, f"Failed for directions {dirs}"
+        assert_charge_neutral(result)
+
+        I_expected = identity(V.indices[5], itags=["f'", "f"])
+        assert_physical_tensors_equal(result, I_expected,
+                                  msg=f"isometry_n conjugate gives identity for directions {dirs}")
 
 
 # Isometry fusion-unfusion tests
@@ -335,7 +460,7 @@ def test_contract_su2_isometry_scalar_multiplication_5th_order():
 
 # Conjugation interaction tests
 
-def test_contract_su2_conjugate_self_contraction_matrix():
+def test_contract_su2_conjugate_norm_matrix():
     """Test that <A|A> = ||A||² for real SU(2) tensors (2nd order)."""
     group = SU2Group()
     
@@ -356,7 +481,7 @@ def test_contract_su2_conjugate_self_contraction_matrix():
         f"<A|A> should equal ||A||² for 2nd order tensor: {value_AA} vs {norm_sq}"
 
 
-def test_contract_su2_conjugate_self_contraction_basic():
+def test_contract_su2_conjugate_norm_basic():
     """Test that <A|A> = ||A||² for real SU(2) tensors (3rd order)."""
     group = SU2Group()
     
@@ -378,7 +503,7 @@ def test_contract_su2_conjugate_self_contraction_basic():
         f"<A|A> should equal ||A||² for 3rd order tensor: {value_AA} vs {norm_sq}"
 
 
-def test_contract_su2_conjugate_self_contraction_4th_order():
+def test_contract_su2_conjugate_norm_4th_order():
     """Test that <A|A> = ||A||² for real SU(2) tensors (4th order)."""
     group = SU2Group()
     
@@ -401,7 +526,7 @@ def test_contract_su2_conjugate_self_contraction_4th_order():
         f"<A|A> should equal ||A||² for 4th order tensor: {value_AA} vs {norm_sq}"
 
 
-def test_contract_su2_conjugate_self_contraction_5th_order():
+def test_contract_su2_conjugate_norm_5th_order():
     """Test that <A|A> = ||A||² for real SU(2) tensors (5th order)."""
     group = SU2Group()
     
