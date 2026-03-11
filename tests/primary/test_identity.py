@@ -461,25 +461,15 @@ def test_isometry_z2():
     assert fused_charges == {0, 1}
 
 
-def test_isometry_fusion_unfusion_roundtrip():
-    """Test that fusion followed by unfusion recovers original."""
+def test_isometry_positive_norm():
+    """Test that isometry is successfully constructed with non-zero norm."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 1)))
-    
-    # Create random tensor on product space
-    T = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
-    
-    # Fuse - isometry has (idx_a OUT, idx_b OUT, fused IN by default)
+
     iso = isometry(idx_a, idx_b, itags=("a", "b", "ab"))
-    # We need to contract T's OUT indices with iso's OUT indices
-    # But they have same direction, so this won't work directly
-    # Let's create T with appropriate directions for fusion
-    T_for_fusion = Tensor.random([idx_a, idx_b], seed=1, itags=["x", "y"])
-    
-    # For proper fusion test, just verify norm is preserved when using identity-like operations
-    # The isometry itself should preserve norm when contracting appropriately
-    assert iso.norm() > 0  # Just verify isometry was created successfully
+
+    assert iso.norm() > 0
 
 
 def test_isometry_orthonormality():
