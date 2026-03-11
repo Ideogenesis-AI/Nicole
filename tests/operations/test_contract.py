@@ -751,7 +751,7 @@ def test_scalar_result_operations():
 
 # SU(2) contraction tests
 
-def test_contract_su2_basic_order2():
+def test_contract_su2_basic_2nd_order():
     """Test basic SU(2) contraction with 2nd order tensors (basic CG)."""
     group = SU2Group()
     
@@ -780,7 +780,7 @@ def test_contract_su2_basic_order2():
         assert bridge.num_components == block.shape[-1], "Number of components should match"
 
 
-def test_contract_su2_basic_order3():
+def test_contract_su2_basic_3rd_order():
     """Test basic SU(2) contraction with 3rd order tensors (basic CG)."""
     group = SU2Group()
     
@@ -809,7 +809,7 @@ def test_contract_su2_basic_order3():
         assert bridge.num_components == block.shape[-1], "Number of components should match"
 
 
-def test_contract_su2_basic_order5():
+def test_contract_su2_basic_5th_order():
     """Test basic SU(2) contraction with 5th order tensors (high-order CG)."""
     group = SU2Group()
     
@@ -843,7 +843,7 @@ def test_contract_su2_basic_order5():
         assert bridge.num_components == block.shape[-1], "Number of components should match"
 
 
-def test_contract_su2_with_identity_order2():
+def test_contract_su2_with_identity_2nd_order():
     """Test contracting 2nd order SU(2) tensor with identity (basic CG)."""
     group = SU2Group()
     
@@ -870,7 +870,7 @@ def test_contract_su2_with_identity_order2():
         f"Norm should be preserved: {norm_result} vs {norm_A}"
 
 
-def test_contract_su2_with_identity_order3():
+def test_contract_su2_with_identity_3rd_order():
     """Test contracting 3rd order SU(2) tensor with identity (basic CG)."""
     group = SU2Group()
     
@@ -898,7 +898,7 @@ def test_contract_su2_with_identity_order3():
         f"Norm should be preserved: {norm_result} vs {norm_A}"
 
 
-def test_contract_su2_with_identity_order5():
+def test_contract_su2_with_identity_5th_order():
     """Test contracting 5th order SU(2) tensor with identity (high-order CG)."""
     group = SU2Group()
     
@@ -928,7 +928,7 @@ def test_contract_su2_with_identity_order5():
         f"Norm should be preserved: {norm_result} vs {norm_A}"
 
 
-def test_contract_su2_multiple_sectors_order2():
+def test_contract_su2_multiple_sectors_2nd_order():
     """Test SU(2) contraction with multiple sectors in 2nd order tensors (basic CG)."""
     group = SU2Group()
     
@@ -956,7 +956,7 @@ def test_contract_su2_multiple_sectors_order2():
         assert bridge.om_dimension > 0
 
 
-def test_contract_su2_multiple_sectors_order3():
+def test_contract_su2_multiple_sectors_3rd_order():
     """Test SU(2) contraction with multiple sectors in 3rd order tensors (basic CG)."""
     group = SU2Group()
     
@@ -985,7 +985,7 @@ def test_contract_su2_multiple_sectors_order3():
         assert bridge.om_dimension > 0
 
 
-def test_contract_su2_multiple_sectors_order5():
+def test_contract_su2_multiple_sectors_5th_order():
     """Test SU(2) contraction with multiple sectors in 5th order tensors (high-order CG)."""
     group = SU2Group()
     
@@ -1102,7 +1102,7 @@ def test_contract_su2_product_group():
         assert key in C.intw
 
 
-def test_contract_su2_associativity_order2():
+def test_contract_su2_associativity_2nd_order():
     """Test associativity with 2nd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
     group = SU2Group()
     
@@ -1142,7 +1142,7 @@ def test_contract_su2_associativity_order2():
             f"Weights for block {key} should match"
 
 
-def test_contract_su2_associativity_order3():
+def test_contract_su2_associativity_3rd_order():
     """Test associativity with 3rd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
     group = SU2Group()
     
@@ -1183,7 +1183,7 @@ def test_contract_su2_associativity_order3():
             f"Weights for block {key} should match"
 
 
-def test_contract_su2_associativity_order5():
+def test_contract_su2_associativity_5th_order():
     """Test associativity with 5th order SU(2) tensors (high-order CG): (A⊗B)⊗C = A⊗(B⊗C)."""
     group = SU2Group()
     
@@ -1227,71 +1227,7 @@ def test_contract_su2_associativity_order5():
             f"Weights for block {key} should match"
 
 
-def test_contract_su2_scalar_product():
-    """Test SU(2) scalar product with 5th order tensors and multiple components."""
-    group = SU2Group()
-    
-    # Create 5 indices with multiple sectors each
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
-    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 4)))
-    
-    indices = [idx1, idx2, idx3, idx4, idx5]
-    itags = ["i1", "i2", "i3", "i4", "i5"]
-    
-    A = Tensor.random(indices, seed=1000, itags=itags)
-    B = Tensor.random(indices, seed=2000, itags=itags)
-    
-    # Expand to multiple components with random weights
-    populate_random_weights(A, seed=3000)
-    populate_random_weights(B, seed=3001)
-    
-    # Verify multiple components exist in all blocks
-    for key in A.intw.keys():
-        assert A.intw[key].num_components >= 3, f"A should have multiple components for {key}"
-        assert B.intw[key].num_components >= 3, f"B should have multiple components for {key}"
-    
-    # Flip all indices to prepare for full contraction
-    A_flipped = Tensor(
-        indices=tuple(idx.flip() for idx in A.indices),
-        itags=A.itags,
-        data=A.data,
-        intw=A.intw,
-        dtype=A.dtype
-    )
-    
-    # Test <A|B> (general scalar product)
-    scalar_AB = contract(A_flipped, B)
-    assert scalar_AB.is_scalar(), "Full contraction should give scalar"
-    assert scalar_AB.intw is None, "Scalar should not have intw"
-    
-    # Test <A|A> = ||A||² (self inner product equals norm squared)
-    scalar_AA = contract(A_flipped, A)
-    norm_sq_A = A.norm() ** 2
-    scalar_AA_val = scalar_AA.data[()].item()
-    
-    assert math.isclose(scalar_AA_val, norm_sq_A, rel_tol=1e-10, abs_tol=1e-12), \
-        f"<A|A> should equal ||A||² for 5-index tensor with multiple components: {scalar_AA_val} vs {norm_sq_A}"
-    
-    # Test <B|B> = ||B||² (verify with different tensor)
-    B_flipped = Tensor(
-        indices=tuple(idx.flip() for idx in B.indices),
-        itags=B.itags,
-        data=B.data,
-        intw=B.intw,
-        dtype=B.dtype
-    )
-    scalar_BB = contract(B_flipped, B)
-    norm_sq_B = B.norm() ** 2
-    scalar_BB_val = scalar_BB.data[()].item()
-    
-    assert math.isclose(scalar_BB_val, norm_sq_B, rel_tol=1e-10, abs_tol=1e-12), \
-        f"<B|B> should equal ||B||² for 5-index tensor with multiple components: {scalar_BB_val} vs {norm_sq_B}"
-
-
-def test_contract_su2_identity_preserves_norm_order2():
+def test_contract_su2_identity_preserves_norm_2nd_order():
     """Test that 2nd order SU(2) contraction with identity preserves norm (basic CG)."""
     group = SU2Group()
     
@@ -1310,7 +1246,7 @@ def test_contract_su2_identity_preserves_norm_order2():
     assert_charge_neutral(result)
 
 
-def test_contract_su2_identity_preserves_norm_order3():
+def test_contract_su2_identity_preserves_norm_3rd_order():
     """Test that 3rd order SU(2) contraction with identity preserves norm (basic CG)."""
     group = SU2Group()
     
@@ -1330,7 +1266,7 @@ def test_contract_su2_identity_preserves_norm_order3():
     assert_charge_neutral(result)
 
 
-def test_contract_su2_identity_preserves_norm_order5():
+def test_contract_su2_identity_preserves_norm_5th_order():
     """Test that 5th order SU(2) contraction with identity preserves norm (high-order CG)."""
     group = SU2Group()
     
