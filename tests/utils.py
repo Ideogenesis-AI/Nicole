@@ -27,6 +27,10 @@ assert_charge_neutral:
     Verify that all blocks in a tensor satisfy charge neutrality.
 assert_blocks_equal:
     Compare two tensors for identical block structure and numerical contents.
+assert_data_weights_equal:
+    Assert that two SU(2) tensors have identical data and weights block-by-block.
+assert_physical_tensors_equal:
+    Assert that two SU(2) tensors have identical physical tensors R@W block-by-block.
 
 Comparison Guidelines
 ---------------------
@@ -87,6 +91,71 @@ def assert_blocks_equal(a: Tensor, b: Tensor) -> None:
     assert set(a.data.keys()) == set(b.data.keys())
     for key in a.data:
         assert torch.allclose(a.data[key], b.data[key])
+
+
+def assert_data_weights_equal(tensor1: Tensor, tensor2: Tensor, rtol: float = 1e-10, atol: float = 1e-12, msg: str = "") -> None:
+    """Assert that two SU(2) tensors have identical data and weights block-by-block.
+    
+    Parameters
+    ----------
+    tensor1, tensor2:
+        Tensors to compare
+    rtol, atol:
+        Relative and absolute tolerances for torch.allclose
+    msg:
+        Optional message prefix for assertion errors
+    """
+    prefix = f"{msg}: " if msg else ""
+    
+    assert set(tensor1.data.keys()) == set(tensor2.data.keys()), \
+        f"{prefix}Block keys should match"
+    
+    for key in tensor1.data.keys():
+        assert torch.allclose(tensor1.intw[key].weights, tensor2.intw[key].weights,
+                            rtol=rtol, atol=atol), \
+            f"{prefix}Block {key} weights should match"
+        
+        assert torch.allclose(tensor1.data[key], tensor2.data[key],
+                            rtol=rtol, atol=atol), \
+            f"{prefix}Block {key} data should match"
+
+
+def assert_physical_tensors_equal(tensor1: Tensor, tensor2: Tensor, rtol: float = 1e-10, atol: float = 1e-12, msg: str = "") -> None:
+    """Assert that two SU(2) tensors have identical physical tensors R@W block-by-block.
+    
+    This comparison is appropriate when weights may differ due to gauge freedom,
+    but the physical tensor (reduced tensor times weights) should be preserved.
+    
+    Parameters
+    ----------
+    tensor1, tensor2:
+        Tensors to compare
+    rtol, atol:
+        Relative and absolute tolerances for torch.allclose
+    msg:
+        Optional message prefix for assertion errors
+    """
+    prefix = f"{msg}: " if msg else ""
+    
+    assert set(tensor1.data.keys()) == set(tensor2.data.keys()), \
+        f"{prefix}Block keys should match"
+    
+    for key in tensor1.data.keys():
+        block1 = tensor1.data[key]
+        block2 = tensor2.data[key]
+        weights1 = tensor1.intw[key].weights
+        weights2 = tensor2.intw[key].weights
+        
+        # Flatten spatial dimensions: (d₁, ..., dₙ, r) → (d, r)
+        block1_flat = block1.flatten(0, -2)
+        block2_flat = block2.flatten(0, -2)
+        
+        # Compute physical tensors: (d, om_dim)
+        physical1 = block1_flat @ weights1
+        physical2 = block2_flat @ weights2
+        
+        assert torch.allclose(physical1, physical2, rtol=rtol, atol=atol), \
+            f"{prefix}Block {key} physical tensors R@W should match"
 
 
 def populate_random_weights(tensor: Tensor, seed: int, min_components: int = 3, max_components: int = 6) -> None:
