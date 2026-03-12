@@ -1819,6 +1819,36 @@ def test_trace_su2_4th_order_produces_scalar():
     assert math.isclose(result.item(), expected.item(), rel_tol=1e-10, abs_tol=1e-12)
 
 
+def test_trace_su2_explicit_multi_pair():
+    """Test SU(2) explicit multi-pair trace and verify order independence."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8006, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=8006)
+
+    # Multi-pair trace with explicit axes
+    traced_multi = trace(T, axes=[(0, 1), (2, 3)])
+    assert traced_multi.is_scalar()
+
+    # Sequential trace: first (0, 1), then (0, 1) [c, d shift to positions 0, 1]
+    traced_seq1 = trace(trace(T, axes=(0, 1)), axes=(0, 1))
+    assert traced_seq1.is_scalar()
+
+    # Sequential trace in different order: first (2, 3), then (0, 1) [a, b shift to positions 0, 1]
+    traced_seq2 = trace(trace(T, axes=(2, 3)), axes=(0, 1))
+    assert traced_seq2.is_scalar()
+
+    # All three methods must give the same scalar
+    assert math.isclose(traced_multi.item(), traced_seq1.item(), rel_tol=1e-10, abs_tol=1e-12)
+    assert math.isclose(traced_multi.item(), traced_seq2.item(), rel_tol=1e-10, abs_tol=1e-12)
+
+
 def test_trace_su2_consistency_with_contract():
     """Test SU(2): contracting 3 legs at once equals contracting 2 then tracing 1."""
     group = SU2Group()
