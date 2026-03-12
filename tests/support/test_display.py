@@ -300,7 +300,7 @@ def test_tensor_repr_equals_str():
     assert repr(tensor) == str(tensor)
 
 
-def test_tensor_summary_three_indices():
+def test_tensor_summary_3rd_order():
     """Test tensor_summary with three indices."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
