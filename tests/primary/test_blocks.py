@@ -50,7 +50,7 @@ def test_iter_admissible_keys_single_index():
     assert set(keys) == {(0,), (1,)}
 
 
-def test_iter_admissible_keys_three_indices():
+def test_iter_admissible_keys_3rd_order():
     """Test BlockSchema.iter_admissible_keys with three indices."""
     group = Z2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1)))

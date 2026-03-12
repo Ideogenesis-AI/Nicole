@@ -44,7 +44,7 @@ def test_tensor_zeros_basic():
     assert_charge_neutral(tensor)
 
 
-def test_tensor_zeros_two_indices():
+def test_tensor_zeros_2nd_order():
     """Test Tensor.zeros with minimum two indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
@@ -92,7 +92,7 @@ def test_tensor_zeros_z2():
     assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
 
 
-def test_tensor_zeros_three_indices():
+def test_tensor_zeros_3rd_order():
     """Test Tensor.zeros with three indices."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))

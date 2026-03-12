@@ -1004,7 +1004,7 @@ def test_inv_non_diagonal_skipped_with_label():
     assert T_inv.label == "Diagonal"
 
 
-def test_inv_error_not_two_indices():
+def test_inv_error_not_2nd_order():
     """Test inv raises error if tensor doesn't have exactly 2 indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, (Sector(0, 2),))

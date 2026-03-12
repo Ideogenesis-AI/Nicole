@@ -431,7 +431,7 @@ def test_oplus_scalar_error():
 # Multi-index tests
 # ============================================================================
 
-def test_oplus_two_indices():
+def test_oplus_2nd_order():
     """Test basic 2-index tensor case."""
     group = U1Group()
     
@@ -448,7 +448,7 @@ def test_oplus_two_indices():
     assert C.indices[1].dim == 5  # 2 + 3
 
 
-def test_oplus_three_indices():
+def test_oplus_3rd_order():
     """Test that oplus works for 3-index tensors."""
     group = U1Group()
     
@@ -467,7 +467,7 @@ def test_oplus_three_indices():
         assert idx.dim == 4  # 2 + 2
 
 
-def test_oplus_four_indices_partial():
+def test_oplus_4th_order_partial():
     """Test merging 2 of 4 axes."""
     group = U1Group()
     

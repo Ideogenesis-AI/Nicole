@@ -980,7 +980,7 @@ def test_isometry_n_dimension_sorting():
     assert iso.indices[2].direction == Direction.IN  # Opposite of idx3
 
 
-def test_isometry_n_four_indices():
+def test_isometry_n_4th_order():
     """Test isometry_n with 4 indices."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
@@ -1022,7 +1022,7 @@ def test_isometry_n_orthonormality():
         assert torch.allclose(gram, torch.eye(gram.shape[0], dtype=gram.dtype), atol=1e-10)
 
 
-def test_isometry_n_five_indices():
+def test_isometry_n_5th_order():
     """Test isometry_n with 5 indices to verify scalability."""
     group = U1Group()
     indices = [
