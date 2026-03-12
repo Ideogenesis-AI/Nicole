@@ -1024,7 +1024,7 @@ def merge_axes(
 
     # Create conjugate of isometry for potential unfusing
     # This flips all directions and conjugates data
-    iso_conj = conj(iso)
+    iso_conj = iso.conj()
 
     return merged, iso_conj
 
