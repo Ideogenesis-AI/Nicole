@@ -30,7 +30,7 @@ import yuzuha
 from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group, SU2Group
-from ..utils import assert_blocks_equal, assert_charge_neutral
+from ..utils import assert_blocks_equal, assert_charge_neutral, populate_random_weights
 
 
 # ============================================================================
@@ -117,14 +117,13 @@ def test_conj_method_double_application():
 
 def test_conj_method_su2_basic():
     """Test method conj(in_place=False) basic behavior with SU2 group."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     tensor_conj = tensor.conj(in_place=False)
@@ -143,12 +142,11 @@ def test_conj_method_su2_basic():
 
 def test_conj_method_su2_shares_data_and_weights():
     """Test that method conj(in_place=False) shares data and scales intw weights for SU2."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     tensor_conj = tensor.conj(in_place=False)
     
     # Data blocks are shared
@@ -163,15 +161,15 @@ def test_conj_method_su2_shares_data_and_weights():
         assert torch.allclose(new_bridge.weights, orig_bridge.weights * phase)
 
 
-def test_conj_method_su2_three_indices():
-    """Test method conj(in_place=False) with SU2 three-index tensor (isometry)."""
-    from nicole.identity import isometry
-    
+def test_conj_method_su2_3rd_order():
+    """Test method conj(in_place=False) with SU2 three-index tensor."""
     group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(3, 3)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(2, 2)))
-    
-    tensor = isometry(idx1, idx2)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     tensor_conj = tensor.conj(in_place=False)
@@ -247,17 +245,17 @@ def test_conj_inplace_allows_chaining():
 
 def test_conj_inplace_su2_modifies_and_returns_self():
     """Test method conj(in_place=True) with SU2 modifies in place and returns self."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
-    
+
     original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
+    original_phases = {k: yuzuha.compute_conjugate(v.cgspec)[0] for k, v in tensor.intw.items()}
     original_directions = [idx.direction for idx in tensor.indices]
     
     result = tensor.conj(in_place=True)
@@ -269,9 +267,9 @@ def test_conj_inplace_su2_modifies_and_returns_self():
     assert tensor.intw is not None
     assert len(tensor.intw) == len(original_weights)
     
-    # Weights unchanged
+    # Weights scaled by the FS phase (±1)
     for key in original_weights:
-        assert torch.allclose(tensor.intw[key].weights, original_weights[key])
+        assert torch.allclose(tensor.intw[key].weights, original_weights[key] * original_phases[key])
     
     # Directions flipped
     for orig_dir, new_idx in zip(original_directions, tensor.indices):
@@ -349,14 +347,13 @@ def test_conj_functional_double_application():
 
 def test_conj_functional_su2_clones_and_updates_intw():
     """Test functional conj() with SU2 clones data and updates intw."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     tensor_conj = conj(tensor)
@@ -392,14 +389,13 @@ def test_conj_functional_su2_clones_and_updates_intw():
 
 def test_conj_functional_su2_double_application():
     """Test functional conj() double application with SU2 preserves intw."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 4), Sector(3, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
     original_directions = [idx.direction for idx in tensor.indices]
     
@@ -414,15 +410,15 @@ def test_conj_functional_su2_double_application():
         assert orig_idx.direction == final_idx.direction
 
 
-def test_conj_functional_su2_three_indices():
-    """Test functional conj() with SU2 three-index tensor (isometry)."""
-    from nicole.identity import isometry
-    
+def test_conj_functional_su2_3rd_order():
+    """Test functional conj() with SU2 three-index tensor."""
     group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(3, 3)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(2, 2)))
-    
-    tensor = isometry(idx1, idx2)
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     tensor_conj = conj(tensor)
@@ -687,18 +683,16 @@ def test_permute_functional_invalid_order():
 
 def test_permute_method_su2_basic():
     """Test method permute with SU(2) tensor updates intw correctly."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     original_intw_keys = set(tensor.intw.keys())
     
-    # Swap two identical indices
     result = tensor.permute([1, 0], in_place=False)
     
     # Returns new instance
@@ -711,15 +705,15 @@ def test_permute_method_su2_basic():
         assert swapped_key in result.intw
 
 
-def test_permute_method_su2_three_indices():
-    """Test method permute with SU(2) three-index tensor (isometry)."""
-    from nicole.identity import isometry
-    
+def test_permute_method_su2_3rd_order():
+    """Test method permute with SU(2) three-index tensor."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
-    
-    tensor = isometry(idx1, idx2)
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     # Permute: [0, 1, 2] -> [2, 1, 0]
@@ -738,34 +732,32 @@ def test_permute_method_su2_three_indices():
 
 
 def test_permute_method_su2_preserves_norm():
-    """Test that permute with SU(2) preserves tensor norm (unitarity of R-symbol)."""
-    from nicole.identity import isometry
-    
+    """Test that permute with SU(2) preserves tensor norm."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 2)))
-    
-    tensor = isometry(idx1, idx2)
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=42)
     original_norm = tensor.norm()
     
-    # Permute
     tensor_perm = tensor.permute([1, 2, 0], in_place=False)
     perm_norm = tensor_perm.norm()
     
-    # Norm should be preserved (R is unitary)
+    # Norm preserved: permutation is a unitary recoupling of bond structure
     assert math.isclose(original_norm, perm_norm, rel_tol=1e-12, abs_tol=1e-15)
 
 
 def test_permute_functional_su2_clones_and_updates_intw():
     """Test functional permute with SU(2) clones data and updates intw."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     tensor_perm = permute(tensor, [1, 0])
@@ -785,14 +777,13 @@ def test_permute_functional_su2_clones_and_updates_intw():
 
 def test_permute_inplace_su2_modifies_and_returns_self():
     """Test method permute(in_place=True) with SU(2) modifies in place."""
-    from nicole.identity import identity
-    
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     assert tensor.intw is not None
     
     original_intw_keys = list(tensor.intw.keys())
@@ -809,7 +800,7 @@ def test_permute_inplace_su2_modifies_and_returns_self():
         assert swapped_key in tensor.intw
 
 
-def test_permute_su2_four_indices():
+def test_permute_su2_4th_order():
     """Test permute with SU(2) four-index tensor."""
     group = SU2Group()
     indices = [
@@ -819,7 +810,8 @@ def test_permute_su2_four_indices():
         Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
     ]
     tensor = Tensor.random(indices, seed=42, dtype=torch.float64, itags=["a", "b", "c", "d"])
-    
+    populate_random_weights(tensor, seed=42)
+
     assert tensor.intw is not None
     original_norm = tensor.norm()
     
@@ -840,13 +832,13 @@ def test_permute_su2_four_indices():
 
 def test_permute_su2_inverse_restores_original():
     """Test that permuting and then applying inverse permutation restores original."""
-    from nicole.identity import isometry
-    
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
     
-    tensor = isometry(idx1, idx2)
+    tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=42)
     
     # Store original data and weights
     original_data = {k: v.clone() for k, v in tensor.data.items()}
@@ -880,15 +872,14 @@ def test_permute_su2_inverse_restores_original():
 
 
 def test_permute_su2_double_application_identity():
-    """Test that applying the same permutation twice may not restore original (not involution)."""
-    from nicole.identity import identity
-    
+    """Test that applying an involution permutation twice, or a 3-cycle three times, restores the original."""
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(
         Sector(0, 2), Sector(1, 3), Sector(2, 2)
     ))
-    
-    tensor = identity(idx)
+
+    tensor = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    populate_random_weights(tensor, seed=42)
     original_norm = tensor.norm()
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     original_weights = {k: v.weights.clone() for k, v in tensor.intw.items()}
@@ -914,7 +905,8 @@ def test_permute_su2_double_application_identity():
     # For consistency, test a cycle: [0,1,2] -> [1,2,0] -> [2,0,1] -> [0,1,2]
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     tensor3 = Tensor.random([idx3, idx3, idx3], seed=123, dtype=torch.float64, itags=["a", "b", "c"])
-    
+    populate_random_weights(tensor3, seed=123)
+
     original_norm3 = tensor3.norm()
     original_data3 = {k: v.clone() for k, v in tensor3.data.items()}
     original_weights3 = {k: v.weights.clone() for k, v in tensor3.intw.items()}
@@ -937,7 +929,7 @@ def test_permute_su2_double_application_identity():
         assert torch.allclose(tensor3_cycled.intw[key].weights, original_weights3[key], rtol=1e-12, atol=1e-15)
 
 
-def test_permute_su2_five_indices():
+def test_permute_su2_5th_order():
     """Test permute with SU(2) five-index tensor."""
     group = SU2Group()
     indices = [
@@ -948,7 +940,8 @@ def test_permute_su2_five_indices():
         Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
     ]
     tensor = Tensor.random(indices, seed=99, dtype=torch.float64, itags=["a", "b", "c", "d", "e"])
-    
+    populate_random_weights(tensor, seed=99)
+
     assert tensor.intw is not None
     original_norm = tensor.norm()
     original_data = {k: v.clone() for k, v in tensor.data.items()}
@@ -995,7 +988,8 @@ def test_permute_su2_multiple_sectors_per_index():
         Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3), Sector(3, 2))),
     ]
     tensor = Tensor.random(indices, seed=777, dtype=torch.float64, itags=["i", "j", "k", "l"])
-    
+    populate_random_weights(tensor, seed=777)
+
     assert tensor.intw is not None
     original_norm = tensor.norm()
     original_data = {k: v.clone() for k, v in tensor.data.items()}
@@ -2562,7 +2556,8 @@ def test_trim_zero_blocks_su2_zero_data():
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
     
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    
+    populate_random_weights(tensor, seed=42)
+
     # Set one block's data to near-zero
     key = (1, 1)
     if key in tensor.data:
@@ -2586,7 +2581,8 @@ def test_trim_zero_blocks_su2_zero_weights():
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
     
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    
+    populate_random_weights(tensor, seed=42)
+
     # Set one block's weights to near-zero (physical tensor becomes zero)
     key = (1, 1)
     if key in tensor.intw:
@@ -2608,7 +2604,8 @@ def test_trim_zero_blocks_su2_nonzero_preserved():
     idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
     
     tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    
+    populate_random_weights(tensor, seed=42)
+
     original_keys = set(tensor.data.keys())
     original_blocks = len(tensor.data)
     
@@ -2622,7 +2619,7 @@ def test_trim_zero_blocks_su2_nonzero_preserved():
     assert set(tensor.intw.keys()) == original_keys
 
 
-def test_trim_zero_blocks_su2_three_indices_mixed():
+def test_trim_zero_blocks_su2_3rd_order_mixed():
     """Test trim with SU(2) using 3 indices, some blocks zero."""
     group = SU2Group()
     idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -2630,7 +2627,8 @@ def test_trim_zero_blocks_su2_three_indices_mixed():
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
     
     tensor = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
-    
+    populate_random_weights(tensor, seed=42)
+
     # Zero out some blocks via weights
     keys_to_zero = []
     for i, key in enumerate(tensor.data.keys()):
