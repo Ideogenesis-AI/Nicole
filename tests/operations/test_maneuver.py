@@ -2062,6 +2062,104 @@ def test_insert_index_invalidates_sorted_keys():
         assert len(key) == 3  # Now 3D
 
 
+# SU(2) insert_index tests
+
+def test_insert_index_su2_intw_keys_match_data_keys():
+    """Test that intw and data share the same key set after insert_index."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=10, itags=["a", "b", "c"])
+
+    T.insert_index(1, Direction.OUT, itag="new")
+
+    assert T.intw is not None
+    assert set(T.intw.keys()) == set(T.data.keys())
+
+
+def test_insert_index_su2_neutral_edge_at_position():
+    """Test that the inserted Bridge edge is neutral and at the correct position."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=20, itags=["a", "b", "c"])
+
+    for pos, direction in [(0, Direction.IN), (1, Direction.OUT), (3, Direction.IN)]:
+        T2 = Tensor.random([idx_a, idx_b, idx_c], seed=20, itags=["a", "b", "c"])
+        T2.insert_index(pos, direction, itag="new")
+
+        for bridge in T2.intw.values():
+            inserted = bridge.cgspec.edges[pos]
+            assert inserted.j.twice() == 0
+            assert inserted.is_incoming() == (direction == Direction.IN)
+
+
+def test_insert_index_su2_other_edges_unchanged():
+    """Test that non-inserted Bridge edges retain their spins and directions."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+
+    original_edges = {k: [(e.j.twice(), e.dir) for e in b.cgspec.edges]
+                      for k, b in T.intw.items()}
+
+    T.insert_index(1, Direction.OUT, itag="new")
+
+    for orig_key, orig_edge_list in original_edges.items():
+        new_key = (orig_key[0], T.indices[0].group.neutral, orig_key[1], orig_key[2])
+        bridge = T.intw[new_key]
+        new_edges = bridge.cgspec.edges
+        # Position 0 and 2,3 should match the original 0 and 1,2
+        for new_i, orig_i in [(0, 0), (2, 1), (3, 2)]:
+            assert new_edges[new_i].j.twice() == orig_edge_list[orig_i][0]
+            assert new_edges[new_i].dir == orig_edge_list[orig_i][1]
+
+
+def test_insert_index_su2_preserves_om_dimension():
+    """Test that the OM dimension is unchanged after insert_index (4th order tensor)."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=40, itags=["a", "b", "c", "d"])
+
+    om_before = {k: b.om_dimension for k, b in T.intw.items()}
+    neutral = T.indices[0].group.neutral
+
+    T.insert_index(2, Direction.IN, itag="new")
+
+    for orig_key, orig_om in om_before.items():
+        new_key = orig_key[:2] + (neutral,) + orig_key[2:]
+        assert new_key in T.intw
+        assert T.intw[new_key].om_dimension == orig_om
+
+
+def test_insert_index_su2_preserves_weights():
+    """Test that Bridge weight matrices are unchanged after insert_index (4th order tensor)."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=50, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=51)
+
+    original_weights = {k: b.weights.clone() for k, b in T.intw.items()}
+    neutral = T.indices[0].group.neutral
+
+    T.insert_index(0, Direction.OUT, itag="new")
+
+    for orig_key, orig_w in original_weights.items():
+        new_key = (neutral,) + orig_key
+        assert new_key in T.intw
+        assert torch.allclose(T.intw[new_key].weights, orig_w)
+
+
 # Merge axes tests
 
 def test_merge_axes_basic():
