@@ -770,6 +770,10 @@ class Tensor:
         - Updating block keys to include the neutral charge at the new position
         
         The symmetry group for the new index is taken from the existing indices.
+        
+        For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is updated
+        by inserting a neutral-charge edge at the same position, which preserves
+        the OM dimension since the neutral irrep does not contribute to coupling.
         """
         # Validate position
         n = len(self.indices)
@@ -800,6 +804,10 @@ class Tensor:
         
         # Update data blocks: insert neutral charge in keys and add singleton dimension
         new_data: Dict[BlockKey, torch.Tensor] = {}
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw = {}
+        
         for key, arr in self.data.items():
             # Insert neutral charge at the appropriate position in the key
             key_list = list(key)
@@ -808,8 +816,12 @@ class Tensor:
             
             # Add singleton dimension at the appropriate axis
             new_data[new_key] = torch.unsqueeze(arr, dim=position)
+            
+            if new_intw is not None:
+                new_intw[new_key] = self.intw[key].insert_edge(position, direction)
         
         self.data = new_data
+        self.intw = new_intw
         self._invalidate_sorted_keys()
 
     def trim_zero_blocks(self) -> None:
