@@ -1289,8 +1289,9 @@ class Tensor:
     def invert(self, positions: Union[int, Sequence[int]]) -> None:
         """Invert the direction of specified index/indices while maintaining charge conservation.
         
-        This operation flips both the direction and conjugates the charges using Index.dual(),
-        effectively inverting the tensor's index structure at the specified positions.
+        This operation inverts the direction(s) and conjugates the charge(s)
+        using Index.dual(), effectively inverting the tensor's index structure
+        at the specified positions.
         
         Parameters
         ----------
@@ -1300,7 +1301,7 @@ class Tensor:
         
         Notes
         -----
-        This operation uses Index.dual() to flip both the direction and conjugate
+        This operation uses Index.dual() to invert both the direction and conjugate
         the charges, ensuring charge conservation is maintained. Both the index
         metadata and the block keys are updated to reflect the conjugated charges.
         The tensor data arrays themselves remain unchanged.
@@ -1308,6 +1309,12 @@ class Tensor:
         This differs from Index.flip() which only reverses direction without
         conjugating charges. The tensor invert operation performs a complete
         inversion of the index structure (direction + charge conjugation).
+        
+        For non-Abelian groups (e.g. SU(2)), the intertwiner (Bridge) at each
+        affected block has its edge directions inverted at the corresponding
+        positions without any additional phase factor, ensuring that two
+        successive calls to invert() with the same positions restore the
+        original tensor exactly.
         
         Examples
         --------
@@ -1329,16 +1336,17 @@ class Tensor:
         
         # Get the symmetry group
         if n == 0:
-            return  # Scalar tensor, nothing to flip
+            return  # Scalar tensor, nothing to invert
         group = self.indices[0].group
         
-        # Create new indices with dual (flipped direction + conjugated charges) at specified positions
+        # Create new indices with dual (inverted direction + conjugated charges)
+        # at the specified positions
         indices_list = list(self.indices)
         for pos in positions:
             indices_list[pos] = indices_list[pos].dual()
         self.indices = tuple(indices_list)
         
-        # Update block keys: conjugate charges at flipped positions
+        # Update block keys: conjugate charges at inverted positions
         new_data: Dict[BlockKey, torch.Tensor] = {}
         for key, arr in self.data.items():
             key_list = list(key)
@@ -1347,6 +1355,18 @@ class Tensor:
             new_key = tuple(key_list)
             new_data[new_key] = arr
         self.data = new_data
+        
+        # Update intw: invert edge directions at specified positions, update keys
+        if self.intw is not None:
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for key, bridge in self.intw.items():
+                key_list = list(key)
+                for pos in positions:
+                    key_list[pos] = group.dual(key_list[pos])
+                new_key = tuple(key_list)
+                new_intw[new_key] = bridge.invert_edges(positions)
+            self.intw = new_intw
+        
         self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------
