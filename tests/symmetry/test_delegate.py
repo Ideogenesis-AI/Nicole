@@ -755,3 +755,107 @@ def test_invert_edges_empty_positions_is_noop():
     new_edges = result.cgspec.edges
     for orig, new in zip(orig_edges, new_edges):
         assert orig.dir == new.dir
+
+
+# Bridge.insert_edge() tests
+
+def test_insert_edge_neutral_spin():
+    """Test that the inserted edge has spin-0 (neutral) charge."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.insert_edge(0, Direction.IN)
+
+    assert result.cgspec.edges[0].j.twice() == 0
+
+
+def test_insert_edge_direction():
+    """Test that the inserted edge has the requested direction."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result_in = bridge.insert_edge(1, Direction.IN)
+    assert result_in.cgspec.edges[1].is_incoming()
+
+    result_out = bridge.insert_edge(1, Direction.OUT)
+    assert result_out.cgspec.edges[1].is_outgoing()
+
+
+def test_insert_edge_position_beginning():
+    """Test inserting at position 0 shifts all original edges right."""
+    group = SU2Group()
+    key = (1, 2, 3)
+    directions = [Direction.IN, Direction.OUT, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(0, Direction.OUT)
+    new_edges = result.cgspec.edges
+
+    assert len(new_edges) == len(orig_edges) + 1
+    for i, orig in enumerate(orig_edges):
+        assert new_edges[i + 1].j.twice() == orig.j.twice()
+        assert new_edges[i + 1].dir == orig.dir
+
+
+def test_insert_edge_position_end():
+    """Test inserting at the last position appends without affecting other edges."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(len(orig_edges), Direction.IN)
+    new_edges = result.cgspec.edges
+
+    assert len(new_edges) == len(orig_edges) + 1
+    for i, orig in enumerate(orig_edges):
+        assert new_edges[i].j.twice() == orig.j.twice()
+        assert new_edges[i].dir == orig.dir
+    assert new_edges[-1].j.twice() == 0
+
+
+def test_insert_edge_preserves_other_edges():
+    """Test that non-inserted edges retain their spins and directions."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(2, Direction.IN)
+    new_edges = result.cgspec.edges
+
+    for new_i, orig_i in [(0, 0), (1, 1), (3, 2), (4, 3)]:
+        assert new_edges[new_i].j.twice() == orig_edges[orig_i].j.twice()
+        assert new_edges[new_i].dir == orig_edges[orig_i].dir
+
+
+def test_insert_edge_shares_weights():
+    """Test that the weight matrix is shared, not copied."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.insert_edge(0, Direction.OUT)
+
+    assert result.weights is bridge.weights
+
+
+def test_insert_edge_preserves_om_dimension():
+    """Test that the OM dimension is unchanged after inserting a neutral edge."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    om_before = bridge.om_dimension
+
+    result = bridge.insert_edge(1, Direction.OUT)
+
+    assert result.om_dimension == om_before
