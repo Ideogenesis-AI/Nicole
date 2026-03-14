@@ -1651,6 +1651,113 @@ def test_invert_double_application():
         assert torch.allclose(tensor.data[key], original_data[key])
 
 
+# SU(2) invert tests
+
+def test_invert_su2_updates_intw_directions_single():
+    """Test that invert flips the Bridge edge direction at the inverted position."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=10, itags=["a", "b", "c"])
+    original_dirs = {key: bridge.cgspec.get_directions() for key, bridge in T.intw.items()}
+
+    T.invert(0)
+
+    for key, bridge in T.intw.items():
+        new_dirs = bridge.cgspec.get_directions()
+        assert new_dirs[0] == -original_dirs[key][0]
+        assert new_dirs[1] == original_dirs[key][1]
+        assert new_dirs[2] == original_dirs[key][2]
+
+
+def test_invert_su2_updates_intw_directions_multiple():
+    """Test that invert flips Bridge edge directions at all specified positions."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=20, itags=["a", "b", "c"])
+    original_dirs = {key: bridge.cgspec.get_directions() for key, bridge in T.intw.items()}
+
+    T.invert([0, 2])
+
+    for key, bridge in T.intw.items():
+        new_dirs = bridge.cgspec.get_directions()
+        assert new_dirs[0] == -original_dirs[key][0]
+        assert new_dirs[1] == original_dirs[key][1]
+        assert new_dirs[2] == -original_dirs[key][2]
+
+
+def test_invert_su2_intw_keys_match_data_keys():
+    """Test that intw and data share exactly the same key set after invert."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c], seed=30, itags=["a", "b", "c"])
+
+    T.invert(1)
+
+    assert set(T.intw.keys()) == set(T.data.keys())
+
+
+def test_invert_su2_preserves_weights():
+    """Test that invert carries Bridge weight matrices over unchanged (4th order tensor)."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=40, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=41)
+
+    original_weights = {key: bridge.weights.clone() for key, bridge in T.intw.items()}
+
+    T.invert(1)
+
+    for orig_key, orig_w in original_weights.items():
+        new_key = (orig_key[0], group.dual(orig_key[1]), orig_key[2], orig_key[3])
+        assert new_key in T.intw
+        assert torch.allclose(T.intw[new_key].weights, orig_w)
+
+
+def test_invert_su2_double_application_restores():
+    """Test that two successive inverts with the same positions exactly restore the tensor (4th order)."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=50, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=51)
+
+    original_dirs    = {key: bridge.cgspec.get_directions() for key, bridge in T.intw.items()}
+    original_weights = {key: bridge.weights.clone()         for key, bridge in T.intw.items()}
+    original_index_dirs = [idx.direction for idx in T.indices]
+
+    T.invert([0, 2])
+    T.invert([0, 2])
+
+    for i, orig_dir in enumerate(original_index_dirs):
+        assert T.indices[i].direction == orig_dir
+    assert set(T.intw.keys()) == set(original_dirs.keys())
+    for key in original_dirs:
+        assert T.intw[key].cgspec.get_directions() == original_dirs[key]
+        assert torch.allclose(T.intw[key].weights, original_weights[key])
+
+
+def test_invert_su2_abelian_tensor_intw_remains_none():
+    """Test that invert on an Abelian tensor leaves intw as None."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+
+    assert T.intw is None
+    T.invert(0)
+    assert T.intw is None
+
+
 # insert_index tests
 
 def test_insert_index_at_beginning():
