@@ -662,3 +662,96 @@ def test_bridge_conj_with_custom_weights():
         conj_edges = bridge_conj.cgspec.edges
         for orig, conj in zip(orig_edges, conj_edges):
             assert orig.dir == conj.dir.flip()
+
+
+# Bridge.invert_edges() tests
+
+def test_invert_edges_single_position():
+    """Test that invert_edges flips only the specified edge direction."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    assert new_edges[0].dir == orig_edges[0].dir.flip()
+    assert new_edges[1].dir == orig_edges[1].dir
+    assert new_edges[2].dir == orig_edges[2].dir
+
+
+def test_invert_edges_multiple_positions():
+    """Test that invert_edges flips all specified positions and leaves others unchanged."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 3])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    assert new_edges[0].dir == orig_edges[0].dir.flip()
+    assert new_edges[1].dir == orig_edges[1].dir
+    assert new_edges[2].dir == orig_edges[2].dir
+    assert new_edges[3].dir == orig_edges[3].dir.flip()
+
+
+def test_invert_edges_preserves_spins():
+    """Test that invert_edges does not alter the spin values."""
+    group = SU2Group()
+    key = (1, 2, 3, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 1, 2, 3])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.j.twice() == new.j.twice()
+
+
+def test_invert_edges_shares_weights():
+    """Test that invert_edges shares the weight tensor (no copy)."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0])
+
+    assert result.weights is bridge.weights
+
+
+def test_invert_edges_double_application_restores():
+    """Test that applying invert_edges twice with the same positions is an involution."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 2]).invert_edges([0, 2])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.dir == new.dir
+        assert orig.j.twice() == new.j.twice()
+
+
+def test_invert_edges_empty_positions_is_noop():
+    """Test that invert_edges([]) returns an equivalent Bridge unchanged."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.dir == new.dir
