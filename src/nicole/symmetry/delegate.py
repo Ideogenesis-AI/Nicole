@@ -281,7 +281,38 @@ class Bridge:
         """
         new_cgspec = self.cgspec.with_inverted_axes(list(positions))
         return Bridge(cgspec=new_cgspec, weights=self.weights)
-    
+
+    def insert_edge(self, position: int, direction: Direction) -> Bridge:
+        """Return a new Bridge with a trivial neutral edge inserted at the given position.
+        
+        Inserts a neutral (spin-0) edge into the CGSpec at ``position``, leaving
+        the weight matrix unchanged. Because the neutral representation does not
+        participate in coupling, the OM dimension is preserved exactly.
+        This is the building block for ``Tensor.insert_index()`` on SU(2) tensors.
+        
+        Parameters
+        ----------
+        position : int
+            0-based index at which to insert the new edge.
+        direction : Direction
+            Direction of the new neutral edge (Direction.IN or Direction.OUT).
+        
+        Returns
+        -------
+        Bridge
+            New Bridge instance with the neutral edge inserted and the same weights.
+        """
+        neutral_charge = yuzuha.Spin(0)
+        if direction == Direction.IN:
+            new_edge = yuzuha.Edge.incoming(neutral_charge)
+        else:
+            new_edge = yuzuha.Edge.outgoing(neutral_charge)
+        
+        edges = list(self.cgspec.edges)
+        edges.insert(position, new_edge)
+        new_cgspec = yuzuha.CGSpec.from_edges(edges)
+        return Bridge(cgspec=new_cgspec, weights=self.weights)
+
     @staticmethod
     def from_block(
         group: SymmetryGroup,
