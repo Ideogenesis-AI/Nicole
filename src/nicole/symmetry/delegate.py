@@ -261,6 +261,27 @@ class Bridge:
         phase, _ = yuzuha.compute_conjugate(self.cgspec)
         return phase
     
+    def invert_edges(self, positions: Sequence[int]) -> Bridge:
+        """Return a new Bridge with edge directions inverted at the specified positions.
+        
+        Rebuilds the CGSpec with the selected edges' directions inverted, keeping
+        the weight matrix unchanged. This is the building block for ``Tensor.invert()``,
+        which must be its own inverse (double application restores the original state).
+        
+        Parameters
+        ----------
+        positions : Sequence[int]
+            0-based edge indices whose directions should be inverted.
+        
+        Returns
+        -------
+        Bridge
+            New Bridge instance with the same spins and weights but with the
+            specified edge directions inverted.
+        """
+        new_cgspec = self.cgspec.with_inverted_axes(list(positions))
+        return Bridge(cgspec=new_cgspec, weights=self.weights)
+    
     @staticmethod
     def from_block(
         group: SymmetryGroup,
