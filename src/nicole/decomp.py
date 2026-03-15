@@ -800,8 +800,8 @@ def decomp(
     - When multiple axes are specified, they are first merged using an n-to-1 isometry,
       decomposed, and then the U tensor is unmerged back to the original axes
     """
-    # Import merge_axes here to avoid circular dependency
-    from .maneuver import merge_axes
+    # Import here to avoid circular dependency
+    from .maneuver import capcup, merge_axes
     from .contract import contract
     
     # Check if axes is a sequence (multiple axes)
@@ -913,32 +913,28 @@ def decomp(
             label="Diagonal"
         )
         
-        # Apply tensor invert to convert from natural_flow to desired flow
-        # When we invert S, we must also invert the corresponding index in U or Vh
+        # Convert from natural_flow to desired flow by inverting contraction bonds.
+        # capcup preserves U⊗S⊗Vh = T across the flow change.
         if natural_flow == ">>":
             # Natural for S: (IN, OUT)
             if flow == "><":
-                # Desired: (IN, IN) - invert S's right index and Vh's bond index
-                S_tensor.invert(1)
-                Vh.invert(0)
+                # Desired: (IN, IN) - invert S-Vh bond
+                capcup(S_tensor, 1, Vh, 0)
             elif flow == "<<":
-                # Desired: (OUT, IN) - invert both S indices and both U's bond and Vh's bond
-                S_tensor.invert([0, 1])
-                U.invert(1)
-                Vh.invert(0)
-            # else flow == ">>": natural, no invert needed
+                # Desired: (OUT, IN) - invert U-S bond then S-Vh bond
+                capcup(S_tensor, 0, U, 1)
+                capcup(S_tensor, 1, Vh, 0)
+            # else flow == ">>": natural, no change needed
         else:  # natural_flow == "<<"
             # Natural for S: (OUT, IN)
             if flow == "><":
-                # Desired: (IN, IN) - invert S's left index and U's bond index
-                S_tensor.invert(0)
-                U.invert(1)
+                # Desired: (IN, IN) - invert U-S bond
+                capcup(S_tensor, 0, U, 1)
             elif flow == ">>":
-                # Desired: (IN, OUT) - invert both S indices and both U's bond and Vh's bond
-                S_tensor.invert([0, 1])
-                U.invert(1)
-                Vh.invert(0)
-            # else flow == "<<": natural, no invert needed
+                # Desired: (IN, OUT) - invert U-S bond then S-Vh bond
+                capcup(S_tensor, 0, U, 1)
+                capcup(S_tensor, 1, Vh, 0)
+            # else flow == "<<": natural, no change needed
         
         return U, S_tensor, Vh
     
@@ -978,10 +974,9 @@ def decomp(
         # For UR mode: normalize flow (both ">>" and "><" mean ">>")
         normalized_flow = ">>" if flow in (">>", "><") else "<<"
         
-        # Invert if normalized flow differs from natural flow
+        # Invert U-R contraction bond if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            U.invert(1)  # Invert U's bond index (position 1)
-            R_tensor.invert(0)  # Invert R's bond index (position 0)
+            capcup(U, 1, R_tensor, 0)
         
         return U, R_tensor
     
@@ -1019,10 +1014,9 @@ def decomp(
         # For LV mode: normalize flow (both "<<" and "><" mean "<<")
         normalized_flow = "<<" if flow in ("<<", "><") else ">>"
         
-        # Invert if normalized flow differs from natural flow
+        # Invert L-Vh contraction bond if normalized flow differs from natural flow
         if normalized_flow != natural_flow:
-            L_tensor.invert(1)  # Invert L's bond index (position 1)
-            Vh.invert(0)  # Invert Vh's bond index (position 0)
+            capcup(L_tensor, 1, Vh, 0)
         
         return L_tensor, Vh
     
@@ -1051,9 +1045,8 @@ def decomp(
         # If Q's left index is OUT, natural flow is "<<"; if IN, natural flow is ">>"
         qr_natural_flow = "<<" if q_left_direction == Direction.OUT else ">>"
         
-        # Invert if normalized flow differs from natural flow
+        # Invert Q-R contraction bond if normalized flow differs from natural flow
         if normalized_flow != qr_natural_flow:
-            Q.invert(1)  # Invert Q's bond index
-            R.invert(0)  # Invert R's bond index
+            capcup(Q, 1, R, 0)
         
         return Q, R
