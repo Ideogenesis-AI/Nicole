@@ -31,7 +31,7 @@ import math
 import torch
 
 from nicole import Direction, Tensor, Index, Sector
-from nicole import contract, isometry, isometry_n, conj, identity
+from nicole import contract, isometry, isometry_n, conj, identity, permute
 from nicole import SU2Group, U1Group, ProductGroup
 from ..utils import (
     assert_charge_neutral,
@@ -1518,3 +1518,195 @@ def test_contract_u1su2_conjugate_norm_5th_order():
 
     assert math.isclose(value_AA, norm_sq, rel_tol=1e-10, abs_tol=1e-12), \
         f"<A|A> should equal ||A||² for 5th order tensor: {value_AA} vs {norm_sq}"
+
+
+# ── Conjugate norm with permuted contraction axes ─────────────────────────────
+#
+# Verify ⟨perm(A†)|A⟩ = ‖A‖² for non-trivial permutations of conj(A).
+# After permuting conj(A) by `perm`, the full contraction uses
+# axes=(range(n), perm), so axesA ≠ axesB — this exercises the R-symbol
+# correction in the scalar branch of `contract`.
+#
+# Permutations used:
+#   3rd order : perm=[2,0,1]      → axes=([0,1,2], [2,0,1])
+#   4th order : perm=[2,3,0,1]    → axes=([0,1,2,3], [2,3,0,1])
+#   5th order : perm=[2,4,0,3,1]  → axes=([0,1,2,3,4], [2,4,0,3,1])
+
+def test_contract_u1_conj_permuted_norm_3rd_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1), 3rd order)."""
+    group = U1Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    A = Tensor.random([idx1, idx2, idx3], seed=6510, dtype=torch.float64,
+                      itags=["i", "j", "k"])
+
+    perm = [2, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_u1_conj_permuted_norm_4th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1), 4th order)."""
+    group = U1Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=6520, dtype=torch.float64,
+                      itags=["i", "j", "k", "l"])
+
+    perm = [2, 3, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_u1_conj_permuted_norm_5th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1), 5th order)."""
+    group = U1Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(-1, 1)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4, idx5], seed=6530, dtype=torch.float64,
+                      itags=["i", "j", "k", "l", "m"])
+
+    perm = [2, 4, 0, 3, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3, 4], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_su2_conj_permuted_norm_3rd_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (SU(2), 3rd order)."""
+    group = SU2Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    A = Tensor.random([idx1, idx2, idx3], seed=4510, dtype=torch.float64,
+                      itags=["i", "j", "k"])
+    populate_random_weights(A, seed=4511)
+
+    perm = [2, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_su2_conj_permuted_norm_4th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (SU(2), 4th order)."""
+    group = SU2Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=4520, dtype=torch.float64,
+                      itags=["i", "j", "k", "l"])
+    populate_random_weights(A, seed=4521)
+
+    perm = [2, 3, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_su2_conj_permuted_norm_5th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (SU(2), 5th order)."""
+    group = SU2Group()
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 4)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4, idx5], seed=4530, dtype=torch.float64,
+                      itags=["i", "j", "k", "l", "m"])
+    populate_random_weights(A, seed=4531)
+
+    perm = [2, 4, 0, 3, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3, 4], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_u1su2_conj_permuted_norm_3rd_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1)×SU(2), 3rd order)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+
+    idx1 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx2 = Index(Direction.IN,  group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx3 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 1), Sector((1, 2), 1)))
+
+    A = Tensor.random([idx1, idx2, idx3], seed=7510, dtype=torch.float64,
+                      itags=["i", "j", "k"])
+    populate_random_weights(A, seed=7511)
+
+    perm = [2, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_u1su2_conj_permuted_norm_4th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1)×SU(2), 4th order)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+
+    idx1 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx2 = Index(Direction.IN,  group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx3 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 1), Sector((1, 2), 1)))
+    idx4 = Index(Direction.IN,  group,
+                 sectors=(Sector((0, 0), 1), Sector((1, 2), 1)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=7520, dtype=torch.float64,
+                      itags=["i", "j", "k", "l"])
+    populate_random_weights(A, seed=7521)
+
+    perm = [2, 3, 0, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
+
+
+def test_contract_u1su2_conj_permuted_norm_5th_order():
+    """Test ⟨perm(A†)|A⟩ = ‖A‖² with non-canonical axes (U(1)×SU(2), 5th order)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+
+    idx1 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx2 = Index(Direction.IN,  group,
+                 sectors=(Sector((0, 0), 1), Sector((1, 2), 1), Sector((-1, 2), 1)))
+    idx3 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 2), Sector((1, 2), 1)))
+    idx4 = Index(Direction.IN,  group,
+                 sectors=(Sector((0, 0), 1), Sector((1, 2), 1)))
+    idx5 = Index(Direction.OUT, group,
+                 sectors=(Sector((0, 0), 3), Sector((1, 2), 1)))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4, idx5], seed=7530, dtype=torch.float64,
+                      itags=["i", "j", "k", "l", "m"])
+    populate_random_weights(A, seed=7531)
+
+    perm = [2, 4, 0, 3, 1]
+    scalar = contract(permute(conj(A), perm), A, axes=([0, 1, 2, 3, 4], perm))
+    assert math.isclose(scalar.data[()].item(), A.norm() ** 2,
+                        rel_tol=1e-10, abs_tol=1e-12)
