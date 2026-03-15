@@ -22,8 +22,8 @@ import pytest
 import torch
 import yuzuha
 
-from nicole import Direction, ProductGroup, SU2Group, U1Group
-from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol
+from nicole import Direction, ProductGroup, SU2Group, U1Group, Z2Group
+from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol, fs_phase
 
 
 def test_bridge_basic_instantiation():
@@ -859,3 +859,52 @@ def test_insert_edge_preserves_om_dimension():
     result = bridge.insert_edge(1, Direction.OUT)
 
     assert result.om_dimension == om_before
+
+
+# ── fs_phase tests ─────────────────────────────────────────────────────────────
+
+def test_fs_phase_abelian_u1_is_one():
+    """Abelian groups always return +1."""
+    group = U1Group()
+    for charge in [0, 1, -1, 2]:
+        assert fs_phase(group, charge) == 1.0
+
+
+def test_fs_phase_abelian_product_is_one():
+    """Abelian ProductGroup (U1×U1) always returns +1."""
+    group = ProductGroup([U1Group(), U1Group()])
+    for charge in [(0, 0), (1, -1), (-2, 3)]:
+        assert fs_phase(group, charge) == 1.0
+
+
+def test_fs_phase_su2():
+    """SU(2): phase is (-1)^{2j}, alternating sign with 2j."""
+    group = SU2Group()
+    assert fs_phase(group, 0) == +1.0  # spin-0:   (-1)^0 = +1
+    assert fs_phase(group, 1) == -1.0  # spin-1/2: (-1)^1 = -1
+    assert fs_phase(group, 2) == +1.0  # spin-1:   (-1)^2 = +1
+    assert fs_phase(group, 3) == -1.0  # spin-3/2: (-1)^3 = -1
+    assert fs_phase(group, 4) == +1.0  # spin-2:   (-1)^4 = +1
+    assert fs_phase(group, 5) == -1.0  # spin-5/2: (-1)^5 = -1
+
+
+def test_fs_phase_z2_su2_product():
+    """Z2×SU2 ProductGroup: phase is determined by the SU(2) part (last element)."""
+    group = ProductGroup([Z2Group(), SU2Group()])
+    # Phase depends only on two_j, not on the Z2 component
+    for z2 in [0, 1]:
+        assert fs_phase(group, (z2, 0)) == +1.0
+        assert fs_phase(group, (z2, 1)) == -1.0
+        assert fs_phase(group, (z2, 2)) == +1.0
+        assert fs_phase(group, (z2, 3)) == -1.0
+
+
+def test_fs_phase_u1_su2_product():
+    """U1×SU2 ProductGroup: phase is determined by the SU(2) part (last element)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    # Phase depends only on two_j, not on the U1 component
+    for u1 in [-1, 0, 1]:
+        assert fs_phase(group, (u1, 0)) == +1.0
+        assert fs_phase(group, (u1, 1)) == -1.0
+        assert fs_phase(group, (u1, 2)) == +1.0
+        assert fs_phase(group, (u1, 3)) == -1.0
