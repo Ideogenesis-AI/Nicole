@@ -35,7 +35,7 @@ import torch
 from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .symmetry import SymmetryGroup
-from .symmetry.delegate import compute_xsymbol, Bridge
+from .symmetry.delegate import compute_xsymbol, compute_rsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
 
@@ -391,18 +391,36 @@ def contract(
                 n_kept_b = len(B.indices) - len(axesB)
                 
                 if n_kept_a == 0 and n_kept_b == 0:
-                    # Scalar: contract components using weight overlap matrix
-                    # res_phys: (k_a, k_b), weights: (k_a, om) @ (om, k_b).T → scalar
+                    # Scalar: contract components using weight overlap matrix.
+                    # The CG-basis overlap <CG_A|CG_B> = conj_phase·δ only
+                    # when the contracted edges of A and B appear in the same internal
+                    # slot order.  When axesA ≠ axesB, a relative permutation
+                    # align_perm = axesB ∘ axesA⁻¹ misaligns the two CG trees; we correct
+                    # this by applying the corresponding R-symbol to bridge_b's weights
+                    # before forming the overlap matrix.
                     weights_a = bridge_a.weights.to(dtype_result)
                     weights_b = bridge_b.weights.to(dtype_result)
+
+                    # Compute align_perm such that align_perm[axesA[k]] = axesB[k]:
+                    # this maps B's CG-tree edge slots into the same contracted
+                    # order as A, so the OM-basis overlap becomes diagonal (δ).
+                    align_perm = [0] * len(axesA)
+                    for k, a in enumerate(axesA):
+                        align_perm[a] = axesB[k]
+
+                    # Apply R-symbol only when align_perm is non-trivial
+                    if align_perm != list(range(len(axesA))):
+                        r_b, _ = compute_rsymbol(bridge_b, align_perm)
+                        weights_b = weights_b @ r_b.to(dtype_result)
+
                     weight_overlap = weights_a @ weights_b.T
                     res = (res_phys * weight_overlap).sum().reshape(())
-                    
-                    # Apply conjugation phase correction for SU(2) coupling tree
-                    # The phase from bridge_a accounts for the Frobenius-Schur signs
+
+                    # Conjugation phase from bridge_a (accounts for FS signs in A's
+                    # CG tree; B's basis is now aligned to A's ordering)
                     phase = bridge_a.conj_phase()
                     res = res * phase
-                    
+
                     bridge_res = None
                 else:
                     # Non-scalar: recouple k_a × k_b → k_c via X-symbol
