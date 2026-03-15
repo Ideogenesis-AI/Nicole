@@ -43,8 +43,12 @@ inv(tensor)
 merge_axes(tensor, axes, merged_tag=None, direction=OUT)
     Merge multiple tensor axes into one using isometry fusion, returning both
     the merged tensor and conjugate isometry for potential unfusing.
+capcup(A, axis_a, B, axis_b)
+    Invert both directions of a contraction pair (bond) between two tensors,
+    applying Frobenius-Schur phase corrections to B for SU(2) tensors.
 """
 
+import math
 from typing import Dict, Sequence, Tuple, Union, Optional
 
 import torch
@@ -1028,3 +1032,74 @@ def merge_axes(
 
     return merged, iso_conj
 
+
+def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
+    """Invert both directions of a contraction pair (bond) between two tensors.
+
+    A contraction pair is a bond where one tensor has an outgoing leg and the
+    other has an incoming leg carrying the same itag. ``capcup`` inverts both
+    directions (equivalent to inserting a cap-cup metric on the bond) and, for
+    SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
+    ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
+    this operation the bond direction is reversed but all tensor contractions
+    that involve this bond yield the same numerical result.
+
+    Parameters
+    ----------
+    A : Tensor
+        First tensor.
+    axis_a : int
+        Integer position of the bond axis in A.
+    B : Tensor
+        Second tensor.
+    axis_b : int
+        Integer position of the bond axis in B.
+
+    Raises
+    ------
+    ValueError
+        If the two indices do not share the same itag, or do not have opposite
+        directions (required for a contraction pair).
+
+    Notes
+    -----
+    The FS phase is absorbed into B's intertwiner weights, which are much
+    smaller than the data blocks (shape ``(num_components, om_dimension)``
+    vs. ``(d1, ..., dn, num_components)``).  For Abelian groups no phase
+    is applied.
+
+    In yuzuha's left-associative CG fusion tree the first (n−1) axes are
+    *leading* axes and the last axis is the *terminal* axis (the total coupled
+    representation).  The FS phase ``(-1)^{2j}`` is applied if and only if
+    both bonds are at the same axis type — both leading or both terminal —
+    because only then does the combined X-symbol transformation require a
+    non-trivial correction.
+    """
+    # Sanity checks
+    if A.itags[axis_a] != B.itags[axis_b]:
+        raise ValueError(
+            f"Index tags do not match: '{A.itags[axis_a]}' vs '{B.itags[axis_b]}'"
+        )
+    if A.indices[axis_a].direction == B.indices[axis_b].direction:
+        raise ValueError(
+            f"Indices must have opposite directions for a contraction pair, "
+            f"but both have direction {A.indices[axis_a].direction}"
+        )
+
+    # Absorb FS phase into B's intertwiner weights before inverting.
+    # The phase (-1)^{2j} is applied iff both bonds are at the same axis type
+    # (both leading or both terminal) in their respective CG fusion trees.
+    group = B.indices[axis_b].group
+    if not group.is_abelian:
+        is_terminal_a = (axis_a == len(A.indices) - 1)
+        is_terminal_b = (axis_b == len(B.indices) - 1)
+        if is_terminal_a == is_terminal_b:
+            for key in list(B.intw.keys()):
+                phase = dg.fs_phase(group, key[axis_b])
+                if not math.isclose(phase, 1.0):
+                    bridge = B.intw[key]
+                    B.intw[key] = dg.Bridge(bridge.cgspec, bridge.weights * phase)
+
+    # Invert both bonds
+    A.invert(axis_a)
+    B.invert(axis_b)
