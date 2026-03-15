@@ -430,6 +430,36 @@ class Bridge:
         return Bridge(cgspec, weights)
 
 
+def fs_phase(group: SymmetryGroup, charge: Charge) -> float:
+    """Return the Frobenius-Schur phase (-1)^{2j} for the SU(2) part of a charge.
+
+    For Abelian groups, returns 1.0. For SU2Group or ProductGroup with SU2Group,
+    extracts the 2j value and returns (-1)^{2j}.
+
+    Parameters
+    ----------
+    group : SymmetryGroup
+        The symmetry group used to interpret the charge.
+    charge : Charge
+        A single block charge (at one index position). For SU2Group, an integer
+        (2j). For ProductGroup with SU2Group, a tuple whose last element is 2j.
+
+    Returns
+    -------
+    float
+        The FS phase: +1.0 or -1.0.
+    """
+    if group.is_abelian:
+        return 1.0
+    if isinstance(group, SU2Group):
+        two_j = charge
+    elif isinstance(group, ProductGroup) and group._has_unitary:
+        two_j = charge[-1] if isinstance(charge, tuple) else charge
+    else:
+        return 1.0
+    return float(yuzuha.fs_phase_for_spin(yuzuha.Spin(two_j)))
+
+
 def compute_xsymbol(
     bridge_a: Bridge,
     bridge_b: Bridge,
