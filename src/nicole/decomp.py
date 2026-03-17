@@ -56,6 +56,7 @@ from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Direction, Sector
+from .symmetry import delegate as dg
 
 
 def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
@@ -154,8 +155,12 @@ def svd(
     left_axis = axis_idx
     right_axes = [i for i in range(len(T.indices)) if i != left_axis]
     
-    # Build permutation to place left axis first
+    # Index-level permutation: moves left_axis to position 0.
+    # Used both for block-key reordering and as the R-symbol argument for intw.
     perm = [left_axis] + right_axes
+    # For non-Abelian tensors each data block has a trailing OM axis that must
+    # be kept last.  The array-level permutation appends that axis index.
+    perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices
     left_index = T.indices[left_axis]
@@ -167,8 +172,11 @@ def svd(
     blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, torch.Tensor, Tuple[int, ...], torch.Tensor]]] = {}
     
     for key, arr in T.data.items():
-        # Permute array to [left_axis] + right_axes
-        arr_perm = torch.permute(arr, perm)
+        # Permute array to [left_axis] + right_axes (+ trailing OM axis for SU(2))
+        if T.intw is not None:
+            arr_perm = torch.permute(arr, perm_with_om)
+        else:
+            arr_perm = torch.permute(arr, perm)
         
         # Get left charge and right charges
         q_left = key[left_axis]
@@ -269,20 +277,23 @@ def svd(
     S_blocks: Dict[BlockKey, torch.Tensor] = {}
     Vh_blocks: Dict[BlockKey, torch.Tensor] = {}
     
+    # Promote to appropriate dtype (float for real input, stays as-is for complex)
+    target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] \
+        else torch.promote_types(T.dtype, torch.float64)
+    
     for q_left, (U, s, Vh_dict) in svd_results.items():
-        rank = len(s)
-        
         # For U tensor: indices (left_index, bond_index)
         # Block key: (q_left, q_left) since bond charge equals left charge
         U_key = (q_left, q_left)
-        U_blocks[U_key] = U
+        if T.group.is_abelian:
+            U_blocks[U_key] = U
+        else:
+            # Non-Abelian: add trailing component dimension of 1
+            U_blocks[U_key] = U.unsqueeze(-1)
         
         # For S: store singular values as 1D array (memory efficient)
         # Block key: (q_left, q_left)
         S_key = (q_left, q_left)
-        # Promote to appropriate dtype (float for real input, stays as-is for complex)
-        target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] \
-            else torch.promote_types(T.dtype, torch.float64)
         S_blocks[S_key] = s.to(dtype=target_dtype)
         
         # For Vh tensor: indices (bond_index.flip(), *right_indices)
@@ -292,19 +303,47 @@ def svd(
             Vh_key = (q_left,) + q_right
             Vh_blocks[Vh_key] = Vh_reshaped
     
+    # Build intertwiners for non-Abelian (SU(2)) tensors
+    U_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    Vh_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    
+    if not T.group.is_abelian:
+        # U intertwiner: identity-like Bridge for each (q_left, q_left) block.
+        # Same convention as identity() in identity.py: weights[0, 0] = sqrt(irrep_dim).
+        U_intw = {}
+        for q_left in bond_charge_dims:
+            bridge = dg.Bridge.from_block(
+                T.group, (q_left, q_left),
+                [left_index.direction, bond_index.direction],
+                dtype=T.dtype
+            )
+            bridge.weights[0, 0] = math.sqrt(T.group.irrep_dim(q_left))
+            U_intw[(q_left, q_left)] = bridge
+        
+        # Vd intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
+        # Vd's index order is [bond, right_indices_in_original_order], which equals T's
+        # index order permuted by perm.  Applying compute_rsymbol(bridge, perm) gives the
+        # correctly recoupled Bridge for Vd's edge ordering.
+        # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
+        # so the weights are copied unchanged.
+        Vh_intw = {}
+        for key, bridge in T.intw.items():
+            r_symbol, spec_permuted = dg.compute_rsymbol(bridge, perm)
+            new_weights = bridge.weights @ r_symbol.to(dtype=bridge.weights.dtype)
+            new_key = tuple(key[i] for i in perm)
+            Vh_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
+    
     # Construct output tensors
     U_tensor = Tensor(
         indices=(left_index, bond_index),
         itags=(T.itags[left_axis], "_bond_L"),
-        data=U_blocks,
-        dtype=T.dtype
+        data=U_blocks, intw=U_intw, dtype=T.dtype
     )
     
     Vh_tensor = Tensor(
         indices=(bond_index.flip(),) + right_indices,
         itags=("_bond_R",) + right_itags,
-        data=Vh_blocks,
-        dtype=T.dtype
+        data=Vh_blocks, intw=Vh_intw, dtype=T.dtype
     )
     
     return U_tensor, S_blocks, Vh_tensor
@@ -747,7 +786,7 @@ def decomp(
         - For LV mode: Both "<<" and "><" normalize to "<<" (inward bonds); ">>" is also accepted
         - For QR mode: Controls bond arrow directions
         Note: The underlying svd naturally produces ">>" or "<<" depending on left_index.direction.
-        This parameter uses tensor.invert() to adjust from the natural flow to the desired flow.
+        This parameter uses capcup() to adjust from the natural flow to the desired flow.
     itag:
         Index tag(s) for the bond dimension(s). Can be:
         - None: Use default tags "_bond_L" and "_bond_R"
@@ -898,19 +937,33 @@ def decomp(
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
         
+        target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] else torch.promote_types(T.dtype, torch.float64)
+        
         S_diag_blocks: Dict[BlockKey, torch.Tensor] = {}
-        for key, s_array in S_blocks.items():
-            # Convert 1D singular values to diagonal matrix
-            S_diag_blocks[key] = torch.diag(s_array)
+        S_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        
+        if T.group.is_abelian:
+            for key, s_array in S_blocks.items():
+                S_diag_blocks[key] = torch.diag(s_array)
+        else:
+            # Non-Abelian: diagonal matrix with trailing component dimension of 1.
+            # Intertwiner is identity-like: weights[0, 0] = sqrt(irrep_dim(q)).
+            S_intw = {}
+            bond_flip_index = bond_index.flip()
+            for key, s_array in S_blocks.items():
+                S_diag_blocks[key] = torch.diag(s_array).unsqueeze(-1)
+                q = key[0]
+                bridge = dg.Bridge.from_block(
+                    T.group, key, [bond_flip_index.direction, bond_index.direction], dtype=target_dtype
+                )
+                bridge.weights[0, 0] = math.sqrt(T.group.irrep_dim(q))
+                S_intw[key] = bridge
         
         # Natural S has indices matching the natural flow from svd
-        target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] else torch.promote_types(T.dtype, torch.float64)
         S_tensor = Tensor(
             indices=(bond_index.flip(), bond_index),
             itags=(bond_tag_left, bond_tag_right),
-            data=S_diag_blocks,
-            dtype=target_dtype,
-            label="Diagonal"
+            data=S_diag_blocks, intw=S_intw, dtype=target_dtype, label="Diagonal"
         )
         
         # Convert from natural_flow to desired flow by inverting contraction bonds.
@@ -951,8 +1004,9 @@ def decomp(
             if s_key in S_blocks:
                 s_array = S_blocks[s_key]
                 # Multiply: R = diag(s) @ Vh = s[:, None, ...] * Vh
-                # vh_block shape: (rank, *right_dims)
-                # Broadcast multiplication along first axis
+                # Abelian vh_block shape: (rank, *right_dims)
+                # SU(2) vh_block shape:  (rank, *right_dims, k)  — trailing k is treated
+                # the same way: reshape s to (rank, 1, ..., 1) and broadcast.
                 rank = len(s_array)
                 s_broadcasted = s_array.reshape((rank,) + (1,) * (vh_block.ndim - 1))
                 R_blocks[key] = (s_broadcasted * vh_block).to(dtype=T.dtype)
@@ -963,12 +1017,10 @@ def decomp(
         # Change bond tag to match U's bond tag for easier contraction
         R_itags = (bond_tag_left,) + Vh.itags[1:]
         
-        # R inherits Vh's bond index structure
+        # R inherits Vh's bond index structure and intertwiner
         R_tensor = Tensor(
-            indices=Vh.indices,
-            itags=R_itags,
-            data=R_blocks,
-            dtype=T.dtype
+            indices=Vh.indices, itags=R_itags, data=R_blocks,
+            intw=Vh.intw, dtype=T.dtype
         )
         
         # For UR mode: normalize flow (both ">>" and "><" mean ">>")
@@ -993,9 +1045,12 @@ def decomp(
             if s_key in S_blocks:
                 s_array = S_blocks[s_key]
                 # Multiply: L = U @ diag(s) = U * s[None, :]
-                # u_block shape: (dim_left, rank)
-                # Broadcast multiplication along second axis
-                L_blocks[key] = (u_block * s_array[None, :]).to(dtype=T.dtype)
+                # Abelian u_block shape: (dim_left, rank)       — s_array[None, :] broadcasts
+                # SU(2) u_block shape:   (dim_left, rank, 1)    — need (1, rank, 1) to match
+                # General: reshape s to (1, rank, 1, ..., 1) with u_block.ndim - 2 trailing ones.
+                rank = len(s_array)
+                s_broadcasted = s_array.reshape((1, rank) + (1,) * (u_block.ndim - 2))
+                L_blocks[key] = (u_block * s_broadcasted).to(dtype=T.dtype)
             else:
                 # No singular values for this block (shouldn't happen normally)
                 L_blocks[key] = u_block
@@ -1003,12 +1058,10 @@ def decomp(
         # Change bond tag to match Vh's bond tag for easier contraction
         L_itags = (U.itags[0], bond_tag_right)
         
-        # L inherits U's bond index structure
+        # L inherits U's bond index structure and intertwiner
         L_tensor = Tensor(
-            indices=U.indices,
-            itags=L_itags,
-            data=L_blocks,
-            dtype=T.dtype
+            indices=U.indices, itags=L_itags, data=L_blocks,
+            intw=U.intw, dtype=T.dtype
         )
         
         # For LV mode: normalize flow (both "<<" and "><" mean "<<")
