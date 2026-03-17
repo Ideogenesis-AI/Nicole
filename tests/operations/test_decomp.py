@@ -22,7 +22,7 @@ import torch
 import pytest
 
 from nicole import Direction, Tensor, contract, decomp, U1Group, SU2Group, Index, Sector
-from ..utils import assert_charge_neutral, assert_physical_tensors_equal
+from ..utils import assert_blocks_equal, assert_charge_neutral, assert_physical_tensors_equal
 
 
 # Decomp function tests
@@ -47,6 +47,7 @@ def test_decomp_ur_mode():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_lv_mode():
@@ -69,6 +70,7 @@ def test_decomp_lv_mode():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_svd_mode():
@@ -156,6 +158,7 @@ def test_decomp_qr_mode():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_ur_multiindex():
@@ -182,6 +185,7 @@ def test_decomp_ur_multiindex():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_lv_multiindex():
@@ -208,6 +212,7 @@ def test_decomp_lv_multiindex():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_qr_multiindex():
@@ -234,6 +239,7 @@ def test_decomp_qr_multiindex():
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
     assert diff_norm / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_mode_case_insensitive():
@@ -372,6 +378,7 @@ def test_decomp_4th_order_tensor():
         # Verify accuracy
         rel_error = (T - reconstructed).norm() / original_norm
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_5th_order_tensor():
@@ -409,6 +416,7 @@ def test_decomp_5th_order_tensor():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_6th_order_tensor_with_truncation():
@@ -463,6 +471,7 @@ def test_decomp_flow_svd_default():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_svd_outward():
@@ -484,6 +493,7 @@ def test_decomp_flow_svd_outward():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_svd_inward():
@@ -505,6 +515,7 @@ def test_decomp_flow_svd_inward():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_svd_with_in_index():
@@ -536,6 +547,7 @@ def test_decomp_flow_svd_with_in_index():
         reconstructed = contract(U, S_Vh, axes=(1, 0))
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_ur_mode_default():
@@ -557,6 +569,7 @@ def test_decomp_flow_ur_mode_default():
     reconstructed = contract(U, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_ur_mode_explicit():
@@ -583,6 +596,8 @@ def test_decomp_flow_ur_mode_explicit():
     
     assert (T - recon_out).norm() / T.norm() < 1e-12
     assert (T - recon_in).norm() / T.norm() < 1e-12
+    assert_blocks_equal(T, recon_out, rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(T, recon_in, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_ur_mode_in_index():
@@ -602,6 +617,7 @@ def test_decomp_flow_ur_mode_in_index():
     reconstructed = contract(U, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_lv_mode_default():
@@ -623,6 +639,7 @@ def test_decomp_flow_lv_mode_default():
     reconstructed = contract(L, V, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_lv_mode_explicit():
@@ -649,6 +666,8 @@ def test_decomp_flow_lv_mode_explicit():
     
     assert (T - recon_in).norm() / T.norm() < 1e-12
     assert (T - recon_out).norm() / T.norm() < 1e-12
+    assert_blocks_equal(T, recon_in, rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(T, recon_out, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_lv_mode_in_index():
@@ -668,6 +687,7 @@ def test_decomp_flow_lv_mode_in_index():
     reconstructed = contract(L, V, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_qr_mode_default():
@@ -691,6 +711,7 @@ def test_decomp_flow_qr_mode_default():
     
     # Verify accuracy
     assert (T - reconstructed).norm() / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_qr_mode_explicit():
@@ -717,6 +738,8 @@ def test_decomp_flow_qr_mode_explicit():
     
     assert (T - recon1).norm() / T.norm() < 1e-12
     assert (T - recon2).norm() / T.norm() < 1e-12
+    assert_blocks_equal(T, recon1, rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(T, recon2, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_multiindex_svd():
@@ -739,6 +762,7 @@ def test_decomp_flow_multiindex_svd():
         reconstructed = contract(U, S_Vh, axes=(1, 0))
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_multiindex_ur_lv():
@@ -760,6 +784,7 @@ def test_decomp_flow_multiindex_ur_lv():
         reconstructed.permute([1, 0, 2])
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Test LV mode with different flows
     for flow in ["><", ">>", "<<"]:
@@ -769,6 +794,7 @@ def test_decomp_flow_multiindex_ur_lv():
         reconstructed.permute([1, 0, 2])
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_flow_invalid():
@@ -827,6 +853,7 @@ def test_decomp_itag_svd_single_string():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_svd_tuple():
@@ -850,6 +877,7 @@ def test_decomp_itag_svd_tuple():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_ur_mode():
@@ -869,6 +897,7 @@ def test_decomp_itag_ur_mode():
     reconstructed = contract(U, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Test with tuple itag
     U2, R2 = decomp(T, axes=0, mode="UR", itag=("i", "j"))
@@ -879,6 +908,7 @@ def test_decomp_itag_ur_mode():
     reconstructed2 = contract(U2, R2, axes=(1, 0))
     rel_error2 = (T - reconstructed2).norm() / T.norm()
     assert rel_error2 < 1e-12
+    assert_blocks_equal(T, reconstructed2, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_lv_mode():
@@ -898,6 +928,7 @@ def test_decomp_itag_lv_mode():
     reconstructed = contract(L, V, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Test with tuple itag
     L2, V2 = decomp(T, axes=0, mode="LV", itag=("p", "q"))
@@ -908,6 +939,7 @@ def test_decomp_itag_lv_mode():
     reconstructed2 = contract(L2, V2, axes=(1, 0))
     rel_error2 = (T - reconstructed2).norm() / T.norm()
     assert rel_error2 < 1e-12
+    assert_blocks_equal(T, reconstructed2, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_qr_mode():
@@ -926,6 +958,7 @@ def test_decomp_itag_qr_mode():
     # Verify reconstruction
     reconstructed = contract(Q, R, axes=(1, 0))
     assert (T - reconstructed).norm() / T.norm() < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_multiindex():
@@ -952,6 +985,7 @@ def test_decomp_itag_multiindex():
     reconstructed.permute([1, 0, 2])  # Reorder (b, a, c) to (a, b, c)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_itag_invalid():
@@ -1122,9 +1156,7 @@ def test_decomp_multi_axis_reconstruction():
     reconstructed.permute(perm)
     
     # Data should match (up to numerical precision)
-    for key in T.data.keys():
-        if key in reconstructed.data:
-            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_multi_axis_too_few_raises():
@@ -1233,8 +1265,7 @@ def test_decomp_multi_axis_duplicate_itags():
     reconstructed = contract(U, S_Vh, axes=(2, 0))
     
     # Check that all blocks match
-    for key in T.data:
-        assert torch.allclose(reconstructed.data[key], T.data[key], atol=1e-10)
+    assert_blocks_equal(reconstructed, T, atol=1e-10)
 
 
 def test_decomp_multi_axis_preserves_index_order():
@@ -1294,8 +1325,7 @@ def test_decomp_multi_axis_preserves_index_order():
     recon1 = contract(U1, S1_Vh1, axes=(2, 0))
     # recon1 has itags ('a', 'c', 'b', 'd'), need to permute to ('a', 'b', 'c', 'd')
     recon1.permute([0, 2, 1, 3])
-    for key in T.data:
-        assert torch.allclose(recon1.data[key], T.data[key], rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(recon1, T, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_truncation_combined_thresh_nkeep():
@@ -1416,6 +1446,7 @@ def test_high_order_multiple_charges():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_high_order_all_modes():
@@ -1528,6 +1559,7 @@ def test_decomp_svd_ultra_high_order_complex_charges():
     # Check reconstruction accuracy
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_ur_ultra_high_order_complex_charges():
@@ -1601,13 +1633,7 @@ def test_decomp_ur_ultra_high_order_complex_charges():
     # Check reconstruction accuracy
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
-    
-    # Spot-check a few blocks
-    block_count = 0
-    for key in T.data.keys():
-        if key in reconstructed.data and block_count < 5:
-            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
-            block_count += 1
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_lv_ultra_high_order_complex_charges():
@@ -1686,13 +1712,7 @@ def test_decomp_lv_ultra_high_order_complex_charges():
     # Check reconstruction accuracy
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
-    
-    # Verify individual blocks match
-    block_count = 0
-    for key in T.data.keys():
-        if key in reconstructed.data and block_count < 5:
-            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
-            block_count += 1
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # ===== High-Order QR Mode Stress Tests =====
@@ -1754,11 +1774,7 @@ def test_decomp_qr_high_order_multi_charge_stress():
     # Check reconstruction accuracy
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
-    
-    # Verify individual blocks match
-    for key in T.data.keys():
-        if key in reconstructed.data:
-            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_decomp_qr_ultra_high_order_complex_charges():
@@ -1832,10 +1848,4 @@ def test_decomp_qr_ultra_high_order_complex_charges():
     # Check reconstruction accuracy
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"Reconstruction error too large: {rel_error}"
-    
-    # Spot-check a few blocks
-    block_count = 0
-    for key in T.data.keys():
-        if key in reconstructed.data and block_count < 5:
-            assert torch.allclose(T.data[key], reconstructed.data[key], rtol=1e-10, atol=1e-12)
-            block_count += 1
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)

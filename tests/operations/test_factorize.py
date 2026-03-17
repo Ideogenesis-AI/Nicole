@@ -24,7 +24,7 @@ import pytest
 
 from nicole import Direction, Tensor, contract, decomp, U1Group, SU2Group, Index, Sector
 from nicole.decomp import svd, qr, eig
-from ..utils import assert_charge_neutral, assert_physical_tensors_equal
+from ..utils import assert_blocks_equal, assert_charge_neutral, assert_physical_tensors_equal
 
 
 # =============================================================================
@@ -59,6 +59,7 @@ def test_svd_basic_reconstruction():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / original_norm
     assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Check norms are preserved
     assert math.isclose(reconstructed.norm(), original_norm)
@@ -109,6 +110,7 @@ def test_svd_string_axis():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_svd_different_axis_positions():
@@ -142,6 +144,7 @@ def test_svd_different_axis_positions():
         diff_norm = (T - reconstructed).norm()
         rel_error = diff_norm / T.norm()
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Block handling tests
@@ -172,6 +175,7 @@ def test_svd_multiple_blocks_same_charge():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_svd_single_block():
@@ -418,6 +422,7 @@ def test_svd_complex_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Truncation tests
@@ -885,6 +890,7 @@ def test_qr_basic_reconstruction():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / original_norm
     assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Check norms are preserved
     assert abs(reconstructed.norm() - original_norm) < 1e-12
@@ -932,6 +938,7 @@ def test_qr_string_axis():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_different_axis_positions():
@@ -965,6 +972,7 @@ def test_qr_different_axis_positions():
         diff_norm = (T - reconstructed).norm()
         rel_error = diff_norm / T.norm()
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Block handling tests
@@ -993,6 +1001,7 @@ def test_qr_multiple_blocks_same_charge():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_single_block():
@@ -1246,6 +1255,7 @@ def test_qr_complex_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_float32_dtype():
@@ -1268,6 +1278,7 @@ def test_qr_float32_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-5  # Lower precision for float32
+    assert_blocks_equal(T, reconstructed)  # Default tolerances for float32
 
 
 # High-order tensor tests
@@ -1303,6 +1314,7 @@ def test_qr_4th_order_tensor():
         # Verify accuracy
         rel_error = (T - reconstructed).norm() / original_norm
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_5th_order_tensor():
@@ -1337,6 +1349,7 @@ def test_qr_5th_order_tensor():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_6th_order_tensor():
@@ -1393,6 +1406,7 @@ def test_qr_high_order_multiple_charges():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_high_order_different_axis_sizes():
@@ -1502,6 +1516,7 @@ def test_qr_thin_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_wide_matrix():
@@ -1529,6 +1544,7 @@ def test_qr_wide_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_square_matrix():
@@ -1556,6 +1572,7 @@ def test_qr_square_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Edge cases
@@ -1574,6 +1591,7 @@ def test_qr_minimal_tensor():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_preserves_itags():
@@ -1612,11 +1630,7 @@ def test_qr_multiblock_reconstruction_accuracy():
     reconstructed = contract(Q, R, axes=(1, 0))
     
     # Check each block individually
-    for key in T.data.keys():
-        if key in reconstructed.data:
-            rel_error = torch.linalg.norm(T.data[key] - reconstructed.data[key]).item() / \
-                       torch.linalg.norm(T.data[key]).item()
-            assert rel_error < 1e-12, f"Block {key} reconstruction error too large: {rel_error}"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_no_truncation():
@@ -1637,6 +1651,7 @@ def test_qr_no_truncation():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_consistency_across_axes():
@@ -1666,6 +1681,7 @@ def test_qr_consistency_across_axes():
     for i, recon in enumerate(results):
         rel_error = (T - recon).norm() / T.norm()
         assert rel_error < 1e-12, f"Axis {i} reconstruction failed"
+        assert_blocks_equal(T, recon, rtol=1e-10, atol=1e-12)
 
 
 # =============================================================================
