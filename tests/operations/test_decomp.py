@@ -1384,10 +1384,59 @@ def test_decomp_truncation_combined_ur_mode():
 def _make_su2_3rd_order_decomp(seed: int = 1):
     """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
     group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
-    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(2, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
     return Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+
+
+def test_decomp_su2_svd_mode():
+    """decomp() SVD mode reconstructs the SU(2) tensor for all decomposed axes."""
+    T = _make_su2_3rd_order_decomp(seed=11)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) SVD mode reconstruction axis={axis}")
+
+
+def _make_su2_4th_order_decomp(seed: int = 1):
+    """4-leg SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
+    return Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+
+
+def _make_su2_5th_order_decomp(seed: int = 1):
+    """5-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    return Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+
+
+def _make_su2_6th_order_decomp(seed: int = 1):
+    """6-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
+    idx6 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
+    return Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
 
 
 def test_decomp_su2_ur_mode():
@@ -1418,6 +1467,87 @@ def test_decomp_su2_lv_mode():
 
     assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                   msg="SU(2) LV mode reconstruction")
+
+
+def test_decomp_su2_svd_4th_order():
+    """decomp() SVD mode reconstructs a 4th-order SU(2) tensor for all decomposed axes."""
+    T = _make_su2_4th_order_decomp(seed=14)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) SVD 4th-order reconstruction axis={axis}")
+
+
+def test_decomp_su2_svd_5th_order():
+    """decomp() SVD mode reconstructs a 5th-order SU(2) tensor for all decomposed axes."""
+    T = _make_su2_5th_order_decomp(seed=15)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) SVD 5th-order reconstruction axis={axis}")
+
+
+def test_decomp_su2_6th_order_all_modes():
+    """decomp() SVD, UR, and LV modes all reconstruct a 6th-order SU(2) tensor for all axes."""
+    T = _make_su2_6th_order_decomp(seed=16)
+
+    for axis in range(len(T.indices)):
+        # SVD mode
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) SVD 6th-order reconstruction axis={axis}")
+
+        # UR mode
+        U, R = decomp(T, axes=axis, mode="UR")
+        reconstructed = contract(U, R, axes=(1, 0))
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) UR 6th-order reconstruction axis={axis}")
+
+        # LV mode
+        L, V = decomp(T, axes=axis, mode="LV")
+        reconstructed = contract(L, V, axes=(1, 0))
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) LV 6th-order reconstruction axis={axis}")
+
+
+def test_decomp_su2_multi_axis():
+    """decomp() SVD mode with multiple axes on the left reconstructs the SU(2) tensor."""
+    T = _make_su2_4th_order_decomp(seed=17)
+
+    for axes in [[0, 1], [0, 2], [1, 2], [0, 1, 2]]:
+        U, S_tensor, Vh = decomp(T, axes=axes, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) multi-axis SVD reconstruction axes={axes}")
 
 
 # ===== High-Order Tensor Tests =====
