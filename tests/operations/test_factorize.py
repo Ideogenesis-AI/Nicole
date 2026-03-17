@@ -646,7 +646,7 @@ def test_svd_high_order_thresh_truncation():
 
 # SU(2) SVD tests
 
-def _make_su2_3leg(seed: int = 1):
+def _make_su2_3rd_order(seed: int = 1):
     """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
@@ -655,7 +655,7 @@ def _make_su2_3leg(seed: int = 1):
     return Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
 
 
-def _make_su2_2leg(seed: int = 42):
+def _make_su2_2nd_order(seed: int = 42):
     """2-leg SU(2) tensor (OUT x IN)."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
@@ -663,9 +663,9 @@ def _make_su2_2leg(seed: int = 42):
     return Tensor.random([idx1, idx2], itags=["a", "b"], seed=seed)
 
 
-def test_svd_su2_reconstruction_3leg():
+def test_svd_su2_reconstruction_3rd_order():
     """SVD of a 3-leg SU(2) tensor reconstructs the original."""
-    T = _make_su2_3leg(seed=10)
+    T = _make_su2_3rd_order(seed=10)
 
     U, S_tensor, Vh = decomp(T, axes=0, mode="SVD")
     reconstructed = contract(U, contract(S_tensor, Vh))
@@ -678,9 +678,9 @@ def test_svd_su2_reconstruction_3leg():
                                   msg="SU(2) 3-leg SVD reconstruction")
 
 
-def test_svd_su2_reconstruction_2leg():
+def test_svd_su2_reconstruction_2nd_order():
     """SVD of a 2-leg SU(2) tensor reconstructs the original."""
-    T = _make_su2_2leg(seed=11)
+    T = _make_su2_2nd_order(seed=11)
 
     U, S_tensor, Vh = decomp(T, axes=0, mode="SVD")
     reconstructed = contract(U, contract(S_tensor, Vh))
@@ -693,10 +693,10 @@ def test_svd_su2_reconstruction_2leg():
                                   msg="SU(2) 2-leg SVD reconstruction")
 
 
-def test_svd_su2_U_intertwiner_identity_like():
+def test_svd_su2_u_intertwiner_identity_like():
     """U from SU(2) SVD has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
     group = SU2Group()
-    T = _make_su2_3leg(seed=20)
+    T = _make_su2_3rd_order(seed=20)
 
     U, _S, _Vh = svd(T, axis=0)
 
@@ -712,10 +712,10 @@ def test_svd_su2_U_intertwiner_identity_like():
         )
 
 
-def test_svd_su2_S_intertwiner_identity_like():
+def test_svd_su2_s_intertwiner_identity_like():
     """S from SU(2) SVD has identity-like intertwiner."""
     group = SU2Group()
-    T = _make_su2_3leg(seed=21)
+    T = _make_su2_3rd_order(seed=21)
 
     _U, S_tensor, _Vh = decomp(T, axes=0, mode="SVD")
 
@@ -731,9 +731,9 @@ def test_svd_su2_S_intertwiner_identity_like():
         )
 
 
-def test_svd_su2_U_data_blocks_have_trailing_component_dim():
+def test_svd_su2_u_data_blocks_have_trailing_component_dim():
     """U data blocks from SU(2) SVD have shape (d_left, rank, 1)."""
-    T = _make_su2_3leg(seed=22)
+    T = _make_su2_3rd_order(seed=22)
 
     U, _S, _Vh = svd(T, axis=0)
 
@@ -742,9 +742,9 @@ def test_svd_su2_U_data_blocks_have_trailing_component_dim():
         assert block.shape[-1] == 1, f"U block {key} trailing dim must be 1, got {block.shape[-1]}"
 
 
-def test_svd_su2_U_reduced_blocks_are_isometric():
+def test_svd_su2_u_reduced_blocks_are_isometric():
     """The reduced matrix U_mat = U.data[key][:, :, 0] satisfies U_mat^T @ U_mat = I."""
-    T = _make_su2_3leg(seed=23)
+    T = _make_su2_3rd_order(seed=23)
 
     U, _S, _Vh = svd(T, axis=0)
 
@@ -758,9 +758,9 @@ def test_svd_su2_U_reduced_blocks_are_isometric():
         )
 
 
-def test_svd_su2_Vd_intertwiner_matches_T_axis0():
+def test_svd_su2_vd_intertwiner_matches_t_axis0():
     """For left_axis=0 the R-symbol is identity: Vd.intw weights equal T.intw weights."""
-    T = _make_su2_3leg(seed=30)
+    T = _make_su2_3rd_order(seed=30)
 
     _U, _S, Vh = svd(T, axis=0)
 
@@ -775,9 +775,9 @@ def test_svd_su2_Vd_intertwiner_matches_T_axis0():
         )
 
 
-def test_svd_su2_Vd_has_correct_intw_keys():
+def test_svd_su2_vd_has_correct_intw_keys():
     """Vd has exactly the same intertwiner key set as T when left_axis=0."""
-    T = _make_su2_3leg(seed=31)
+    T = _make_su2_3rd_order(seed=31)
 
     _U, _S, Vh = svd(T, axis=0)
 
@@ -788,7 +788,7 @@ def test_svd_su2_Vd_has_correct_intw_keys():
 
 def test_svd_su2_non_zero_axis_reconstruction():
     """SVD with left_axis=1 (R-symbol path) reconstructs the SU(2) tensor."""
-    T = _make_su2_3leg(seed=40)
+    T = _make_su2_3rd_order(seed=40)
 
     U, S_tensor, Vh = decomp(T, axes=1, mode="SVD")
     reconstructed = contract(U, contract(S_tensor, Vh))
@@ -801,9 +801,9 @@ def test_svd_su2_non_zero_axis_reconstruction():
                                   msg="SU(2) left_axis=1 SVD reconstruction")
 
 
-def test_svd_su2_non_zero_axis_Vh_intw_not_none():
+def test_svd_su2_non_zero_axis_vh_intw_not_none():
     """Vd has a populated intw even when left_axis != 0."""
-    T = _make_su2_3leg(seed=41)
+    T = _make_su2_3rd_order(seed=41)
 
     _U, _S, Vh = svd(T, axis=1)
 
@@ -813,7 +813,7 @@ def test_svd_su2_non_zero_axis_Vh_intw_not_none():
 
 def test_svd_su2_truncation_nkeep():
     """nkeep truncation on SU(2) tensor produces tensors with valid intw."""
-    T = _make_su2_3leg(seed=50)
+    T = _make_su2_3rd_order(seed=50)
 
     U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 2})
 
@@ -825,7 +825,7 @@ def test_svd_su2_truncation_nkeep():
 
 def test_svd_su2_truncation_thresh():
     """thresh truncation (small thresh) on SU(2) tensor still reconstructs accurately."""
-    T = _make_su2_3leg(seed=51)
+    T = _make_su2_3rd_order(seed=51)
 
     U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"thresh": 1e-10})
     reconstructed = contract(U, contract(S_tensor, Vh))
@@ -840,7 +840,7 @@ def test_svd_su2_truncation_thresh():
 
 def test_svd_su2_truncation_nkeep_s_blocks_3d():
     """S blocks are 3D with trailing dim 1 after truncation."""
-    T = _make_su2_3leg(seed=52)
+    T = _make_su2_3rd_order(seed=52)
 
     _U, S_tensor, _Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 3})
 
@@ -851,7 +851,7 @@ def test_svd_su2_truncation_nkeep_s_blocks_3d():
 
 def test_svd_su2_charge_neutral():
     """U, S, Vh from SU(2) SVD are all charge neutral."""
-    T = _make_su2_3leg(seed=60)
+    T = _make_su2_3rd_order(seed=60)
 
     U, S_tensor, Vh = decomp(T, axes=0, mode="SVD")
 

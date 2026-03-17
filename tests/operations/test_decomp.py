@@ -1381,7 +1381,7 @@ def test_decomp_truncation_combined_ur_mode():
 
 # Tests for SU(2) tensor decomposition
 
-def _make_su2_3leg_decomp(seed: int = 1):
+def _make_su2_3rd_order_decomp(seed: int = 1):
     """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
@@ -1392,7 +1392,7 @@ def _make_su2_3leg_decomp(seed: int = 1):
 
 def test_decomp_su2_ur_mode():
     """decomp() UR mode reconstructs the SU(2) tensor."""
-    T = _make_su2_3leg_decomp(seed=12)
+    T = _make_su2_3rd_order_decomp(seed=12)
 
     U, R = decomp(T, axes=0, mode="UR")
     reconstructed = contract(U, R, axes=(1, 0))
@@ -1407,7 +1407,7 @@ def test_decomp_su2_ur_mode():
 
 def test_decomp_su2_lv_mode():
     """decomp() LV mode reconstructs the SU(2) tensor."""
-    T = _make_su2_3leg_decomp(seed=13)
+    T = _make_su2_3rd_order_decomp(seed=13)
 
     L, V = decomp(T, axes=0, mode="LV")
     reconstructed = contract(L, V, axes=(1, 0))
@@ -1422,7 +1422,7 @@ def test_decomp_su2_lv_mode():
 
 # ===== High-Order Tensor Tests =====
 
-def test_high_order_multiple_charges():
+def test_decomp_high_order_multiple_charges():
     """Test high-order tensor with multiple charge blocks."""
     group = U1Group()
     indices = [
@@ -1449,7 +1449,7 @@ def test_high_order_multiple_charges():
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
-def test_high_order_all_modes():
+def test_decomp_high_order_all_modes():
     """Test all decomp modes on high-order tensor."""
     group = U1Group()
     indices = [
