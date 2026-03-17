@@ -313,6 +313,56 @@ def test_svd_s_diagonal():
         assert torch.allclose(block, torch.diag(torch.diag(block)))
 
 
+# U and Vd isometry tests
+
+def test_svd_u1_u_blocks_are_isometric():
+    """Each U block satisfies U^† @ U = I (column-orthonormal)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(-1, 2), Sector(0, 5), Sector(1, 4)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=50)
+
+    U, _S, _Vh = svd(T, axis=0)
+
+    for key, block in U.data.items():
+        should_be_I = block.T.conj() @ block
+        rank = block.shape[1]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=block.dtype), atol=1e-12), (
+            f"U block {key}: U^† @ U should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=block.dtype)).abs().max().item():.2e}"
+        )
+
+
+def test_svd_u1_vh_blocks_are_isometric():
+    """Vh blocks, concatenated per left charge, satisfy Vh @ Vh^† = I (row-orthonormal)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(-1, 2), Sector(0, 5), Sector(1, 4)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=50)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    # Group Vh blocks by q_left (position 0 of key), then concatenate horizontally
+    vh_by_q_left: dict = {}
+    for key, block in Vh.data.items():
+        q_left = key[0]
+        row = block.reshape(block.shape[0], -1)  # (bond_dim, prod_right)
+        vh_by_q_left.setdefault(q_left, []).append(row)
+
+    for q_left, rows in vh_by_q_left.items():
+        Vh_full = torch.cat(rows, dim=1)  # (bond_dim, total_right_dim)
+        should_be_I = Vh_full @ Vh_full.T.conj()
+        rank = Vh_full.shape[0]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=Vh_full.dtype), atol=1e-12), (
+            f"Vh for q_left={q_left}: Vh @ Vh^† should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=Vh_full.dtype)).abs().max().item():.2e}"
+        )
+
+
 # Charge conservation tests
 
 def test_svd_preserves_charge_conservation():
@@ -838,6 +888,29 @@ def test_svd_su2_u_reduced_blocks_are_isometric():
         assert torch.allclose(should_be_I, torch.eye(rank, dtype=U_mat.dtype), atol=1e-10), (
             f"U reduced block {key}: U^T @ U should be identity, max deviation="
             f"{(should_be_I - torch.eye(rank, dtype=U_mat.dtype)).abs().max().item():.2e}"
+        )
+
+
+def test_svd_su2_vh_blocks_are_isometric():
+    """Vh reduced blocks, concatenated per left charge, satisfy Vh @ Vh^† = I (row-orthonormal)."""
+    T = _make_su2_3rd_order(seed=24)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    # Group Vh blocks by q_left (position 0 of key), then concatenate horizontally
+    vh_by_q_left: dict = {}
+    for key, block in Vh.data.items():
+        q_left = key[0]
+        row = block.reshape(block.shape[0], -1)  # (bond_dim, prod_right_with_component)
+        vh_by_q_left.setdefault(q_left, []).append(row)
+
+    for q_left, rows in vh_by_q_left.items():
+        Vh_full = torch.cat(rows, dim=1)  # (bond_dim, total_right_dim)
+        should_be_I = Vh_full @ Vh_full.T.conj()
+        rank = Vh_full.shape[0]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=Vh_full.dtype), atol=1e-10), (
+            f"Vh for q_left={q_left}: Vh @ Vh^† should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=Vh_full.dtype)).abs().max().item():.2e}"
         )
 
 
