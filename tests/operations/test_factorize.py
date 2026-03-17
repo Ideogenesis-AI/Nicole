@@ -22,9 +22,11 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Tensor, contract, decomp, U1Group, SU2Group, Index, Sector
+from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
+from nicole import contract, decomp
 from nicole.decomp import svd, qr, eig
-from ..utils import assert_blocks_equal, assert_charge_neutral, assert_physical_tensors_equal
+from ..utils import assert_charge_neutral
+from ..utils import assert_blocks_equal, assert_physical_tensors_equal
 
 
 # =============================================================================
