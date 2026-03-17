@@ -326,8 +326,12 @@ def svd(
         # correctly recoupled Bridge for Vd's edge ordering.
         # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
         # so the weights are copied unchanged.
+        # Note: skip entries whose left charge was eliminated by truncation.
         Vh_intw = {}
         for key, bridge in T.intw.items():
+            q_left = key[left_axis]
+            if q_left not in bond_charge_dims:
+                continue
             r_symbol, spec_permuted = dg.compute_rsymbol(bridge, perm)
             new_weights = bridge.weights @ r_symbol.to(dtype=bridge.weights.dtype)
             new_key = tuple(key[i] for i in perm)
