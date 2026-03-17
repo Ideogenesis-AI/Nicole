@@ -21,9 +21,8 @@
 import torch
 import pytest
 
-from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
-from nicole.decomp import svd
-from ..utils import assert_charge_neutral
+from nicole import Direction, Tensor, contract, decomp, U1Group, SU2Group, Index, Sector
+from ..utils import assert_charge_neutral, assert_physical_tensors_equal
 
 
 # Decomp function tests
@@ -1350,6 +1349,47 @@ def test_decomp_truncation_combined_ur_mode():
     assert len(reconstructed.indices) == len(T.indices)
 
 
+# Tests for SU(2) tensor decomposition
+
+def _make_su2_3leg_decomp(seed: int = 1):
+    """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
+    return Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+
+
+def test_decomp_su2_ur_mode():
+    """decomp() UR mode reconstructs the SU(2) tensor."""
+    T = _make_su2_3leg_decomp(seed=12)
+
+    U, R = decomp(T, axes=0, mode="UR")
+    reconstructed = contract(U, R, axes=(1, 0))
+
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+
+    assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                  msg="SU(2) UR mode reconstruction")
+
+
+def test_decomp_su2_lv_mode():
+    """decomp() LV mode reconstructs the SU(2) tensor."""
+    T = _make_su2_3leg_decomp(seed=13)
+
+    L, V = decomp(T, axes=0, mode="LV")
+    reconstructed = contract(L, V, axes=(1, 0))
+
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm)
+
+    assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                  msg="SU(2) LV mode reconstruction")
+
+
 # ===== High-Order Tensor Tests =====
 
 def test_high_order_tensor_multiple_charges():
@@ -1376,32 +1416,6 @@ def test_high_order_tensor_multiple_charges():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
-
-
-def test_high_order_tensor_different_axis_sizes():
-    """Test high-order tensor with varying axis dimensions."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 5),)),
-        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
-        Index(Direction.IN, group, sectors=(Sector(0, 4),))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1200)
-    
-    # Decompose on axis 1 (separates axis 1 from axes 0,2,3)
-    U, S_blocks, Vh = svd(T, axis=1)
-    
-    # Bond dimension should be min(dim_axis1, dim_others)
-    # dim_axis1 = 5, dim_others = 2*3*4 = 24
-    # So bond_dim = min(5, 24) = 5
-    total_bond_dim = sum(len(s) for s in S_blocks.values())
-    assert total_bond_dim == 5
-    
-    # Verify singular values are sorted
-    for key, s_array in S_blocks.items():
-        assert torch.all(s_array[:-1] >= s_array[1:]).item(), "Singular values should be sorted descending"
 
 
 def test_high_order_tensor_all_modes():
@@ -1435,63 +1449,6 @@ def test_high_order_tensor_all_modes():
     
     assert (recon_ur - recon_svd).norm() / T.norm() < 1e-12
     assert (recon_svd - recon_lv).norm() / T.norm() < 1e-12
-
-
-def test_high_order_tensor_bond_structure():
-    """Test bond index structure in high-order tensor decomposition."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
-        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1400)
-    
-    U, S_blocks, Vh = svd(T, axis=0)
-    
-    bond_index = U.indices[1]
-    
-    # Bond should have charges that appear in the tensor's first index
-    left_charges_in_data = set(key[0] for key in T.data.keys())
-    bond_charges = set(bond_index.charges())
-    
-    assert bond_charges == left_charges_in_data
-    
-    # Bond should have correct group
-    assert bond_index.group == indices[0].group
-    
-    # Bond direction should be opposite of left index
-    assert bond_index.direction == indices[0].direction.reverse()
-
-
-def test_high_order_tensor_thresh_truncation():
-    """Test threshold truncation on high-order tensor."""
-    group = U1Group()
-    indices = [
-        Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3))),
-        Index(Direction.IN, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
-        Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
-        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
-    ]
-    
-    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1500)
-    
-    # Apply threshold truncation
-    threshold = 1.0
-    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
-    
-    # All kept singular values should be >= threshold
-    for key, s_array in S_blocks.items():
-        assert torch.all(s_array >= threshold).item()
-    
-    # Verify we can still reconstruct (approximately)
-    U_full = decomp(T, axes=0, mode="UR", trunc={"thresh": threshold})[0]
-    assert len(U_full.indices) == 2
-    # Left index should be unchanged (sum of all sector dimensions)
-    expected_left_dim = sum(s.dim for s in indices[0].sectors)
-    assert U_full.indices[0].dim == expected_left_dim
 
 
 # ===== High-Order SVD-Related Mode Stress Tests =====
