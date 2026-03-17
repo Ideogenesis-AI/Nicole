@@ -1272,7 +1272,7 @@ def test_qr_float32_dtype():
 
 # High-order tensor tests
 
-def test_qr_4index_tensor():
+def test_qr_4th_order_tensor():
     """Test QR on 4-index tensor with reconstruction."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
@@ -1305,7 +1305,7 @@ def test_qr_4index_tensor():
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
 
 
-def test_qr_5index_tensor():
+def test_qr_5th_order_tensor():
     """Test QR on 5-index tensor."""
     group = U1Group()
     indices = [
@@ -1339,7 +1339,7 @@ def test_qr_5index_tensor():
     assert rel_error < 1e-12
 
 
-def test_qr_6index_tensor():
+def test_qr_6th_order_tensor():
     """Test QR on 6-index tensor."""
     group = U1Group()
     indices = [
@@ -1369,7 +1369,7 @@ def test_qr_6index_tensor():
         assert idx.dim == T.indices[i].dim
 
 
-def test_qr_high_order_tensor_multiple_charges():
+def test_qr_high_order_multiple_charges():
     """Test high-order tensor with multiple charge blocks."""
     group = U1Group()
     indices = [
@@ -1395,7 +1395,7 @@ def test_qr_high_order_tensor_multiple_charges():
     assert rel_error < 1e-12
 
 
-def test_qr_high_order_tensor_different_axis_sizes():
+def test_qr_high_order_different_axis_sizes():
     """Test high-order tensor with varying axis dimensions."""
     group = U1Group()
     indices = [
@@ -1417,7 +1417,7 @@ def test_qr_high_order_tensor_different_axis_sizes():
     assert bond_dim == 5
 
 
-def test_qr_high_order_tensor_bond_structure():
+def test_qr_high_order_bond_structure():
     """Test bond index structure in high-order tensor QR."""
     group = U1Group()
     indices = [

@@ -341,7 +341,7 @@ def test_decomp_truncation_svd_mode():
 
 # High-order tensor tests
 
-def test_decomp_4index_tensor():
+def test_decomp_4th_order_tensor():
     """Test decomp on 4-index tensor with reconstruction."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
@@ -374,7 +374,7 @@ def test_decomp_4index_tensor():
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
 
 
-def test_decomp_5index_tensor():
+def test_decomp_5th_order_tensor():
     """Test decomp on 5-index tensor."""
     group = U1Group()
     indices = [
@@ -411,7 +411,7 @@ def test_decomp_5index_tensor():
     assert rel_error < 1e-12
 
 
-def test_decomp_6index_tensor_with_truncation():
+def test_decomp_6th_order_tensor_with_truncation():
     """Test decomp on 6-index tensor with truncation."""
     group = U1Group()
     indices = [
@@ -1392,7 +1392,7 @@ def test_decomp_su2_lv_mode():
 
 # ===== High-Order Tensor Tests =====
 
-def test_high_order_tensor_multiple_charges():
+def test_high_order_multiple_charges():
     """Test high-order tensor with multiple charge blocks."""
     group = U1Group()
     indices = [
@@ -1418,7 +1418,7 @@ def test_high_order_tensor_multiple_charges():
     assert rel_error < 1e-12
 
 
-def test_high_order_tensor_all_modes():
+def test_high_order_all_modes():
     """Test all decomp modes on high-order tensor."""
     group = U1Group()
     indices = [
