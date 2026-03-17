@@ -77,20 +77,20 @@ def assert_charge_neutral(tensor: Tensor) -> None:
         assert BlockSchema.charges_conserved(tensor.indices, key)
 
 
-def assert_blocks_equal(a: Tensor, b: Tensor) -> None:
+def assert_blocks_equal(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> None:
     """Verify that two tensors have identical block structure and numerical contents.
-    
-    Uses torch.allclose() with default PyTorch tolerances (rtol=1e-05, atol=1e-08)
-    for numerical comparison of block values.
 
     Parameters
     ----------
     a, b:
         Tensors to compare for block equality.
+    rtol, atol:
+        Relative and absolute tolerances passed to torch.allclose.
+        Defaults match PyTorch's own defaults (rtol=1e-05, atol=1e-08).
     """
     assert set(a.data.keys()) == set(b.data.keys())
     for key in a.data:
-        assert torch.allclose(a.data[key], b.data[key])
+        assert torch.allclose(a.data[key], b.data[key], rtol=rtol, atol=atol)
 
 
 def assert_data_weights_equal(tensor1: Tensor, tensor2: Tensor, rtol: float = 1e-10, atol: float = 1e-12, msg: str = "") -> None:
