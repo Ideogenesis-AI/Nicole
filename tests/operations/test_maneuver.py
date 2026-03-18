@@ -30,7 +30,7 @@ import yuzuha
 from nicole import Direction, Index, Sector, Tensor
 from nicole import conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group, SU2Group
-from ..utils import assert_blocks_equal, assert_charge_neutral, populate_random_weights
+from ..utils import populate_random_weights, assert_physical_tensors_equal
 
 
 # ============================================================================
@@ -1195,6 +1195,99 @@ def test_transpose_functional_double_application():
     # Data restored
     for key in original_data:
         assert torch.allclose(double_transpose.data[key], original_data[key])
+
+
+# SU(2) transpose tests
+
+def test_transpose_su2_default_reverses():
+    """Test that default transpose reverses axes on an SU(2) tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=10, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=10)
+
+    T_t = transpose(T)
+
+    # Returns new instance
+    assert T_t is not T
+
+    # Axes reversed: itags should be ['c', 'b', 'a']
+    assert list(T_t.itags) == ['c', 'b', 'a']
+
+    # intw keys have reversed tuple order
+    assert T_t.intw is not None
+    for key in T.intw:
+        reversed_key = tuple(reversed(key))
+        assert reversed_key in T_t.intw
+
+
+def test_transpose_su2_explicit_order():
+    """Test transpose with an explicit non-trivial axis order on SU(2)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=11, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=11)
+
+    order = [1, 2, 0]
+    T_t = transpose(T, *order)
+
+    assert list(T_t.itags) == ['b', 'c', 'a']
+
+    # intw keys match the permuted order
+    assert T_t.intw is not None
+    for key in T.intw:
+        new_key = tuple(key[i] for i in order)
+        assert new_key in T_t.intw
+
+
+def test_transpose_su2_preserves_norm():
+    """Test that transpose preserves the SU(2) tensor norm (R-symbol is unitary)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=12, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=12)
+    original_norm = T.norm()
+
+    T_t = transpose(T)
+
+    assert math.isclose(original_norm, T_t.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+
+def test_transpose_su2_double_application_identity():
+    """Test that applying the default transpose twice restores the original SU(2) tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=13, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=13)
+    original_weights = {k: v.weights.clone() for k, v in T.intw.items()}
+
+    T_double = transpose(transpose(T))
+
+    # itags restored
+    assert list(T_double.itags) == list(T.itags)
+
+    # Data blocks restored
+    assert set(T.data.keys()) == set(T_double.data.keys())
+    for key in T.data:
+        assert torch.allclose(T.data[key], T_double.data[key], rtol=1e-12, atol=1e-14)
+
+    # intw weights restored
+    for key in original_weights:
+        assert torch.allclose(T_double.intw[key].weights, original_weights[key],
+                              rtol=1e-12, atol=1e-14)
+
 
 # Retag tests
 
@@ -2393,6 +2486,183 @@ def test_merge_axes_preserves_dtype():
     assert merged.dtype == torch.complex128
     # Isometry uses the tensor's dtype
     assert iso_conj.dtype == torch.complex128
+
+
+# SU(2) merge_axes tests
+
+def test_merge_axes_su2_basic():
+    """Test basic merge_axes with a 3rd-order SU(2) tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=1, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=1)
+
+    merged, iso_conj = merge_axes(T, [0, 1], merged_tag='ab')
+
+    # Merged tensor has 2 indices (fused + free)
+    assert len(merged.indices) == 2
+    assert 'ab' in merged.itags
+    assert 'c' in merged.itags
+
+    # SU(2) tensor: intw must be populated
+    assert merged.intw is not None
+    assert len(merged.intw) > 0
+
+    # iso_conj has 3 indices (2 unfused + 1 fused) and carries intw
+    assert len(iso_conj.indices) == 3
+    assert iso_conj.intw is not None
+
+
+def test_merge_axes_su2_unfuse_roundtrip():
+    """Test that contracting with iso_conj recovers the same physical SU(2) tensor.
+
+    For non-Abelian tensors the merge→unmerge may produce a different user-chosen
+    outer multiplicity (num_components) while the physical content R@W stays identical.
+    We verify this with both norm equality and assert_physical_tensors_equal.
+    """
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=2, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=2)
+    original_norm = T.norm()
+
+    merged, iso_conj = merge_axes(T, [0, 1], merged_tag='ab')
+    unmerged = contract(merged, iso_conj)
+
+    assert len(unmerged.indices) == 3
+    assert set(unmerged.itags) == {'a', 'b', 'c'}
+
+    # Norm preserved
+    assert math.isclose(original_norm, unmerged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    # Permute unmerged to match T's axis order, then compare physical tensors block-by-block.
+    # Physical equality (R@W) holds even when num_components differs between the two representations.
+    tag_to_pos = {tag: i for i, tag in enumerate(unmerged.itags)}
+    perm = [tag_to_pos[tag] for tag in T.itags]
+    unmerged.permute(perm, in_place=True)
+    assert_physical_tensors_equal(T, unmerged)
+
+
+def test_merge_axes_su2_norm_preserved():
+    """Test that merge_axes preserves the SU(2) tensor norm."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=3, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=3)
+    original_norm = T.norm()
+
+    merged, _ = merge_axes(T, [0, 1], merged_tag='ab')
+    merged_norm = merged.norm()
+
+    assert math.isclose(original_norm, merged_norm, rel_tol=1e-12, abs_tol=1e-15)
+
+
+def test_merge_axes_su2_4th_order():
+    """Test merge_axes on a 4th-order SU(2) tensor (non-trivial outer multiplicity)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    T = Tensor.random([idx1, idx2, idx3, idx4], seed=4, itags=['a', 'b', 'c', 'd'])
+    populate_random_weights(T, seed=4)
+    original_norm = T.norm()
+
+    # Merge first three axes
+    merged, iso_conj = merge_axes(T, [0, 1, 2], merged_tag='abc')
+
+    assert len(merged.indices) == 2
+    assert 'abc' in merged.itags
+    assert merged.intw is not None
+
+    # Roundtrip
+    unmerged = contract(merged, iso_conj)
+    assert len(unmerged.indices) == 4
+
+    assert math.isclose(original_norm, unmerged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    tag_to_pos = {tag: i for i, tag in enumerate(unmerged.itags)}
+    perm = [tag_to_pos[tag] for tag in T.itags]
+    unmerged.permute(perm, in_place=True)
+    assert_physical_tensors_equal(T, unmerged)
+
+
+def test_merge_axes_su2_non_first_axes():
+    """Test merge_axes on SU(2) when merging axes that are not at positions [0,1]."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=5, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=5)
+    original_norm = T.norm()
+
+    # Merge the last two axes (positions 1 and 2)
+    merged, iso_conj = merge_axes(T, [1, 2], merged_tag='bc')
+
+    assert len(merged.indices) == 2
+    assert 'a' in merged.itags
+    assert 'bc' in merged.itags
+    assert merged.intw is not None
+
+    # Norm must be preserved regardless of which axes are fused
+    assert math.isclose(original_norm, merged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    # Roundtrip
+    unmerged = contract(merged, iso_conj)
+    assert len(unmerged.indices) == 3
+
+    assert math.isclose(original_norm, unmerged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    tag_to_pos = {tag: i for i, tag in enumerate(unmerged.itags)}
+    perm = [tag_to_pos[tag] for tag in T.itags]
+    unmerged.permute(perm, in_place=True)
+    assert_physical_tensors_equal(T, unmerged)
+
+
+def test_merge_axes_su2_product_group():
+    """Test merge_axes with a U1×SU2 ProductGroup tensor."""
+    u1 = U1Group()
+    su2 = SU2Group()
+    group = ProductGroup([u1, su2])
+
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((-1, 1), 2), Sector((0, 2), 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2), Sector((1, 2), 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector((-1, 0), 1), Sector((0, 2), 3)))
+
+    T = Tensor.random([idx1, idx2, idx3], seed=6, itags=['a', 'b', 'c'])
+    populate_random_weights(T, seed=6)
+    original_norm = T.norm()
+
+    merged, iso_conj = merge_axes(T, [0, 1], merged_tag='ab')
+
+    assert len(merged.indices) == 2
+    assert merged.intw is not None
+
+    # Norm preserved
+    assert math.isclose(original_norm, merged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    # Roundtrip
+    unmerged = contract(merged, iso_conj)
+    assert len(unmerged.indices) == 3
+
+    assert math.isclose(original_norm, unmerged.norm(), rel_tol=1e-12, abs_tol=1e-15)
+
+    tag_to_pos = {tag: i for i, tag in enumerate(unmerged.itags)}
+    perm = [tag_to_pos[tag] for tag in T.itags]
+    unmerged.permute(perm, in_place=True)
+    assert_physical_tensors_equal(T, unmerged)
 
 
 # Trim zero sectors tests
