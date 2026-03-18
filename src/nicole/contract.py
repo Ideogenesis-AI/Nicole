@@ -478,19 +478,16 @@ def contract(
         elif out_intw and all(v is None for v in out_intw.values()):
             out_intw = None
     
-    result = Tensor(
-        indices=out_indices,
-        itags=out_itags,
-        data=out_blocks,
-        intw=out_intw,
+    out_tensor = Tensor(
+        indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw,
         dtype=torch.promote_types(A.dtype, B.dtype)
     )
 
     # Apply permutation if requested.
     if perm is not None:
-        result.permute(perm, in_place=True)
+        out_tensor.permute(perm, in_place=True)
     
-    return result
+    return out_tensor
 
 
 def _detect_trace_pairs(T: Tensor, excl: set[int] = None) -> list[tuple[int, int]]:
@@ -757,13 +754,7 @@ def trace(
 
         if T.intw is None:
             # Abelian: plain accumulation.
-            if out_key in out_blocks:
-                result_block = out_blocks[out_key] + diag
-                if not isinstance(result_block, torch.Tensor):
-                    result_block = torch.tensor(result_block)
-                out_blocks[out_key] = result_block
-            else:
-                out_blocks[out_key] = diag
+            out_blocks[out_key] = out_blocks.get(out_key, 0) + diag
         else:
             # Non-Abelian (SU(2) / ProductGroup with SU(2)).
             # Tracing axes a and b is equivalent to contracting with a 2-leg identity
