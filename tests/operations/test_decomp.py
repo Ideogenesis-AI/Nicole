@@ -1713,6 +1713,21 @@ def test_decomp_su2_lv_mode():
                                   msg="SU(2) LV mode reconstruction")
 
 
+def test_decomp_su2_qr_mode():
+    """decomp() QR mode reconstructs the SU(2) tensor."""
+    T = _make_su2_3rd_order_decomp(seed=14)
+
+    Q, R = decomp(T, axes=0, mode="QR")
+    reconstructed = contract(Q, R, axes=(1, 0))
+
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm, in_place=True)
+
+    assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                  msg="SU(2) QR mode reconstruction")
+
+
 def test_decomp_su2_svd_4th_order():
     """decomp() SVD mode reconstructs a 4th-order SU(2) tensor for all decomposed axes."""
     T = _make_su2_4th_order_decomp(seed=14)
@@ -1776,6 +1791,15 @@ def test_decomp_su2_6th_order_all_modes():
         reconstructed.permute(perm, in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) LV 6th-order reconstruction axis={axis}")
+
+        # QR mode
+        Q, R = decomp(T, axes=axis, mode="QR")
+        reconstructed = contract(Q, R, axes=(1, 0))
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) QR 6th-order reconstruction axis={axis}")
 
 
 def test_decomp_su2_multi_axis():
@@ -1864,6 +1888,14 @@ def test_decomp_u1su2_6th_order_all_modes():
         reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) LV 6th-order reconstruction axis={axis}")
+
+        # QR mode
+        Q, R = decomp(T, axes=axis, mode="QR")
+        reconstructed = contract(Q, R, axes=(1, 0))
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"U(1)×SU(2) QR 6th-order reconstruction axis={axis}")
 
 
 def test_decomp_u1su2_multi_axis():
