@@ -547,15 +547,10 @@ class Tensor:
         if self.intw is not None:
             new_intw = {k: bridge.to(device, dtype=new_dtype) for k, bridge in self.intw.items()}
         
-        result = Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            intw=new_intw,
-            dtype=new_dtype,
-            label=self.label,
+        return Tensor(
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=new_dtype, label=self.label
         )
-        return result
     
     def cpu(self) -> 'Tensor':
         """Move tensor to CPU."""
@@ -919,9 +914,9 @@ class Tensor:
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
-            result_data = self.data[()] + other.data[()]
+            scalar_data = self.data[()] + other.data[()]
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
@@ -977,9 +972,9 @@ class Tensor:
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
-            result_data = self.data[()] - other.data[()]
+            scalar_data = self.data[()] - other.data[()]
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
@@ -1031,7 +1026,7 @@ class Tensor:
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
             # Perform operation on torch tensor to preserve computational graph
-            result_data = self.data[()] * scalar
+            scalar_data = self.data[()] * scalar
             # Determine scalar dtype for promotion
             if isinstance(scalar, complex):
                 scalar_dtype = torch.complex128
@@ -1040,7 +1035,7 @@ class Tensor:
             else:  # int
                 scalar_dtype = torch.int64
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
             )
         
