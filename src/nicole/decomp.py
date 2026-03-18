@@ -173,10 +173,8 @@ def svd(
     
     for key, arr in T.data.items():
         # Permute array to [left_axis] + right_axes (+ trailing OM axis for SU(2))
-        if T.intw is not None:
-            arr_perm = torch.permute(arr, perm_with_om)
-        else:
-            arr_perm = torch.permute(arr, perm)
+        arr_perm = torch.permute(arr, perm) if T.intw is None \
+            else torch.permute(arr, perm_with_om)
         
         # Get left charge and right charges
         q_left = key[left_axis]
@@ -285,11 +283,8 @@ def svd(
         # For U tensor: indices (left_index, bond_index)
         # Block key: (q_left, q_left) since bond charge equals left charge
         U_key = (q_left, q_left)
-        if T.group.is_abelian:
-            U_blocks[U_key] = U
-        else:
-            # Non-Abelian: add trailing component dimension of 1
-            U_blocks[U_key] = U.unsqueeze(-1)
+        # Add trailing component dimension of 1 for non-Abelian groups
+        U_blocks[U_key] = U if T.group.is_abelian else U.unsqueeze(-1)
         
         # For S: store singular values as 1D array (memory efficient)
         # Block key: (q_left, q_left)
@@ -310,15 +305,15 @@ def svd(
     if not T.group.is_abelian:
         # U intertwiner: identity-like Bridge for each (q_left, q_left) block.
         # Same convention as identity() in identity.py: weights[0, 0] = sqrt(irrep_dim).
-        U_intw = {}
+        U_intw: Dict[BlockKey, dg.Bridge] = {}
         for q_left in bond_charge_dims:
-            bridge = dg.Bridge.from_block(
-                T.group, (q_left, q_left),
-                [left_index.direction, bond_index.direction],
-                dtype=T.dtype
-            )
-            bridge.weights[0, 0] = math.sqrt(T.group.irrep_dim(q_left))
-            U_intw[(q_left, q_left)] = bridge
+            # Create intertwiner with correct directions and dtype
+            directions = [left_index.direction, bond_index.direction]
+            U_intw[(q_left, q_left)] = \
+                dg.Bridge.from_block(T.group, (q_left, q_left), directions, dtype=T.dtype)
+            # Set intertwiner weights to sqrt(irrep_dim(q))
+            U_intw[(q_left, q_left)].weights[0, 0] = \
+                torch.sqrt(torch.tensor(T.group.irrep_dim(q_left), dtype=T.dtype))
         
         # Vd intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
         # Vd's index order is [bond, right_indices_in_original_order], which equals T's
@@ -327,7 +322,7 @@ def svd(
         # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
         # so the weights are copied unchanged.
         # Note: skip entries whose left charge was eliminated by truncation.
-        Vh_intw = {}
+        Vh_intw: Dict[BlockKey, dg.Bridge] = {}
         for key, bridge in T.intw.items():
             q_left = key[left_axis]
             if q_left not in bond_charge_dims:
@@ -419,6 +414,9 @@ def qr(
     
     # Build permutation to place left axis first
     perm = [left_axis] + right_axes
+    # For non-Abelian tensors each data block has a trailing OM axis that must
+    # be kept last.  The array-level permutation appends that axis index.
+    perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices
     left_index = T.indices[left_axis]
@@ -430,8 +428,9 @@ def qr(
     blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, torch.Tensor, Tuple[int, ...], torch.Tensor]]] = {}
     
     for key, arr in T.data.items():
-        # Permute array to [left_axis] + right_axes
-        arr_perm = torch.permute(arr, perm)
+        # Permute array to [left_axis] + right_axes (+ trailing OM axis for SU(2))
+        arr_perm = torch.permute(arr, perm) if T.intw is None \
+            else torch.permute(arr, perm_with_om)
         
         # Get left charge
         q_left = key[left_axis]
@@ -488,7 +487,8 @@ def qr(
         # For Q tensor: indices (left_index, bond_index)
         # Block key: (q_left, q_left) since bond charge equals left charge
         Q_key = (q_left, q_left)
-        Q_blocks[Q_key] = Q
+        # Add trailing component dimension of 1 for non-Abelian groups
+        Q_blocks[Q_key] = Q if T.group.is_abelian else Q.unsqueeze(-1)
         
         # For R tensor: indices (bond_index.flip(), *right_indices)
         # Each block gets its corresponding R from the dictionary
@@ -497,21 +497,41 @@ def qr(
             R_key = (q_left,) + q_right
             R_blocks[R_key] = R_reshaped
     
+    # Build intertwiners for non-Abelian groups
+    Q_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    R_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+
+    if not T.group.is_abelian:
+        # Q intertwiner: identity-like, one entry per bond charge
+        Q_intw: Dict[BlockKey, dg.Bridge] = {}
+        for q_left in bond_charge_dims:
+            directions = [left_index.direction, bond_index.direction]
+            Q_intw[(q_left, q_left)] = \
+                dg.Bridge.from_block(T.group, (q_left, q_left), directions, dtype=T.dtype)
+            Q_intw[(q_left, q_left)].weights[0, 0] = \
+                torch.sqrt(torch.tensor(T.group.irrep_dim(q_left), dtype=T.dtype))
+
+        # R intertwiner: permuted from T.intw via R-symbol (mirrors Vh_intw in svd)
+        R_intw: Dict[BlockKey, dg.Bridge] = {}
+        for key, bridge in T.intw.items():
+            r_symbol, spec_permuted = dg.compute_rsymbol(bridge, perm)
+            new_weights = bridge.weights @ r_symbol.to(dtype=bridge.weights.dtype)
+            new_key = tuple(key[i] for i in perm)
+            R_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
+
     # Construct output tensors
     Q_tensor = Tensor(
         indices=(left_index, bond_index),
         itags=(T.itags[left_axis], "_bond"),
-        data=Q_blocks,
-        dtype=T.dtype
+        data=Q_blocks, intw=Q_intw, dtype=T.dtype
     )
-    
+
     R_tensor = Tensor(
         indices=(bond_index.flip(),) + right_indices,
         itags=("_bond",) + right_itags,
-        data=R_blocks,
-        dtype=T.dtype
+        data=R_blocks, intw=R_intw, dtype=T.dtype
     )
-    
+
     return Q_tensor, R_tensor
 
 
@@ -952,16 +972,17 @@ def decomp(
         else:
             # Non-Abelian: diagonal matrix with trailing component dimension of 1.
             # Intertwiner is identity-like: weights[0, 0] = sqrt(irrep_dim(q)).
-            S_intw = {}
+            S_intw: Dict[BlockKey, dg.Bridge] = {}
             bond_flip_index = bond_index.flip()
             for key, s_array in S_blocks.items():
+                # Create diagonal matrix with trailing component dimension of 1
                 S_diag_blocks[key] = torch.diag(s_array).unsqueeze(-1)
-                q = key[0]
-                bridge = dg.Bridge.from_block(
-                    T.group, key, [bond_flip_index.direction, bond_index.direction], dtype=target_dtype
-                )
-                bridge.weights[0, 0] = math.sqrt(T.group.irrep_dim(q))
-                S_intw[key] = bridge
+                # Create intertwiner with correct directions and dtype
+                directions = [bond_flip_index.direction, bond_index.direction]
+                S_intw[key] = dg.Bridge.from_block(T.group, key, directions, dtype=target_dtype)
+                # Set intertwiner weights to sqrt(irrep_dim(q))
+                S_intw[key].weights[0, 0] = \
+                    torch.sqrt(torch.tensor(T.group.irrep_dim(key[0]), dtype=target_dtype))
         
         # Natural S has indices matching the natural flow from svd
         S_tensor = Tensor(
