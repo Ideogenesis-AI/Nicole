@@ -349,7 +349,7 @@ def isometry_n(
     # Create first 2-to-1 isometry
     # For n=2 (base case), use the specified direction; otherwise use OUT for intermediate
     first_fused_dir = direction if n == 2 else Direction.OUT
-    result = isometry(
+    accu_iso = isometry(
         first_idx,
         second_idx,
         dtype=dtype,
@@ -359,9 +359,9 @@ def isometry_n(
     
     # Sequentially fuse remaining indices
     for i in range(2, n):
-        # Get the fused index from the previous result (last index)
-        fused_idx = result.indices[-1]
-        fused_tag = result.itags[-1]  # Get the tag of the fused index
+        # Get the fused index from the accumulated isometry (last index)
+        fused_idx = accu_iso.indices[-1]
+        fused_tag = accu_iso.itags[-1]
         
         # Get next index to fuse
         next_idx = sorted_idx_list[i]
@@ -374,8 +374,7 @@ def isometry_n(
         # Use OUT for intermediate, use specified direction for final
         fused_dir = direction if is_last else Direction.OUT
         
-        # Create new 2-to-1 isometry
-        # Use the same tag for the first index to enable contraction
+        # Create new 2-to-1 isometry; reuse fused_tag so the contracted legs match
         new_iso = isometry(
             fused_idx_flipped,
             next_idx,
@@ -384,29 +383,24 @@ def isometry_n(
             fused_direction=fused_dir,
         )
         
-        # Contract the new isometry with accumulated result
-        # The fused index from result will contract with the first index of new_iso
-        # They should have matching tags and opposite directions
-        # Contract: last index of result with first index of new_iso (0)
-        result_last_idx = len(result.indices) - 1
-        result = contract(result, new_iso, axes=(result_last_idx, 0))
+        # Contract: last index of accu_iso with first index of new_iso
+        accu_iso_last_idx = len(accu_iso.indices) - 1
+        accu_iso = contract(accu_iso, new_iso, axes=(accu_iso_last_idx, 0))
     
-    # After all fusions, result has n indices (in sorted order) + 1 fused index
-    # The indices are at positions 0, 1, ..., n-1, and the fused index is at position n
+    # After all fusions, accu_iso has n indices (in sorted order) + 1 fused index
+    # The original indices are at positions 0..n-1; the fused index is at position n
     
     # Step 5: Restore Original Index Order
     # Create permutation that moves indices back to their original positions
     # The fused index (currently at position n) stays at position n
     perm = inverse_perm + [n]
-    result.permute(perm, in_place=True)
+    accu_iso.permute(perm, in_place=True)
     
     # Step 6: Apply Tags
     if itags is not None:
-        # Retag all indices with user-provided tags
-        result.retag(itags)
+        accu_iso.retag(itags)
     else:
-        # Use default tags
-        result.retag(["_init_"] * (n + 1))
+        accu_iso.retag(["_init_"] * (n + 1))
     
-    return result
+    return accu_iso
 
