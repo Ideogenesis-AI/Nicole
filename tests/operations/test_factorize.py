@@ -1842,7 +1842,7 @@ def test_qr_consistency_across_axes():
         assert_blocks_equal(T, recon, rtol=1e-10, atol=1e-12)
 
 
-# ===== SU(2) QR Tests =====
+# SU(2) QR Tests
 
 def test_qr_su2_reconstruction_2nd_order():
     """QR of a 2nd-order SU(2) tensor reconstructs the original for all decomposed axes."""
@@ -2562,3 +2562,88 @@ def test_eig_order_multiple_blocks():
     all_eigvals = torch.cat([torch.real(eigvals) for eigvals in D_nkeep.values()])
     all_eigvals, _ = torch.sort(all_eigvals)
     assert torch.allclose(all_eigvals, torch.tensor([-3.0, -2.0, 0.0], dtype=all_eigvals.dtype))
+
+
+# SU(2) Eigendecomposition Tests
+
+def test_eig_su2_u_has_intw():
+    """U from SU(2) eig has a non-None intertwiner."""
+    T = _make_su2_2nd_order(seed=70)
+
+    U, _D = eig(T)
+
+    assert U.intw is not None, "U must have intw for SU(2)"
+
+
+def test_eig_su2_u_intertwiner_identity_like():
+    """U from SU(2) eig has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
+    T = _make_su2_2nd_order(seed=71)
+
+    U, _D = eig(T)
+
+    assert U.intw is not None
+    for key, bridge in U.intw.items():
+        q = key[0]
+        assert bridge.weights.shape == (1, 1), \
+            f"U bridge weights should be (1,1), got {bridge.weights.shape}"
+        expected = math.sqrt(T.group.irrep_dim(q))
+        assert abs(bridge.weights[0, 0].item() - expected) < 1e-6, \
+            f"U bridge weights[0,0] should be sqrt(irrep_dim({q}))={expected:.4f}"
+
+
+def test_eig_su2_u_data_blocks_have_trailing_component_dim():
+    """U blocks from SU(2) eig have a trailing OM axis of size 1."""
+    T = _make_su2_2nd_order(seed=72)
+
+    U, _D = eig(T)
+
+    for key, arr in U.data.items():
+        assert arr.ndim == 3, f"U block {key} should be 3D, got {arr.ndim}D"
+        assert arr.shape[-1] == 1, \
+            f"U block {key} trailing dim should be 1, got {arr.shape[-1]}"
+
+
+def test_eig_su2_eigendecomposition_relation():
+    """For each block: T_block @ U_block = U_block @ diag(D_block) (reduced matrix elements)."""
+    T = _make_su2_2nd_order(seed=73)
+
+    U, D = eig(T)
+
+    for key, t_arr in T.data.items():
+        q = key[0]
+        u_key = (q, q)
+        if u_key not in U.data:
+            continue
+
+        T_mat = t_arr.squeeze(-1).to(dtype=U.dtype)      # (d_q, d_q)
+        U_mat = U.data[u_key].squeeze(-1)                 # (d_q, rank)
+        D_vec = D[u_key]                                  # (rank,)
+
+        lhs = T_mat @ U_mat
+        rhs = U_mat @ torch.diag(D_vec.to(dtype=U.dtype))
+        assert torch.allclose(lhs, rhs, atol=1e-8), \
+            f"Eigendecomposition relation T@U = U@diag(D) failed for charge {q}, " \
+            f"max err={( lhs - rhs).abs().max():.2e}"
+
+
+def test_eig_su2_charge_neutral():
+    """U from SU(2) eig is charge neutral."""
+    T = _make_su2_2nd_order(seed=74)
+
+    U, _D = eig(T)
+
+    assert_charge_neutral(U)
+
+
+def test_eig_su2_truncation_nkeep():
+    """SU(2) eig with nkeep truncation produces the correct number of eigenvalues."""
+    T = _make_su2_2nd_order(seed=75)
+
+    U, D = eig(T, order="descend", trunc={"nkeep": 2})
+
+    total = sum(len(vals) for vals in D.values())
+    assert total == 2, f"Expected 2 eigenvalues after nkeep=2, got {total}"
+    assert U.intw is not None, "U.intw must not be None after truncation"
+    # intw keys must match U.data keys exactly
+    assert set(U.intw.keys()) == set(U.data.keys()), \
+        "U.intw keys must match U.data keys after nkeep truncation"
