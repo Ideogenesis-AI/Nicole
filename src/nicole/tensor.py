@@ -1188,7 +1188,7 @@ class Tensor:
                 dtype=self.dtype, label=self.label
             )
 
-    def permute(self, order: Sequence[int], in_place: bool = True) -> Tensor:
+    def permute(self, order: Sequence[int], in_place: bool = False) -> Tensor:
         """Permute tensor axes according to the provided reordering.
         
         Parameters
@@ -1197,9 +1197,10 @@ class Tensor:
             Sequence of integer axes specifying the new ordering. Must be a
             permutation of range(len(self.indices)).
         in_place : bool, optional
-            If True (default), modifies this tensor in-place and returns self.
-            If False, returns a new Tensor instance with permuted axes. The data
-            blocks share the same underlying storage (torch.permute creates views).
+            If False (default), returns a new Tensor instance with permuted axes.
+            The data blocks share the same underlying storage (torch.permute
+            creates views). If True, modifies this tensor in-place and returns
+            self.
         
         Returns
         -------
@@ -1214,14 +1215,14 @@ class Tensor:
         
         Examples
         --------
-        >>> # In-place style (default, allows chaining)
-        >>> result = t.permute([2, 0, 1])
-        >>> result is t  # Returns self for chaining
-        >>> 
-        >>> # Functional style (efficient with sharing)
-        >>> t2 = t.permute([2, 0, 1], in_place=False)
+        >>> # Functional style (default, efficient with sharing)
+        >>> t2 = t.permute([2, 0, 1])
         >>> t2 is not t  # Different Tensor instances
         >>> # But t2.data blocks share storage with t.data (as permuted views)
+        >>> 
+        >>> # In-place style (allows chaining)
+        >>> result = t.permute([2, 0, 1], in_place=True)
+        >>> result is t  # Returns self for chaining
         """
         if sorted(order) != list(range(len(self.indices))):
             raise ValueError("Invalid permutation order")
