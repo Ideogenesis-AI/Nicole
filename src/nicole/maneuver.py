@@ -782,17 +782,22 @@ def inv(tensor: Tensor) -> Tensor:
     diagonal element. For charge conservation, the input tensor must have
     opposite index directions.
     
+    Supports both Abelian groups (U1Group, Z2Group, etc.) and non-Abelian
+    groups (SU2Group, ProductGroup with SU2Group). For non-Abelian tensors,
+    blocks carry a trailing outer-multiplicity (OM) dimension and an intertwiner
+    (intw) field; both are handled correctly and preserved in the output.
+    
     Parameters
     ----------
     tensor : Tensor
-        Input diagonal matrix tensor with exactly 2 indices. If both indices have
-        the same direction, they will be flipped automatically. If labeled "Diagonal",
-        the diagonal structure check is skipped.
+        Input diagonal matrix tensor with exactly 2 indices. If labeled
+        "Diagonal", the diagonal structure check is skipped.
     
     Returns
     -------
     Tensor
-        Inverted diagonal matrix with the same structure as input.
+        Inverted diagonal matrix with the same structure as input, including
+        the intertwiner field for non-Abelian tensors.
     
     Raises
     ------
@@ -819,7 +824,7 @@ def inv(tensor: Tensor) -> Tensor:
     >>> from nicole import contract
     >>> result = contract(S_diag, S_inv)
     
-    >>> # Manual diagonal tensor
+    >>> # Manual diagonal tensor (Abelian)
     >>> idx = Index(Direction.IN, U1Group(), (Sector(0, 2),))
     >>> D = Tensor(
     ...     indices=(idx.flip(), idx),
@@ -832,11 +837,27 @@ def inv(tensor: Tensor) -> Tensor:
     array([[0.5 , 0.  ],
            [0.  , 0.25]])
     
+    >>> # SU(2) diagonal tensor (non-Abelian)
+    >>> from nicole import SU2Group
+    >>> group = SU2Group()
+    >>> idx = Index(Direction.IN, group, (Sector(1, 2),))
+    >>> S_blocks_su2 = {(1, 1): torch.tensor([2.0, 0.5])}
+    >>> S_diag_su2 = diag(S_blocks_su2, idx)
+    >>> S_inv_su2 = inv(S_diag_su2)
+    >>> # S_inv_su2.intw is preserved with same weights as S_diag_su2
+    
     Notes
     -----
     The function inverts each diagonal matrix block independently by computing
     1/x for each diagonal element. Off-diagonal elements are assumed to be zero
     (only checked if label != "Diagonal").
+    
+    For non-Abelian (SU(2)) tensors, blocks have shape (n, n, 1) with a trailing
+    OM dimension. The diagonal is extracted from block[:, :, 0], and the output
+    block is reconstructed with the same trailing dimension. The intertwiner
+    (Bridge) weights encode the irrep normalisation √(irrep_dim) and are
+    unchanged by inversion; new Bridge objects are built with the transposed
+    index directions.
     
     For numerical stability, elements with absolute value below machine epsilon
     for float64 will raise ZeroDivisionError.
@@ -847,16 +868,23 @@ def inv(tensor: Tensor) -> Tensor:
             f"inv requires a tensor with exactly 2 indices, got {len(tensor.indices)}"
         )
     
-    # Check diagonal structure (skip if labeled "Diagonal")
+    # Always swap and flip indices (transpose)
+    inv_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())
+    inv_itags = (tensor.itags[1], tensor.itags[0])
+    
+    # Machine epsilon
     eps = torch.finfo(torch.float64).eps
+    
+    # Check diagonal structure (skip if labeled "Diagonal")
     if tensor.label != "Diagonal":
         for key, block in tensor.data.items():
-            if block.ndim != 2 or block.shape[0] != block.shape[1]:
+            # Non-Abelian blocks carry a trailing OM axis: (n, n, om)
+            matrix_2d = block[:, :, 0] if tensor.intw is not None else block
+            if matrix_2d.ndim != 2 or matrix_2d.shape[0] != matrix_2d.shape[1]:
                 raise ValueError(
                     f"inv requires square matrix blocks, but block {key} has shape {block.shape}"
                 )
-            # Check off-diagonal elements are zero
-            off_diag = block - torch.diag(torch.diag(block))
+            off_diag = matrix_2d - torch.diag(torch.diag(matrix_2d))
             if torch.max(torch.abs(off_diag)).item() > eps:
                 raise ValueError(
                     f"inv requires diagonal matrices, but block {key} has non-zero "
@@ -865,10 +893,12 @@ def inv(tensor: Tensor) -> Tensor:
     
     # Invert each diagonal block and transpose by swapping block keys
     inv_blocks: Dict[BlockKey, torch.Tensor] = {}
+    inv_intw: Optional[Dict[BlockKey, dg.Bridge]] = {} if tensor.intw is not None else None
     
     for key, block in tensor.data.items():
-        # Extract diagonal elements
-        diag_elements = torch.diag(block)
+        # Non-Abelian blocks carry a trailing OM axis: extract the 2D matrix slice
+        matrix_2d = block[:, :, 0] if tensor.intw is not None else block
+        diag_elements = torch.diag(matrix_2d)
         
         # Check for zeros
         if torch.any(torch.abs(diag_elements) < eps):
@@ -878,24 +908,21 @@ def inv(tensor: Tensor) -> Tensor:
                 f"at diagonal positions {zero_indices.tolist()}"
             )
         
-        # Invert diagonal elements
         inv_diag = 1.0 / diag_elements
-        
-        # Swap block keys for transpose
         swapped_key = (key[1], key[0])
         inv_blocks[swapped_key] = torch.diag(inv_diag)
-    
-    # Always swap and flip indices (transpose)
-    result_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())
-    result_itags = (tensor.itags[1], tensor.itags[0])
+        
+        if tensor.intw is not None:
+            inv_blocks[swapped_key] = inv_blocks[swapped_key].unsqueeze(-1)
+            inv_intw[swapped_key] = dg.Bridge.from_block(
+                tensor.group, swapped_key, [inv_indices[0].direction, inv_indices[1].direction],
+                weights=tensor.intw[key].weights.clone(), dtype=tensor.dtype
+            )
     
     # Create inverted tensor
     return Tensor(
-        indices=result_indices,
-        itags=result_itags,
-        data=inv_blocks,
-        dtype=tensor.dtype,
-        label=tensor.label
+        indices=inv_indices, itags=inv_itags, data=inv_blocks, intw=inv_intw,
+        dtype=tensor.dtype, label=tensor.label
     )
 
 
