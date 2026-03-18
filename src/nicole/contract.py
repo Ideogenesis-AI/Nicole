@@ -595,8 +595,6 @@ def trace(
 
     Raises
     ------
-    NotImplementedError
-        If the tensor uses non-Abelian symmetry groups.
     ValueError
         If both axes and excl are specified, or if paired indices have the same direction,
         mismatched charges, incompatible dimensions, or if no valid pairs are found,
