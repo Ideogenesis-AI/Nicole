@@ -488,7 +488,7 @@ def contract(
 
     # Apply permutation if requested.
     if perm is not None:
-        result.permute(perm)
+        result.permute(perm, in_place=True)
     
     return result
 

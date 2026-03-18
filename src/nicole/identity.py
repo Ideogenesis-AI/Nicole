@@ -398,7 +398,7 @@ def isometry_n(
     # Create permutation that moves indices back to their original positions
     # The fused index (currently at position n) stays at position n
     perm = inverse_perm + [n]
-    result.permute(perm)
+    result.permute(perm, in_place=True)
     
     # Step 6: Apply Tags
     if itags is not None:
