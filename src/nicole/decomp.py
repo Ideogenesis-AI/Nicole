@@ -881,7 +881,7 @@ def decomp(
         
         # The merged index is now at position 0 (merge_axes places it first)
         # Decompose on the merged axis
-        result = decomp(
+        decomp_result = decomp(
             merged_T,
             axes=0,  # Merged index is at position 0
             mode=mode,
@@ -890,9 +890,9 @@ def decomp(
             trunc=trunc
         )
         
-        # Unmerge the U tensor (first element of result)
+        # Unmerge the U tensor (first element of decomp_result)
         if mode == "SVD":
-            U, S, Vh = result
+            U, S, Vh = decomp_result
             # Unmerge U by contracting with conjugate isometry
             # The merged index is at position 0 of U, and at last position of iso_conj
             iso_conj_last_idx = len(iso_conj.indices) - 1
@@ -900,7 +900,7 @@ def decomp(
             U_unmerged.trim_zero_blocks()
             return U_unmerged, S, Vh
         else:  # mode == "UR", "LV", or "QR"
-            first, second = result
+            first, second = decomp_result
             # For UR mode, first is U; for LV mode, first is L; for QR mode, first is Q
             # All have the merged index at position 0
             # The merged index is at position 0 of first, and at last position of iso_conj
