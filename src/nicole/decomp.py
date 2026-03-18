@@ -661,10 +661,13 @@ def eig(
         q_row = key[0]
         # Note: charge conservation ensures q_row == key[1] for square matrices
         
-        # Perform eigendecomposition
+        # Perform eigendecomposition on the reduced matrix.
+        # For non-Abelian tensors the block has a trailing OM axis of size 1;
+        # squeeze it away before calling eig (eig requires a 2-D input).
         # torch.linalg.eig returns (eigenvalues, eigenvectors)
         # eigenvectors[:, i] is the eigenvector for eigenvalues[i]
-        eigenvalues, eigenvectors = torch.linalg.eig(arr)
+        eigenvalues, eigenvectors = torch.linalg.eig(arr) if T.intw is None \
+            else torch.linalg.eig(arr.squeeze(-1))
         
         # Sort eigenvalues according to order parameter
         # For real eigenvalues, sorts by value; for complex, sorts by real part
@@ -759,8 +762,10 @@ def eig(
         # For U tensor: indices (row_index, bond_index)
         # Block key: (q, q) since bond charge equals row charge
         U_key = (q, q)
-        # When all_real is True, explicitly take real part to avoid casting warning
-        U_blocks[U_key] = eigvecs.real.to(dtype=U_dtype) if all_real else eigvecs.to(dtype=U_dtype)
+        # When all_real is True, explicitly take real part to avoid casting warning.
+        # For non-Abelian tensors add trailing OM axis of size 1 to match convention.
+        u_block = eigvecs.real.to(dtype=U_dtype) if all_real else eigvecs.to(dtype=U_dtype)
+        U_blocks[U_key] = u_block if T.group.is_abelian else u_block.unsqueeze(-1)
         
         # For D: store eigenvalues as 1D array (memory efficient)
         # Block key: (q, q)
@@ -768,14 +773,24 @@ def eig(
         # When all_real is True, explicitly take real part to avoid casting warning
         D_blocks[D_key] = eigvals.real.to(dtype=D_dtype) if all_real else eigvals.to(dtype=D_dtype)
     
+    # Build identity-like intertwiner for non-Abelian (SU(2)) tensors.
+    # Iterates over bond_charge_dims (post-truncation), so nkeep truncation is
+    # automatically handled without a separate guard.
+    U_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    if not T.group.is_abelian:
+        U_intw = {}
+        for q in bond_charge_dims:
+            directions = [row_index.direction, bond_index.direction]
+            U_intw[(q, q)] = dg.Bridge.from_block(T.group, (q, q), directions, dtype=U_dtype)
+            U_intw[(q, q)].weights[0, 0] = \
+                torch.sqrt(torch.tensor(T.group.irrep_dim(q), dtype=U_dtype))
+
     # Construct output tensor
     U_tensor = Tensor(
-        indices=(row_index, bond_index),
-        itags=(T.itags[0], bond_tag),
-        data=U_blocks,
-        dtype=U_dtype
+        indices=(row_index, bond_index), itags=(T.itags[0], bond_tag),
+        data=U_blocks, intw=U_intw, dtype=U_dtype
     )
-    
+
     return U_tensor, D_blocks
 
 
