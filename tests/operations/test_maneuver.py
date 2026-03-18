@@ -473,7 +473,7 @@ def test_permute_method_inplace_basic():
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    result = tensor.permute(order)
+    result = tensor.permute(order, in_place=True)
     
     # Returns self
     assert result is tensor
@@ -498,7 +498,7 @@ def test_permute_method_inplace_allows_chaining():
     tensor = Tensor.random(indices, seed=10, itags=["a", "b", "c"])
     
     # Chain: [a,b,c] -> [c,a,b] -> [b,c,a]
-    result = tensor.permute([2, 0, 1]).permute([2, 0, 1])
+    result = tensor.permute([2, 0, 1], in_place=True).permute([2, 0, 1], in_place=True)
     
     # Returns self
     assert result is tensor
@@ -515,7 +515,7 @@ def test_permute_method_inplace_identity():
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    result = tensor.permute([0, 1, 2])
+    result = tensor.permute([0, 1, 2], in_place=True)
     
     # Returns self
     assert result is tensor
@@ -788,7 +788,7 @@ def test_permute_inplace_su2_modifies_and_returns_self():
     
     original_intw_keys = list(tensor.intw.keys())
     
-    result = tensor.permute([1, 0])
+    result = tensor.permute([1, 0], in_place=True)
     
     # Returns self
     assert result is tensor
@@ -2226,7 +2226,7 @@ def test_merge_axes_unfuse_with_conjugate():
     tag_to_pos_original = {tag: i for i, tag in enumerate(T.itags)}
     tag_to_pos_unmerged = {tag: i for i, tag in enumerate(unmerged.itags)}
     perm = [tag_to_pos_unmerged[tag] for tag in T.itags]
-    unmerged.permute(perm)
+    unmerged.permute(perm, in_place=True)
     
     # Now compare block by block
     assert set(T.data.keys()) == set(unmerged.data.keys())
@@ -2372,7 +2372,7 @@ def test_merge_axes_product_group():
     tag_to_pos_original = {tag: i for i, tag in enumerate(T.itags)}
     tag_to_pos_unmerged = {tag: i for i, tag in enumerate(unmerged.itags)}
     perm = [tag_to_pos_unmerged[tag] for tag in T.itags]
-    unmerged.permute(perm)
+    unmerged.permute(perm, in_place=True)
     
     # Verify data blocks match
     assert set(T.data.keys()) == set(unmerged.data.keys())

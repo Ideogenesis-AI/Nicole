@@ -258,7 +258,7 @@ def test_permute_invalidates_sorted_keys():
     assert old_cache is not None  # Cache should be populated
     
     # Permute changes the keys
-    tensor.permute([1, 0])
+    tensor.permute([1, 0], in_place=True)
     
     # Cache should be invalidated
     assert tensor._sorted_keys is None

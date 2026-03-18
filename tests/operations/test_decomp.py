@@ -182,7 +182,7 @@ def test_decomp_ur_multiindex():
     reconstructed = contract(U, R, axes=(1, 0))
     
     # Permute back to original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
@@ -209,7 +209,7 @@ def test_decomp_lv_multiindex():
     reconstructed = contract(L, V, axes=(1, 0))
     
     # Permute back to original order (c, a, b) -> (a, b, c)
-    reconstructed.permute([1, 2, 0])
+    reconstructed.permute([1, 2, 0], in_place=True)
     
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
@@ -236,7 +236,7 @@ def test_decomp_qr_multiindex():
     reconstructed = contract(Q, R, axes=(1, 0))
     
     # Permute back to original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     # Verify accuracy
     diff_norm = (T - reconstructed).norm()
@@ -371,11 +371,11 @@ def test_decomp_4th_order_tensor():
         if axis == 0:
             pass  # (a, b, c, d)
         elif axis == 1:
-            reconstructed.permute([1, 0, 2, 3])  # (b, a, c, d) -> (a, b, c, d)
+            reconstructed.permute([1, 0, 2, 3], in_place=True)  # (b, a, c, d) -> (a, b, c, d)
         elif axis == 2:
-            reconstructed.permute([1, 2, 0, 3])  # (c, a, b, d) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 0, 3], in_place=True)  # (c, a, b, d) -> (a, b, c, d)
         elif axis == 3:
-            reconstructed.permute([1, 2, 3, 0])  # (d, a, b, c) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 3, 0], in_place=True)  # (d, a, b, c) -> (a, b, c, d)
         
         # Verify accuracy
         rel_error = (T - reconstructed).norm() / original_norm
@@ -414,7 +414,7 @@ def test_decomp_5th_order_tensor():
     reconstructed = contract(U, S_Vh, axes=(1, 0))
     
     # Permute: (c, a, b, d, e) -> (a, b, c, d, e)
-    reconstructed.permute([1, 2, 0, 3, 4])
+    reconstructed.permute([1, 2, 0, 3, 4], in_place=True)
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
@@ -783,7 +783,7 @@ def test_decomp_flow_multiindex_ur_lv():
         U, R = decomp(T, axes=1, mode="UR", flow=flow)
         reconstructed = contract(U, R, axes=(1, 0))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
-        reconstructed.permute([1, 0, 2])
+        reconstructed.permute([1, 0, 2], in_place=True)
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
         assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -793,7 +793,7 @@ def test_decomp_flow_multiindex_ur_lv():
         L, V = decomp(T, axes=1, mode="LV", flow=flow)
         reconstructed = contract(L, V, axes=(1, 0))
         # Permute reconstructed to match T's index order (b, a, c) -> (a, b, c)
-        reconstructed.permute([1, 0, 2])
+        reconstructed.permute([1, 0, 2], in_place=True)
         rel_error = (T - reconstructed).norm() / T.norm()
         assert rel_error < 1e-12
         assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -984,7 +984,7 @@ def test_decomp_itag_multiindex():
     # Verify reconstruction with integer pairs
     S_Vh = contract(S, Vh, axes=(1, 0))
     reconstructed = contract(U, S_Vh, axes=(1, 0))
-    reconstructed.permute([1, 0, 2])  # Reorder (b, a, c) to (a, b, c)
+    reconstructed.permute([1, 0, 2], in_place=True)  # Reorder (b, a, c) to (a, b, c)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1155,7 +1155,7 @@ def test_decomp_multi_axis_reconstruction():
     tag_to_pos_orig = {tag: i for i, tag in enumerate(T.itags)}
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
     perm = [tag_to_pos_recon[tag] for tag in T.itags]
-    reconstructed.permute(perm)
+    reconstructed.permute(perm, in_place=True)
     
     # Data should match (up to numerical precision)
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1326,7 +1326,7 @@ def test_decomp_multi_axis_preserves_index_order():
     S1_Vh1 = contract(S1, Vh1, axes=(1, 0))
     recon1 = contract(U1, S1_Vh1, axes=(2, 0))
     # recon1 has itags ('a', 'c', 'b', 'd'), need to permute to ('a', 'b', 'c', 'd')
-    recon1.permute([0, 2, 1, 3])
+    recon1.permute([0, 2, 1, 3], in_place=True)
     assert_blocks_equal(recon1, T, rtol=1e-10, atol=1e-12)
 
 
@@ -1435,9 +1435,9 @@ def test_decomp_high_order_all_modes():
     
     # All reconstructions should match (after permuting to same order)
     # Current order is (b, a, c, d), need (a, b, c, d)
-    recon_ur.permute([1, 0, 2, 3])
-    recon_svd.permute([1, 0, 2, 3])
-    recon_lv.permute([1, 0, 2, 3])
+    recon_ur.permute([1, 0, 2, 3], in_place=True)
+    recon_svd.permute([1, 0, 2, 3], in_place=True)
+    recon_lv.permute([1, 0, 2, 3], in_place=True)
     
     assert (recon_ur - recon_svd).norm() / T.norm() < 1e-12
     assert (recon_svd - recon_lv).norm() / T.norm() < 1e-12
@@ -1503,7 +1503,7 @@ def test_decomp_6th_order_svd_ur_lv_modes():
     # Reconstruction accuracy: U @ S @ Vh = T
     reconstructed = contract(contract(U, S), Vh)
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"SVD reconstruction error too large: {rel_error}"
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1539,7 +1539,7 @@ def test_decomp_6th_order_svd_ur_lv_modes():
     # Reconstruction accuracy: U @ R = T
     reconstructed = contract(U, R)
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"UR reconstruction error too large: {rel_error}"
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1578,7 +1578,7 @@ def test_decomp_6th_order_svd_ur_lv_modes():
     # Reconstruction accuracy: L @ Vh = T
     reconstructed = contract(L, Vh)
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+    reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-11, f"LV reconstruction error too large: {rel_error}"
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1617,7 +1617,7 @@ def test_decomp_6th_order_qr_mode():
     # Reconstruction accuracy: Q @ R = T
     reconstructed = contract(Q, R)
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-    reconstructed.permute([tag_to_pos_recon[tag] for tag in T6.itags])
+    reconstructed.permute([tag_to_pos_recon[tag] for tag in T6.itags], in_place=True)
     rel_error = (T6 - reconstructed).norm() / T6.norm()
     assert rel_error < 1e-11, f"6th-order QR reconstruction error too large: {rel_error}"
     assert_blocks_equal(T6, reconstructed, rtol=1e-10, atol=1e-12)
@@ -1644,7 +1644,7 @@ def test_decomp_su2_svd_mode():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) SVD mode reconstruction axis={axis}")
@@ -1692,7 +1692,7 @@ def test_decomp_su2_ur_mode():
 
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
     perm = [tag_to_pos_recon[tag] for tag in T.itags]
-    reconstructed.permute(perm)
+    reconstructed.permute(perm, in_place=True)
 
     assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                   msg="SU(2) UR mode reconstruction")
@@ -1707,7 +1707,7 @@ def test_decomp_su2_lv_mode():
 
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
     perm = [tag_to_pos_recon[tag] for tag in T.itags]
-    reconstructed.permute(perm)
+    reconstructed.permute(perm, in_place=True)
 
     assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                   msg="SU(2) LV mode reconstruction")
@@ -1723,7 +1723,7 @@ def test_decomp_su2_svd_4th_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) SVD 4th-order reconstruction axis={axis}")
@@ -1739,7 +1739,7 @@ def test_decomp_su2_svd_5th_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) SVD 5th-order reconstruction axis={axis}")
@@ -1755,7 +1755,7 @@ def test_decomp_su2_6th_order_all_modes():
         reconstructed = contract(U, contract(S_tensor, Vh))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) SVD 6th-order reconstruction axis={axis}")
 
@@ -1764,7 +1764,7 @@ def test_decomp_su2_6th_order_all_modes():
         reconstructed = contract(U, R, axes=(1, 0))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) UR 6th-order reconstruction axis={axis}")
 
@@ -1773,7 +1773,7 @@ def test_decomp_su2_6th_order_all_modes():
         reconstructed = contract(L, V, axes=(1, 0))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) LV 6th-order reconstruction axis={axis}")
 
@@ -1789,7 +1789,7 @@ def test_decomp_su2_multi_axis():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T4.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T4, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 4th-order multi-axis SVD reconstruction axes={axes}")
@@ -1803,7 +1803,7 @@ def test_decomp_su2_multi_axis():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T6.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T6, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 6th-order multi-axis SVD reconstruction axes={axes}")
@@ -1845,7 +1845,7 @@ def test_decomp_u1su2_6th_order_all_modes():
         U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
         reconstructed = contract(U, contract(S_tensor, Vh))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) SVD 6th-order reconstruction axis={axis}")
 
@@ -1853,7 +1853,7 @@ def test_decomp_u1su2_6th_order_all_modes():
         U, R = decomp(T, axes=axis, mode="UR")
         reconstructed = contract(U, R, axes=(1, 0))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) UR 6th-order reconstruction axis={axis}")
 
@@ -1861,7 +1861,7 @@ def test_decomp_u1su2_6th_order_all_modes():
         L, V = decomp(T, axes=axis, mode="LV")
         reconstructed = contract(L, V, axes=(1, 0))
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) LV 6th-order reconstruction axis={axis}")
 
@@ -1875,7 +1875,7 @@ def test_decomp_u1su2_multi_axis():
         reconstructed = contract(U, contract(S_tensor, Vh))
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
-        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags])
+        reconstructed.permute([tag_to_pos_recon[tag] for tag in T.itags], in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) multi-axis SVD reconstruction axes={axes}")

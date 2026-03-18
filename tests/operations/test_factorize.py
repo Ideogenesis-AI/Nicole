@@ -107,7 +107,7 @@ def test_svd_string_axis():
     reconstructed = contract(U, S_Vh)
     
     # Permute reconstructed to match original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
@@ -137,10 +137,10 @@ def test_svd_different_axis_positions():
             pass
         elif axis == 1:
             # Current order (b, a, c) -> (a, b, c)
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
             # Current order (c, a, b) -> (a, b, c)
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         # Verify reconstruction
         diff_norm = (T - reconstructed).norm()
@@ -758,7 +758,7 @@ def test_svd_su2_reconstruction_2nd_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 2nd-order SVD reconstruction axis={axis}")
@@ -774,7 +774,7 @@ def test_svd_su2_reconstruction_3rd_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 3rd-order SVD reconstruction axis={axis}")
@@ -790,7 +790,7 @@ def test_svd_su2_reconstruction_4th_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 4th-order SVD reconstruction axis={axis}")
@@ -806,7 +806,7 @@ def test_svd_su2_reconstruction_5th_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 5th-order SVD reconstruction axis={axis}")
@@ -822,7 +822,7 @@ def test_svd_su2_reconstruction_6th_order():
 
         tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
         perm = [tag_to_pos_recon[tag] for tag in T.itags]
-        reconstructed.permute(perm)
+        reconstructed.permute(perm, in_place=True)
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"SU(2) 6th-order SVD reconstruction axis={axis}")
@@ -953,7 +953,7 @@ def test_svd_su2_non_zero_axis_reconstruction():
 
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
     perm = [tag_to_pos_recon[tag] for tag in T.itags]
-    reconstructed.permute(perm)
+    reconstructed.permute(perm, in_place=True)
 
     assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                   msg="SU(2) left_axis=1 SVD reconstruction")
@@ -990,7 +990,7 @@ def test_svd_su2_truncation_thresh():
 
     tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
     perm = [tag_to_pos_recon[tag] for tag in T.itags]
-    reconstructed.permute(perm)
+    reconstructed.permute(perm, in_place=True)
 
     assert_physical_tensors_equal(T, reconstructed, atol=1e-8,
                                   msg="SU(2) thresh=1e-10 reconstruction")
@@ -1091,7 +1091,7 @@ def test_qr_string_axis():
     reconstructed = contract(Q, R)
     
     # Permute reconstructed to match original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
@@ -1121,10 +1121,10 @@ def test_qr_different_axis_positions():
             pass
         elif axis == 1:
             # Current order (b, a, c) -> (a, b, c)
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
             # Current order (c, a, b) -> (a, b, c)
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         # Verify reconstruction
         diff_norm = (T - reconstructed).norm()
@@ -1463,11 +1463,11 @@ def test_qr_4th_order_tensor():
         if axis == 0:
             pass  # (a, b, c, d)
         elif axis == 1:
-            reconstructed.permute([1, 0, 2, 3])  # (b, a, c, d) -> (a, b, c, d)
+            reconstructed.permute([1, 0, 2, 3], in_place=True)  # (b, a, c, d) -> (a, b, c, d)
         elif axis == 2:
-            reconstructed.permute([1, 2, 0, 3])  # (c, a, b, d) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 0, 3], in_place=True)  # (c, a, b, d) -> (a, b, c, d)
         elif axis == 3:
-            reconstructed.permute([1, 2, 3, 0])  # (d, a, b, c) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 3, 0], in_place=True)  # (d, a, b, c) -> (a, b, c, d)
         
         # Verify accuracy
         rel_error = (T - reconstructed).norm() / original_norm
@@ -1503,7 +1503,7 @@ def test_qr_5th_order_tensor():
     reconstructed = contract(Q, R, axes=(1, 0))
     
     # Permute: (c, a, b, d, e) -> (a, b, c, d, e)
-    reconstructed.permute([1, 2, 0, 3, 4])
+    reconstructed.permute([1, 2, 0, 3, 4], in_place=True)
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
@@ -1829,9 +1829,9 @@ def test_qr_consistency_across_axes():
         if axis == 0:
             pass
         elif axis == 1:
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         results.append(reconstructed)
     
