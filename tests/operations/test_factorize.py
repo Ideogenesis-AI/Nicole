@@ -1842,6 +1842,177 @@ def test_qr_consistency_across_axes():
         assert_blocks_equal(T, recon, rtol=1e-10, atol=1e-12)
 
 
+# ===== SU(2) QR Tests =====
+
+def test_qr_su2_reconstruction_2nd_order():
+    """QR of a 2nd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_2nd_order(seed=11)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 2nd-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_3rd_order():
+    """QR of a 3rd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_3rd_order(seed=10)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 3rd-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_4th_order():
+    """QR of a 4th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_4th_order(seed=12)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 4th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_5th_order():
+    """QR of a 5th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_5th_order(seed=13)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 5th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_6th_order():
+    """QR of a 6th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_6th_order(seed=14)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 6th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_q_intertwiner_identity_like():
+    """Q from SU(2) QR has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
+    T = _make_su2_3rd_order(seed=20)
+
+    Q, _R = qr(T, axis=0)
+
+    assert Q.intw is not None, "Q must have intw for SU(2)"
+    for key, bridge in Q.intw.items():
+        q = key[0]
+        assert bridge.weights.shape == (1, 1), \
+            f"Q bridge weights should be (1,1), got {bridge.weights.shape}"
+        expected = math.sqrt(T.group.irrep_dim(q))
+        assert abs(bridge.weights[0, 0].item() - expected) < 1e-6, \
+            f"Q bridge weights[0,0] should be sqrt(irrep_dim({q}))={expected:.4f}"
+
+
+def test_qr_su2_q_data_blocks_have_trailing_component_dim():
+    """Q blocks from SU(2) QR have a trailing OM axis of size 1."""
+    T = _make_su2_3rd_order(seed=22)
+
+    Q, _R = qr(T, axis=0)
+
+    for key, arr in Q.data.items():
+        assert arr.ndim == 3, f"Q block {key} should be 3D, got {arr.ndim}D"
+        assert arr.shape[-1] == 1, \
+            f"Q block {key} trailing dim should be 1, got {arr.shape[-1]}"
+
+
+def test_qr_su2_q_reduced_blocks_are_isometric():
+    """Q from SU(2) QR: reduced blocks satisfy Q^†Q = I."""
+    T = _make_su2_3rd_order(seed=23)
+
+    Q, _R = qr(T, axis=0)
+
+    import torch
+    for key, arr in Q.data.items():
+        q_mat = arr.squeeze(-1)  # (d_left, rank)
+        prod = q_mat.conj().T @ q_mat  # (rank, rank)
+        eye = torch.eye(prod.shape[0], dtype=T.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"Q block {key}: Q^†Q deviates from identity, max err={( prod - eye).abs().max():.2e}"
+
+
+def test_qr_su2_r_intertwiner_matches_t_axis0():
+    """For axis=0, R from SU(2) QR has intertwiner with same keys and weights as T."""
+    T = _make_su2_3rd_order(seed=30)
+
+    _Q, R = qr(T, axis=0)
+
+    assert R.intw is not None, "R must have intw for SU(2)"
+    assert set(R.intw.keys()) == set(T.intw.keys()), \
+        "R intw keys should match T intw keys when axis=0 (identity permutation)"
+    for key, bridge in R.intw.items():
+        t_weights = T.intw[key].weights.to(dtype=bridge.weights.dtype)
+        assert torch.allclose(bridge.weights, t_weights, atol=1e-10), \
+            f"R intw weights differ from T intw weights at key {key}"
+
+
+def test_qr_su2_r_has_correct_intw_keys():
+    """R from SU(2) QR has intertwiner keys matching its index count."""
+    T = _make_su2_3rd_order(seed=31)
+
+    _Q, R = qr(T, axis=0)
+
+    assert R.intw is not None
+    for key in R.intw.keys():
+        assert len(key) == len(R.indices), \
+            f"R intw key length {len(key)} should match R index count {len(R.indices)}"
+
+
+def test_qr_su2_non_zero_axis_r_intw_not_none():
+    """R from SU(2) QR has a non-None intertwiner even when axis != 0."""
+    T = _make_su2_3rd_order(seed=41)
+
+    for axis in range(1, len(T.indices)):
+        _Q, R = qr(T, axis=axis)
+        assert R.intw is not None, f"R.intw must not be None for axis={axis}"
+
+
+def test_qr_su2_charge_neutral():
+    """Q and R from SU(2) QR are charge neutral."""
+    T = _make_su2_3rd_order(seed=60)
+
+    Q, R = qr(T, axis=0)
+
+    assert_charge_neutral(Q)
+    assert_charge_neutral(R)
+
+
 # =============================================================================
 #  Eigen-decomposition Tests
 # =============================================================================
