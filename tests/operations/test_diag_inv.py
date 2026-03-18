@@ -1258,3 +1258,177 @@ def test_inv_small_but_invertible():
     # Inversion should work
     expected = torch.diag(torch.tensor([1/small_val, 1.0]))
     assert torch.allclose(D_inv.data[(0, 0)], expected)
+
+
+# =============================================================================
+#  Tests for inv with SU(2) / non-Abelian symmetry
+# =============================================================================
+
+def test_inv_su2_basic():
+    """Test basic inv functionality on an SU(2) diagonal tensor."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 1), Sector(1, 2)))
+
+    S_blocks = {
+        (0, 0): torch.tensor([3.0]),
+        (1, 1): torch.tensor([2.0, 0.5]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv = inv(S_diag)
+
+    # Basic structure
+    assert len(S_inv.indices) == 2
+    assert S_inv.label == "Diagonal"
+    assert S_inv.itags == ("_bond_R", "_bond_L")  # Swapped from diag defaults
+
+    # diag produces (OUT, IN); after swapping+flipping both sides: (IN.flip(), OUT.flip()) = (OUT, IN)
+    assert S_inv.indices[0].direction == Direction.OUT
+    assert S_inv.indices[1].direction == Direction.IN
+
+    # Block keys remain (q, q) after swap for diagonal tensors
+    assert set(S_inv.data.keys()) == {(0, 0), (1, 1)}
+
+    # Blocks have trailing OM dimension
+    assert S_inv.data[(0, 0)].shape == (1, 1, 1)
+    assert S_inv.data[(1, 1)].shape == (2, 2, 1)
+
+    # Values are elementwise inverses of original diagonal
+    assert torch.allclose(S_inv.data[(0, 0)][..., 0], torch.diag(torch.tensor([1/3.0])))
+    assert torch.allclose(S_inv.data[(1, 1)][..., 0], torch.diag(torch.tensor([0.5, 2.0])))
+
+    # intw is preserved
+    assert S_inv.intw is not None
+    assert set(S_inv.intw.keys()) == {(0, 0), (1, 1)}
+
+
+def test_inv_su2_weights_preserved():
+    """Test that inv preserves the Bridge weights (√(irrep_dim)) for SU(2)."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+
+    S_blocks = {
+        (0, 0): torch.tensor([1.0]),
+        (1, 1): torch.tensor([2.0, 1.5]),
+        (2, 2): torch.tensor([0.8]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv = inv(S_diag)
+
+    # Bridge weights should equal √(irrep_dim) — same as diag produces
+    for charge in [0, 1, 2]:
+        key = (charge, charge)
+        expected_weight = torch.sqrt(torch.tensor(group.irrep_dim(charge), dtype=S_diag.dtype))
+        assert torch.allclose(S_inv.intw[key].weights, expected_weight), (
+            f"Charge {charge}: inv weight {S_inv.intw[key].weights.item()} "
+            f"!= √irrep_dim = {expected_weight.item()}"
+        )
+
+
+def test_inv_su2_multiple_sectors():
+    """Test inv with multiple SU(2) sectors."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+
+    S_blocks = {
+        (0, 0): torch.tensor([4.0, 2.0]),
+        (1, 1): torch.tensor([3.0, 1.5, 0.5]),
+        (2, 2): torch.tensor([2.0, 1.0]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv = inv(S_diag)
+
+    # All sectors present
+    assert set(S_inv.data.keys()) == {(0, 0), (1, 1), (2, 2)}
+    assert set(S_inv.intw.keys()) == {(0, 0), (1, 1), (2, 2)}
+
+    # Elementwise inverses
+    for charge, vec in S_blocks.items():
+        key = (charge[0], charge[0]) if isinstance(charge, tuple) else charge
+        inv_block_2d = S_inv.data[key][..., 0]
+        expected = torch.diag(1.0 / vec)
+        assert torch.allclose(inv_block_2d, expected)
+
+
+def test_inv_su2_double_inversion():
+    """Test that inv(inv(S)) == S for SU(2) tensors."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(1, 2), Sector(2, 1)))
+
+    S_blocks = {
+        (1, 1): torch.tensor([3.0, 1.5]),
+        (2, 2): torch.tensor([0.5]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv_inv = inv(inv(S_diag))
+
+    for key in S_diag.data:
+        assert torch.allclose(S_inv_inv.data[key], S_diag.data[key], atol=1e-12)
+
+    # Weights also round-trip
+    for key in S_diag.intw:
+        assert torch.allclose(S_inv_inv.intw[key].weights, S_diag.intw[key].weights, atol=1e-12)
+
+
+def test_inv_su2_from_diag_roundtrip():
+    """Test that S_diag @ inv(S_diag) = identity block-wise for SU(2)."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 1), Sector(1, 2)))
+
+    S_blocks = {
+        (0, 0): torch.tensor([2.0]),
+        (1, 1): torch.tensor([4.0, 0.5]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv = inv(S_diag)
+
+    # Verify block-wise: S @ S_inv gives identity matrices (without SU(2) intertwiner factors)
+    for key in S_diag.data:
+        s_matrix = S_diag.data[key][..., 0]   # (n, n)
+        s_inv_matrix = S_inv.data[key][..., 0]  # (n, n)
+        product = s_matrix @ s_inv_matrix
+        n = product.shape[0]
+        assert torch.allclose(product, torch.eye(n), atol=1e-10), (
+            f"Block {key}: S @ S_inv =\n{product}\n(expected identity)"
+        )
+
+
+def test_inv_su2_error_zero_element():
+    """Test inv raises ZeroDivisionError for SU(2) tensor with zero diagonal element."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(1, 2),))
+
+    S_blocks = {(1, 1): torch.tensor([2.0, 0.0])}
+    S_diag = diag(S_blocks, bond_index)
+
+    with pytest.raises(ZeroDivisionError, match="zero elements"):
+        inv(S_diag)
+
+
+def test_inv_su2_product_group():
+    """Test inv with ProductGroup (U1 × SU2) non-Abelian diagonal tensor."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    bond_index = Index(
+        Direction.IN,
+        group,
+        (Sector((0, 0), 1), Sector((1, 1), 2)),
+    )
+
+    S_blocks = {
+        ((0, 0), (0, 0)): torch.tensor([5.0]),
+        ((1, 1), (1, 1)): torch.tensor([3.0, 1.0]),
+    }
+    S_diag = diag(S_blocks, bond_index)
+    S_inv = inv(S_diag)
+
+    assert S_inv.intw is not None
+    assert set(S_inv.data.keys()) == set(S_diag.data.keys())
+
+    # Values are elementwise inverses
+    assert torch.allclose(
+        S_inv.data[((0, 0), (0, 0))][..., 0],
+        torch.diag(torch.tensor([1/5.0]))
+    )
+    assert torch.allclose(
+        S_inv.data[((1, 1), (1, 1))][..., 0],
+        torch.diag(torch.tensor([1/3.0, 1.0]))
+    )
