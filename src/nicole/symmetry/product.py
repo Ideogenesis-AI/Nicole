@@ -189,12 +189,12 @@ class ProductGroup(SymmetryGroup):
             self.validate_charge(q)
         
         # Fuse each component independently (all are Abelian)
-        result = []
+        fused_components = []
         for i, comp in enumerate(self.components):
             component_charges = [q[i] for q in qs]
-            result.append(comp.fuse_unique(*component_charges))
+            fused_components.append(comp.fuse_unique(*component_charges))
         
-        return tuple(result)
+        return tuple(fused_components)
     
     def fuse_channels(self, *qs: Tuple[Any, ...]) -> Tuple[Tuple[Any, ...], ...]:
         """Fuse multiple charge tuples, returning all achievable fusion channels.
