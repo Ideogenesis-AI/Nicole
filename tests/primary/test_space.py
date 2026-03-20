@@ -22,10 +22,9 @@ import math
 import torch
 import pytest
 
-from nicole import load_space, contract
-from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, identity, decomp
-from nicole.symmetry import ProductGroup
-from ..utils import assert_blocks_equal, assert_charge_neutral
+from nicole import load_space
+from nicole import Direction, Index, Tensor
+from nicole import U1Group, Z2Group, SU2Group,ProductGroup
 
 
 class TestLoadSpaceBasic:
@@ -971,3 +970,218 @@ class TestBandErrorHandling:
         
         # But same total dimension
         assert Spc_u1u1.dim == Spc_z2u1.dim == 4
+
+
+class TestLoadSpinSU2:
+    """Test SU(2)-symmetric spin space and operator construction."""
+
+    # ── Space structure ────────────────────────────────────────────────────────
+
+    def test_spc_group(self):
+        """Test that Spc uses SU2Group."""
+        Spc, _ = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Spc.group, SU2Group)
+
+    def test_spc_direction(self):
+        """Test that Spc has IN direction."""
+        Spc, _ = load_space("Spin", "SU2", {"J": 0.5})
+        assert Spc.direction == Direction.IN
+
+    def test_spc_dim_is_one_multiplet(self):
+        """Spc.dim is always 1 (one irrep, no degeneracy) for all J."""
+        for J in [0, 0.5, 1, 1.5, 2, 2.5]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            assert Spc.dim == 1, f"Expected dim=1 for J={J}, got {Spc.dim}"
+
+    def test_spc_num_states(self):
+        """Spc.num_states equals the physical dimension 2J+1."""
+        for J in [0, 0.5, 1, 1.5, 2, 2.5, 3]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            expected = int(2 * J + 1)
+            assert Spc.num_states == expected, (
+                f"J={J}: expected num_states={expected}, got {Spc.num_states}"
+            )
+
+    def test_spc_single_sector_charge(self):
+        """Spc has exactly one sector with charge = 2J."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            assert len(Spc.sectors) == 1
+            assert Spc.sectors[0].charge == int(round(2 * J))
+            assert Spc.sectors[0].dim == 1
+
+    # ── Operator keys ──────────────────────────────────────────────────────────
+
+    def test_operator_keys(self):
+        """Op contains exactly 'S' and 'vac'."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert set(Op.keys()) == {"S", "vac"}
+
+    # ── S tensor structure ─────────────────────────────────────────────────────
+
+    def test_s_has_three_indices(self):
+        """S operator is a 3-index tensor."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        assert len(Op["S"].indices) == 3
+
+    def test_s_itags(self):
+        """S operator has correct itags."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        assert Op["S"].itags == ("_init_", "_init_", "_aux_")
+
+    def test_s_index_directions(self):
+        """S tensor has directions (IN, OUT, OUT)."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        S = Op["S"]
+        assert S.indices[0].direction == Direction.IN
+        assert S.indices[1].direction == Direction.OUT
+        assert S.indices[2].direction == Direction.OUT
+
+    def test_s_aux_index(self):
+        """Auxiliary index of S carries rank-1 (spin-1, charge=2) character."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            aux = Op["S"].indices[2]
+            assert isinstance(aux.group, SU2Group)
+            assert len(aux.sectors) == 1
+            assert aux.sectors[0].charge == 2   # spin-1 in 2j convention
+            assert aux.sectors[0].dim == 1
+
+    def test_s_is_tensor(self):
+        """S is a Tensor instance."""
+        _, Op = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Op["S"], Tensor)
+
+    # ── Non-Abelian block structure ────────────────────────────────────────────
+
+    def test_s_intw_populated(self):
+        """S.intw is populated (mandatory for non-Abelian tensors)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert Op["S"].intw is not None
+
+    def test_s_intw_keys_match_data_keys(self):
+        """S.intw and S.data have identical key sets."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            assert set(S.intw.keys()) == set(S.data.keys())
+
+    def test_s_bridge_num_external(self):
+        """Each Bridge in S.intw has 3 external edges (one per tensor index)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            for bridge in S.intw.values():
+                assert bridge.num_external == 3
+
+    def test_s_bridge_om_dimension(self):
+        """Bridge OM dimension is 1 (unique fusion channel for each block)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            for bridge in S.intw.values():
+                assert bridge.om_dimension == 1
+
+    def test_s_block_shape(self):
+        """S data block has shape (1, 1, 1, 1) = (dim_out, dim_in, dim_aux, num_components)."""
+        for J in [0.5, 1, 1.5, 2]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            assert S.data[(two_J, two_J, 2)].shape == (1, 1, 1, 1)
+
+    # ── Reduced matrix elements ────────────────────────────────────────────────
+
+    def test_s_data_value(self):
+        """data block stores sqrt(J(J+1)), Bridge weight stores sqrt(2J+1)."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            key = (two_J, two_J, 2)
+
+            data_val = S.data[key][0, 0, 0, 0].item()
+            weight_val = S.intw[key].weights[0, 0].item()
+
+            assert math.isclose(data_val, math.sqrt(J * (J + 1)), rel_tol=1e-12), (
+                f"J={J}: data value {data_val} != sqrt(J(J+1))={math.sqrt(J*(J+1))}"
+            )
+            assert math.isclose(weight_val, math.sqrt(2 * J + 1), rel_tol=1e-12), (
+                f"J={J}: weight {weight_val} != sqrt(2J+1)={math.sqrt(2*J+1)}"
+            )
+
+    def test_s_full_rme(self):
+        """data * weight = sqrt(J(J+1)(2J+1)), the full reduced matrix element."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            key = (two_J, two_J, 2)
+
+            full_rme = S.data[key][0, 0, 0, 0].item() * S.intw[key].weights[0, 0].item()
+            expected = math.sqrt(J * (J + 1) * (2 * J + 1))
+            assert math.isclose(full_rme, expected, rel_tol=1e-12), (
+                f"J={J}: full RME {full_rme} != sqrt(J(J+1)(2J+1))={expected}"
+            )
+
+    def test_s_spin_zero_is_empty(self):
+        """For J=0, S has no blocks (charge conservation forbids the block (0,0,2))."""
+        _, Op = load_space("Spin", "SU2", {"J": 0})
+        S = Op["S"]
+        assert len(S.data) == 0
+        assert len(S.intw) == 0
+
+    def test_s_nonzero_j_has_one_block(self):
+        """For J > 0, S has exactly one block."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert len(Op["S"].data) == 1
+
+    def test_s_block_key(self):
+        """Block key is (2J, 2J, 2) for all J > 0."""
+        for J in [0.5, 1, 1.5, 2]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert (two_J, two_J, 2) in Op["S"].data
+
+    # ── Vacuum index ───────────────────────────────────────────────────────────
+
+    def test_vac_is_index(self):
+        """vac is an Index, not a Tensor."""
+        _, Op = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Op["vac"], Index)
+
+    def test_vac_structure(self):
+        """vac has SU2Group, IN direction, single sector with charge=0 and dim=1."""
+        for J in [0, 0.5, 1]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            vac = Op["vac"]
+            assert isinstance(vac.group, SU2Group)
+            assert vac.direction == Direction.IN
+            assert len(vac.sectors) == 1
+            assert vac.sectors[0].charge == 0
+            assert vac.sectors[0].dim == 1
+
+    # ── Error handling ─────────────────────────────────────────────────────────
+
+    def test_unsupported_symmetry_still_raises(self):
+        """Non-SU2/U1 symmetries for Spin still raise ValueError."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Spin", "Z2", {"J": 0.5})
+
+    def test_missing_j_raises(self):
+        """Missing J option raises ValueError."""
+        with pytest.raises(ValueError, match="Option 'J'"):
+            load_space("Spin", "SU2", {})
+
+    def test_negative_j_raises(self):
+        """Negative J raises ValueError."""
+        with pytest.raises(ValueError, match="J must be non-negative"):
+            load_space("Spin", "SU2", {"J": -1})
+
+    def test_non_half_integer_j_raises(self):
+        """Non-half-integer J raises ValueError."""
+        with pytest.raises(ValueError, match="J must be a half-integer"):
+            load_space("Spin", "SU2", {"J": 0.3})
