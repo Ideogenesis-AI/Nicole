@@ -91,9 +91,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
             
             # Create Bridge with actual index directions
             bridge = dg.Bridge.from_block(
-                group, (q, q),
-                [left.direction, right.direction],
-                dtype=dtype
+                group, (q, q), [left.direction, right.direction], dtype=dtype
             )
             
             # Apply normalization: weights = √(irrep_dim)
@@ -235,11 +233,8 @@ def isometry(
                     blocks[(qa, qb, qf)] = arr
                     
                     # Create Bridge for CG fusion
-                    bridge = dg.Bridge.from_block(
-                        group, (qa, qb, qf),
-                        [first.direction, second.direction, direction],
-                        dtype=dtype
-                    )
+                    directions = [first.direction, second.direction, direction]
+                    bridge = dg.Bridge.from_block(group, (qa, qb, qf), directions, dtype=dtype)
                     
                     # Apply normalization: weights = √(irrep_dim) of fused charge
                     irrep_dimension = group.irrep_dim(qf)
