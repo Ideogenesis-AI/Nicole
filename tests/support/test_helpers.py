@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor helper operations: clone, sorted_keys, key, block, display, subsector."""
+"""Tests for tensor helper operations: clone, sorted_keys, blocks, subsector, regularize."""
 
 import torch
 import pytest
@@ -273,21 +273,29 @@ def test_permute_invalidates_sorted_keys():
 
 
 def test_display_numbering_matches_block_index():
-    """Test that display numbering is consistent with block() indexing."""
+    """Test that block numbers in the display string match block() / key() indexing."""
+    import re
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=108, itags=["A", "B"])
-    
-    # Get display string
+
     display_str = str(tensor)
-    
-    # The display shows blocks numbered 1, 2, 3, etc.
-    # block(1), block(2), block(3) should match
-    for i, key in enumerate(tensor.sorted_keys, start=1):
-        # Verify the block index matches
+
+    # Each block line starts with a right-aligned number followed by a period,
+    # e.g. "     1.  1x1     |  1x1     [ 0 ;  0 ]  ...".
+    # Extract the leading block numbers from the display.
+    displayed_numbers = [
+        int(m.group(1))
+        for m in re.finditer(r"^\s+(\d+)\.", display_str, re.MULTILINE)
+    ]
+
+    # The display must list every block (no truncation for 3 blocks)
+    assert displayed_numbers == list(range(1, len(tensor.data) + 1))
+
+    # Each displayed number i must correspond to the correct key in sorted order
+    for i, key in zip(displayed_numbers, tensor.sorted_keys):
         assert tensor.key(i) == key
-        assert torch.equal(tensor.block(i), tensor.data[key])
 
 
 # subsector tests
@@ -574,4 +582,162 @@ def test_subsector_su2_clones_weights():
     
     # Original should be unchanged
     assert torch.equal(orig_bridge.weights, original_value)
+
+
+# regularize tests
+
+def test_regularize_no_op_for_abelian():
+    """Test that regularize leaves Abelian tensors (intw=None) untouched."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
+    tensor = Tensor.random([idx_a, idx_b], seed=300, itags=["A", "B"])
+
+    original_data = {k: v.clone() for k, v in tensor.data.items()}
+    tensor.regularize()
+
+    assert tensor.intw is None
+    for key, original in original_data.items():
+        assert torch.equal(tensor.data[key], original)
+
+
+def test_regularize_2nd_order_sets_weight_to_sqrt_irrep_dim():
+    """Test that Bridge weights equal sqrt(irrep_dim(q)) after regularize."""
+    import math
+    group = SU2Group()
+    # Tensor.random initialises Bridge weights to 1.0 via from_block
+    idx = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=301, itags=["a", "b"])
+
+    tensor.regularize()
+
+    for key, bridge in tensor.intw.items():
+        q = key[0]
+        expected = math.sqrt(group.irrep_dim(q))
+        assert torch.isclose(
+            bridge.weights[0, 0],
+            torch.tensor(expected, dtype=tensor.dtype),
+        ), f"key={key}: expected weight {expected}, got {bridge.weights[0, 0].item()}"
+
+
+def test_regularize_2nd_order_preserves_physical_content():
+    """Test that regularize preserves R * W for every block."""
+    group = SU2Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=302, itags=["a", "b"])
+
+    # Record physical content (R * W) before regularization
+    physical_before = {
+        key: tensor.data[key] * tensor.intw[key].weights[0, 0]
+        for key in tensor.data
+    }
+
+    tensor.regularize()
+
+    for key in tensor.data:
+        physical_after = tensor.data[key] * tensor.intw[key].weights[0, 0]
+        assert torch.allclose(physical_after, physical_before[key]), (
+            f"Physical content changed for block {key}"
+        )
+
+
+def test_regularize_2nd_order_identity_already_canonical():
+    """Test that regularize leaves an identity tensor's data unchanged."""
+    from nicole.identity import identity
+    group = SU2Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
+    tensor = identity(idx)
+
+    # Record R and W before regularization
+    data_before = {k: v.clone() for k, v in tensor.data.items()}
+    weights_before = {k: b.weights.clone() for k, b in tensor.intw.items()}
+
+    tensor.regularize()
+
+    for key in tensor.data:
+        assert torch.allclose(tensor.data[key], data_before[key]), (
+            f"R changed for canonical block {key}"
+        )
+        assert torch.allclose(tensor.intw[key].weights, weights_before[key]), (
+            f"W changed for canonical block {key}"
+        )
+
+
+def test_regularize_2nd_order_idempotent():
+    """Test that calling regularize twice gives the same result as calling it once."""
+    group = SU2Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=303, itags=["a", "b"])
+
+    tensor.regularize()
+
+    data_after_first = {k: v.clone() for k, v in tensor.data.items()}
+    weights_after_first = {k: b.weights.clone() for k, b in tensor.intw.items()}
+
+    tensor.regularize()
+
+    for key in tensor.data:
+        assert torch.allclose(tensor.data[key], data_after_first[key]), (
+            f"Second regularize changed R for block {key}"
+        )
+        assert torch.allclose(tensor.intw[key].weights, weights_after_first[key]), (
+            f"Second regularize changed W for block {key}"
+        )
+
+
+def test_regularize_higher_order_large_weight_unchanged():
+    """Test that higher-order blocks with weight > eps are left unchanged."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=304, itags=["a", "b", "c"])
+    assert tensor.intw is not None
+
+    # from_block initialises weights[0,0]=1.0, which is well above float32 eps
+    data_before   = {k: v.clone() for k, v in tensor.data.items()}
+    weights_before = {k: b.weights.clone() for k, b in tensor.intw.items()}
+
+    tensor.regularize()
+
+    for key in tensor.data:
+        assert torch.allclose(tensor.data[key], data_before[key]), (
+            f"R unexpectedly changed for higher-order block {key}"
+        )
+        assert torch.allclose(tensor.intw[key].weights, weights_before[key]), (
+            f"W unexpectedly changed for higher-order block {key}"
+        )
+
+
+def test_regularize_higher_order_small_weight_normalised():
+    """Test that a small (< float32 eps) single-scalar weight is normalised to 1."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=305, itags=["a", "b", "c"])
+    assert tensor.intw is not None
+
+    # Pick a block whose Bridge weight is a single scalar and force it small
+    target_key = None
+    for key, bridge in tensor.intw.items():
+        if bridge.weights.numel() == 1:
+            target_key = key
+            break
+    if target_key is None:
+        pytest.skip("No single-scalar Bridge found in this tensor")
+
+    small_w = torch.tensor(1e-10, dtype=tensor.dtype)
+    tensor.intw[target_key].weights[0, 0] = small_w
+    r_before = tensor.data[target_key].clone()
+
+    tensor.regularize()
+
+    # Weight must now be 1
+    assert torch.isclose(
+        tensor.intw[target_key].weights[0, 0],
+        torch.ones(1, dtype=tensor.dtype),
+    )
+    # R must carry the absorbed factor
+    assert torch.allclose(tensor.data[target_key], r_before * small_w)
 
