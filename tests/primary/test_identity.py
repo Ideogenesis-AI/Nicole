@@ -36,7 +36,7 @@ def test_identity_basic():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
     ident = identity(idx, itags=("p", "p_dual"))
 
-    # Identity should have matching charges on both legs
+    # Identity should have matching charges on both indices
     for (q_left, q_right), block in ident.data.items():
         assert q_left == q_right
         assert torch.allclose(block, torch.eye(block.shape[0], dtype=block.dtype))
@@ -598,7 +598,7 @@ def test_isometry_su2_fused_direction():
     # Specify fused direction as OUT
     iso = isometry(idx1, idx2, fused_direction=Direction.OUT)
     
-    # Fused leg should have OUT direction
+    # Fused index should have OUT direction
     assert iso.indices[2].direction == Direction.OUT
 
 

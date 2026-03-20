@@ -633,7 +633,7 @@ def test_contract_u1su2_isometry_fusion_unfusion_roundtrip_5th_order():
 
 # isometry_n
 #
-# Note: for isometry_n, V's unfused legs are pre-flipped relative to the inputs,
+# Note: for isometry_n, V's unfused indices are pre-flipped relative to the inputs,
 # so V fuses (contract V with A) and V† unfuses (contract V.conj() with fused).
 
 def test_contract_u1_isometry_n_fusion_unfusion_roundtrip_3rd_order():

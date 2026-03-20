@@ -699,7 +699,7 @@ def test_svd_high_order_thresh_truncation():
 # SU(2) SVD tests
 
 def _make_su2_3rd_order(seed: int = 1):
-    """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
+    """3rd-order SU(2) tensor with (OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
@@ -708,7 +708,7 @@ def _make_su2_3rd_order(seed: int = 1):
 
 
 def _make_su2_2nd_order(seed: int = 42):
-    """2-leg SU(2) tensor (OUT x IN)."""
+    """2nd-order SU(2) tensor (OUT x IN)."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
@@ -716,7 +716,7 @@ def _make_su2_2nd_order(seed: int = 42):
 
 
 def _make_su2_4th_order(seed: int = 1):
-    """4-leg SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
+    """4th-order SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
@@ -726,7 +726,7 @@ def _make_su2_4th_order(seed: int = 1):
 
 
 def _make_su2_5th_order(seed: int = 1):
-    """5-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
+    """5th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
@@ -737,7 +737,7 @@ def _make_su2_5th_order(seed: int = 1):
 
 
 def _make_su2_6th_order(seed: int = 1):
-    """6-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
+    """6th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
@@ -840,7 +840,7 @@ def test_svd_su2_u_intertwiner_identity_like():
         q = key[0]
         expected_weight = math.sqrt(group.irrep_dim(q))
         assert bridge.num_components == 1, f"U intertwiner at {key} must have 1 component"
-        assert bridge.om_dimension == 1, f"U intertwiner OM dim must be 1 (2-leg identity-like)"
+        assert bridge.om_dimension == 1, f"U intertwiner OM dim must be 1 (2nd-order identity-like)"
         assert math.isclose(bridge.weights[0, 0].item(), expected_weight, rel_tol=1e-10), (
             f"U intertwiner weight at {key} should be sqrt(irrep_dim)={expected_weight:.6f}, "
             f"got {bridge.weights[0, 0].item():.6f}"
@@ -859,7 +859,7 @@ def test_svd_su2_s_intertwiner_identity_like():
         q = key[0]
         expected_weight = math.sqrt(group.irrep_dim(q))
         assert bridge.num_components == 1, f"S intertwiner at {key} must have 1 component"
-        assert bridge.om_dimension == 1, f"S intertwiner OM dim must be 1 (2-leg identity-like)"
+        assert bridge.om_dimension == 1, f"S intertwiner OM dim must be 1 (2nd-order identity-like)"
         assert math.isclose(bridge.weights[0, 0].item(), expected_weight, rel_tol=1e-10), (
             f"S intertwiner weight at {key} should be sqrt(irrep_dim)={expected_weight:.6f}, "
             f"got {bridge.weights[0, 0].item():.6f}"

@@ -1626,7 +1626,7 @@ def test_decomp_6th_order_qr_mode():
 # Tests for SU(2) tensor decomposition
 
 def _make_su2_3rd_order_decomp(seed: int = 1):
-    """3-leg SU(2) tensor with (OUT, IN, OUT) index structure."""
+    """3rd-order SU(2) tensor with (OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
@@ -1651,7 +1651,7 @@ def test_decomp_su2_svd_mode():
 
 
 def _make_su2_4th_order_decomp(seed: int = 1):
-    """4-leg SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
+    """4th-order SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
@@ -1661,7 +1661,7 @@ def _make_su2_4th_order_decomp(seed: int = 1):
 
 
 def _make_su2_5th_order_decomp(seed: int = 1):
-    """5-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
+    """5th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
@@ -1672,7 +1672,7 @@ def _make_su2_5th_order_decomp(seed: int = 1):
 
 
 def _make_su2_6th_order_decomp(seed: int = 1):
-    """6-leg SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
+    """6th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
@@ -1836,7 +1836,7 @@ def test_decomp_su2_multi_axis():
 # ===== U(1) × SU(2) Product Group Tests =====
 
 def _make_u1su2_6th_order_decomp(seed: int = 1):
-    """6-leg U(1)×SU(2) tensor for decomposition stress tests."""
+    """6th-order U(1)×SU(2) tensor for decomposition stress tests."""
     group = ProductGroup([U1Group(), SU2Group()])
     idx1 = Index(Direction.OUT, group, sectors=(
         Sector((0, 0), 1), Sector((1, 2), 1), Sector((-1, 2), 1), Sector((0, 1), 1)

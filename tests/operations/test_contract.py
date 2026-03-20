@@ -1742,7 +1742,7 @@ def test_contract_trace_consistency_high_order():
 # ── SU(2) trace tests ─────────────────────────────────────────────────────────
 
 def test_trace_su2_basic():
-    """Test that tracing a pair of SU(2) legs returns a tensor with correct structure."""
+    """Test that tracing a pair of SU(2) indices returns a tensor with correct structure."""
     group = SU2Group()
     sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
 
@@ -1761,7 +1761,7 @@ def test_trace_su2_basic():
     assert result.intw is not None
     assert_charge_neutral(result)
 
-    # The trace is equivalent to contracting T with the reversed identity on the traced legs.
+    # The trace is equivalent to contracting T with the reversed identity on the traced indices.
     # idx_a.flip() gives the IN direction, so identity(idx_a.flip()) has edges (IN, OUT),
     # which pair with T's (OUT, IN) in an opposite-direction contraction.
     I_ab = identity(idx_a.flip(), itags=["a", "b"])
@@ -1794,7 +1794,7 @@ def test_trace_su2_produces_scalar():
 
 
 def test_trace_su2_4th_order_produces_scalar():
-    """Test that tracing both pairs of a 4-leg SU(2) tensor produces a correct scalar."""
+    """Test that tracing both pairs of a 4th-order SU(2) tensor produces a correct scalar."""
     group = SU2Group()
     sectors = (Sector(0, 1), Sector(1, 2))
 
@@ -1850,7 +1850,7 @@ def test_trace_su2_explicit_multi_pair():
 
 
 def test_trace_su2_consistency_with_contract():
-    """Test SU(2): contracting 3 legs at once equals contracting 2 then tracing 1."""
+    """Test SU(2): contracting 3 indices at once equals contracting 2 then tracing 1."""
     group = SU2Group()
     sectors = (Sector(0, 1), Sector(1, 2))
 
