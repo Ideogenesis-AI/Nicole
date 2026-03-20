@@ -755,9 +755,9 @@ def trace(
             out_blocks[out_key] = out_blocks.get(out_key, 0) + diag
         else:
             # Non-Abelian (SU(2) / ProductGroup with SU(2)).
-            # Tracing axes a and b is equivalent to contracting with a 2-leg identity
-            # tensor on those legs.  Build bridge_I at charge q = qa = qb with directions
-            # reversed from T's traced legs and weight √(irrep_dim(q)), exactly as
+            # Tracing axes a and b is equivalent to contracting with a 2nd order identity
+            # tensor on those indices.  Build bridge_I at charge q = qa = qb with directions
+            # reversed from T's traced indices and weight √(irrep_dim(q)), exactly as
             # identity() does, then get the X-symbol for that virtual contraction.
             q = qa
             irrep_dim = group.irrep_dim(q)

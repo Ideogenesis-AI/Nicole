@@ -21,7 +21,7 @@ from __future__ import annotations
 """Utilities for constructing canonical identity and fusion tensors.
 
 This module provides helpers that build symmetry-aware tensors commonly used in
-tensor network algorithms: a two-leg identity and a three-leg fusion isometry.
+tensor network algorithms: a 2nd order identity and a 3rd order fusion isometry.
 Both routines respect the block structure defined by Nicole indices and ensure
 charge conservation across all generated blocks.
 """
@@ -37,7 +37,7 @@ from .symmetry import delegate as dg
 
 
 def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
-    """Return a 2-leg identity tensor between `index` and its conjugate leg.
+    """Return a 2nd order identity tensor between `index` and its conjugate index.
     
     For Abelian groups, creates diagonal blocks with identity matrices.
     For generic groups (e.g., SU(2)), creates blocks with trailing reduced
@@ -60,7 +60,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         intertwiner (intw) field with weights set to √(irrep_dim(q)).
     """
 
-    # Prepare the left leg and its flipped partner.
+    # Prepare the left index and its flipped partner.
     left = index
     right = index.flip()
     if itags is None:
@@ -113,7 +113,7 @@ def isometry(
     itags: Optional[Tuple[str, str, str]] = None,
     fused_direction: Optional[Direction] = None,
 ) -> Tensor:
-    """Return a 3-leg tensor that fuses ``first ⊗ second`` into a fused leg.
+    """Return a 3rd order tensor that fuses ``first ⊗ second`` into a fused index.
     
     For Abelian groups, creates a single block per charge combination.
     For generic groups (e.g., SU(2)), creates multiple blocks corresponding
@@ -129,12 +129,12 @@ def isometry(
     itags:
         Optional tuple of tags for the three tensor indices. Defaults to `("_init_", "_init_", "_init_")`.
     fused_direction:
-        Optional direction for the fused leg. Defaults to the dual of `first`.
+        Optional direction for the fused index. Defaults to the dual of `first`.
 
     Returns
     -------
     Tensor
-        Three-leg tensor whose third index represents the fusion of the first two.
+        Third order tensor whose third index represents the fusion of the first two.
         For generic groups, includes intertwiner (intw) field with Bridge
         objects containing CG specifications and normalization weights.
 
@@ -149,7 +149,7 @@ def isometry(
         raise ValueError("Both indices must share the same symmetry group")
     group = first.group
     
-    # Determine orientation of the fused leg; default to the dual of `first`.
+    # Determine orientation of the fused index; default to the dual of `first`.
     default_dir = first.direction.reverse()
     direction = fused_direction if fused_direction is not None else default_dir
     fused = combine_indices(direction, first, second)
@@ -258,7 +258,7 @@ def isometry_n(
     itags: Optional[Sequence[str]] = None,
     direction: Direction = Direction.OUT,
 ) -> Tensor:
-    """Return an (n+1)-leg tensor that fuses n indices into a single fused leg.
+    """Return an (n+1)th order tensor that fuses n indices into a single fused index.
 
     This function constructs an n-to-1 isometry by sequentially applying 2-to-1
     isometries. Indices are fused in order of increasing dimension to minimize
@@ -369,7 +369,7 @@ def isometry_n(
         # Use OUT for intermediate, use specified direction for final
         fused_dir = direction if is_last else Direction.OUT
         
-        # Create new 2-to-1 isometry; reuse fused_tag so the contracted legs match
+        # Create new 2-to-1 isometry; reuse fused_tag so the contracted indices match
         new_iso = isometry(
             fused_idx_flipped,
             next_idx,

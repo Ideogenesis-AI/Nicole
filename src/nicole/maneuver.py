@@ -1063,8 +1063,8 @@ def merge_axes(
 def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     """Invert both directions of a contraction pair (bond) between two tensors.
 
-    A contraction pair is a bond where one tensor has an outgoing leg and the
-    other has an incoming leg carrying the same itag. ``capcup`` inverts both
+    A contraction pair is a bond where one tensor has an outgoing index and the
+    other has an incoming index carrying the same itag. ``capcup`` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
     ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
