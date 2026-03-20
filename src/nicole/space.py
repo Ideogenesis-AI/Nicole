@@ -23,8 +23,9 @@ import torch
 
 from .index import Index, Direction, Sector
 from .tensor import Tensor
-from .symmetry import U1Group, Z2Group
+from .symmetry import U1Group, Z2Group, SU2Group
 from .symmetry import ProductGroup
+from .symmetry import delegate as dg
 
 
 def load_space(
@@ -42,6 +43,7 @@ def load_space(
     preserv : str
         Symmetry to preserve:
         - "U1" for U(1) charge conservation
+        - "SU2" for full SU(2) spin rotation (Spin only)
         - "Z2" for Z2 parity
         - "Z2,U1" for Z2 parity + U1 spin (Band only)
         - "U1,U1" for U1 particle number + U1 spin (Band only)
@@ -57,10 +59,15 @@ def load_space(
         Physical space index containing all sectors of the local Hilbert space
     Op : dict[str, Tensor | Index]
         Dictionary of operators and indices.
-        For spin systems: {"Sp", "Sm", "Sz", "vac"}
-        - Sz: 2-index tensor (OUT, IN) - charge neutral
-        - Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
-        - Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
+        For spin systems with U(1): {"Sp", "Sm", "Sz", "vac"}
+        - Sz: 2-index tensor (IN, OUT) - charge neutral
+        - Sp: 3-index tensor (IN, OUT, auxiliary) - charge neutral with auxiliary index
+        - Sm: 3-index tensor (IN, OUT, auxiliary) - charge neutral with auxiliary index
+        - vac: Index representing trivial vacuum space with charge 0
+        For spin systems with SU(2): {"S", "vac"}
+        - S: 3-index tensor (IN, OUT, auxiliary) - rank-1 spherical tensor (spin operator)
+          Stores the reduced matrix element split as:
+            data block = sqrt(J(J+1)), Bridge weight = sqrt(2J+1)
         - vac: Index representing trivial vacuum space with charge 0
         For spinless fermion systems: {"F", "Z", "vac"}
         - F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
@@ -93,6 +100,15 @@ def load_space(
     >>> Spc, Op = load_space("Spin", "U1", {"J": 1.0})
     >>> Spc.dim  # 3 states: m_z = -1, 0, +1
     3
+    
+    >>> # Create spin-1/2 system with full SU(2) symmetry
+    >>> Spc, Op = load_space("Spin", "SU2", {"J": 0.5})
+    >>> Spc.dim       # 1 multiplet (multiplicity space)
+    1
+    >>> Spc.num_states  # 2 physical states: m_z = ±1/2
+    2
+    >>> list(Op.keys())
+    ['S', 'vac']
     
     >>> # Create spinless fermion system with U(1) symmetry
     >>> Spc, Op = load_space("Ferm", "U1")
@@ -127,7 +143,7 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Parameters
     ----------
     preserv : str
-        Symmetry to preserve
+        Symmetry to preserve: "U1" or "SU2"
     option : dict
         Options including "J" (total spin)
     
@@ -136,11 +152,18 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Spc : Index
         Physical space index for spin
     Op : dict[str, Tensor | Index]
-        Spin operators and indices {Sp, Sm, Sz, vac}
+        Spin operators and indices
     """
-    if preserv != "U1":
-        raise ValueError(f"Unsupported symmetry '{preserv}' for Spin. Currently only 'U1' is implemented.")
-    
+    if preserv == "U1":
+        return _load_spin_u1(option)
+    elif preserv == "SU2":
+        return _load_spin_su2(option)
+    else:
+        raise ValueError(f"Unsupported symmetry '{preserv}' for Spin. Supported: 'U1', 'SU2'.")
+
+
+def _validate_spin_J(option: Dict[str, Any]) -> float:
+    """Validate and return J from option dict. Shared by U1 and SU2 spin loaders."""
     if "J" not in option:
         raise ValueError("Option 'J' (total spin) is required for Spin systems.")
     
@@ -153,7 +176,26 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         raise ValueError(f"J must be non-negative, got {J}")
     if not (2 * float(J)).is_integer():
         raise ValueError(f"J must be a half-integer (0, 0.5, 1, 1.5, ...), got {J}")
+    return float(J)
+
+
+def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spin space and operators with U(1) symmetry.
     
+    Parameters
+    ----------
+    option : dict
+        Options including "J" (total spin)
+    
+    Returns
+    -------
+    Spc : Index
+        Physical space index for spin (2J+1 sectors, one per m_z value)
+    Op : dict[str, Tensor | Index]
+        Spin operators and indices {Sp, Sm, Sz, vac}
+    """
+    J = _validate_spin_J(option)
+
     # Create physical space index
     # For spin-J system: m_z ranges from -J to J in steps of 1
     # Each m_z value is a separate sector with dimension 1
@@ -278,6 +320,94 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     )
     Op["vac"] = vac_index
     
+    return Spc, Op
+
+
+def _load_spin_su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spin space and operators with full SU(2) symmetry.
+
+    Under SU(2) the full spin-J multiplet forms a single irreducible sector.
+    Operators are stored as reduced matrix elements (Wigner-Eckart theorem);
+    the full matrix element is recovered externally via Clebsch-Gordan coefficients.
+
+    The reduced matrix element of the rank-1 spherical tensor T^1 is split as:
+        ⟨J||T^1||J⟩ = sqrt(J(J+1)(2J+1))
+                     = sqrt(J(J+1))        [stored in data block]
+                       × sqrt(2J+1)        [stored in Bridge weight]
+
+    Parameters
+    ----------
+    option : dict
+        Options including "J" (total spin)
+
+    Returns
+    -------
+    Spc : Index
+        Physical space index: one sector (charge=2J, dim=1); Spc.num_states = 2J+1
+    Op : dict[str, Tensor | Index]
+        {"S": rank-1 spin tensor, "vac": vacuum Index}
+    """
+    J = _validate_spin_J(option)
+    two_J = int(round(2 * J))
+
+    group = SU2Group()
+
+    # Physical space: single irrep labeled by 2J, multiplicity 1.
+    # Spc.dim = 1 (one multiplet), Spc.num_states = 2J+1 (physical states).
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=two_J, dim=1),)
+    )
+
+    # Auxiliary index carrying the rank-1 (spin-1) tensor character.
+    aux_S = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=2, dim=1),)
+    )
+
+    directions = [Direction.IN, Direction.OUT, Direction.OUT]
+
+    S_data: Dict = {}
+    S_intw: Dict = {}
+
+    if J > 0:
+        # Charge conservation forbids the block (0, 0, 2) for J=0, since
+        # fuse_channels(0, 0, 2) = (2,) which does not contain neutral 0.
+        key = (two_J, two_J, 2)
+
+        # Bridge weight = sqrt(2J+1); data value = sqrt(J(J+1)).
+        # Together: full RME = sqrt(J(J+1)) * sqrt(2J+1) = sqrt(J(J+1)(2J+1)).
+        bridge_weights = torch.sqrt(torch.tensor(
+            [[2 * J + 1]], dtype=torch.float64
+        ))
+        S_intw[key] = dg.Bridge.from_block(
+            group, key, directions, weights=bridge_weights, dtype=torch.float64
+        )
+
+        # Block shape: (dim_out, dim_in, dim_aux, num_components) = (1, 1, 1, 1).
+        S_data[key] = torch.sqrt(torch.tensor(
+            [[[[J * (J + 1)]]]], dtype=torch.float64
+        ))
+
+    Op: Dict = {}
+    Op["S"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_S),
+        itags=("_init_", "_init_", "_aux_"),
+        data=S_data,
+        intw=S_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
+
     return Spc, Op
 
 
