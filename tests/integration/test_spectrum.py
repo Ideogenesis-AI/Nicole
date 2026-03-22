@@ -548,3 +548,137 @@ def test_hopping_two_site_spectrum_band_z2u1():
         assert torch.allclose(evals, expected, atol=1e-6), (
             f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
         )
+
+
+# ---------------------------------------------------------------------------
+# U(1)×SU(2) band hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def _build_band_hopping_su2(preserv: str):
+    """Build the two-site spinful hopping Hamiltonian Σ_σ(F†_σ₁F_σ₂ + h.c.) for
+    a symmetry group with SU(2) spin symmetry.
+
+    SU(2) symmetry unifies |↑⟩ and |↓⟩ into a single doublet multiplet, so a
+    single rank-½ tensor F (not separate F_up/F_dn) represents the fermionic
+    annihilation operator.  The same Jordan-Wigner Z insertion applies: the
+    Z factor does not drop out for spinful fermions, so site 1 uses (F†Z)₁
+    composed via:
+
+        FdagZ = contract(F†, Z, axes=(ket_of_F†=1, bra_of_Z=0)).permute([0, 2, 1])
+
+    After merging physical indices, Bridge weights must be brought to canonical
+    form via regularize() so that the reduced data values equal the physical
+    eigenvalues directly (Wigner-Eckart theorem).
+
+    The N=2 J=1 triplet at E=0 would yield a 1×1 block with zero reduced matrix
+    element; Nicole trims such zero blocks, so it does not appear in H.data.
+    """
+    _, Op = load_space("Band", preserv=preserv)
+    F, Z = Op["F"], Op["Z"]
+
+    FdagZ = contract(F.conj().permute([1, 0, 2]), Z, axes=(1, 0)).permute([0, 2, 1])
+    H12   = contract(FdagZ, F, axes=(2, 2))
+    H     = H12 + H12.conj().permute([1, 0, 3, 2])
+
+    H, _ = merge_axes(H, (0, 2), merged_tag="band", direction=Direction.IN)
+    H, _ = merge_axes(H, (1, 2), merged_tag="band")
+    H.regularize()
+
+    return H
+
+
+def test_hopping_two_site_spectrum_band_u1su2():
+    """Two-site U(1)×SU(2) spinful hopping spectrum.
+
+    SU(2) symmetry combines |↑⟩ and |↓⟩ into a single doublet sector.  Block
+    keys are ((total_U1, 2*J_total), same) where total_U1 = N − 2 offset.
+    After regularize() the reduced data values equal physical eigenvalues.
+
+    Absent blocks:
+      ((-2, 0), (-2, 0))  vacuum N=0, J=0
+      ((2,  0), (2,  0))  N=4 doubly occupied, J=0
+      ((0,  2), (0,  2))  N=2 triplet J=1 at E=0 (zero block, trimmed)
+
+    Non-trivial blocks (eigenvalues from independent spin channels):
+      ((-1, 1), (-1, 1))  N=1, J=½: bonding & antibonding doublets  → {−1, +1}
+      (( 0, 0), ( 0, 0))  N=2, J=0: three singlets at E=−2, 0, +2   → {−2, 0, +2}
+      (( 1, 1), ( 1, 1))  N=3, J=½: particle-hole of N=1            → {−1, +1}
+    """
+    H = _build_band_hopping_su2("U1,SU2")
+
+    # --- absent blocks (vacuum, doubly occupied, zero triplet) ---
+    for key, label in [
+        (((-2, 0), (-2, 0)), "vacuum"),
+        (((2,  0), (2,  0)), "doubly-occupied"),
+        (((0,  2), (0,  2)), "N=2 triplet (zero block)"),
+    ]:
+        assert key not in H.data, f"{label} block {key} should be absent"
+
+    # --- single-particle and single-hole doublet blocks: {−1, +1} ---
+    for key in [((-1, 1), (-1, 1)), ((1, 1), (1, 1))]:
+        assert key in H.data, f"Block {key} missing"
+        evals = _eigvalsh_block(H, key)
+        expected = torch.tensor([-1.0, 1.0], dtype=evals.dtype)
+        assert torch.allclose(evals, expected, atol=1e-6), (
+            f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+        )
+
+    # --- N=2 singlet sector: three J=0 multiplets → {−2, 0, +2} ---
+    key = ((0, 0), (0, 0))
+    assert key in H.data, f"Half-filling singlet block {key} missing"
+    evals = _eigvalsh_block(H, key)
+    expected = torch.tensor([-2.0, 0.0, 2.0], dtype=evals.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Z2×SU(2) band hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def test_hopping_two_site_spectrum_band_z2su2():
+    """Two-site Z2×SU(2) spinful hopping spectrum.
+
+    In Z2×SU(2), |0⟩ and |↑↓⟩ share charge (0, 0) with dim=2 (like Z2×U1),
+    while {|↑⟩, |↓⟩} form a doublet of charge (1, 1).  After merging two sites
+    the blocks are:
+
+    ((0, 0), (0, 0)) — 5×5 reduced matrix in the J=0 sector, combining:
+        • 4 singlet multiplets from (0,0)⊗(0,0): the pair
+          {|0₁0₂⟩, |0₁↑↓₂⟩, |↑↓₁0₂⟩, |↑↓₁↑↓₂⟩}
+        • 1 singlet multiplet from (1,1)⊗(1,1)→(0,0): the N=2 singlet
+          (|↑₁↓₂⟩ − |↓₁↑₂⟩)/√2
+        Hopping connects |0₁,↑↓₂⟩ ↔ N=2 singlet ↔ |↑↓₁,0₂⟩ at eigenvalues
+        {−2, 0, +2}; states |0₁0₂⟩ and |↑↓₁↑↓₂⟩ are isolated (two extra zeros).
+
+    ((0, 2), (0, 2)) — N=2 triplet J=1 at E=0; zero block, trimmed by Nicole.
+
+    ((1, 1), (1, 1)) — 4×4 reduced matrix: two N=1 doublets (bonding/antibonding)
+        and two N=3 doublets, each channel contributing ±1 → {−1, −1, +1, +1}.
+    """
+    H = _build_band_hopping_su2("Z2,SU2")
+
+    # --- absent: zero triplet block ---
+    key = ((0, 2), (0, 2))
+    assert key not in H.data, f"N=2 triplet block {key} should be absent (zero)"
+
+    # --- mixed-N singlet sector: 5×5, eigenvalues {−2, 0, 0, 0, +2} ---
+    key = ((0, 0), (0, 0))
+    assert key in H.data, f"Block {key} missing"
+    evals = _eigvalsh_block(H, key)
+    expected = torch.tensor([-2.0, 0.0, 0.0, 0.0, 2.0], dtype=evals.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+    )
+
+    # --- odd-parity doublet sector: 4×4, two independent hops → {−1, −1, +1, +1} ---
+    key = ((1, 1), (1, 1))
+    assert key in H.data, f"Block {key} missing"
+    evals = _eigvalsh_block(H, key)
+    expected = torch.tensor([-1.0, -1.0, 1.0, 1.0], dtype=evals.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+    )
