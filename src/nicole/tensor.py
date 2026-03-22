@@ -1137,7 +1137,7 @@ class Tensor:
     def regularize(self) -> None:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
-        For an order-2 non-Abelian tensor (SU(2) matrix), the reduced data ``R``
+        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data ``R``
         and the Bridge weight ``W`` satisfy::
 
             physical block  ≈  R  ×  W
@@ -1164,7 +1164,7 @@ class Tensor:
         _sp_eps = torch.finfo(torch.float32).eps
 
         if len(self.indices) == 2:
-            # Order-2 (matrix): normalise each weight to sqrt(irrep_dim(q))
+            # 2nd order (matrix): normalise each weight to sqrt(irrep_dim(q))
             for key, arr in self.data.items():
                 bridge = self.intw.get(key)
                 if bridge is None:
