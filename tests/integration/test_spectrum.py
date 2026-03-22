@@ -395,3 +395,156 @@ def test_hopping_two_site_spectrum_z2():
     assert torch.allclose(evals, expected, atol=1e-6), (
         f"Odd-parity eigenvalues: expected {expected.tolist()}, got {evals.tolist()}"
     )
+
+
+# ---------------------------------------------------------------------------
+# U(1)×U(1) band hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def _build_band_hopping(preserv: str):
+    """Build the two-site spinful hopping Hamiltonian Σ_σ(F†_σ₁F_σ₂ + h.c.).
+
+    For spinful fermions each site has four states: |0⟩, |↑⟩, |↓⟩, |↑↓⟩.
+    The physical operator at site 2 carries a Jordan-Wigner string from all
+    modes at site 1:
+
+        c_{2σ} = Z_site1 ⊗ F_{σ,2}
+
+    Unlike the spinless case (where σ⁺Z = σ⁺ causes the Z to drop out), here
+    F_up†Z ≠ F_up† because F_up† maps the odd-parity state |↓⟩ → |↑↓⟩ and Z
+    flips the sign on that path.  The site-1 tensor is therefore F†_σ Z rather
+    than F†_σ alone.
+
+    The composition F†_σ Z is built by contracting F†'s ket index (axis 1, OUT)
+    with Z's bra index (axis 0, IN), then permuting back to (bra, ket, aux) order.
+    After that the construction is identical to the spinless case.
+
+    No Z factor is needed at site 2: F_dn already encodes the intra-site
+    Jordan-Wigner string Z_up within the site (the −1 coefficient in
+    F_dn|↑↓⟩ = −|↑⟩).
+    """
+    _, Op = load_space("Band", preserv=preserv)
+    F_up, F_dn, Z = Op["F_up"], Op["F_dn"], Op["Z"]
+
+    # Compose F†_σ with Z at site 1: F†'s ket (axis 1) ↔ Z's bra (axis 0)
+    FdagZ_up = contract(F_up.conj().permute([1, 0, 2]), Z, axes=(1, 0)).permute([0, 2, 1])
+    FdagZ_dn = contract(F_dn.conj().permute([1, 0, 2]), Z, axes=(1, 0)).permute([0, 2, 1])
+
+    # Hop each spin channel: (F†_σ Z)_site1 ⊗ F_{σ,site2}, contracted on aux
+    H12_up = contract(FdagZ_up, F_up, axes=(2, 2))
+    H12_dn = contract(FdagZ_dn, F_dn, axes=(2, 2))
+
+    # Sum both channels then add h.c. via conj + bra↔ket swap per site
+    H12 = H12_up + H12_dn
+    H = H12 + H12.conj().permute([1, 0, 3, 2])
+
+    H, _ = merge_axes(H, (0, 2), merged_tag="band", direction=Direction.IN)
+    H, _ = merge_axes(H, (1, 2), merged_tag="band")
+
+    return H
+
+
+def _eigvalsh_block(H, key):
+    """Return sorted eigenvalues of a square block from H.data."""
+    block = H.data[key]
+    n = block.shape[0]
+    return torch.linalg.eigvalsh(block.reshape(n, n))
+
+
+def test_hopping_two_site_spectrum_band_u1u1():
+    """Two-site U(1)×U(1) spinful hopping spectrum.
+
+    Block keys are charge tuples (q_charge, q_spin) where q_charge = N_site − 1
+    offset (empty = −1, doubly occupied = +1) and q_spin = 2·Sz per site.
+    Product-group charges are represented as tuples, so each block key has the
+    form ((q_bra_charge, q_bra_spin), (q_ket_charge, q_ket_spin)).
+
+    Absent blocks (no hopping amplitude):
+      ((−2, 0), (−2, 0))  vacuum, N=0
+      (( 0, ±2), (0, ±2)) both sites same-spin, N=2: Pauli blocks hopping
+      (( 2, 0), ( 2, 0))  both sites doubly occupied, N=4
+
+    Non-trivial blocks and eigenvalues (independent spin channels):
+      ((−1, ±1), (−1, ±1))  N=1, one spin flavour:              {−1, +1}
+      (( 0,  0), ( 0,  0))  N=2 Sz=0, both channels active:    {−2, 0, 0, +2}
+      (( 1, ±1), ( 1, ±1))  N=3, one hole hops:                {−1, +1}
+    """
+    H = _build_band_hopping("U1,U1")
+
+    # --- absent blocks ---
+    for key, label in [
+        (((-2, 0), (-2, 0)), "vacuum"),
+        (((0,  2), (0,  2)), "N=2 spin-up"),
+        (((0, -2), (0, -2)), "N=2 spin-down"),
+        (((2,  0), (2,  0)), "doubly-occupied"),
+    ]:
+        assert key not in H.data, f"{label} block {key} should be absent"
+
+    # --- single-particle / single-hole blocks: {−1, +1} ---
+    for key in [((-1, 1), (-1, 1)), ((-1, -1), (-1, -1)),
+                ((1, 1), (1, 1)), ((1, -1), (1, -1))]:
+        assert key in H.data, f"Block {key} missing"
+        evals = _eigvalsh_block(H, key)
+        expected = torch.tensor([-1.0, 1.0], dtype=evals.dtype)
+        assert torch.allclose(evals, expected, atol=1e-6), (
+            f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+        )
+
+    # --- half-filling Sz=0: two channels each contribute ±1 → {−2, 0, 0, +2} ---
+    key = ((0, 0), (0, 0))
+    assert key in H.data, f"Half-filling block {key} missing"
+    evals = _eigvalsh_block(H, key)
+    expected = torch.tensor([-2.0, 0.0, 0.0, 2.0], dtype=evals.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Z2×U(1) band hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def test_hopping_two_site_spectrum_band_z2u1():
+    """Two-site Z2×U(1) spinful hopping spectrum.
+
+    In Z2×U(1), |0⟩ and |↑↓⟩ share charge (0, 0) with dim=2, so after merging
+    two sites the ((0,0),(0,0)) bra sector has dimension 6, combining N=0,
+    N=2 Sz=0, and N=4 configurations.  Hopping conserves particle number so
+    those sub-sectors are disconnected; the 6×6 block has eigenvalues
+    {−2, 0, 0, 0, 0, +2}.
+
+    The odd-parity sectors ((1,±1),(1,±1)) each contain four states spanning
+    two independent hopping pairs: one N=1 hop and one N=3 hop (a hole hop
+    with a spectator spin in the other channel).  Both pairs contribute ±1,
+    giving eigenvalues {−1, −1, +1, +1}.
+
+    Absent: ((0,±2),(0,±2)) — both sites carry the same spin, no hopping.
+    """
+    H = _build_band_hopping("Z2,U1")
+
+    # --- absent blocks ---
+    for key, label in [
+        (((0,  2), (0,  2)), "N=2 spin-up"),
+        (((0, -2), (0, -2)), "N=2 spin-down"),
+    ]:
+        assert key not in H.data, f"{label} block {key} should be absent"
+
+    # --- mixed-N sector: 6×6, eigenvalues {−2, 0, 0, 0, 0, +2} ---
+    key = ((0, 0), (0, 0))
+    assert key in H.data, f"Block {key} missing"
+    evals = _eigvalsh_block(H, key)
+    expected = torch.tensor([-2.0, 0.0, 0.0, 0.0, 0.0, 2.0], dtype=evals.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+    )
+
+    # --- odd-parity sectors: 4×4, two independent hops → {−1, −1, +1, +1} ---
+    for key in [((1, 1), (1, 1)), ((1, -1), (1, -1))]:
+        assert key in H.data, f"Block {key} missing"
+        evals = _eigvalsh_block(H, key)
+        expected = torch.tensor([-1.0, -1.0, 1.0, 1.0], dtype=evals.dtype)
+        assert torch.allclose(evals, expected, atol=1e-6), (
+            f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
+        )
