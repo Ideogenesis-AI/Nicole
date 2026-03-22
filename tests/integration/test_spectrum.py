@@ -36,6 +36,16 @@ def _heisenberg_eigenvalue(j_site: float, j_total: int) -> float:
     return 0.5 * (j_total * (j_total + 1) - 2 * j_site * (j_site + 1))
 
 
+def _hopping_eigenvalues() -> list:
+    """Analytic eigenvalues of the two-site hopping Hamiltonian F†₁F₂ + h.c.
+
+    The spectrum is {−1, 0, 0, +1}: the ±1 pair lives in the single-particle
+    sector (one fermion, 2×2 block) and the two zeros correspond to the vacuum
+    and doubly-occupied sectors (no hopping, blocks absent from the data dict).
+    """
+    return [-1.0, 1.0]
+
+
 # ---------------------------------------------------------------------------
 # U(1) Heisenberg spectrum
 # ---------------------------------------------------------------------------
@@ -267,3 +277,121 @@ def test_heisenberg_two_site_spectrum_generic_su2(j_site: float):
             f"j_site={j_site}, J_total={j_total}: "
             f"expected {expected:.6f}, got {actual:.6f}"
         )
+
+
+# ---------------------------------------------------------------------------
+# U(1) hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def _build_hopping_u1():
+    """Build the two-site hopping Hamiltonian F†₁F₂ + h.c. for U(1) symmetry.
+
+    F is a 3-index tensor (bra, ket, aux) loaded from the 'Ferm' space.
+    Contracting F†(site 1) with F(site 2) on the auxiliary index gives H₁₂;
+    its Hermitian conjugate H₁₂† = H₁₂.conj().permute([1, 0, 3, 2]) swaps
+    bra ↔ ket on each site independently and represents F†₂F₁.
+
+    No Jordan-Wigner Z factor is inserted: for nearest-neighbor hopping on a
+    two-site chain there are no sites strictly between sites 1 and 2, so the
+    JW string is trivial.  Algebraically, σ⁺Z = σ⁺ and Zσ⁻ = σ⁻ cause the
+    Z₁ factors in c†₁c₂ = F†₁(Z₁F₂) and c†₂c₁ = (F†₂Z₁)F₁ to drop out,
+    leaving F†₁F₂ and F†₂F₁ respectively.
+
+    After merging physical indices the Hamiltonian is block-diagonal in total
+    U(1) charge (sum of single-site charges, with empty = −1 and occupied = +1):
+
+    - q_total = −2  (|00⟩, vacuum):           block absent, E = 0
+    - q_total =  0  (|01⟩ and |10⟩):          2×2 block, eigenvalues {−1, +1}
+    - q_total = +2  (|11⟩, doubly occupied):   block absent, E = 0
+    """
+    _, Op = load_space("Ferm", preserv="U1")
+    F = Op["F"]
+
+    # F†₁F₂: contract creation at site 1 with annihilation at site 2
+    H12 = contract(F.conj().permute([1, 0, 2]), F, axes=(2, 2))
+
+    # h.c.: swap bra ↔ ket on each site (F†₂F₁)
+    H = H12 + H12.conj().permute([1, 0, 3, 2])
+
+    H, _ = merge_axes(H, (0, 2), merged_tag="ff", direction=Direction.IN)
+    H, _ = merge_axes(H, (1, 2), merged_tag="ff")
+
+    return H
+
+
+def test_hopping_two_site_spectrum_u1():
+    """Two-site U(1) hopping spectrum: single-particle block has eigenvalues {−1, +1}.
+
+    The vacuum (q_total = −2) and doubly-occupied (q_total = +2) sectors carry
+    no hopping amplitude and their blocks are absent from the data dictionary.
+    """
+    H = _build_hopping_u1()
+
+    # Vacuum and doubly-occupied sectors: no hopping → blocks absent
+    assert (-2, -2) not in H.data, "Vacuum block (-2, -2) should be absent"
+    assert (2, 2) not in H.data, "Doubly-occupied block (2, 2) should be absent"
+
+    # Single-particle sector: 2×2 off-diagonal matrix, eigenvalues ±1
+    assert (0, 0) in H.data, "Single-particle block (0, 0) missing"
+    block = H.data[(0, 0)]
+    n = block.shape[0]
+    evals = torch.linalg.eigvalsh(block.reshape(n, n))
+    expected = torch.tensor(_hopping_eigenvalues(), dtype=block.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Single-particle eigenvalues: expected {expected.tolist()}, got {evals.tolist()}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Z2 hopping spectrum
+# ---------------------------------------------------------------------------
+
+
+def _build_hopping_z2():
+    """Build the two-site hopping Hamiltonian F†₁F₂ + h.c. for Z2 symmetry.
+
+    The construction mirrors the U(1) case exactly; only the symmetry group
+    changes (Z2 parity instead of U(1) charge).  Parity charges: empty = 0,
+    occupied = 1.
+
+    After merging physical indices the Hamiltonian is block-diagonal in total
+    Z2 parity (XOR of single-site parities):
+
+    - p_total = 0  (|00⟩ and |11⟩, even parity):  block absent, E = 0
+    - p_total = 1  (|01⟩ and |10⟩, odd parity):   2×2 block, eigenvalues {−1, +1}
+    """
+    _, Op = load_space("Ferm", preserv="Z2")
+    F = Op["F"]
+
+    H12 = contract(F.conj().permute([1, 0, 2]), F, axes=(2, 2))
+    H = H12 + H12.conj().permute([1, 0, 3, 2])
+
+    H, _ = merge_axes(H, (0, 2), merged_tag="ff", direction=Direction.IN)
+    H, _ = merge_axes(H, (1, 2), merged_tag="ff")
+
+    return H
+
+
+def test_hopping_two_site_spectrum_z2():
+    """Two-site Z2 hopping spectrum: odd-parity block has eigenvalues {−1, +1}.
+
+    States |00⟩ and |11⟩ both have even total parity and are not connected by
+    hopping, so the even-parity block (p_total = 0) is absent.  States |01⟩
+    and |10⟩ each have odd total parity and are connected by the hopping term,
+    giving eigenvalues ±1 in the odd-parity block (p_total = 1).
+    """
+    H = _build_hopping_z2()
+
+    # Even-parity sector: no hopping → block absent
+    assert (0, 0) not in H.data, "Even-parity block (0, 0) should be absent"
+
+    # Odd-parity sector: 2×2 off-diagonal matrix, eigenvalues ±1
+    assert (1, 1) in H.data, "Odd-parity block (1, 1) missing"
+    block = H.data[(1, 1)]
+    n = block.shape[0]
+    evals = torch.linalg.eigvalsh(block.reshape(n, n))
+    expected = torch.tensor(_hopping_eigenvalues(), dtype=block.dtype)
+    assert torch.allclose(evals, expected, atol=1e-6), (
+        f"Odd-parity eigenvalues: expected {expected.tolist()}, got {evals.tolist()}"
+    )
