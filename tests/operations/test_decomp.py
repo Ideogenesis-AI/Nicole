@@ -23,7 +23,7 @@ import pytest
 
 from nicole import Direction, Index, Sector, Tensor, contract, decomp
 from nicole import U1Group, SU2Group, ProductGroup
-from ..utils import assert_charge_neutral
+from ..utils import assert_charge_neutral, populate_random_weights
 from ..utils import assert_blocks_equal, assert_physical_tensors_equal
 
 
@@ -1631,7 +1631,9 @@ def _make_su2_3rd_order_decomp(seed: int = 1):
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
-    return Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def test_decomp_su2_svd_mode():
@@ -1657,7 +1659,9 @@ def _make_su2_4th_order_decomp(seed: int = 1):
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    return Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def _make_su2_5th_order_decomp(seed: int = 1):
@@ -1668,7 +1672,9 @@ def _make_su2_5th_order_decomp(seed: int = 1):
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
     idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
-    return Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def _make_su2_6th_order_decomp(seed: int = 1):
@@ -1680,7 +1686,9 @@ def _make_su2_6th_order_decomp(seed: int = 1):
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
     idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
     idx6 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    return Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def test_decomp_su2_ur_mode():
