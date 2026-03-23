@@ -22,7 +22,7 @@ eigenvalue structure for physically known models."""
 import torch
 import pytest
 
-from nicole import Direction, contract, load_space, merge_axes
+from nicole import Direction, Index, Sector, Tensor, contract, load_space, merge_axes
 
 
 def _heisenberg_eigenvalue(j_site: float, j_total: int) -> float:
@@ -682,3 +682,302 @@ def test_hopping_two_site_spectrum_band_z2su2():
     assert torch.allclose(evals, expected, atol=1e-6), (
         f"Block {key}: expected {expected.tolist()}, got {evals.tolist()}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Band spin-spin operator: S₁·S₂ via Op["S"] and Op["F"] consistency
+# ---------------------------------------------------------------------------
+
+
+def _build_ss_band_from_S(preserv: str):
+    """Build S₁·S₂ for a two-site Band system using the pre-built spin operator.
+
+    The Band Op["S"] is the on-site rank-1 (spin-1) tensor whose reduced matrix
+    element encodes the Wigner-Eckart content of the F†F bilinear projected onto
+    the spin-1 sector.  The construction follows the same aux-contraction pattern
+    as _build_heisenberg_su2: contract S† at site 1 with S at site 2 on the
+    spin-1 auxiliary index, then merge the physical indices into a 2-index operator.
+    """
+    _, Op = load_space("Band", preserv=preserv)
+    S = Op["S"]
+
+    SS = contract(S.conj().permute([1, 0, 2]), S, axes=(2, 2))
+    SS, _ = merge_axes(SS, (0, 2), merged_tag="ss", direction=Direction.IN)
+    SS, _ = merge_axes(SS, (1, 2), merged_tag="ss")
+    SS.regularize()
+
+    return SS
+
+
+def _build_ss_band_from_F(preserv: str):
+    """Build S₁·S₂ for a two-site Band system using fermionic operators only.
+
+    The on-site spin-1 operator S_from_F is extracted from the F†F bilinear by:
+
+    1. Computing the on-site bilinear T = F†F with both spin-½ auxiliaries external.
+    2. Permuting to (bra, ket, aux_F†, aux_F) and merging the two spin-½ aux into
+       a combined auxiliary index with sectors (0,0) [scalar/N] and (0,2) [vector/S].
+    3. Isolating the spin-1 sector (0,2) to obtain S_from_F, then rescaling by
+       −1/√2 to match the RME convention of Op["S"].
+    4. Contracting S†_from_F₁ with S_from_F₂ on the spin-1 aux (S₁·S₂ form).
+
+    The resulting two-site operator is S₁·S₂, with eigenvalues matching those
+    produced by _build_ss_band_from_S, which serves as the consistency check.
+    """
+    _, Op = load_space("Band", preserv=preserv)
+    F = Op["F"]
+    Fd = F.conj().permute([1, 0, 2])
+
+    # On-site bilinear with both spin-½ aux external, then merge aux to get
+    # a single combined index with sectors (0,0) [N-like] and (0,2) [S-like].
+    T = contract(Fd, F, axes=(1, 0))
+    T_perm = T.permute([0, 2, 1, 3])           # (bra, ket, aux_F†, aux_F)
+    T_merged, _ = merge_axes(T_perm, (2, 3), merged_tag="_aux_")
+    # T_merged: (merged_aux/IN, ket/OUT, bra/IN)
+    # Index 0 of T_merged is the merged aux with sectors (0,0) and (0,2).
+
+    # Isolate the spin-1 (0,2) sector to obtain S_from_F ∝ Op["S"]
+    aux_idx = T_merged.indices[0]
+    aux_spin1 = Index(
+        direction=aux_idx.direction,
+        group=aux_idx.group,
+        sectors=(Sector(charge=(0, 2), dim=1),),
+    )
+    S_data = {k: v for k, v in T_merged.data.items() if k[0] == (0, 2)}
+    S_intw = {k: v for k, v in T_merged.intw.items() if k[0] == (0, 2)}
+    S_from_F = Tensor(
+        indices=(aux_spin1, T_merged.indices[1], T_merged.indices[2]),
+        itags=T_merged.itags,
+        data=S_data,
+        intw=S_intw,
+        dtype=T_merged.dtype,
+    )
+    # S_from_F: (aux_spin1/IN, ket/OUT, bra/IN)
+
+    # The merging of the two spin-½ aux indices via Clebsch-Gordan essentially
+    # applies a −1/√2 · σ factor relative to Op["S"]'s RME convention.
+    # Dividing by −√2 corrects this so S_from_F carries exactly the same RME
+    # as Op["S"], making the two-site contraction give S₁·S₂ (not 2·S₁·S₂).
+    S_from_F = S_from_F * (-1.0 / 2**0.5)
+
+    # Contract S†_from_F at site 1 with S_from_F at site 2 on the spin-1 aux.
+    # conj().permute([1,2,0]): (ket*/IN, bra*/OUT, aux*/OUT)
+    Sconj = S_from_F.conj().permute([1, 2, 0])
+    SS = contract(Sconj, S_from_F, axes=(2, 0))  # (ket1*/IN, bra1*/OUT, ket2/OUT, bra2/IN)
+    SS = SS.permute([0, 1, 3, 2])                # → standard (ket1*/IN, bra1*/OUT, bra2/IN, ket2/OUT)
+    SS, _ = merge_axes(SS, (0, 2), merged_tag="ss", direction=Direction.IN)
+    SS, _ = merge_axes(SS, (1, 2), merged_tag="ss")
+    SS.regularize()
+
+    return SS   # = S₁·S₂
+
+
+def _build_ss_band_from_fierz(preserv: str):
+    """Build S₁·S₂ for a two-site Band system via the four-fermion Fierz identity.
+
+    Starting from the Fierz decomposition of Pauli matrices,
+
+        Σᵢ σⁱ_αβ σⁱ_γδ = 2 δ_αδ δ_βγ − δ_αβ δ_γδ,
+
+    the spin–spin interaction can be written purely in terms of F and F†:
+
+        S₁·S₂ = (1/4)(2·exchange − N₁N₂)
+
+    where
+
+        exchange = Σ_αβ F†_{1α} F_{1β} F†_{2β} F_{2α}
+
+    and N = Σ_σ F†_σ F_σ is the on-site particle number.
+
+    Construction:
+    1. Build the on-site bilinear T_perm = F†F with both spin-½ aux indices
+       external: (bra/IN, ket/OUT, aux_F†/IN, aux_F/OUT).
+    2. Exchange term: cross-contract T1_perm and T2_perm on the aux pair with
+       the σ indices swapped across sites — axes=([2,3],[3,2]).
+    3. Number operator N: contract Fd and F on both the physical intermediate
+       site and the spin-½ aux simultaneously.
+    4. N₁N₂ outer product: extend N by inserting a dummy OUT/IN index pair, then
+       contract those trivial indices to tensor-product the two on-site operators.
+    5. Combine: SS = (1/4)(2·exchange − N₁N₂); merge and regularize.
+    6. compress() collapses the num_components > 1 that arise from the sum of
+       two tensors back to 1, making _eigvalsh_block applicable.
+    """
+    _, Op = load_space("Band", preserv=preserv)
+    F = Op["F"]
+    Fd = F.conj().permute([1, 0, 2])
+
+    # On-site bilinear with both spin-½ aux indices external.
+    # Fd: (ket*/IN, bra*/OUT, aux_Fd*/IN)  ;  F: (bra/IN, ket/OUT, aux_F/OUT)
+    # contract on axis 1 of Fd (bra*/OUT) and axis 0 of F (bra/IN).
+    # Result T: (ket*/IN, aux_Fd*/IN, ket/OUT, aux_F/OUT)
+    T = contract(Fd, F, axes=(1, 0))
+    T_perm = T.permute([0, 2, 1, 3])   # (bra/IN, ket/OUT, aux_Fd/IN, aux_F/OUT)
+
+    # Exchange term: contract T1 and T2 with aux indices crossed.
+    #   T1p indices 2 (aux_Fd/IN)  ↔  T2p indices 3 (aux_F/OUT)   [σ channel]
+    #   T1p indices 3 (aux_F/OUT)  ↔  T2p indices 2 (aux_Fd/IN)   [σ′ channel]
+    # Result: (bra1/IN, ket1/OUT, bra2/IN, ket2/OUT)
+    exchange = contract(T_perm, T_perm.clone(), axes=([2, 3], [3, 2]))
+
+    # Number operator N = Σ_σ F†_σ F_σ.
+    # Contract both the physical site (Fd axis 1 ↔ F axis 0) and
+    # the spin-½ aux (Fd axis 2 ↔ F axis 2) simultaneously.
+    # Result N: (bra/IN, ket/OUT)
+    N = contract(Fd, F, axes=([1, 2], [0, 2]))
+
+    # N₁N₂ outer product via trivial-index trick.
+    #   N1_ext: (bra1/IN, ket1/OUT, dummy/OUT)
+    #   N2_ext: (dummy/IN, bra2/IN, ket2/OUT)
+    # Contracting on the dummy pair gives the outer product.
+    N1_ext = N.clone()
+    N1_ext.insert_index(2, Direction.OUT, itag="_nn_")
+    N2_ext = N.clone()
+    N2_ext.insert_index(0, Direction.IN, itag="_nn_")
+    N1N2 = contract(N1_ext, N2_ext, axes=(2, 0))
+    # Result: (bra1/IN, ket1/OUT, bra2/IN, ket2/OUT)
+
+    # Fierz combination: S₁·S₂ = (1/4)(2·exchange − N₁N₂)
+    SS_fierz = (exchange * 2 - N1N2) * 0.25
+
+    # Merge physical indices and normalise.
+    SS_fierz, _ = merge_axes(SS_fierz, (0, 2), merged_tag="ss", direction=Direction.IN)
+    SS_fierz, _ = merge_axes(SS_fierz, (1, 2), merged_tag="ss")
+    # The sum 2·exchange − N₁N₂ inflates num_components (each summand contributes
+    # its own weight row).  compress() performs SVD on the Bridge weight matrix
+    # and retains only the linearly independent components.  It must run BEFORE
+    # regularize() because regularize() for 2-index tensors reads bridge.weights[0,0]
+    # alone; with num_components > 1 that first element may differ from the true
+    # effective weight, leading to incorrect data scaling.
+    SS_fierz.compress()
+    SS_fierz.regularize()
+    # exchange and N₁N₂ each populate sectors where spin is zero (e.g. empty or
+    # doubly-occupied sites); after cancellation these blocks are numerically tiny
+    # but may have residuals a few multiples of float64 eps, so we trim with a
+    # slightly more generous threshold than trim_zero_blocks()'s machine-epsilon.
+    for key in list(SS_fierz.data.keys()):
+        if SS_fierz.data[key].abs().max().item() < 1e-12:
+            del SS_fierz.data[key]
+            if SS_fierz.intw:
+                SS_fierz.intw.pop(key, None)
+
+    return SS_fierz
+
+
+def test_spin_spin_band_u1su2():
+    """S₁·S₂ for a two-site U(1)×SU(2) Band system: three independent routes.
+
+    All three constructions must give the same S₁·S₂ operator:
+      • Op["S"] route: direct contraction of the pre-built spin-1 tensor.
+      • T_merged route: spin-1 sector extracted from the F†F bilinear and
+        rescaled by −1/√2 to match the RME convention of Op["S"].
+      • Fierz route: four-fermion identity S₁·S₂ = (1/4)(2·exchange − N₁N₂)
+        followed by compress() + regularize().
+
+    Block keys are ((total_U1, 2·J_total), same):
+
+    ((0, 0), (0, 0)) — 3×3, combining:
+        • |0₁,↑↓₂⟩ and |↑↓₁,0₂⟩: S is zero on empty/doubly-occupied → eigenvalue 0
+        • singlet (|↑₁↓₂⟩ − |↓₁↑₂⟩)/√2: S₁·S₂ = −¾ (one state)
+        eigenvalues: {−¾, 0, 0}
+
+    ((0, 2), (0, 2)) — 1×1, triplet of two singly-occupied sites:
+        S₁·S₂ = +¼
+    """
+    SS  = _build_ss_band_from_S("U1,SU2")
+    SS2 = _build_ss_band_from_F("U1,SU2")
+    SS3 = _build_ss_band_from_fierz("U1,SU2")
+
+    # --- all three produce the same non-trivial block keys ---
+    assert SS.data.keys() == SS2.data.keys(), (
+        f"T_merged key mismatch: SS={set(SS.data.keys())}, SS2={set(SS2.data.keys())}"
+    )
+    assert SS.data.keys() == SS3.data.keys(), (
+        f"Fierz key mismatch: SS={set(SS.data.keys())}, SS3={set(SS3.data.keys())}"
+    )
+
+    # --- absent blocks: S is zero outside the singly-occupied sector ---
+    for key, label in [
+        (((-2, 0), (-2, 0)), "vacuum"),
+        (((-1, 1), (-1, 1)), "N=1 single-particle"),
+        ((( 1, 1), ( 1, 1)), "N=3 single-hole"),
+        ((( 2, 0), ( 2, 0)), "doubly-occupied"),
+    ]:
+        assert key not in SS.data, f"block {key} ({label}) should be absent"
+
+    # --- analytic eigenvalues ---
+    key = ((0, 0), (0, 0))
+    expected_singlet = torch.tensor([-0.75, 0.0, 0.0], dtype=torch.float64)
+    assert torch.allclose(_eigvalsh_block(SS,  key), expected_singlet, atol=1e-6), (
+        f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
+    )
+
+    key = ((0, 2), (0, 2))
+    expected_triplet = torch.tensor([0.25], dtype=torch.float64)
+    assert torch.allclose(_eigvalsh_block(SS,  key), expected_triplet, atol=1e-6), (
+        f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
+    )
+
+    # --- all three routes agree on every block ---
+    for key in SS.data:
+        ev = _eigvalsh_block(SS, key)
+        for name, other in [("T_merged", SS2), ("Fierz", SS3)]:
+            ev_other = _eigvalsh_block(other, key)
+            assert torch.allclose(ev_other, ev, atol=1e-6), (
+                f"{name} mismatch at {key}: got {ev_other.tolist()}, expected {ev.tolist()}"
+            )
+
+
+def test_spin_spin_band_z2su2():
+    """S₁·S₂ for a two-site Z2×SU(2) Band system: three independent routes.
+
+    Z2 combines the empty |0⟩ and doubly-occupied |↑↓⟩ states (both even parity)
+    with the singly-occupied doublet |↑⟩/|↓⟩ (odd parity).
+
+    All three constructions (Op["S"], T_merged, Fierz) must give the same S₁·S₂
+    operator.  Block keys are ((Z2_parity, 2·J_total), same):
+
+    ((0, 0), (0, 0)) — 5×5, combining:
+        • 4 even-parity pairs: {|0₁0₂⟩, |0₁↑↓₂⟩, |↑↓₁0₂⟩, |↑↓₁↑↓₂⟩}
+          → S zero on each, eigenvalue 0 (×4)
+        • 1 singlet from (1,1)⊗(1,1)→(0,0): S₁·S₂ = −¾
+        eigenvalues: {−¾, 0, 0, 0, 0}
+
+    ((0, 2), (0, 2)) — 1×1, triplet: S₁·S₂ = +¼
+    """
+    SS  = _build_ss_band_from_S("Z2,SU2")
+    SS2 = _build_ss_band_from_F("Z2,SU2")
+    SS3 = _build_ss_band_from_fierz("Z2,SU2")
+
+    # --- all three produce the same non-trivial block keys ---
+    assert SS.data.keys() == SS2.data.keys(), (
+        f"T_merged key mismatch: SS={set(SS.data.keys())}, SS2={set(SS2.data.keys())}"
+    )
+    assert SS.data.keys() == SS3.data.keys(), (
+        f"Fierz key mismatch: SS={set(SS.data.keys())}, SS3={set(SS3.data.keys())}"
+    )
+
+    # --- absent: odd-parity doublet block (one site always empty or doubly occ) ---
+    key = ((1, 1), (1, 1))
+    assert key not in SS.data, f"block {key} should be absent"
+
+    # --- analytic eigenvalues ---
+    key = ((0, 0), (0, 0))
+    expected_singlet = torch.tensor([-0.75, 0.0, 0.0, 0.0, 0.0], dtype=torch.float64)
+    assert torch.allclose(_eigvalsh_block(SS, key), expected_singlet, atol=1e-6), (
+        f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
+    )
+
+    key = ((0, 2), (0, 2))
+    expected_triplet = torch.tensor([0.25], dtype=torch.float64)
+    assert torch.allclose(_eigvalsh_block(SS, key), expected_triplet, atol=1e-6), (
+        f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
+    )
+
+    # --- all three routes agree on every block ---
+    for key in SS.data:
+        ev = _eigvalsh_block(SS, key)
+        for name, other in [("T_merged", SS2), ("Fierz", SS3)]:
+            ev_other = _eigvalsh_block(other, key)
+            assert torch.allclose(ev_other, ev, atol=1e-6), (
+                f"{name} mismatch at {key}: got {ev_other.tolist()}, expected {ev.tolist()}"
+            )
