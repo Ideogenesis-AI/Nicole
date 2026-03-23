@@ -59,6 +59,7 @@ def iter_diag_spin(
     Nkeep: int = 300,
     J: float = 1.0,
     spin: float = 0.5,
+    symmetry: str = "U1",
     verbose: bool = True
 ) -> Tuple[np.ndarray, np.ndarray, list]:
     """Run iterative diagonalization for spin chain (Heisenberg model).
@@ -68,12 +69,21 @@ def iter_diag_spin(
     N : int, optional
         Maximum chain length (default: 50)
     Nkeep : int, optional
-        Maximum number of states to keep after truncation (default: 300)
+        Maximum number of states to keep after truncation (default: 300).
+        For symmetry="U1" this counts individual states; for symmetry="SU2"
+        this counts SU(2) multiplets (each contributes 2*spin+1 physical states).
     J : float, optional
         Spin-spin coupling constant (default: 1.0)
     spin : float, optional
         Total spin quantum number for each site (default: 0.5 for spin-1/2)
         Must be a half-integer: 0.5, 1.0, 1.5, 2.0, etc.
+    symmetry : str, optional
+        Symmetry sector to exploit (default: "U1").
+        - "U1": conserve total S^z (block-diagonal in m_z)
+        - "SU2": exploit full SU(2) spin-rotation symmetry (block-diagonal in
+          total spin J). The Hamiltonian is stored as reduced matrix elements
+          (Wigner-Eckart theorem); each block covers an entire multiplet.
+          Convergence is typically faster than "U1" for the same Nkeep.
     verbose : bool, optional
         Print progress messages (default: True)
     
@@ -97,7 +107,7 @@ def iter_diag_spin(
     
     Examples
     --------
-    >>> # Run with default parameters
+    >>> # Run with default parameters (U(1) symmetry)
     >>> Eg, Egs, mps = iter_diag_spin()
     
     >>> # Longer chain with more states kept
@@ -105,14 +115,23 @@ def iter_diag_spin(
     
     >>> # Spin-1 chain
     >>> Eg, Egs, mps = iter_diag_spin(spin=1.0)
+    
+    >>> # Use full SU(2) symmetry for faster convergence
+    >>> Eg, Egs, mps = iter_diag_spin(symmetry="SU2")
     """
     
+    if symmetry not in ("U1", "SU2"):
+        raise ValueError(f"Unsupported symmetry '{symmetry}'. Use 'U1' or 'SU2'.")
+
     tol = Nkeep * 100 * np.finfo(float).eps  # numerical tolerance for degeneracy
     
     # Get local spin space and operators
-    Spc, Op = load_space("Spin", "U1", {"J": spin})
-    Op["Sz"].insert_index(2, direction=Direction.OUT)
-    S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Sum of all spin operators
+    Spc, Op = load_space("Spin", symmetry, {"J": spin})
+    if symmetry == "U1":
+        Op["Sz"].insert_index(2, direction=Direction.OUT)
+        S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Sum of all spin operators
+    else:  # SU2
+        S = Op["S"]  # Single rank-1 spherical tensor
     I = identity(Spc)  # Identity operator
     
     # Set itags for spin operators
@@ -141,7 +160,7 @@ def iter_diag_spin(
     
     for itN in range(1, N + 1):
         # Create spin operator for the current site with proper itags
-        Snow = Op["Sp"] + Op["Sm"] + Op["Sz"]
+        Snow = S.clone()
         Snow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
         
         if itN == 1:
@@ -253,6 +272,11 @@ def main():
         help="Total spin quantum number (default: 0.5)"
     )
     parser.add_argument(
+        "-Y", "--symmetry", type=str, default="U1",
+        choices=["U1", "SU2"],
+        help="Symmetry to exploit: 'U1' (default) or 'SU2'"
+    )
+    parser.add_argument(
         "-q", "--quiet", action="store_true",
         help="Suppress progress messages"
     )
@@ -264,6 +288,7 @@ def main():
         Nkeep=args.nkeep,
         J=args.coupling,
         spin=args.spin,
+        symmetry=args.symmetry,
         verbose=not args.quiet
     )
     
