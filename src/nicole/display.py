@@ -112,8 +112,8 @@ def _format_single_value(arr: torch.Tensor) -> str:
         real_part = f"{val.real:.4g}"
         imag_part = f"{abs(val.imag):.4g}"
         sign = "+" if val.imag >= 0 else "-"
-        return f"{real_part}{sign}{imag_part}i."
-    return f"{val:.4g}."
+        return f"{real_part}{sign}{imag_part}i"
+    return f"{val:.4g}" + ("." if "." not in f"{val:.4g}" and "e" not in f"{val:.4g}" else "")
 
 
 def _format_count_list(counts: Sequence[int]) -> str:
