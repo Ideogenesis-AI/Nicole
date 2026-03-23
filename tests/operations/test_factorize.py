@@ -2046,7 +2046,7 @@ def test_eig_basic():
         dtype=T.dtype
     )
     
-    U, D = eig(T)
+    U, D = eig(T, is_hermitian=True)
     
     # Check dimensions
     assert len(U.indices) == 2
@@ -2055,8 +2055,8 @@ def test_eig_basic():
     
     # Check eigenvalues are real for Hermitian matrix
     for key, eigvals in D.items():
-        if eigvals.is_complex():
-            assert torch.allclose(eigvals.imag, torch.zeros_like(eigvals.imag), atol=1e-10)
+        assert eigvals.is_floating_point(), \
+            f"Expected real eigenvalues from eigh, got {eigvals.dtype} at {key}"
     
     # Verify eigendecomposition: T @ U = U @ diag(D) for each block
     for key in T.data.keys():
@@ -2647,7 +2647,7 @@ def test_eig_su2_reconstruction():
     # T_ref holds the physical values we want to reconstruct.
     T_ref = T.clone()
 
-    U, D = eig(T)
+    U, D = eig(T, is_hermitian=True)
 
     # Build diagonal matrix tensor from eigenvalues.
     # Give both bond axes the same itag as U's bond so contract's itag check passes.
@@ -2686,3 +2686,123 @@ def test_eig_su2_truncation_nkeep():
     # intw keys must match U.data keys exactly
     assert set(U.intw.keys()) == set(U.data.keys()), \
         "U.intw keys must match U.data keys after nkeep truncation"
+
+
+# is_hermitian flag tests (Abelian / non-Abelian) x (Hermitian / non-Hermitian)
+
+def test_eig_is_hermitian_abelian_hermitian():
+    """Abelian (U1) + is_hermitian=True: eigenvalues are real, eigenvectors orthonormal."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in  = Index(Direction.IN,  group, sectors=(Sector(0, 3), Sector(1, 2)))
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=80)
+    # Symmetrize each block so T is Hermitian
+    for key in list(T.data.keys()):
+        T.data[key] = (T.data[key] + T.data[key].T.conj()) / 2
+
+    U, D = eig(T, is_hermitian=True)
+
+    # eigh returns real eigenvalues
+    for key, vals in D.items():
+        assert vals.is_floating_point(), \
+            f"Expected real eigenvalues from eigh, got {vals.dtype} at {key}"
+
+    # eigenvectors must be orthonormal per block
+    for key, arr in U.data.items():
+        U_mat = arr  # (d, rank) for Abelian
+        prod = U_mat.T.conj() @ U_mat
+        eye  = torch.eye(prod.shape[0], dtype=prod.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"U†U ≠ I at block {key}, max err={( prod - eye).abs().max():.2e}"
+
+
+def test_eig_is_hermitian_abelian_nonhermitian():
+    """Abelian (U1) + is_hermitian=False: decomposition holds, eigenvectors not orthonormal."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in  = Index(Direction.IN,  group, sectors=(Sector(0, 3), Sector(1, 2)))
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=81)
+    # Do NOT symmetrize — blocks are generically asymmetric
+
+    U, D = eig(T)  # is_hermitian=False by default
+
+    # eigendecomposition relation must hold: T @ U = U @ diag(D)
+    for key, t_arr in T.data.items():
+        if key not in U.data:
+            continue
+        T_mat = t_arr.to(dtype=U.dtype)
+        U_mat = U.data[key]
+        D_vec = D[key]
+        lhs = T_mat @ U_mat
+        rhs = U_mat @ torch.diag(D_vec)
+        assert torch.allclose(lhs, rhs, atol=1e-8), \
+            f"T@U = U@diag(D) failed at {key}, max err={( lhs - rhs).abs().max():.2e}"
+
+    # eigenvectors from the general path are NOT guaranteed to be orthonormal
+    any_non_orthonormal = False
+    for key, arr in U.data.items():
+        prod = arr.T.conj() @ arr
+        eye  = torch.eye(prod.shape[0], dtype=prod.dtype)
+        if not torch.allclose(prod, eye, atol=1e-10):
+            any_non_orthonormal = True
+            break
+    assert any_non_orthonormal, \
+        "Expected at least one non-orthonormal eigenvector block for a non-symmetric matrix"
+
+
+def test_eig_is_hermitian_su2_hermitian():
+    """SU(2) + is_hermitian=True: eigenvalues are real, reduced eigenvectors orthonormal."""
+    T = _make_su2_2nd_order(seed=82)
+    # Symmetrize the reduced data blocks so T is Hermitian
+    for key in list(T.data.keys()):
+        mat = T.data[key].squeeze(-1)
+        T.data[key] = ((mat + mat.T.conj()) / 2).unsqueeze(-1)
+
+    U, D = eig(T, is_hermitian=True)
+
+    # eigh returns real eigenvalues
+    for key, vals in D.items():
+        assert vals.is_floating_point(), \
+            f"Expected real eigenvalues from eigh, got {vals.dtype} at {key}"
+
+    # reduced eigenvector blocks must be orthonormal
+    for key, arr in U.data.items():
+        U_mat = arr.squeeze(-1)  # (d, rank)
+        prod  = U_mat.T.conj() @ U_mat
+        eye   = torch.eye(prod.shape[0], dtype=prod.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"U†U ≠ I at SU(2) block {key}, max err={( prod - eye).abs().max():.2e}"
+
+
+def test_eig_is_hermitian_su2_nonhermitian():
+    """SU(2) + is_hermitian=False: decomposition holds, reduced eigenvectors not orthonormal."""
+    T = _make_su2_2nd_order(seed=83)
+    # Do NOT symmetrize — blocks are generically asymmetric
+
+    U, D = eig(T)  # is_hermitian=False by default
+
+    # eigendecomposition relation on reduced blocks: T_mat @ U_mat = U_mat @ diag(D_vec)
+    for key, t_arr in T.data.items():
+        q = key[0]
+        u_key = (q, q)
+        if u_key not in U.data:
+            continue
+        T_mat = t_arr.squeeze(-1).to(dtype=U.dtype)
+        U_mat = U.data[u_key].squeeze(-1)
+        D_vec = D[u_key]
+        lhs = T_mat @ U_mat
+        rhs = U_mat @ torch.diag(D_vec.to(dtype=U.dtype))
+        assert torch.allclose(lhs, rhs, atol=1e-8), \
+            f"T@U = U@diag(D) failed at SU(2) block {key}, max err={( lhs - rhs).abs().max():.2e}"
+
+    # eigenvectors from the general path are NOT guaranteed to be orthonormal
+    any_non_orthonormal = False
+    for key, arr in U.data.items():
+        U_mat = arr.squeeze(-1)
+        prod  = U_mat.T.conj() @ U_mat
+        eye   = torch.eye(prod.shape[0], dtype=prod.dtype)
+        if not torch.allclose(prod, eye, atol=1e-10):
+            any_non_orthonormal = True
+            break
+    assert any_non_orthonormal, \
+        "Expected at least one non-orthonormal reduced eigenvector block for a non-symmetric SU(2) tensor"
