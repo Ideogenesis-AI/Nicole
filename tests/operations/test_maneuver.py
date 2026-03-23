@@ -3118,3 +3118,81 @@ def test_trim_zero_blocks_su2_3rd_order_mixed():
         assert key not in tensor.data
         assert key not in tensor.intw
 
+
+def test_trim_zero_blocks_custom_eps_trims_few_eps_residual():
+    """Custom eps trims a block that the default threshold would keep.
+
+    A block with max abs ≈ 5×eps_f64 lies above the default threshold
+    (eps_f64 × norm ≈ eps_f64) but below a 10× relaxed threshold.
+    This exercises the eps keyword introduced to handle accumulated
+    floating-point residuals from algebraic cancellations.
+    """
+    float_eps = torch.finfo(torch.float64).eps
+    residual_val = 5 * float_eps
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    tensor = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data={
+            (0, 0): torch.tensor([[1.0]]),
+            (1, 1): torch.tensor([[residual_val]]),
+        },
+        dtype=torch.float64,
+    )
+
+    # Default eps: threshold ≈ float_eps × norm ≈ float_eps × 1.0
+    # residual_val = 5×float_eps  >  float_eps  →  NOT trimmed
+    t_default = tensor.clone()
+    t_default.trim_zero_blocks()
+    assert (1, 1) in t_default.data, (
+        f"Default trim should NOT remove a {residual_val:.2e} block "
+        f"(threshold ≈ eps × norm ≈ {float_eps:.2e})"
+    )
+
+    # Custom eps = 10×float_eps: threshold ≈ 10×float_eps × 1.0
+    # residual_val = 5×float_eps  <  10×float_eps  →  TRIMMED
+    t_custom = tensor.clone()
+    t_custom.trim_zero_blocks(eps=10 * float_eps)
+    assert (1, 1) not in t_custom.data, (
+        f"Custom trim (eps=10×float_eps) should remove a {residual_val:.2e} block"
+    )
+    assert (0, 0) in t_custom.data, "Non-zero block must be preserved"
+
+
+def test_trim_zero_blocks_threshold_relative_to_norm():
+    """Threshold scales with the tensor norm, not the absolute block magnitude.
+
+    The same absolute residual value (1e-10) is preserved when the tensor's
+    overall scale is O(1), but trimmed when the tensor's scale is O(1e14),
+    because the threshold is eps × norm in both cases.
+    """
+    residual = 1e-10
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+
+    # Tensor with norm ≈ 1: threshold ≈ 2.22e-16 << 1e-10 → NOT trimmed
+    t_small_norm = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data={(0, 0): torch.tensor([[1.0]]), (1, 1): torch.tensor([[residual]])},
+        dtype=torch.float64,
+    )
+    t_small_norm.trim_zero_blocks()
+    assert (1, 1) in t_small_norm.data, (
+        "Residual 1e-10 must survive when norm ≈ 1 (threshold ≈ eps)"
+    )
+
+    # Tensor with norm ≈ 1e14: threshold ≈ 2.22e-2 >> 1e-10 → TRIMMED
+    t_large_norm = Tensor(
+        indices=(idx, idx.flip()),
+        itags=("a", "b"),
+        data={(0, 0): torch.tensor([[1e14]]), (1, 1): torch.tensor([[residual]])},
+        dtype=torch.float64,
+    )
+    t_large_norm.trim_zero_blocks()
+    assert (1, 1) not in t_large_norm.data, (
+        "Residual 1e-10 must be trimmed when norm ≈ 1e14 (threshold ≈ 2.2e-2)"
+    )
+    assert (0, 0) in t_large_norm.data, "Non-zero block must be preserved"
+
