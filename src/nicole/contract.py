@@ -444,6 +444,12 @@ def contract(
                     # Reshape to (k_a * k_b, om_c)
                     weights_c = weights_c.reshape(k_c, x_symbol.shape[2])
                     
+                    # Row-normalize weights_c and redistribute norms into res to
+                    # prevent weights from decaying across successive contractions.
+                    norms = weights_c.norm(dim=1)           # (k_c,)
+                    weights_c = weights_c / norms.clamp(min=1e-12)[:, None]
+                    res = res * norms                       # (...phys..., k_c)
+
                     # Create output bridge
                     bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
             
