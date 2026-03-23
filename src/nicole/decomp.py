@@ -632,6 +632,10 @@ def eig(
         raise ValueError(f"eig requires a square matrix, got {len(T.indices)} indices")
     
     row_index, col_index = T.indices
+
+    # Restore canonical intertwiner weights W[q] = sqrt(dim q) so that the
+    # CG part does not interfere with the eigendecomposition.
+    T.regularize()
     
     # Check that indices have opposite directions (required for eigendecomposition)
     if row_index.direction == col_index.direction:
