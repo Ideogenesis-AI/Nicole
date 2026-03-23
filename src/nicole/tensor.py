@@ -827,33 +827,44 @@ class Tensor:
         self.intw = new_intw
         self._invalidate_sorted_keys()
 
-    def trim_zero_blocks(self) -> None:
-        """Remove blocks where all data elements have absolute value below double precision.
-        
+    def trim_zero_blocks(self, eps: Optional[float] = None) -> None:
+        """Remove blocks whose data is negligible relative to the tensor's overall scale.
+
         This operation modifies the tensor in-place by:
-        - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
-        - For generic groups, also removes blocks where all weights are near-zero
+        - Removing blocks from self.data where max(abs(values)) < eps * norm
+        - For generic groups, also removing blocks where all weights are similarly negligible
         - Updating each index to only include sectors that still have data in remaining blocks
-        
+
+        Parameters
+        ----------
+        eps : float or None
+            Relative tolerance.  A block is considered zero when its maximum absolute
+            value is less than ``eps * self.norm()``.  Defaults to
+            ``torch.finfo(torch.float64).eps`` (~2.2e-16) when ``None``.
+
         Notes
         -----
-        Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
-        For generic tensors T = R @ W, if W ≈ 0, then T ≈ 0 regardless of R.
-        Index sectors are only removed if no blocks remain that reference their charges.
+        Using the Frobenius norm as the scale makes the criterion fully relative: a block
+        is trimmed only when it is negligible compared to the tensor as a whole, regardless
+        of the absolute magnitude of individual entries.
+
+        If the tensor is identically zero (norm == 0) all blocks are removed.
         """
-        # Define threshold as double precision machine epsilon
-        eps = torch.finfo(torch.float64).eps
-        
+        if eps is None:
+            eps = torch.finfo(torch.float64).eps
+
+        threshold = eps * self.norm()  # == 0.0 when tensor is identically zero
+
         # Step 1: Identify and remove blocks with all near-zero values
         blocks_to_remove = []
         for key, arr in self.data.items():
-            is_data_zero = torch.max(torch.abs(arr)) < eps
+            is_data_zero = torch.max(torch.abs(arr)).item() <= threshold
             is_weights_zero = False
-            
+
             # For generic groups: also check if weights are zero (T = R @ 0 = 0)
             if self.intw is not None and key in self.intw:
                 weights = self.intw[key].weights
-                is_weights_zero = torch.max(torch.abs(weights)) < eps
+                is_weights_zero = torch.max(torch.abs(weights)).item() <= threshold
             
             if is_data_zero or is_weights_zero:
                 blocks_to_remove.append(key)
