@@ -380,8 +380,9 @@ def test_contract_su2_distributivity_left_matrix():
     BC = contract(B, C, axes=(1, 0))
     result_separate = AC + BC
     
-    # Verify data and weights equality
-    assert_data_weights_equal(result_combined, result_separate)
+    # Distributivity preserves the physical tensor; internal k may differ
+    # between (A+B)⊗C and (A⊗C)+(B⊗C) due to component concatenation.
+    assert_physical_tensors_equal(result_combined, result_separate)
 
 
 def test_contract_su2_distributivity_left_basic():
