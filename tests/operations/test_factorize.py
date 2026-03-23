@@ -23,9 +23,9 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
-from nicole import contract, decomp
+from nicole import contract, decomp, diag
 from nicole.decomp import svd, qr, eig
-from ..utils import assert_charge_neutral
+from ..utils import assert_charge_neutral, populate_random_weights
 from ..utils import assert_blocks_equal, assert_physical_tensors_equal
 
 
@@ -704,7 +704,9 @@ def _make_su2_3rd_order(seed: int = 1):
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
-    return Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def _make_su2_2nd_order(seed: int = 42):
@@ -722,7 +724,9 @@ def _make_su2_4th_order(seed: int = 1):
     idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    return Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def _make_su2_5th_order(seed: int = 1):
@@ -733,7 +737,9 @@ def _make_su2_5th_order(seed: int = 1):
     idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
     idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
-    return Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def _make_su2_6th_order(seed: int = 1):
@@ -745,7 +751,9 @@ def _make_su2_6th_order(seed: int = 1):
     idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
     idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
     idx6 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
-    return Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
 
 
 def test_svd_su2_reconstruction_2nd_order():
@@ -2624,6 +2632,37 @@ def test_eig_su2_eigendecomposition_relation():
         assert torch.allclose(lhs, rhs, atol=1e-8), \
             f"Eigendecomposition relation T@U = U@diag(D) failed for charge {q}, " \
             f"max err={( lhs - rhs).abs().max():.2e}"
+
+
+def test_eig_su2_reconstruction():
+    """Physical tensor T = U @ diag(D) @ U† reconstructed via the tensor API."""
+    T = _make_su2_2nd_order(seed=76)
+
+    # Symmetrize so U is orthonormal and T = U @ diag(D) @ U† holds exactly.
+    for key in list(T.data.keys()):
+        mat = T.data[key].squeeze(-1)
+        T.data[key] = ((mat + mat.T.conj()) / 2).unsqueeze(-1)
+
+    # Clone BEFORE eig, which mutates T in-place via regularize().
+    # T_ref holds the physical values we want to reconstruct.
+    T_ref = T.clone()
+
+    U, D = eig(T)
+
+    # Build diagonal matrix tensor from eigenvalues.
+    # Give both bond axes the same itag as U's bond so contract's itag check passes.
+    bond_index = U.indices[1]
+    bond_tag = U.itags[1]
+    D_diag = diag(D, bond_index, itags=(bond_tag, bond_tag))
+
+    # Reconstruct: T = U @ D_diag @ U†
+    U_dag = U.conj()
+    D_Udag = contract(D_diag, U_dag, axes=(1, 1))
+    T_recon = contract(U, D_Udag, axes=(1, 0))
+    T_recon.retag(T_ref.itags)
+
+    assert_physical_tensors_equal(T_ref, T_recon, atol=1e-8,
+                                  msg="SU(2) eig physical reconstruction T = U@diag(D)@U†")
 
 
 def test_eig_su2_charge_neutral():
