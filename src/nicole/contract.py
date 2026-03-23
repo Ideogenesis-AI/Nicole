@@ -444,12 +444,6 @@ def contract(
                     # Reshape to (k_a * k_b, om_c)
                     weights_c = weights_c.reshape(k_c, x_symbol.shape[2])
                     
-                    # Row-normalize weights_c and redistribute norms into res to
-                    # prevent weights from decaying across successive contractions.
-                    norms = weights_c.norm(dim=1)           # (k_c,)
-                    weights_c = weights_c / norms.clamp(min=1e-12)[:, None]
-                    res = res * norms                       # (...phys..., k_c)
-
                     # Create output bridge
                     bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
             
@@ -488,6 +482,10 @@ def contract(
         indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw,
         dtype=torch.promote_types(A.dtype, B.dtype)
     )
+
+    # Row-normalize intertwiner weights and redistribute norms into data to
+    # prevent weights from decaying across successive contractions.
+    out_tensor.regularize()
 
     # Apply permutation if requested.
     if perm is not None:
