@@ -22,10 +22,9 @@ import math
 import torch
 import pytest
 
-from nicole import load_space, contract
-from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, identity, decomp
-from nicole.symmetry import ProductGroup
-from ..utils import assert_blocks_equal, assert_charge_neutral
+from nicole import load_space
+from nicole import Direction, Index, Tensor
+from nicole import U1Group, Z2Group, SU2Group,ProductGroup
 
 
 class TestLoadSpaceBasic:
@@ -971,3 +970,658 @@ class TestBandErrorHandling:
         
         # But same total dimension
         assert Spc_u1u1.dim == Spc_z2u1.dim == 4
+
+
+class TestLoadSpinSU2:
+    """Test SU(2)-symmetric spin space and operator construction."""
+
+    # ── Space structure ────────────────────────────────────────────────────────
+
+    def test_spc_group(self):
+        """Test that Spc uses SU2Group."""
+        Spc, _ = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Spc.group, SU2Group)
+
+    def test_spc_direction(self):
+        """Test that Spc has IN direction."""
+        Spc, _ = load_space("Spin", "SU2", {"J": 0.5})
+        assert Spc.direction == Direction.IN
+
+    def test_spc_dim_is_one_multiplet(self):
+        """Spc.dim is always 1 (one irrep, no degeneracy) for all J."""
+        for J in [0, 0.5, 1, 1.5, 2, 2.5]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            assert Spc.dim == 1, f"Expected dim=1 for J={J}, got {Spc.dim}"
+
+    def test_spc_num_states(self):
+        """Spc.num_states equals the physical dimension 2J+1."""
+        for J in [0, 0.5, 1, 1.5, 2, 2.5, 3]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            expected = int(2 * J + 1)
+            assert Spc.num_states == expected, (
+                f"J={J}: expected num_states={expected}, got {Spc.num_states}"
+            )
+
+    def test_spc_single_sector_charge(self):
+        """Spc has exactly one sector with charge = 2J."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            Spc, _ = load_space("Spin", "SU2", {"J": J})
+            assert len(Spc.sectors) == 1
+            assert Spc.sectors[0].charge == int(round(2 * J))
+            assert Spc.sectors[0].dim == 1
+
+    # ── Operator keys ──────────────────────────────────────────────────────────
+
+    def test_operator_keys(self):
+        """Op contains exactly 'S' and 'vac'."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert set(Op.keys()) == {"S", "vac"}
+
+    # ── S tensor structure ─────────────────────────────────────────────────────
+
+    def test_s_has_three_indices(self):
+        """S operator is a 3-index tensor."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        assert len(Op["S"].indices) == 3
+
+    def test_s_itags(self):
+        """S operator has correct itags."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        assert Op["S"].itags == ("_init_", "_init_", "_aux_")
+
+    def test_s_index_directions(self):
+        """S tensor has directions (IN, OUT, OUT)."""
+        _, Op = load_space("Spin", "SU2", {"J": 1.0})
+        S = Op["S"]
+        assert S.indices[0].direction == Direction.IN
+        assert S.indices[1].direction == Direction.OUT
+        assert S.indices[2].direction == Direction.OUT
+
+    def test_s_aux_index(self):
+        """Auxiliary index of S carries rank-1 (spin-1, charge=2) character."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            aux = Op["S"].indices[2]
+            assert isinstance(aux.group, SU2Group)
+            assert len(aux.sectors) == 1
+            assert aux.sectors[0].charge == 2   # spin-1 in 2j convention
+            assert aux.sectors[0].dim == 1
+
+    def test_s_is_tensor(self):
+        """S is a Tensor instance."""
+        _, Op = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Op["S"], Tensor)
+
+    # ── Non-Abelian block structure ────────────────────────────────────────────
+
+    def test_s_intw_populated(self):
+        """S.intw is populated (mandatory for non-Abelian tensors)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert Op["S"].intw is not None
+
+    def test_s_intw_keys_match_data_keys(self):
+        """S.intw and S.data have identical key sets."""
+        for J in [0, 0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            assert set(S.intw.keys()) == set(S.data.keys())
+
+    def test_s_bridge_num_external(self):
+        """Each Bridge in S.intw has 3 external edges (one per tensor index)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            for bridge in S.intw.values():
+                assert bridge.num_external == 3
+
+    def test_s_bridge_om_dimension(self):
+        """Bridge OM dimension is 1 (unique fusion channel for each block)."""
+        for J in [0.5, 1, 1.5, 2]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            for bridge in S.intw.values():
+                assert bridge.om_dimension == 1
+
+    def test_s_block_shape(self):
+        """S data block has shape (1, 1, 1, 1) = (dim_out, dim_in, dim_aux, num_components)."""
+        for J in [0.5, 1, 1.5, 2]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            assert S.data[(two_J, two_J, 2)].shape == (1, 1, 1, 1)
+
+    # ── Reduced matrix elements ────────────────────────────────────────────────
+
+    def test_s_data_value(self):
+        """data block stores sqrt(J(J+1)), Bridge weight stores sqrt(2J+1)."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            key = (two_J, two_J, 2)
+
+            data_val = S.data[key][0, 0, 0, 0].item()
+            weight_val = S.intw[key].weights[0, 0].item()
+
+            assert math.isclose(data_val, math.sqrt(J * (J + 1)), rel_tol=1e-12), (
+                f"J={J}: data value {data_val} != sqrt(J(J+1))={math.sqrt(J*(J+1))}"
+            )
+            assert math.isclose(weight_val, math.sqrt(2 * J + 1), rel_tol=1e-12), (
+                f"J={J}: weight {weight_val} != sqrt(2J+1)={math.sqrt(2*J+1)}"
+            )
+
+    def test_s_full_rme(self):
+        """data * weight = sqrt(J(J+1)(2J+1)), the full reduced matrix element."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            S = Op["S"]
+            key = (two_J, two_J, 2)
+
+            full_rme = S.data[key][0, 0, 0, 0].item() * S.intw[key].weights[0, 0].item()
+            expected = math.sqrt(J * (J + 1) * (2 * J + 1))
+            assert math.isclose(full_rme, expected, rel_tol=1e-12), (
+                f"J={J}: full RME {full_rme} != sqrt(J(J+1)(2J+1))={expected}"
+            )
+
+    def test_s_spin_zero_is_empty(self):
+        """For J=0, S has no blocks (charge conservation forbids the block (0,0,2))."""
+        _, Op = load_space("Spin", "SU2", {"J": 0})
+        S = Op["S"]
+        assert len(S.data) == 0
+        assert len(S.intw) == 0
+
+    def test_s_nonzero_j_has_one_block(self):
+        """For J > 0, S has exactly one block."""
+        for J in [0.5, 1, 1.5, 2, 2.5]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert len(Op["S"].data) == 1
+
+    def test_s_block_key(self):
+        """Block key is (2J, 2J, 2) for all J > 0."""
+        for J in [0.5, 1, 1.5, 2]:
+            two_J = int(round(2 * J))
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            assert (two_J, two_J, 2) in Op["S"].data
+
+    # ── Vacuum index ───────────────────────────────────────────────────────────
+
+    def test_vac_is_index(self):
+        """vac is an Index, not a Tensor."""
+        _, Op = load_space("Spin", "SU2", {"J": 0.5})
+        assert isinstance(Op["vac"], Index)
+
+    def test_vac_structure(self):
+        """vac has SU2Group, IN direction, single sector with charge=0 and dim=1."""
+        for J in [0, 0.5, 1]:
+            _, Op = load_space("Spin", "SU2", {"J": J})
+            vac = Op["vac"]
+            assert isinstance(vac.group, SU2Group)
+            assert vac.direction == Direction.IN
+            assert len(vac.sectors) == 1
+            assert vac.sectors[0].charge == 0
+            assert vac.sectors[0].dim == 1
+
+    # ── Error handling ─────────────────────────────────────────────────────────
+
+    def test_unsupported_symmetry_still_raises(self):
+        """Non-SU2/U1 symmetries for Spin still raise ValueError."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Spin", "Z2", {"J": 0.5})
+
+    def test_missing_j_raises(self):
+        """Missing J option raises ValueError."""
+        with pytest.raises(ValueError, match="Option 'J'"):
+            load_space("Spin", "SU2", {})
+
+    def test_negative_j_raises(self):
+        """Negative J raises ValueError."""
+        with pytest.raises(ValueError, match="J must be non-negative"):
+            load_space("Spin", "SU2", {"J": -1})
+
+    def test_non_half_integer_j_raises(self):
+        """Non-half-integer J raises ValueError."""
+        with pytest.raises(ValueError, match="J must be a half-integer"):
+            load_space("Spin", "SU2", {"J": 0.3})
+
+
+class TestBandU1SU2:
+    """Tests for the Band U(1)xSU(2) preset."""
+
+    @pytest.fixture
+    def space(self):
+        return load_space("Band", "U1,SU2")
+
+    # ── Physical space ─────────────────────────────────────────────────────────
+
+    def test_spc_group(self, space):
+        """Spc uses ProductGroup([U1Group, SU2Group])."""
+        Spc, _ = space
+        assert isinstance(Spc.group, ProductGroup)
+
+    def test_spc_direction(self, space):
+        """Spc has IN direction."""
+        Spc, _ = space
+        assert Spc.direction == Direction.IN
+
+    def test_spc_dim(self, space):
+        """Spc.dim = 3 (three multiplets)."""
+        Spc, _ = space
+        assert Spc.dim == 3
+
+    def test_spc_num_states(self, space):
+        """Spc.num_states = 4 (four physical states)."""
+        Spc, _ = space
+        assert Spc.num_states == 4
+
+    def test_spc_sectors(self, space):
+        """Spc has three sectors with the correct charges and dim=1 each."""
+        Spc, _ = space
+        charges = {s.charge for s in Spc.sectors}
+        assert (-1, 0) in charges   # |0⟩
+        assert (0, 1) in charges    # {|↑⟩,|↓⟩}
+        assert (1, 0) in charges    # |↑↓⟩
+        for s in Spc.sectors:
+            assert s.dim == 1
+
+    # ── Operator keys ──────────────────────────────────────────────────────────
+
+    def test_op_keys(self, space):
+        """Op contains exactly {F, Z, S, vac}."""
+        _, Op = space
+        assert set(Op.keys()) == {"F", "Z", "S", "vac"}
+
+    # ── F operator ─────────────────────────────────────────────────────────────
+
+    def test_f_is_tensor(self, space):
+        """F is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["F"], Tensor)
+
+    def test_f_num_indices(self, space):
+        """F has 3 indices."""
+        _, Op = space
+        assert len(Op["F"].indices) == 3
+
+    def test_f_index_directions(self, space):
+        """F indices are (IN, OUT, OUT)."""
+        _, Op = space
+        F = Op["F"]
+        assert F.indices[0].direction == Direction.IN
+        assert F.indices[1].direction == Direction.OUT
+        assert F.indices[2].direction == Direction.OUT
+
+    def test_f_aux_charge(self, space):
+        """F auxiliary index has charge (-1, 1)."""
+        _, Op = space
+        aux = Op["F"].indices[2]
+        assert len(aux.sectors) == 1
+        assert aux.sectors[0].charge == (-1, 1)
+
+    def test_f_num_blocks(self, space):
+        """F has 2 non-zero blocks."""
+        _, Op = space
+        assert len(Op["F"].data) == 2
+
+    def test_f_block_shapes(self, space):
+        """Each F block has shape (1, 1, 1, 1)."""
+        _, Op = space
+        for v in Op["F"].data.values():
+            assert v.shape == torch.Size([1, 1, 1, 1])
+
+    def test_f_data_values(self, space):
+        """F data blocks are all 1.0."""
+        _, Op = space
+        for v in Op["F"].data.values():
+            assert torch.allclose(v, torch.ones_like(v))
+
+    def test_f_bridge_weights(self, space):
+        """F Bridge weights are sqrt(2) for each block."""
+        _, Op = space
+        for b in Op["F"].intw.values():
+            assert torch.allclose(b.weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+
+    def test_f_intw_keys_match_data(self, space):
+        """F.intw keys exactly match F.data keys."""
+        _, Op = space
+        assert set(Op["F"].intw.keys()) == set(Op["F"].data.keys())
+
+    def test_f_block_keys(self, space):
+        """F has blocks for empty→doublet and doublet→double-occ transitions."""
+        _, Op = space
+        assert ((-1, 0), (0, 1), (-1, 1)) in Op["F"].data
+        assert ((0, 1), (1, 0), (-1, 1)) in Op["F"].data
+
+    # ── Z operator ─────────────────────────────────────────────────────────────
+
+    def test_z_is_tensor(self, space):
+        """Z is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["Z"], Tensor)
+
+    def test_z_num_blocks(self, space):
+        """Z has 3 diagonal blocks (one per sector)."""
+        _, Op = space
+        assert len(Op["Z"].data) == 3
+
+    def test_z_block_shapes(self, space):
+        """Z blocks have shape (1, 1, 1) for scalar SU(2) with dim=1 sectors."""
+        _, Op = space
+        for v in Op["Z"].data.values():
+            assert v.shape == torch.Size([1, 1, 1])
+
+    def test_z_values(self, space):
+        """Z is +1 on vacuum/doubly-occ sectors, -1 on doublet sector."""
+        _, Op = space
+        Z = Op["Z"]
+        assert torch.allclose(Z.data[((-1, 0), (-1, 0))], torch.tensor([[[1.0]]], dtype=torch.float64))
+        assert torch.allclose(Z.data[((0, 1), (0, 1))], torch.tensor([[[-1.0]]], dtype=torch.float64))
+        assert torch.allclose(Z.data[((1, 0), (1, 0))], torch.tensor([[[1.0]]], dtype=torch.float64))
+
+    def test_z_bridge_weights(self, space):
+        """Z Bridge weights = sqrt(irrep_dim): 1 for singlets, sqrt(2) for doublet."""
+        _, Op = space
+        Z = Op["Z"]
+        assert torch.allclose(Z.intw[((-1, 0), (-1, 0))].weights, torch.tensor([[1.0]], dtype=torch.float64))
+        assert torch.allclose(Z.intw[((0, 1), (0, 1))].weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+        assert torch.allclose(Z.intw[((1, 0), (1, 0))].weights, torch.tensor([[1.0]], dtype=torch.float64))
+
+    def test_z_intw_keys_match_data(self, space):
+        """Z.intw keys exactly match Z.data keys."""
+        _, Op = space
+        assert set(Op["Z"].intw.keys()) == set(Op["Z"].data.keys())
+
+    # ── S operator ─────────────────────────────────────────────────────────────
+
+    def test_s_is_tensor(self, space):
+        """S is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["S"], Tensor)
+
+    def test_s_num_blocks(self, space):
+        """S has exactly one block."""
+        _, Op = space
+        assert len(Op["S"].data) == 1
+
+    def test_s_block_key(self, space):
+        """S block key is ((0,1), (0,1), (0,2))."""
+        _, Op = space
+        assert ((0, 1), (0, 1), (0, 2)) in Op["S"].data
+
+    def test_s_block_shape(self, space):
+        """S block has shape (1, 1, 1, 1)."""
+        _, Op = space
+        v = Op["S"].data[((0, 1), (0, 1), (0, 2))]
+        assert v.shape == torch.Size([1, 1, 1, 1])
+
+    def test_s_data_value(self, space):
+        """S data block contains sqrt(3/4)."""
+        _, Op = space
+        v = Op["S"].data[((0, 1), (0, 1), (0, 2))]
+        assert torch.allclose(v, torch.sqrt(torch.tensor([[[[3.0 / 4.0]]]], dtype=torch.float64)))
+
+    def test_s_bridge_weight(self, space):
+        """S Bridge weight is sqrt(2)."""
+        _, Op = space
+        b = Op["S"].intw[((0, 1), (0, 1), (0, 2))]
+        assert torch.allclose(b.weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+
+    def test_s_rme_product(self, space):
+        """Product of S data and Bridge weight equals sqrt(3/2)."""
+        _, Op = space
+        data_val = Op["S"].data[((0, 1), (0, 1), (0, 2))].item()
+        weight_val = Op["S"].intw[((0, 1), (0, 1), (0, 2))].weights.item()
+        assert math.isclose(data_val * weight_val, math.sqrt(3.0 / 2.0), rel_tol=1e-9)
+
+    def test_s_intw_keys_match_data(self, space):
+        """S.intw keys exactly match S.data keys."""
+        _, Op = space
+        assert set(Op["S"].intw.keys()) == set(Op["S"].data.keys())
+
+    # ── vac index ──────────────────────────────────────────────────────────────
+
+    def test_vac_is_index(self, space):
+        """vac is an Index."""
+        _, Op = space
+        assert isinstance(Op["vac"], Index)
+
+    def test_vac_structure(self, space):
+        """vac has IN direction and charge (0, 0)."""
+        _, Op = space
+        vac = Op["vac"]
+        assert vac.direction == Direction.IN
+        assert len(vac.sectors) == 1
+        assert vac.sectors[0].charge == (0, 0)
+        assert vac.sectors[0].dim == 1
+
+    # ── Error handling ─────────────────────────────────────────────────────────
+
+    def test_unsupported_symmetry_raises(self):
+        """Unsupported Band symmetry raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Band", "U1,U2")
+
+
+class TestBandZ2SU2:
+    """Tests for the Band Z2xSU(2) preset."""
+
+    @pytest.fixture
+    def space(self):
+        return load_space("Band", "Z2,SU2")
+
+    # ── Physical space ─────────────────────────────────────────────────────────
+
+    def test_spc_group(self, space):
+        """Spc uses ProductGroup([Z2Group, SU2Group])."""
+        Spc, _ = space
+        assert isinstance(Spc.group, ProductGroup)
+
+    def test_spc_direction(self, space):
+        """Spc has IN direction."""
+        Spc, _ = space
+        assert Spc.direction == Direction.IN
+
+    def test_spc_dim(self, space):
+        """Spc.dim = 3 (three multiplets)."""
+        Spc, _ = space
+        assert Spc.dim == 3
+
+    def test_spc_num_states(self, space):
+        """Spc.num_states = 4 (four physical states)."""
+        Spc, _ = space
+        assert Spc.num_states == 4
+
+    def test_spc_num_sectors(self, space):
+        """Spc has exactly 2 sectors."""
+        Spc, _ = space
+        assert len(Spc.sectors) == 2
+
+    def test_spc_sectors(self, space):
+        """Spc has sectors (0,0) with dim=2 and (1,1) with dim=1."""
+        Spc, _ = space
+        sector_map = {s.charge: s.dim for s in Spc.sectors}
+        assert sector_map[(0, 0)] == 2
+        assert sector_map[(1, 1)] == 1
+
+    # ── Operator keys ──────────────────────────────────────────────────────────
+
+    def test_op_keys(self, space):
+        """Op contains exactly {F, Z, S, vac}."""
+        _, Op = space
+        assert set(Op.keys()) == {"F", "Z", "S", "vac"}
+
+    # ── F operator ─────────────────────────────────────────────────────────────
+
+    def test_f_is_tensor(self, space):
+        """F is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["F"], Tensor)
+
+    def test_f_num_blocks(self, space):
+        """F has 2 non-zero blocks."""
+        _, Op = space
+        assert len(Op["F"].data) == 2
+
+    def test_f_block_keys(self, space):
+        """F has blocks for the two symmetry-allowed transitions."""
+        _, Op = space
+        assert ((0, 0), (1, 1), (1, 1)) in Op["F"].data
+        assert ((1, 1), (0, 0), (1, 1)) in Op["F"].data
+
+    def test_f_block_shape_even_in(self, space):
+        """F block ((0,0),(1,1),(1,1)) has shape (2,1,1,1)."""
+        _, Op = space
+        v = Op["F"].data[((0, 0), (1, 1), (1, 1))]
+        assert v.shape == torch.Size([2, 1, 1, 1])
+
+    def test_f_block_shape_odd_in(self, space):
+        """F block ((1,1),(0,0),(1,1)) has shape (1,2,1,1)."""
+        _, Op = space
+        v = Op["F"].data[((1, 1), (0, 0), (1, 1))]
+        assert v.shape == torch.Size([1, 2, 1, 1])
+
+    def test_f_data_values_even_in(self, space):
+        """F block ((0,0),(1,1),(1,1)): row 0 = 1.0, row 1 = 0.0."""
+        _, Op = space
+        v = Op["F"].data[((0, 0), (1, 1), (1, 1))]
+        assert torch.allclose(v[0, 0, 0, 0], torch.tensor(1.0, dtype=torch.float64))
+        assert torch.allclose(v[1, 0, 0, 0], torch.tensor(0.0, dtype=torch.float64))
+
+    def test_f_data_values_odd_in(self, space):
+        """F block ((1,1),(0,0),(1,1)): col 0 = 0.0, col 1 = 1.0."""
+        _, Op = space
+        v = Op["F"].data[((1, 1), (0, 0), (1, 1))]
+        assert torch.allclose(v[0, 0, 0, 0], torch.tensor(0.0, dtype=torch.float64))
+        assert torch.allclose(v[0, 1, 0, 0], torch.tensor(1.0, dtype=torch.float64))
+
+    def test_f_bridge_weights(self, space):
+        """F Bridge weights are sqrt(2) for each block."""
+        _, Op = space
+        for b in Op["F"].intw.values():
+            assert torch.allclose(b.weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+
+    def test_f_intw_keys_match_data(self, space):
+        """F.intw keys exactly match F.data keys."""
+        _, Op = space
+        assert set(Op["F"].intw.keys()) == set(Op["F"].data.keys())
+
+    # ── Z operator ─────────────────────────────────────────────────────────────
+
+    def test_z_is_tensor(self, space):
+        """Z is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["Z"], Tensor)
+
+    def test_z_num_blocks(self, space):
+        """Z has 2 diagonal blocks."""
+        _, Op = space
+        assert len(Op["Z"].data) == 2
+
+    def test_z_even_block_shape(self, space):
+        """Z block ((0,0),(0,0)) has shape (2, 2, 1)."""
+        _, Op = space
+        v = Op["Z"].data[((0, 0), (0, 0))]
+        assert v.shape == torch.Size([2, 2, 1])
+
+    def test_z_odd_block_shape(self, space):
+        """Z block ((1,1),(1,1)) has shape (1, 1, 1)."""
+        _, Op = space
+        v = Op["Z"].data[((1, 1), (1, 1))]
+        assert v.shape == torch.Size([1, 1, 1])
+
+    def test_z_even_block_values(self, space):
+        """Z block ((0,0),(0,0)) is +1 identity (|0⟩ and |↑↓⟩ have even parity)."""
+        _, Op = space
+        v = Op["Z"].data[((0, 0), (0, 0))]
+        expected = torch.tensor([[[1.0], [0.0]], [[0.0], [1.0]]], dtype=torch.float64)
+        assert torch.allclose(v, expected)
+
+    def test_z_odd_block_value(self, space):
+        """Z block ((1,1),(1,1)) is -1 (odd-parity doublet)."""
+        _, Op = space
+        v = Op["Z"].data[((1, 1), (1, 1))]
+        assert torch.allclose(v, torch.tensor([[[-1.0]]], dtype=torch.float64))
+
+    def test_z_bridge_weights(self, space):
+        """Z Bridge weights = sqrt(irrep_dim): 1 for even sector (singlets), sqrt(2) for odd sector (doublet)."""
+        _, Op = space
+        Z = Op["Z"]
+        assert torch.allclose(Z.intw[((0, 0), (0, 0))].weights, torch.tensor([[1.0]], dtype=torch.float64))
+        assert torch.allclose(Z.intw[((1, 1), (1, 1))].weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+
+    def test_z_intw_keys_match_data(self, space):
+        """Z.intw keys exactly match Z.data keys."""
+        _, Op = space
+        assert set(Op["Z"].intw.keys()) == set(Op["Z"].data.keys())
+
+    # ── S operator ─────────────────────────────────────────────────────────────
+
+    def test_s_is_tensor(self, space):
+        """S is a Tensor."""
+        _, Op = space
+        assert isinstance(Op["S"], Tensor)
+
+    def test_s_num_blocks(self, space):
+        """S has exactly one block."""
+        _, Op = space
+        assert len(Op["S"].data) == 1
+
+    def test_s_block_key(self, space):
+        """S block key is ((1,1), (1,1), (0,2))."""
+        _, Op = space
+        assert ((1, 1), (1, 1), (0, 2)) in Op["S"].data
+
+    def test_s_block_shape(self, space):
+        """S block has shape (1, 1, 1, 1)."""
+        _, Op = space
+        v = Op["S"].data[((1, 1), (1, 1), (0, 2))]
+        assert v.shape == torch.Size([1, 1, 1, 1])
+
+    def test_s_data_value(self, space):
+        """S data block contains sqrt(3/4)."""
+        _, Op = space
+        v = Op["S"].data[((1, 1), (1, 1), (0, 2))]
+        assert torch.allclose(v, torch.sqrt(torch.tensor([[[[3.0 / 4.0]]]], dtype=torch.float64)))
+
+    def test_s_bridge_weight(self, space):
+        """S Bridge weight is sqrt(2)."""
+        _, Op = space
+        b = Op["S"].intw[((1, 1), (1, 1), (0, 2))]
+        assert torch.allclose(b.weights, torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)))
+
+    def test_s_rme_product(self, space):
+        """Product of S data and Bridge weight equals sqrt(3/2)."""
+        _, Op = space
+        data_val = Op["S"].data[((1, 1), (1, 1), (0, 2))].item()
+        weight_val = Op["S"].intw[((1, 1), (1, 1), (0, 2))].weights.item()
+        assert math.isclose(data_val * weight_val, math.sqrt(3.0 / 2.0), rel_tol=1e-9)
+
+    def test_s_intw_keys_match_data(self, space):
+        """S.intw keys exactly match S.data keys."""
+        _, Op = space
+        assert set(Op["S"].intw.keys()) == set(Op["S"].data.keys())
+
+    # ── vac index ──────────────────────────────────────────────────────────────
+
+    def test_vac_is_index(self, space):
+        """vac is an Index."""
+        _, Op = space
+        assert isinstance(Op["vac"], Index)
+
+    def test_vac_structure(self, space):
+        """vac has IN direction and charge (0, 0)."""
+        _, Op = space
+        vac = Op["vac"]
+        assert vac.direction == Direction.IN
+        assert len(vac.sectors) == 1
+        assert vac.sectors[0].charge == (0, 0)
+        assert vac.sectors[0].dim == 1
+
+    # ── Error handling ─────────────────────────────────────────────────────────
+
+    def test_unsupported_symmetry_raises(self):
+        """Unsupported Band symmetry raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported symmetry"):
+            load_space("Band", "Z2,U2")

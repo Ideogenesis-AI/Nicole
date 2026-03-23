@@ -21,8 +21,9 @@
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, U1Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
 from nicole import contract, trace, permute, decomp
+from ..utils import populate_random_weights
 
 
 def test_autograd_disabled_by_default():
@@ -634,3 +635,156 @@ def test_autograd_with_contraction_to_scalar():
         for block in B.data.values():
             if block.grad is not None:
                 assert block.grad.shape == block.shape
+
+
+# ============================================================================
+#   Tests for autograd with SU(2) tensors
+# ============================================================================
+
+def test_autograd_su2_with_contraction():
+    """Test that gradients flow through contraction of SU(2) tensors.
+
+    populate_random_weights() replaces block tensors, so requires_grad must be
+    set *after* the SU(2) intertwiner structure is fully initialised.
+    """
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 2)))
+
+    with torch.enable_grad():
+        A = Tensor.random([idx_a, idx_b], itags=["p", "q"], seed=42)
+        populate_random_weights(A, seed=42)
+        A.requires_grad = True  # enable after intw is set up
+
+        B = Tensor.random([idx_b.flip(), idx_c], itags=["q", "r"], seed=43)
+        populate_random_weights(B, seed=43)
+        B.requires_grad = True
+
+        C = contract(A, B)
+
+        # At least some result blocks must be in the computational graph
+        assert any(block.requires_grad for block in C.data.values())
+
+        loss = torch.stack([block.sum() for block in C.data.values()]).sum()
+        loss.backward()
+
+        has_grad_A = sum(1 for block in A.data.values() if block.grad is not None)
+        has_grad_B = sum(1 for block in B.data.values() if block.grad is not None)
+        assert has_grad_A > 0, "At least some blocks in A should have gradients"
+        assert has_grad_B > 0, "At least some blocks in B should have gradients"
+
+        for block in A.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+        for block in B.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_su2_with_permute():
+    """Test that gradients flow through permutation of SU(2) tensors."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    with torch.enable_grad():
+        T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=44)
+        populate_random_weights(T, seed=44)
+        T.requires_grad = True  # enable after intw is set up
+
+        T_perm = permute(T, [2, 0, 1])
+
+        assert any(block.requires_grad for block in T_perm.data.values())
+
+        loss = torch.stack([block.sum() for block in T_perm.data.values()]).sum()
+        loss.backward()
+
+        # Permutation is a bijection on blocks, so all blocks should have gradients
+        for block in T.data.values():
+            assert block.grad is not None, "All blocks should have gradients after permute"
+            assert block.grad.shape == block.shape
+
+
+def test_autograd_su2_with_decomposition():
+    """Test that gradients flow through SVD decomposition of SU(2) tensors."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
+
+    with torch.enable_grad():
+        T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=45)
+        populate_random_weights(T, seed=45)
+        T.requires_grad = True  # enable after intw is set up
+
+        U, S, Vh = decomp(T, axes="a", mode="SVD")
+
+        assert any(block.requires_grad for block in U.data.values())
+        assert any(block.requires_grad for block in Vh.data.values())
+
+        loss = (torch.stack([block.sum() for block in U.data.values()]).sum()
+                + torch.stack([block.sum() for block in Vh.data.values()]).sum())
+        loss.backward()
+
+        has_grad = sum(1 for block in T.data.values() if block.grad is not None)
+        assert has_grad > 0, "At least some blocks in T should have gradients"
+
+        for block in T.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_su2_with_contraction_to_scalar():
+    """Test backward through a full SU(2) contraction that produces a scalar."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+
+    with torch.enable_grad():
+        A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=46)
+        populate_random_weights(A, seed=46)
+        A.requires_grad = True  # enable after intw is set up
+
+        B = Tensor.random([idx.flip(), idx], itags=["a", "b"], seed=47)
+        populate_random_weights(B, seed=47)
+        B.requires_grad = True
+
+        scalar = contract(A, B)
+        assert scalar.is_scalar()
+
+        scalar.backward()
+
+        has_grad_A = sum(1 for block in A.data.values() if block.grad is not None)
+        has_grad_B = sum(1 for block in B.data.values() if block.grad is not None)
+        assert has_grad_A > 0, "At least some blocks in A should have gradients"
+        assert has_grad_B > 0, "At least some blocks in B should have gradients"
+
+        for block in A.data.values():
+            if block.grad is not None:
+                assert block.grad.shape == block.shape
+
+
+def test_autograd_su2_intw_weights_are_not_trainable():
+    """Test that Bridge intertwiner weights do not acquire requires_grad.
+
+    Intertwiner weights are fixed structural constants derived from CG coefficients
+    and must never appear as trainable parameters in the computational graph.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+
+    with torch.enable_grad():
+        T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=48)
+        populate_random_weights(T, seed=48)
+        T.requires_grad = True  # enable after intw is set up
+
+        # Data blocks should now be in the computational graph
+        assert T.requires_grad
+
+        # Intertwiner weight tensors must NOT have requires_grad — they are
+        # fixed structural constants, not learnable parameters.
+        for key, bridge in T.intw.items():
+            assert not bridge.weights.requires_grad, (
+                f"Bridge weights for key {key} should not require grad"
+            )

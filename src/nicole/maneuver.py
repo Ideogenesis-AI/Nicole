@@ -18,12 +18,11 @@
 
 from __future__ import annotations
 
-"""Standalone tensor operators for functional-style tensor manipulation.
+"""Standalone tensor maneuvers for structural and/or algebraic operations.
 
-This module provides functional versions of tensor operations that return new
-Tensor instances rather than modifying tensors in-place. These functions are
-useful for functional programming patterns and for cases where immutability
-is desired.
+This module provides functional tensor maneuvers covering conjugation, axis
+reordering, block selection, direct sums, diagonal matrix construction, matrix
+inversion, and axis merging.
 
 Functions
 ---------
@@ -33,21 +32,32 @@ permute(tensor, order)
     Return a new tensor with permuted axes according to the provided order.
 transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
-getsub(tensor, block_indices)
-    Return a new tensor containing only the specified blocks.
+subsector(tensor, block_indices)
+    Return a new tensor containing only the specified blocks with pruned sectors.
+oplus(A, B, axes=None)
+    Direct sum of two tensors with selective axis merging.
+diag(S_blocks, bond_index, itags=None, dtype=None)
+    Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
+inv(tensor)
+    Invert a diagonal matrix tensor.
 merge_axes(tensor, axes, merged_tag=None, direction=OUT)
     Merge multiple tensor axes into one using isometry fusion, returning both
     the merged tensor and conjugate isometry for potential unfusing.
+capcup(A, axis_a, B, axis_b)
+    Invert both directions of a contraction pair (bond) between two tensors,
+    applying Frobenius-Schur phase corrections to B for SU(2) tensors.
 """
 
-from typing import Dict, Optional, Sequence, Tuple, Union
+import math
+from typing import Dict, Sequence, Tuple, Union, Optional
 
 import torch
 
-from .blocks import BlockKey
+from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
+from .symmetry import delegate as dg
 
 
 def conj(tensor: Tensor) -> Tensor:
@@ -64,22 +74,43 @@ def conj(tensor: Tensor) -> Tensor:
         A new tensor instance with:
         - Conjugated dense blocks (if dtype is complex)
         - All index directions flipped
+        - Intertwiners (if present) updated with flipped directions
         - All other attributes preserved
+    
+    Notes
+    -----
+    This functional version creates a fully independent tensor by cloning all
+    data blocks. For an efficient version that shares underlying tensors, use
+    tensor.conj(in_place=False).
     """
-    # Only conjugate data if dtype is complex
+    # Clone data for complete isolation
     if tensor.dtype.is_complex:
-        new_data = {k: torch.conj(v) for k, v in tensor.data.items()}
+        new_data = {k: torch.conj(v).clone() for k, v in tensor.data.items()}
     else:
         new_data = {k: v.clone() for k, v in tensor.data.items()}
     
     # Flip all index directions
     new_indices = tuple(idx.flip() for idx in tensor.indices)
     
-    return Tensor(indices=new_indices, itags=tensor.itags, data=new_data, dtype=tensor.dtype, label=tensor.label)
+    # Update intw with flipped directions
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    if tensor.intw is not None:
+        new_intw: Dict[BlockKey, dg.Bridge] = {}
+        for key, bridge in tensor.intw.items():
+            new_intw[key] = bridge.conj()
+    
+    return Tensor(
+        indices=new_indices, itags=tensor.itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label
+    )
 
 
 def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     """Return a new tensor with permuted axes according to the provided order.
+    
+    This functional version creates a fully independent tensor by cloning all
+    data blocks. For an efficient version that shares underlying tensors, use
+    tensor.permute(order, in_place=False).
     
     Parameters
     ----------
@@ -92,12 +123,18 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor instance with reordered indices and transposed blocks.
+        A new tensor instance with reordered indices and cloned permuted blocks.
     
     Raises
     ------
     ValueError
         If order is not a valid permutation.
+    
+    Notes
+    -----
+    For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
+    the outer multiplicity (OM) indices. The weights are updated by matrix
+    multiplication with the R-symbol: new_weights = R @ old_weights.
     
     Examples
     --------
@@ -110,13 +147,43 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     
     new_indices = tuple(tensor.indices[i] for i in order)
     new_itags = tuple(tensor.itags[i] for i in order)
-    new_data = {}
+    new_data: Dict[BlockKey, torch.Tensor] = {}
     
-    for key, arr in tensor.data.items():
-        new_key = tuple(key[i] for i in order)
-        new_data[new_key] = torch.permute(arr, order)
+    # Permute data blocks (clone for independence)
+    if tensor.intw is not None:
+        # Non-Abelian: data has trailing OM axis, permute all but last
+        order_with_om = tuple(order) + (len(order),)
+        for key, arr in tensor.data.items():
+            new_key = tuple(key[i] for i in order)
+            new_data[new_key] = torch.permute(arr, order_with_om).clone()
+    else:
+        # Abelian: standard permutation
+        for key, arr in tensor.data.items():
+            new_key = tuple(key[i] for i in order)
+            new_data[new_key] = torch.permute(arr, order).clone()
     
-    return Tensor(indices=new_indices, itags=new_itags, data=new_data, dtype=tensor.dtype, label=tensor.label)
+    # Update intw with R-symbols for non-Abelian case
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    if tensor.intw is not None:
+        new_intw: Dict[BlockKey, dg.Bridge] = {}
+        for key, bridge in tensor.intw.items():
+            # Compute R-symbol for this permutation
+            r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
+            
+            # Update weights: new_weights = R @ old_weights
+            # R has shape (om_original, om_permuted)
+            # weights has shape (num_components, om_original)
+            # Result: (num_components, om_permuted)
+            new_weights = bridge.weights @ r_symbol
+            
+            # Create new Bridge with permuted spec and updated weights
+            new_key = tuple(key[i] for i in order)
+            new_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
+    
+    return Tensor(
+        indices=new_indices, itags=new_itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label
+    )
 
 
 def transpose(tensor: Tensor, *order: int) -> Tensor:
@@ -164,7 +231,8 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     Tensor
         A new tensor instance containing only the specified blocks with unused sectors
         removed from the indices. Other attributes (itags, dtype, label) are preserved.
-    
+        For SU(2) tensors, the corresponding intertwiner (intw) data is also extracted.
+
     Raises
     ------
     IndexError
@@ -188,15 +256,17 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     
     new_data = {tensor.key(i): tensor.block(i).clone() for i in block_indices}
     
+    # Extract intw for SU(2) tensors (clone weights for independence)
+    new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+    if tensor.intw is not None:
+        new_intw = {tensor.key(i): tensor.intw[tensor.key(i)].clone() for i in block_indices}
+
     # Prune unused sectors from indices
     pruned_indices = Tensor._prune_unused_sectors(tensor.indices, new_data)
     
     return Tensor(
-        indices=pruned_indices,
-        itags=tensor.itags,
-        data=new_data,
-        dtype=tensor.dtype,
-        label=tensor.label,
+        indices=pruned_indices, itags=tensor.itags, data=new_data, intw=new_intw,
+        dtype=tensor.dtype, label=tensor.label,
     )
 
 
@@ -210,6 +280,10 @@ def oplus(
     Combines two tensors by merging their sector structures along specified
     axes and arranging blocks in a block-diagonal fashion. Axes not specified
     must match exactly (same sectors, same dimensions).
+    
+    For generic tensors, blocks are padded with zeros and combined using
+    block_add, which properly handles intertwiner weights by concatenating
+    them along the reduced multiplicity dimension.
     
     Parameters
     ----------
@@ -405,67 +479,141 @@ def oplus(
     # First, collect all possible charge keys from A and B
     all_charge_keys = set(A.data.keys()) | set(B.data.keys())
     
-    out_data = {}
+    out_data: Dict[BlockKey, torch.Tensor] = {}
+    out_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
     
-    for charge_key in all_charge_keys:
-        # Determine output shape for this charge combination
-        out_shape = []
-        for i, charge in enumerate(charge_key):
-            if i in merged_axes:
-                # Use merged dimension
-                _, _, dim_total = merged_sector_info[i][charge]
-                out_shape.append(dim_total)
-            else:
-                # Use exact dimension from A (same as B)
-                dim_map_A = A.indices[i].sector_dim_map()
-                out_shape.append(dim_map_A[charge])
-        
-        # Initialize output block with zeros
-        out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
-        
-        # Place block from A if it exists
-        if charge_key in A.data:
-            block_A = A.data[charge_key]
-            # Build slices for placing block_A
-            slices_A = []
+    # Check if we need to handle SU(2) symmetry
+    is_abelian = len(A.indices) == 0 or A.indices[0].group.is_abelian
+    
+    if is_abelian:
+        # Abelian case: direct block placement
+        for charge_key in all_charge_keys:
+            # Determine output shape for this charge combination
+            out_shape = []
             for i, charge in enumerate(charge_key):
                 if i in merged_axes:
-                    # Use offset 0:dim_A
-                    dim_A, _, _ = merged_sector_info[i][charge]
-                    slices_A.append(slice(0, dim_A))
+                    # Use merged dimension
+                    _, _, dim_total = merged_sector_info[i][charge]
+                    out_shape.append(dim_total)
                 else:
-                    # Use full dimension
-                    slices_A.append(slice(None))
+                    # Use exact dimension from A (same as B)
+                    dim_map_A = A.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge])
             
-            out_block[tuple(slices_A)] = block_A
+            # Initialize output block with zeros
+            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
+            
+            # Place block from A if it exists
+            if charge_key in A.data:
+                block_A = A.data[charge_key]
+                # Build slices for placing block_A
+                slices_A = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset 0:dim_A
+                        dim_A, _, _ = merged_sector_info[i][charge]
+                        slices_A.append(slice(0, dim_A))
+                    else:
+                        # Use full dimension
+                        slices_A.append(slice(None))
+                
+                out_block[tuple(slices_A)] = block_A
+            
+            # Place block from B if it exists
+            if charge_key in B.data:
+                block_B = B.data[charge_key]
+                # Build slices for placing block_B
+                slices_B = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset dim_A:dim_total
+                        dim_A, dim_B, dim_total = merged_sector_info[i][charge]
+                        slices_B.append(slice(dim_A, dim_total))
+                    else:
+                        # Use full dimension
+                        slices_B.append(slice(None))
+                
+                out_block[tuple(slices_B)] = block_B
+            
+            # Only add non-zero blocks
+            if torch.any(out_block != 0):
+                out_data[charge_key] = out_block
+    else:
+        # Generic (non-Abelian) case: pad blocks and use block_add
+        out_intw: Dict[BlockKey, dg.Bridge] = {}
         
-        # Place block from B if it exists
-        if charge_key in B.data:
-            block_B = B.data[charge_key]
-            # Build slices for placing block_B
-            slices_B = []
+        for charge_key in all_charge_keys:
+            # Determine output shape for this charge combination
+            out_shape = []
             for i, charge in enumerate(charge_key):
                 if i in merged_axes:
-                    # Use offset dim_A:dim_total
-                    dim_A, dim_B, dim_total = merged_sector_info[i][charge]
-                    slices_B.append(slice(dim_A, dim_total))
+                    # Use merged dimension (without OM axis yet)
+                    _, _, dim_total = merged_sector_info[i][charge]
+                    out_shape.append(dim_total)
                 else:
-                    # Use full dimension
-                    slices_B.append(slice(None))
+                    # Use exact dimension from A (same as B)
+                    dim_map_A = A.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge])
             
-            out_block[tuple(slices_B)] = block_B
-        
-        # Only add non-zero blocks
-        if torch.any(out_block != 0):
-            out_data[charge_key] = out_block
+            # Pad A's block if it exists
+            padded_A = None
+            bridge_A = None
+            if charge_key in A.data:
+                block_A = A.data[charge_key]
+                om_A = block_A.shape[-1]
+                # Create padded block with OM dimension from A
+                padded_shape = out_shape + [om_A]
+                padded_A = torch.zeros(padded_shape, dtype=A.dtype)
+                
+                # Build slices for placing block_A
+                slices_A = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset 0:dim_A
+                        dim_A, _, _ = merged_sector_info[i][charge]
+                        slices_A.append(slice(0, dim_A))
+                    else:
+                        # Use full dimension
+                        slices_A.append(slice(None))
+                slices_A.append(slice(None))  # OM axis
+                
+                padded_A[tuple(slices_A)] = block_A
+                bridge_A = A.intw[charge_key]
+            
+            # Pad B's block if it exists
+            padded_B = None
+            bridge_B = None
+            if charge_key in B.data:
+                block_B = B.data[charge_key]
+                om_B = block_B.shape[-1]
+                # Create padded block with OM dimension from B
+                padded_shape = out_shape + [om_B]
+                padded_B = torch.zeros(padded_shape, dtype=B.dtype)
+                
+                # Build slices for placing block_B
+                slices_B = []
+                for i, charge in enumerate(charge_key):
+                    if i in merged_axes:
+                        # Use offset dim_A:dim_total
+                        dim_A, dim_B, dim_total = merged_sector_info[i][charge]
+                        slices_B.append(slice(dim_A, dim_total))
+                    else:
+                        # Use full dimension
+                        slices_B.append(slice(None))
+                slices_B.append(slice(None))  # OM axis
+                
+                padded_B[tuple(slices_B)] = block_B
+                bridge_B = B.intw[charge_key]
+            
+            # Combine using block_add
+            out_data[charge_key], out_intw[charge_key] = BlockSchema.block_add(
+                padded_A, bridge_A, padded_B, bridge_B
+            )
     
     # Step 6: Create and return output tensor
     return Tensor(
-        indices=tuple(out_indices),
-        itags=A.itags,
-        data=out_data,
-        dtype=torch.promote_types(A.dtype, B.dtype),
-        label=A.label
+        indices=tuple(out_indices), itags=A.itags, data=out_data, intw=out_intw,
+        dtype=torch.promote_types(A.dtype, B.dtype), label=A.label
     )
 
 
@@ -480,6 +628,10 @@ def diag(
     Takes a dictionary of 1D arrays (such as singular values from SVD or eigenvalues
     from eig) and creates a diagonal matrix tensor where each 1D array becomes a
     diagonal matrix block.
+    
+    For Abelian groups, creates standard diagonal blocks.
+    For generic groups (e.g., SU(2)), creates blocks with trailing reduced
+    multiplicity dimension and intertwiner (Bridge) with proper normalization.
     
     Parameters
     ----------
@@ -500,7 +652,8 @@ def diag(
     -------
     Tensor
         Diagonal matrix tensor with two indices (bond_index.flip(), bond_index).
-        Label is set to "Diagonal".
+        For generic groups, includes intertwiner (intw) field with weights set to
+        √(irrep_dim(q)). Label is set to "Diagonal".
     
     Raises
     ------
@@ -526,6 +679,15 @@ def diag(
     >>> # Can now use S_diag in contractions
     >>> result = contract(U, S_diag)  # Equivalent to U @ S
     
+    >>> # SU(2) case
+    >>> from nicole import SU2Group
+    >>> group = SU2Group()
+    >>> idx = Index(Direction.OUT, group, sectors=(Sector(1, 3),))
+    >>> S_blocks_su2 = {(1, 1): torch.tensor([2.0, 1.5, 0.5])}
+    >>> S_diag_su2 = diag(S_blocks_su2, idx)
+    >>> # S_diag_su2.data[(1, 1)].shape is (3, 3, 1) - includes OM dimension
+    >>> # S_diag_su2.intw[(1, 1)].weights is √(irrep_dim(1)) = √2
+    
     Notes
     -----
     This function is useful for converting the singular values dict S from svd() or
@@ -536,6 +698,7 @@ def diag(
     - Two indices: (bond_index.flip(), bond_index)
     - Block keys (q, q) for each charge q in S_blocks
     - Diagonal matrices as data blocks
+    - For non-Abelian groups: trailing OM dimension and Bridge weights = √(irrep_dim)
     - Label "Diagonal" (overriding default "Tensor")
     """
     # Validate all blocks are 1D
@@ -548,14 +711,14 @@ def diag(
     
     # Determine output itags
     if itags is None:
-        out_itags = ("_bond_L", "_bond_R")
+        diag_itags = ("_bond_L", "_bond_R")
     else:
         if not isinstance(itags, tuple) or len(itags) != 2:
             length = len(itags) if isinstance(itags, (tuple, list)) else 'N/A'
             raise ValueError(
                 f"itags must be a tuple of two strings, got {type(itags)} with length {length}"
             )
-        out_itags = itags
+        diag_itags = itags
     
     # Determine dtype
     if dtype is None:
@@ -566,21 +729,50 @@ def diag(
         else:
             dtype = torch.float64
     
-    # Convert each 1D block to diagonal matrix
-    diag_blocks: Dict[BlockKey, torch.Tensor] = {}
-    for key, vec_array in S_blocks.items():
-        # Create diagonal matrix from 1D array
-        diag_matrix = torch.diag(vec_array)
-        diag_blocks[key] = diag_matrix
+    # Check if group is Abelian or generic (non-Abelian)
+    group = bond_index.group
     
-    # Create output tensor with two indices
-    return Tensor(
-        indices=(bond_index.flip(), bond_index),
-        itags=out_itags,
-        data=diag_blocks,
-        dtype=dtype,
-        label="Diagonal"
-    )
+    if group.is_abelian:
+        # Abelian case: standard diagonal matrices
+        diag_blocks: Dict[BlockKey, torch.Tensor] = {}
+        for key, vec_array in S_blocks.items():
+            # Create diagonal matrix from 1D array
+            diag_matrix = torch.diag(vec_array)
+            diag_blocks[key] = diag_matrix
+        
+        # Create output tensor with two indices
+        return Tensor(
+            indices=(bond_index.flip(), bond_index), itags=diag_itags, data=diag_blocks,
+            dtype=dtype, label="Diagonal"
+        )
+    else:
+        # Generic (non-Abelian) case: diagonal with intertwiner normalization
+        diag_blocks: Dict[BlockKey, torch.Tensor] = {}
+        intw: Dict[BlockKey, dg.Bridge] = {}
+        
+        left = bond_index.flip()
+        right = bond_index
+        
+        for key, vec_array in S_blocks.items():
+            # Create diagonal matrix from 1D array with trailing reduced multiplicity dimension
+            diag_matrix = torch.diag(vec_array).unsqueeze(-1)
+            diag_blocks[key] = diag_matrix
+            
+            # Create Bridge with actual index directions
+            intw[key] = dg.Bridge.from_block(
+                group, key, [left.direction, right.direction], dtype=dtype
+            )
+            
+            # Apply normalization: weights = √(irrep_dim)
+            # For 2 edges, om_dimension = 1, weights shape is (1, 1)
+            irrep_dimension = group.irrep_dim(key[0])
+            # Use torch.sqrt to maintain dtype precision
+            intw[key].weights[0, 0] = torch.sqrt(torch.tensor(irrep_dimension, dtype=dtype))
+        
+        return Tensor(
+            indices=(left, right), itags=diag_itags, data=diag_blocks, intw=intw,
+            dtype=dtype, label="Diagonal"
+        )
 
 
 def inv(tensor: Tensor) -> Tensor:
@@ -590,17 +782,22 @@ def inv(tensor: Tensor) -> Tensor:
     diagonal element. For charge conservation, the input tensor must have
     opposite index directions.
     
+    Supports both Abelian groups (U1Group, Z2Group, etc.) and non-Abelian
+    groups (SU2Group, ProductGroup with SU2Group). For non-Abelian tensors,
+    blocks carry a trailing outer-multiplicity (OM) dimension and an intertwiner
+    (intw) field; both are handled correctly and preserved in the output.
+    
     Parameters
     ----------
     tensor : Tensor
-        Input diagonal matrix tensor with exactly 2 indices. If both indices have
-        the same direction, they will be flipped automatically. If labeled "Diagonal",
-        the diagonal structure check is skipped.
+        Input diagonal matrix tensor with exactly 2 indices. If labeled
+        "Diagonal", the diagonal structure check is skipped.
     
     Returns
     -------
     Tensor
-        Inverted diagonal matrix with the same structure as input.
+        Inverted diagonal matrix with the same structure as input, including
+        the intertwiner field for non-Abelian tensors.
     
     Raises
     ------
@@ -627,7 +824,7 @@ def inv(tensor: Tensor) -> Tensor:
     >>> from nicole import contract
     >>> result = contract(S_diag, S_inv)
     
-    >>> # Manual diagonal tensor
+    >>> # Manual diagonal tensor (Abelian)
     >>> idx = Index(Direction.IN, U1Group(), (Sector(0, 2),))
     >>> D = Tensor(
     ...     indices=(idx.flip(), idx),
@@ -640,11 +837,27 @@ def inv(tensor: Tensor) -> Tensor:
     array([[0.5 , 0.  ],
            [0.  , 0.25]])
     
+    >>> # SU(2) diagonal tensor (non-Abelian)
+    >>> from nicole import SU2Group
+    >>> group = SU2Group()
+    >>> idx = Index(Direction.IN, group, (Sector(1, 2),))
+    >>> S_blocks_su2 = {(1, 1): torch.tensor([2.0, 0.5])}
+    >>> S_diag_su2 = diag(S_blocks_su2, idx)
+    >>> S_inv_su2 = inv(S_diag_su2)
+    >>> # S_inv_su2.intw is preserved with same weights as S_diag_su2
+    
     Notes
     -----
     The function inverts each diagonal matrix block independently by computing
     1/x for each diagonal element. Off-diagonal elements are assumed to be zero
     (only checked if label != "Diagonal").
+    
+    For non-Abelian (SU(2)) tensors, blocks have shape (n, n, 1) with a trailing
+    OM dimension. The diagonal is extracted from block[:, :, 0], and the output
+    block is reconstructed with the same trailing dimension. The intertwiner
+    (Bridge) weights encode the irrep normalisation √(irrep_dim) and are
+    unchanged by inversion; new Bridge objects are built with the transposed
+    index directions.
     
     For numerical stability, elements with absolute value below machine epsilon
     for float64 will raise ZeroDivisionError.
@@ -655,16 +868,23 @@ def inv(tensor: Tensor) -> Tensor:
             f"inv requires a tensor with exactly 2 indices, got {len(tensor.indices)}"
         )
     
-    # Check diagonal structure (skip if labeled "Diagonal")
+    # Always swap and flip indices (transpose)
+    inv_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())
+    inv_itags = (tensor.itags[1], tensor.itags[0])
+    
+    # Machine epsilon
     eps = torch.finfo(torch.float64).eps
+    
+    # Check diagonal structure (skip if labeled "Diagonal")
     if tensor.label != "Diagonal":
         for key, block in tensor.data.items():
-            if block.ndim != 2 or block.shape[0] != block.shape[1]:
+            # Non-Abelian blocks carry a trailing OM axis: (n, n, om)
+            matrix_2d = block[:, :, 0] if tensor.intw is not None else block
+            if matrix_2d.ndim != 2 or matrix_2d.shape[0] != matrix_2d.shape[1]:
                 raise ValueError(
                     f"inv requires square matrix blocks, but block {key} has shape {block.shape}"
                 )
-            # Check off-diagonal elements are zero
-            off_diag = block - torch.diag(torch.diag(block))
+            off_diag = matrix_2d - torch.diag(torch.diag(matrix_2d))
             if torch.max(torch.abs(off_diag)).item() > eps:
                 raise ValueError(
                     f"inv requires diagonal matrices, but block {key} has non-zero "
@@ -673,10 +893,12 @@ def inv(tensor: Tensor) -> Tensor:
     
     # Invert each diagonal block and transpose by swapping block keys
     inv_blocks: Dict[BlockKey, torch.Tensor] = {}
+    inv_intw: Optional[Dict[BlockKey, dg.Bridge]] = {} if tensor.intw is not None else None
     
     for key, block in tensor.data.items():
-        # Extract diagonal elements
-        diag_elements = torch.diag(block)
+        # Non-Abelian blocks carry a trailing OM axis: extract the 2D matrix slice
+        matrix_2d = block[:, :, 0] if tensor.intw is not None else block
+        diag_elements = torch.diag(matrix_2d)
         
         # Check for zeros
         if torch.any(torch.abs(diag_elements) < eps):
@@ -686,24 +908,21 @@ def inv(tensor: Tensor) -> Tensor:
                 f"at diagonal positions {zero_indices.tolist()}"
             )
         
-        # Invert diagonal elements
         inv_diag = 1.0 / diag_elements
-        
-        # Swap block keys for transpose
         swapped_key = (key[1], key[0])
         inv_blocks[swapped_key] = torch.diag(inv_diag)
-    
-    # Always swap and flip indices (transpose)
-    result_indices = (tensor.indices[1].flip(), tensor.indices[0].flip())
-    result_itags = (tensor.itags[1], tensor.itags[0])
+        
+        if tensor.intw is not None:
+            inv_blocks[swapped_key] = inv_blocks[swapped_key].unsqueeze(-1)
+            inv_intw[swapped_key] = dg.Bridge.from_block(
+                tensor.group, swapped_key, [inv_indices[0].direction, inv_indices[1].direction],
+                weights=tensor.intw[key].weights.clone(), dtype=tensor.dtype
+            )
     
     # Create inverted tensor
     return Tensor(
-        indices=result_indices,
-        itags=result_itags,
-        data=inv_blocks,
-        dtype=tensor.dtype,
-        label=tensor.label
+        indices=inv_indices, itags=inv_itags, data=inv_blocks, intw=inv_intw,
+        dtype=tensor.dtype, label=tensor.label
     )
 
 
@@ -836,7 +1055,78 @@ def merge_axes(
 
     # Create conjugate of isometry for potential unfusing
     # This flips all directions and conjugates data
-    iso_conj = conj(iso)
+    iso_conj = iso.conj()
 
     return merged, iso_conj
 
+
+def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
+    """Invert both directions of a contraction pair (bond) between two tensors.
+
+    A contraction pair is a bond where one tensor has an outgoing index and the
+    other has an incoming index carrying the same itag. ``capcup`` inverts both
+    directions (equivalent to inserting a cap-cup metric on the bond) and, for
+    SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
+    ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
+    this operation the bond direction is reversed but all tensor contractions
+    that involve this bond yield the same numerical result.
+
+    Parameters
+    ----------
+    A : Tensor
+        First tensor.
+    axis_a : int
+        Integer position of the bond axis in A.
+    B : Tensor
+        Second tensor.
+    axis_b : int
+        Integer position of the bond axis in B.
+
+    Raises
+    ------
+    ValueError
+        If the two indices do not share the same itag, or do not have opposite
+        directions (required for a contraction pair).
+
+    Notes
+    -----
+    The FS phase is absorbed into B's intertwiner weights, which are much
+    smaller than the data blocks (shape ``(num_components, om_dimension)``
+    vs. ``(d1, ..., dn, num_components)``).  For Abelian groups no phase
+    is applied.
+
+    In yuzuha's left-associative CG fusion tree the first (n−1) axes are
+    *leading* axes and the last axis is the *terminal* axis (the total coupled
+    representation).  The FS phase ``(-1)^{2j}`` is applied if and only if
+    both bonds are at the same axis type — both leading or both terminal —
+    because only then does the combined X-symbol transformation require a
+    non-trivial correction.
+    """
+    # Sanity checks
+    if A.itags[axis_a] != B.itags[axis_b]:
+        raise ValueError(
+            f"Index tags do not match: '{A.itags[axis_a]}' vs '{B.itags[axis_b]}'"
+        )
+    if A.indices[axis_a].direction == B.indices[axis_b].direction:
+        raise ValueError(
+            f"Indices must have opposite directions for a contraction pair, "
+            f"but both have direction {A.indices[axis_a].direction}"
+        )
+
+    # Absorb FS phase into B's intertwiner weights before inverting.
+    # The phase (-1)^{2j} is applied iff both bonds are at the same axis type
+    # (both leading or both terminal) in their respective CG fusion trees.
+    group = B.indices[axis_b].group
+    if not group.is_abelian:
+        is_terminal_a = (axis_a == len(A.indices) - 1)
+        is_terminal_b = (axis_b == len(B.indices) - 1)
+        if is_terminal_a == is_terminal_b:
+            for key in list(B.intw.keys()):
+                phase = dg.fs_phase(group, key[axis_b])
+                if not math.isclose(phase, 1.0):
+                    bridge = B.intw[key]
+                    B.intw[key] = dg.Bridge(bridge.cgspec, bridge.weights * phase)
+
+    # Invert both bonds
+    A.invert(axis_a)
+    B.invert(axis_b)

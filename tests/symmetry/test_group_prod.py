@@ -22,6 +22,7 @@ import pytest
 
 from nicole.symmetry.abelian import U1Group, Z2Group
 from nicole.symmetry.product import ProductGroup
+from nicole.symmetry.unitary import SU2Group
 
 
 # Basic ProductGroup creation tests
@@ -56,35 +57,106 @@ def test_product_group_creation_empty_fails():
         ProductGroup([])
 
 
-def test_product_group_creation_non_abelian_fails():
-    """Test that non-Abelian groups are rejected (for now)."""
-    # Create a mock non-Abelian group
-    from nicole.symmetry.base import SymmetryGroup
+def test_product_group_creation_non_abelian_at_end_allowed():
+    """Test that UnitaryGroup is allowed at the end."""
+    # Create a mock UnitaryGroup
+    from nicole.symmetry.base import UnitaryGroup
     
-    class MockNonAbelian(SymmetryGroup):
+    class MockUnitary(UnitaryGroup):
         @property
         def name(self):
             return "SU2"
-        
+
         @property
         def neutral(self):
             return 0
-        
+
         def dual(self, q):
-            return -q
-        
-        def fuse(self, *qs):
-            return sum(qs)
-        
+            return q
+
+        def irrep_dim(self, q):
+            return 1  # Mock: return trivial dimension
+
+        def fuse_channels(self, q1, q2):
+            return (0, 1, 2)  # Mock: return some channels
+
         def equal(self, a, b):
             return a == b
-        
+
         def validate_charge(self, q):
             pass
     
-    mock_group = MockNonAbelian()
-    with pytest.raises(ValueError, match="not an AbelianGroup"):
-        ProductGroup([mock_group])
+    # Should succeed: UnitaryGroup at end
+    group = ProductGroup([U1Group(), MockUnitary()])
+    assert group.num_components == 2
+
+
+def test_product_group_creation_non_abelian_not_at_end_fails():
+    """Test that UnitaryGroup not at end is rejected."""
+    from nicole.symmetry.base import UnitaryGroup
+    
+    class MockUnitary(UnitaryGroup):
+        @property
+        def name(self):
+            return "SU2"
+
+        @property
+        def neutral(self):
+            return 0
+
+        def dual(self, q):
+            return q
+
+        def irrep_dim(self, q):
+            return 1  # Mock: return trivial dimension
+
+        def fuse_channels(self, q1, q2):
+            return (0, 1, 2)
+
+        def equal(self, a, b):
+            return a == b
+
+        def validate_charge(self, q):
+            pass
+    
+    # Should fail: UnitaryGroup not at end
+    with pytest.raises(ValueError, match="must be the last component"):
+        ProductGroup([MockUnitary(), U1Group()])
+
+
+def test_product_group_creation_nested_fails():
+    """Test that nested ProductGroups are rejected."""
+    inner_group = ProductGroup([U1Group(), Z2Group()])
+    
+    # Should fail: nested ProductGroup not allowed
+    with pytest.raises(TypeError, match="Nested ProductGroups are not allowed"):
+        ProductGroup([U1Group(), inner_group])
+    
+    # Should also fail even if inner is first
+    with pytest.raises(TypeError, match="Nested ProductGroups are not allowed"):
+        ProductGroup([inner_group, U1Group()])
+
+
+# is_abelian property tests
+
+def test_product_group_is_abelian_all_abelian():
+    """Test is_abelian returns True when all components are Abelian."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    assert group.is_abelian is True
+    
+    group2 = ProductGroup([U1Group(), U1Group(), Z2Group()])
+    assert group2.is_abelian is True
+
+
+def test_product_group_is_abelian_with_unitary():
+    """Test is_abelian returns False when a UnitaryGroup component is present."""
+    from nicole.symmetry.unitary import SU2Group
+    
+    group = ProductGroup([U1Group(), SU2Group()])
+    assert group.is_abelian is False
+    
+    group2 = ProductGroup([U1Group(), Z2Group(), SU2Group()])
+    assert group2.is_abelian is False
 
 
 # Neutral element tests
@@ -119,35 +191,125 @@ def test_product_group_dual_u1_z2():
     assert group.dual((0, 1)) == (0, 1)
 
 
+# irrep_dim tests
+
+def test_product_group_irrep_dim_u1_u1():
+    """Test irrep_dim for U1×U1 (always 1×1=1 for Abelian)."""
+    group = ProductGroup([U1Group(), U1Group()])
+    assert group.irrep_dim((0, 0)) == 1
+    assert group.irrep_dim((2, 3)) == 1
+    assert group.irrep_dim((-5, 10)) == 1
+
+
+def test_product_group_irrep_dim_u1_su2():
+    """Test irrep_dim for U1×SU(2) (product of constituent dims)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    # U1 always contributes 1, SU(2) contributes 2j+1
+    assert group.irrep_dim((0, 0)) == 1 * 1  # U1(any) × spin-0
+    assert group.irrep_dim((1, 1)) == 1 * 2  # U1(any) × spin-1/2
+    assert group.irrep_dim((0, 2)) == 1 * 3  # U1(any) × spin-1
+    assert group.irrep_dim((-3, 3)) == 1 * 4  # U1(any) × spin-3/2
+    assert group.irrep_dim((5, 4)) == 1 * 5  # U1(any) × spin-2
+
+
+def test_product_group_irrep_dim_z2_su2():
+    """Test irrep_dim for Z2×SU(2)."""
+    group = ProductGroup([Z2Group(), SU2Group()])
+    assert group.irrep_dim((0, 1)) == 1 * 2  # Z2 × spin-1/2
+    assert group.irrep_dim((1, 2)) == 1 * 3  # Z2 × spin-1
+
+
 # Fuse tests
 
-def test_product_group_fuse_two_u1_u1():
+def test_product_group_fuse_unique_two_u1_u1():
     """Test fusing two charges in U1×U1."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse((2, 3), (1, -1)) == (3, 2)
-    assert group.fuse((0, 0), (5, 7)) == (5, 7)
-    assert group.fuse((-2, 4), (2, -4)) == (0, 0)
+    assert group.fuse_unique((2, 3), (1, -1)) == (3, 2)
+    assert group.fuse_unique((0, 0), (5, 7)) == (5, 7)
+    assert group.fuse_unique((-2, 4), (2, -4)) == (0, 0)
 
 
-def test_product_group_fuse_many_u1_u1():
+def test_product_group_fuse_unique_many_u1_u1():
     """Test fusing multiple charges in U1×U1."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse((1, 2), (3, 4), (5, 6)) == (9, 12)
-    assert group.fuse((2, -1), (-1, 3), (-1, -2)) == (0, 0)
+    assert group.fuse_unique((1, 2), (3, 4), (5, 6)) == (9, 12)
+    assert group.fuse_unique((2, -1), (-1, 3), (-1, -2)) == (0, 0)
 
 
-def test_product_group_fuse_empty_u1_u1():
+def test_product_group_fuse_unique_empty_u1_u1():
     """Test fusing no charges returns neutral."""
     group = ProductGroup([U1Group(), U1Group()])
-    assert group.fuse() == (0, 0)
+    assert group.fuse_unique() == (0, 0)
 
 
-def test_product_group_fuse_u1_z2():
+def test_product_group_fuse_unique_u1_z2():
     """Test fusing charges in U1×Z2."""
     group = ProductGroup([U1Group(), Z2Group()])
-    assert group.fuse((2, 1), (3, 0)) == (5, 1)
-    assert group.fuse((1, 1), (2, 1)) == (3, 0)
-    assert group.fuse((-5, 0), (5, 1)) == (0, 1)
+    assert group.fuse_unique((2, 1), (3, 0)) == (5, 1)
+    assert group.fuse_unique((1, 1), (2, 1)) == (3, 0)
+    assert group.fuse_unique((-5, 0), (5, 1)) == (0, 1)
+
+
+def test_product_group_fuse_channels_all_abelian():
+    """Test fuse_channels returns single result for all-Abelian groups."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels((2, 1), (3, 0))
+    assert result == ((5, 1),)  # Single-element tuple
+    
+    result2 = group.fuse_channels((1, 1), (2, 1))
+    assert result2 == ((3, 0),)
+
+
+def test_product_group_fuse_channels_multi_abelian():
+    """Test fuse_channels with multiple charges for all-Abelian groups."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    # Three charges
+    result = group.fuse_channels((2, 1), (3, 0), (1, 1))
+    assert result == ((6, 0),)  # (2+3+1, (1+0+1)%2)
+    
+    # Four charges
+    result2 = group.fuse_channels((1, 1), (2, 1), (-1, 0), (3, 1))
+    assert result2 == ((5, 1),)  # (1+2-1+3, (1+1+0+1)%2)
+
+
+def test_product_group_fuse_channels_with_su2():
+    """Test fuse_channels with SU2Group component."""
+    from nicole.symmetry.unitary import SU2Group
+    
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # Pairwise: U1 charge 1, SU2 spins 1⊗1 → (1,0) and (1,2)
+    result = group.fuse_channels((1, 1), (0, 1))
+    assert result == ((1, 0), (1, 2))
+    
+    # Three charges: U1 charges sum to 3, SU2 spins 1⊗1⊗1 → 1,3
+    result2 = group.fuse_channels((1, 1), (0, 1), (2, 1))
+    assert result2 == ((3, 1), (3, 3))
+    
+    # Check U1 component sums correctly
+    assert all(ch[0] == 3 for ch in result2)
+    # Check SU2 component gives correct channels
+    assert set(ch[1] for ch in result2) == {1, 3}
+
+
+def test_product_group_fuse_channels_single_charge():
+    """Test fuse_channels with single charge returns itself."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels((2, 1))
+    assert result == ((2, 1),)
+    
+    from nicole.symmetry.unitary import SU2Group
+    group2 = ProductGroup([U1Group(), SU2Group()])
+    result2 = group2.fuse_channels((3, 2))
+    assert result2 == ((3, 2),)
+
+
+def test_product_group_fuse_channels_empty():
+    """Test fuse_channels with no charges returns neutral."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    result = group.fuse_channels()
+    assert result == ((0, 0),)
 
 
 # Equal tests

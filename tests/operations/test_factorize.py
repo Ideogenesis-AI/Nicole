@@ -22,9 +22,11 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Tensor, contract, decomp, U1Group, Index, Sector
+from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
+from nicole import contract, decomp, diag
 from nicole.decomp import svd, qr, eig
-from ..utils import assert_charge_neutral
+from ..utils import assert_charge_neutral, populate_random_weights
+from ..utils import assert_blocks_equal, assert_physical_tensors_equal
 
 
 # =============================================================================
@@ -59,6 +61,7 @@ def test_svd_basic_reconstruction():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / original_norm
     assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Check norms are preserved
     assert math.isclose(reconstructed.norm(), original_norm)
@@ -104,11 +107,12 @@ def test_svd_string_axis():
     reconstructed = contract(U, S_Vh)
     
     # Permute reconstructed to match original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_svd_different_axis_positions():
@@ -133,15 +137,16 @@ def test_svd_different_axis_positions():
             pass
         elif axis == 1:
             # Current order (b, a, c) -> (a, b, c)
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
             # Current order (c, a, b) -> (a, b, c)
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         # Verify reconstruction
         diff_norm = (T - reconstructed).norm()
         rel_error = diff_norm / T.norm()
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Block handling tests
@@ -172,6 +177,7 @@ def test_svd_multiple_blocks_same_charge():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_svd_single_block():
@@ -309,6 +315,56 @@ def test_svd_s_diagonal():
         assert torch.allclose(block, torch.diag(torch.diag(block)))
 
 
+# U and Vd isometry tests
+
+def test_svd_u1_u_blocks_are_isometric():
+    """Each U block satisfies U^† @ U = I (column-orthonormal)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(-1, 2), Sector(0, 5), Sector(1, 4)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=50)
+
+    U, _S, _Vh = svd(T, axis=0)
+
+    for key, block in U.data.items():
+        should_be_I = block.T.conj() @ block
+        rank = block.shape[1]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=block.dtype), atol=1e-12), (
+            f"U block {key}: U^† @ U should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=block.dtype)).abs().max().item():.2e}"
+        )
+
+
+def test_svd_u1_vh_blocks_are_isometric():
+    """Vh blocks, concatenated per left charge, satisfy Vh @ Vh^† = I (row-orthonormal)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(-1, 2), Sector(0, 5), Sector(1, 4)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=50)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    # Group Vh blocks by q_left (position 0 of key), then concatenate horizontally
+    vh_by_q_left: dict = {}
+    for key, block in Vh.data.items():
+        q_left = key[0]
+        row = block.reshape(block.shape[0], -1)  # (bond_dim, prod_right)
+        vh_by_q_left.setdefault(q_left, []).append(row)
+
+    for q_left, rows in vh_by_q_left.items():
+        Vh_full = torch.cat(rows, dim=1)  # (bond_dim, total_right_dim)
+        should_be_I = Vh_full @ Vh_full.T.conj()
+        rank = Vh_full.shape[0]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=Vh_full.dtype), atol=1e-12), (
+            f"Vh for q_left={q_left}: Vh @ Vh^† should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=Vh_full.dtype)).abs().max().item():.2e}"
+        )
+
+
 # Charge conservation tests
 
 def test_svd_preserves_charge_conservation():
@@ -418,6 +474,7 @@ def test_svd_complex_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Truncation tests
@@ -558,6 +615,417 @@ def test_svd_truncation_combined_thresh_nkeep():
     assert total_sv == 3
 
 
+# High-order tensor tests
+
+def test_svd_high_order_different_axis_sizes():
+    """Test SVD on high-order tensor with varying axis dimensions."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 5),)),
+        Index(Direction.OUT, group, sectors=(Sector(0, 3),)),
+        Index(Direction.IN, group, sectors=(Sector(0, 4),))
+    ]
+
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1200)
+
+    # Decompose on axis 1 (separates axis 1 from axes 0,2,3)
+    U, S_blocks, Vh = svd(T, axis=1)
+
+    # Bond dimension should be min(dim_axis1, dim_others)
+    # dim_axis1 = 5, dim_others = 2*3*4 = 24
+    # So bond_dim = min(5, 24) = 5
+    total_bond_dim = sum(len(s) for s in S_blocks.values())
+    assert total_bond_dim == 5
+
+    # Verify singular values are sorted descending
+    for key, s_array in S_blocks.items():
+        assert torch.all(s_array[:-1] >= s_array[1:]).item(), "Singular values should be sorted descending"
+
+
+def test_svd_high_order_bond_structure():
+    """Test bond index structure from SVD of a high-order tensor."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    ]
+
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1400)
+
+    U, S_blocks, Vh = svd(T, axis=0)
+
+    bond_index = U.indices[1]
+
+    # Bond should have charges that appear in the tensor's first index
+    left_charges_in_data = set(key[0] for key in T.data.keys())
+    bond_charges = set(bond_index.charges())
+
+    assert bond_charges == left_charges_in_data
+
+    # Bond should have correct group
+    assert bond_index.group == indices[0].group
+
+    # Bond direction should be opposite of left index
+    assert bond_index.direction == indices[0].direction.reverse()
+
+
+def test_svd_high_order_thresh_truncation():
+    """Test threshold truncation on high-order tensor SVD."""
+    group = U1Group()
+    indices = [
+        Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3))),
+        Index(Direction.IN, group, sectors=(Sector(-2, 2), Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
+        Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2))),
+        Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 4), Sector(1, 2)))
+    ]
+
+    T = Tensor.random(indices, itags=["a", "b", "c", "d"], seed=1500)
+
+    threshold = 1.0
+    U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": threshold})
+
+    # All kept singular values should be >= threshold
+    for key, s_array in S_blocks.items():
+        assert torch.all(s_array >= threshold).item()
+
+    # Left index of U should be unchanged
+    expected_left_dim = sum(s.dim for s in indices[0].sectors)
+    assert U.indices[0].dim == expected_left_dim
+
+
+# SU(2) SVD tests
+
+def _make_su2_3rd_order(seed: int = 1):
+    """3rd-order SU(2) tensor with (OUT, IN, OUT) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    T = Tensor.random([idx1, idx2, idx3], itags=["a", "b", "c"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
+
+
+def _make_su2_2nd_order(seed: int = 42):
+    """2nd-order SU(2) tensor (OUT x IN)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    return Tensor.random([idx1, idx2], itags=["a", "b"], seed=seed)
+
+
+def _make_su2_4th_order(seed: int = 1):
+    """4th-order SU(2) tensor with (OUT, IN, OUT, IN) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
+    T = Tensor.random([idx1, idx2, idx3, idx4], itags=["a", "b", "c", "d"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
+
+
+def _make_su2_5th_order(seed: int = 1):
+    """5th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5], itags=["a", "b", "c", "d", "e"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
+
+
+def _make_su2_6th_order(seed: int = 1):
+    """6th-order SU(2) tensor with (OUT, IN, OUT, IN, OUT, IN) index structure."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 2)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+    idx4 = Index(Direction.IN,  group, sectors=(Sector(0, 1), Sector(1, 1), Sector(2, 1)))
+    idx5 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 2)))
+    idx6 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 1)))
+    T = Tensor.random([idx1, idx2, idx3, idx4, idx5, idx6], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
+    populate_random_weights(T, seed=seed + 1000)
+    return T
+
+
+def test_svd_su2_reconstruction_2nd_order():
+    """SVD of a 2nd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_2nd_order(seed=11)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 2nd-order SVD reconstruction axis={axis}")
+
+
+def test_svd_su2_reconstruction_3rd_order():
+    """SVD of a 3rd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_3rd_order(seed=10)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 3rd-order SVD reconstruction axis={axis}")
+
+
+def test_svd_su2_reconstruction_4th_order():
+    """SVD of a 4th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_4th_order(seed=12)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 4th-order SVD reconstruction axis={axis}")
+
+
+def test_svd_su2_reconstruction_5th_order():
+    """SVD of a 5th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_5th_order(seed=13)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 5th-order SVD reconstruction axis={axis}")
+
+
+def test_svd_su2_reconstruction_6th_order():
+    """SVD of a 6th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_6th_order(seed=14)
+
+    for axis in range(len(T.indices)):
+        U, S_tensor, Vh = decomp(T, axes=axis, mode="SVD")
+        reconstructed = contract(U, contract(S_tensor, Vh))
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 6th-order SVD reconstruction axis={axis}")
+
+
+def test_svd_su2_u_intertwiner_identity_like():
+    """U from SU(2) SVD has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
+    group = SU2Group()
+    T = _make_su2_3rd_order(seed=20)
+
+    U, _S, _Vh = svd(T, axis=0)
+
+    assert U.intw is not None, "U must have intw for SU(2)"
+    for key, bridge in U.intw.items():
+        q = key[0]
+        expected_weight = math.sqrt(group.irrep_dim(q))
+        assert bridge.num_components == 1, f"U intertwiner at {key} must have 1 component"
+        assert bridge.om_dimension == 1, f"U intertwiner OM dim must be 1 (2nd-order identity-like)"
+        assert math.isclose(bridge.weights[0, 0].item(), expected_weight, rel_tol=1e-10), (
+            f"U intertwiner weight at {key} should be sqrt(irrep_dim)={expected_weight:.6f}, "
+            f"got {bridge.weights[0, 0].item():.6f}"
+        )
+
+
+def test_svd_su2_s_intertwiner_identity_like():
+    """S from SU(2) SVD has identity-like intertwiner."""
+    group = SU2Group()
+    T = _make_su2_3rd_order(seed=21)
+
+    _U, S_tensor, _Vh = decomp(T, axes=0, mode="SVD")
+
+    assert S_tensor.intw is not None, "S must have intw for SU(2)"
+    for key, bridge in S_tensor.intw.items():
+        q = key[0]
+        expected_weight = math.sqrt(group.irrep_dim(q))
+        assert bridge.num_components == 1, f"S intertwiner at {key} must have 1 component"
+        assert bridge.om_dimension == 1, f"S intertwiner OM dim must be 1 (2nd-order identity-like)"
+        assert math.isclose(bridge.weights[0, 0].item(), expected_weight, rel_tol=1e-10), (
+            f"S intertwiner weight at {key} should be sqrt(irrep_dim)={expected_weight:.6f}, "
+            f"got {bridge.weights[0, 0].item():.6f}"
+        )
+
+
+def test_svd_su2_u_data_blocks_have_trailing_component_dim():
+    """U data blocks from SU(2) SVD have shape (d_left, rank, 1)."""
+    T = _make_su2_3rd_order(seed=22)
+
+    U, _S, _Vh = svd(T, axis=0)
+
+    for key, block in U.data.items():
+        assert block.ndim == 3, f"U block {key} must be 3D for SU(2), got ndim={block.ndim}"
+        assert block.shape[-1] == 1, f"U block {key} trailing dim must be 1, got {block.shape[-1]}"
+
+
+def test_svd_su2_u_reduced_blocks_are_isometric():
+    """The reduced matrix U_mat = U.data[key][:, :, 0] satisfies U_mat^T @ U_mat = I."""
+    T = _make_su2_3rd_order(seed=23)
+
+    U, _S, _Vh = svd(T, axis=0)
+
+    for key, block in U.data.items():
+        U_mat = block[:, :, 0]  # (d_left, rank)
+        should_be_I = U_mat.T @ U_mat
+        rank = U_mat.shape[1]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=U_mat.dtype), atol=1e-10), (
+            f"U reduced block {key}: U^T @ U should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=U_mat.dtype)).abs().max().item():.2e}"
+        )
+
+
+def test_svd_su2_vh_blocks_are_isometric():
+    """Vh reduced blocks, concatenated per left charge, satisfy Vh @ Vh^† = I (row-orthonormal)."""
+    T = _make_su2_3rd_order(seed=24)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    # Group Vh blocks by q_left (position 0 of key), then concatenate horizontally
+    vh_by_q_left: dict = {}
+    for key, block in Vh.data.items():
+        q_left = key[0]
+        row = block.reshape(block.shape[0], -1)  # (bond_dim, prod_right_with_component)
+        vh_by_q_left.setdefault(q_left, []).append(row)
+
+    for q_left, rows in vh_by_q_left.items():
+        Vh_full = torch.cat(rows, dim=1)  # (bond_dim, total_right_dim)
+        should_be_I = Vh_full @ Vh_full.T.conj()
+        rank = Vh_full.shape[0]
+        assert torch.allclose(should_be_I, torch.eye(rank, dtype=Vh_full.dtype), atol=1e-10), (
+            f"Vh for q_left={q_left}: Vh @ Vh^† should be identity, max deviation="
+            f"{(should_be_I - torch.eye(rank, dtype=Vh_full.dtype)).abs().max().item():.2e}"
+        )
+
+
+def test_svd_su2_vd_intertwiner_matches_t_axis0():
+    """For left_axis=0 the R-symbol is identity: Vd.intw weights equal T.intw weights."""
+    T = _make_su2_3rd_order(seed=30)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    assert Vh.intw is not None, "Vd must have intw for SU(2)"
+    assert T.intw is not None
+
+    for t_key, t_bridge in T.intw.items():
+        vh_key = t_key  # keys are identical when left_axis=0
+        assert vh_key in Vh.intw, f"Vd.intw missing key {vh_key}"
+        assert torch.allclose(Vh.intw[vh_key].weights, t_bridge.weights, atol=1e-14), (
+            f"Vd.intw[{vh_key}].weights differ from T.intw[{t_key}].weights"
+        )
+
+
+def test_svd_su2_vd_has_correct_intw_keys():
+    """Vd has exactly the same intertwiner key set as T when left_axis=0."""
+    T = _make_su2_3rd_order(seed=31)
+
+    _U, _S, Vh = svd(T, axis=0)
+
+    assert set(Vh.intw.keys()) == set(T.intw.keys()), (
+        f"Vd.intw keys {set(Vh.intw.keys())} differ from T.intw keys {set(T.intw.keys())}"
+    )
+
+
+def test_svd_su2_non_zero_axis_reconstruction():
+    """SVD with left_axis=1 (R-symbol path) reconstructs the SU(2) tensor."""
+    T = _make_su2_3rd_order(seed=40)
+
+    U, S_tensor, Vh = decomp(T, axes=1, mode="SVD")
+    reconstructed = contract(U, contract(S_tensor, Vh))
+
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm, in_place=True)
+
+    assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                  msg="SU(2) left_axis=1 SVD reconstruction")
+
+
+def test_svd_su2_non_zero_axis_vh_intw_not_none():
+    """Vd has a populated intw even when left_axis != 0."""
+    T = _make_su2_3rd_order(seed=41)
+
+    _U, _S, Vh = svd(T, axis=1)
+
+    assert Vh.intw is not None, "Vd must have intw for SU(2) regardless of left_axis"
+    assert len(Vh.intw) > 0, "Vd.intw must be non-empty"
+
+
+def test_svd_su2_truncation_nkeep():
+    """nkeep truncation on SU(2) tensor produces tensors with valid intw."""
+    T = _make_su2_3rd_order(seed=50)
+
+    U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 2})
+
+    assert U.intw is not None, "U must have intw after nkeep truncation"
+    assert Vh.intw is not None, "Vh must have intw after nkeep truncation"
+    assert S_tensor.intw is not None, "S must have intw after nkeep truncation"
+    assert len(U.data) > 0, "U must have non-empty blocks after truncation"
+
+
+def test_svd_su2_truncation_thresh():
+    """thresh truncation (small thresh) on SU(2) tensor still reconstructs accurately."""
+    T = _make_su2_3rd_order(seed=51)
+
+    U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"thresh": 1e-10})
+    reconstructed = contract(U, contract(S_tensor, Vh))
+
+    tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    perm = [tag_to_pos_recon[tag] for tag in T.itags]
+    reconstructed.permute(perm, in_place=True)
+
+    assert_physical_tensors_equal(T, reconstructed, atol=1e-8,
+                                  msg="SU(2) thresh=1e-10 reconstruction")
+
+
+def test_svd_su2_truncation_nkeep_s_blocks_3d():
+    """S blocks are 3D with trailing dim 1 after truncation."""
+    T = _make_su2_3rd_order(seed=52)
+
+    _U, S_tensor, _Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 3})
+
+    for key, block in S_tensor.data.items():
+        assert block.ndim == 3, f"S block {key} must be 3D for SU(2)"
+        assert block.shape[-1] == 1, f"S block {key} trailing dim must be 1"
+
+
+def test_svd_su2_charge_neutral():
+    """U, S, Vh from SU(2) SVD are all charge neutral."""
+    T = _make_su2_3rd_order(seed=60)
+
+    U, S_tensor, Vh = decomp(T, axes=0, mode="SVD")
+
+    assert_charge_neutral(U)
+    assert_charge_neutral(S_tensor)
+    assert_charge_neutral(Vh)
+
+
 # =============================================================================
 #  QR Decomposition Tests
 # =============================================================================
@@ -588,6 +1056,7 @@ def test_qr_basic_reconstruction():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / original_norm
     assert rel_error < 1e-12, f"Reconstruction error {rel_error} too large"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
     
     # Check norms are preserved
     assert abs(reconstructed.norm() - original_norm) < 1e-12
@@ -630,11 +1099,12 @@ def test_qr_string_axis():
     reconstructed = contract(Q, R)
     
     # Permute reconstructed to match original order (b, a, c) -> (a, b, c)
-    reconstructed.permute([1, 0, 2])
+    reconstructed.permute([1, 0, 2], in_place=True)
     
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_different_axis_positions():
@@ -659,15 +1129,16 @@ def test_qr_different_axis_positions():
             pass
         elif axis == 1:
             # Current order (b, a, c) -> (a, b, c)
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
             # Current order (c, a, b) -> (a, b, c)
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         # Verify reconstruction
         diff_norm = (T - reconstructed).norm()
         rel_error = diff_norm / T.norm()
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Block handling tests
@@ -696,6 +1167,7 @@ def test_qr_multiple_blocks_same_charge():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_single_block():
@@ -949,6 +1421,7 @@ def test_qr_complex_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_float32_dtype():
@@ -971,11 +1444,12 @@ def test_qr_float32_dtype():
     diff_norm = (T - reconstructed).norm()
     rel_error = diff_norm / T.norm()
     assert rel_error < 1e-5  # Lower precision for float32
+    assert_blocks_equal(T, reconstructed)  # Default tolerances for float32
 
 
 # High-order tensor tests
 
-def test_qr_4index_tensor():
+def test_qr_4th_order_tensor():
     """Test QR on 4-index tensor with reconstruction."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
@@ -997,18 +1471,19 @@ def test_qr_4index_tensor():
         if axis == 0:
             pass  # (a, b, c, d)
         elif axis == 1:
-            reconstructed.permute([1, 0, 2, 3])  # (b, a, c, d) -> (a, b, c, d)
+            reconstructed.permute([1, 0, 2, 3], in_place=True)  # (b, a, c, d) -> (a, b, c, d)
         elif axis == 2:
-            reconstructed.permute([1, 2, 0, 3])  # (c, a, b, d) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 0, 3], in_place=True)  # (c, a, b, d) -> (a, b, c, d)
         elif axis == 3:
-            reconstructed.permute([1, 2, 3, 0])  # (d, a, b, c) -> (a, b, c, d)
+            reconstructed.permute([1, 2, 3, 0], in_place=True)  # (d, a, b, c) -> (a, b, c, d)
         
         # Verify accuracy
         rel_error = (T - reconstructed).norm() / original_norm
         assert rel_error < 1e-12, f"Reconstruction failed for axis {axis}"
+        assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
-def test_qr_5index_tensor():
+def test_qr_5th_order_tensor():
     """Test QR on 5-index tensor."""
     group = U1Group()
     indices = [
@@ -1036,13 +1511,14 @@ def test_qr_5index_tensor():
     reconstructed = contract(Q, R, axes=(1, 0))
     
     # Permute: (c, a, b, d, e) -> (a, b, c, d, e)
-    reconstructed.permute([1, 2, 0, 3, 4])
+    reconstructed.permute([1, 2, 0, 3, 4], in_place=True)
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
-def test_qr_6index_tensor():
+def test_qr_6th_order_tensor():
     """Test QR on 6-index tensor."""
     group = U1Group()
     indices = [
@@ -1072,7 +1548,7 @@ def test_qr_6index_tensor():
         assert idx.dim == T.indices[i].dim
 
 
-def test_qr_high_order_tensor_multiple_charges():
+def test_qr_high_order_multiple_charges():
     """Test high-order tensor with multiple charge blocks."""
     group = U1Group()
     indices = [
@@ -1096,9 +1572,10 @@ def test_qr_high_order_tensor_multiple_charges():
     
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
-def test_qr_high_order_tensor_different_axis_sizes():
+def test_qr_high_order_different_axis_sizes():
     """Test high-order tensor with varying axis dimensions."""
     group = U1Group()
     indices = [
@@ -1120,7 +1597,7 @@ def test_qr_high_order_tensor_different_axis_sizes():
     assert bond_dim == 5
 
 
-def test_qr_high_order_tensor_bond_structure():
+def test_qr_high_order_bond_structure():
     """Test bond index structure in high-order tensor QR."""
     group = U1Group()
     indices = [
@@ -1205,6 +1682,7 @@ def test_qr_thin_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_wide_matrix():
@@ -1232,6 +1710,7 @@ def test_qr_wide_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_square_matrix():
@@ -1259,6 +1738,7 @@ def test_qr_square_matrix():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 # Edge cases
@@ -1277,6 +1757,7 @@ def test_qr_minimal_tensor():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_preserves_itags():
@@ -1315,11 +1796,7 @@ def test_qr_multiblock_reconstruction_accuracy():
     reconstructed = contract(Q, R, axes=(1, 0))
     
     # Check each block individually
-    for key in T.data.keys():
-        if key in reconstructed.data:
-            rel_error = torch.linalg.norm(T.data[key] - reconstructed.data[key]).item() / \
-                       torch.linalg.norm(T.data[key]).item()
-            assert rel_error < 1e-12, f"Block {key} reconstruction error too large: {rel_error}"
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_no_truncation():
@@ -1340,6 +1817,7 @@ def test_qr_no_truncation():
     reconstructed = contract(Q, R, axes=(1, 0))
     rel_error = (T - reconstructed).norm() / T.norm()
     assert rel_error < 1e-12
+    assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
 def test_qr_consistency_across_axes():
@@ -1359,9 +1837,9 @@ def test_qr_consistency_across_axes():
         if axis == 0:
             pass
         elif axis == 1:
-            reconstructed.permute([1, 0, 2])
+            reconstructed.permute([1, 0, 2], in_place=True)
         elif axis == 2:
-            reconstructed.permute([1, 2, 0])
+            reconstructed.permute([1, 2, 0], in_place=True)
         
         results.append(reconstructed)
     
@@ -1369,6 +1847,178 @@ def test_qr_consistency_across_axes():
     for i, recon in enumerate(results):
         rel_error = (T - recon).norm() / T.norm()
         assert rel_error < 1e-12, f"Axis {i} reconstruction failed"
+        assert_blocks_equal(T, recon, rtol=1e-10, atol=1e-12)
+
+
+# SU(2) QR Tests
+
+def test_qr_su2_reconstruction_2nd_order():
+    """QR of a 2nd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_2nd_order(seed=11)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 2nd-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_3rd_order():
+    """QR of a 3rd-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_3rd_order(seed=10)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 3rd-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_4th_order():
+    """QR of a 4th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_4th_order(seed=12)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 4th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_5th_order():
+    """QR of a 5th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_5th_order(seed=13)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 5th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_reconstruction_6th_order():
+    """QR of a 6th-order SU(2) tensor reconstructs the original for all decomposed axes."""
+    T = _make_su2_6th_order(seed=14)
+
+    for axis in range(len(T.indices)):
+        Q, R = qr(T, axis=axis)
+        reconstructed = contract(Q, R)
+
+        tag_to_pos_recon = {tag: i for i, tag in enumerate(reconstructed.itags)}
+        perm = [tag_to_pos_recon[tag] for tag in T.itags]
+        reconstructed.permute(perm, in_place=True)
+
+        assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
+                                      msg=f"SU(2) 6th-order QR reconstruction axis={axis}")
+
+
+def test_qr_su2_q_intertwiner_identity_like():
+    """Q from SU(2) QR has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
+    T = _make_su2_3rd_order(seed=20)
+
+    Q, _R = qr(T, axis=0)
+
+    assert Q.intw is not None, "Q must have intw for SU(2)"
+    for key, bridge in Q.intw.items():
+        q = key[0]
+        assert bridge.weights.shape == (1, 1), \
+            f"Q bridge weights should be (1,1), got {bridge.weights.shape}"
+        expected = math.sqrt(T.group.irrep_dim(q))
+        assert abs(bridge.weights[0, 0].item() - expected) < 1e-6, \
+            f"Q bridge weights[0,0] should be sqrt(irrep_dim({q}))={expected:.4f}"
+
+
+def test_qr_su2_q_data_blocks_have_trailing_component_dim():
+    """Q blocks from SU(2) QR have a trailing OM axis of size 1."""
+    T = _make_su2_3rd_order(seed=22)
+
+    Q, _R = qr(T, axis=0)
+
+    for key, arr in Q.data.items():
+        assert arr.ndim == 3, f"Q block {key} should be 3D, got {arr.ndim}D"
+        assert arr.shape[-1] == 1, \
+            f"Q block {key} trailing dim should be 1, got {arr.shape[-1]}"
+
+
+def test_qr_su2_q_reduced_blocks_are_isometric():
+    """Q from SU(2) QR: reduced blocks satisfy Q^†Q = I."""
+    T = _make_su2_3rd_order(seed=23)
+
+    Q, _R = qr(T, axis=0)
+
+    import torch
+    for key, arr in Q.data.items():
+        q_mat = arr.squeeze(-1)  # (d_left, rank)
+        prod = q_mat.conj().T @ q_mat  # (rank, rank)
+        eye = torch.eye(prod.shape[0], dtype=T.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"Q block {key}: Q^†Q deviates from identity, max err={( prod - eye).abs().max():.2e}"
+
+
+def test_qr_su2_r_intertwiner_matches_t_axis0():
+    """For axis=0, R from SU(2) QR has intertwiner with same keys and weights as T."""
+    T = _make_su2_3rd_order(seed=30)
+
+    _Q, R = qr(T, axis=0)
+
+    assert R.intw is not None, "R must have intw for SU(2)"
+    assert set(R.intw.keys()) == set(T.intw.keys()), \
+        "R intw keys should match T intw keys when axis=0 (identity permutation)"
+    for key, bridge in R.intw.items():
+        t_weights = T.intw[key].weights.to(dtype=bridge.weights.dtype)
+        assert torch.allclose(bridge.weights, t_weights, atol=1e-10), \
+            f"R intw weights differ from T intw weights at key {key}"
+
+
+def test_qr_su2_r_has_correct_intw_keys():
+    """R from SU(2) QR has intertwiner keys matching its index count."""
+    T = _make_su2_3rd_order(seed=31)
+
+    _Q, R = qr(T, axis=0)
+
+    assert R.intw is not None
+    for key in R.intw.keys():
+        assert len(key) == len(R.indices), \
+            f"R intw key length {len(key)} should match R index count {len(R.indices)}"
+
+
+def test_qr_su2_non_zero_axis_r_intw_not_none():
+    """R from SU(2) QR has a non-None intertwiner even when axis != 0."""
+    T = _make_su2_3rd_order(seed=41)
+
+    for axis in range(1, len(T.indices)):
+        _Q, R = qr(T, axis=axis)
+        assert R.intw is not None, f"R.intw must not be None for axis={axis}"
+
+
+def test_qr_su2_charge_neutral():
+    """Q and R from SU(2) QR are charge neutral."""
+    T = _make_su2_3rd_order(seed=60)
+
+    Q, R = qr(T, axis=0)
+
+    assert_charge_neutral(Q)
+    assert_charge_neutral(R)
 
 
 # =============================================================================
@@ -1920,3 +2570,119 @@ def test_eig_order_multiple_blocks():
     all_eigvals = torch.cat([torch.real(eigvals) for eigvals in D_nkeep.values()])
     all_eigvals, _ = torch.sort(all_eigvals)
     assert torch.allclose(all_eigvals, torch.tensor([-3.0, -2.0, 0.0], dtype=all_eigvals.dtype))
+
+
+# SU(2) Eigendecomposition Tests
+
+def test_eig_su2_u_has_intw():
+    """U from SU(2) eig has a non-None intertwiner."""
+    T = _make_su2_2nd_order(seed=70)
+
+    U, _D = eig(T)
+
+    assert U.intw is not None, "U must have intw for SU(2)"
+
+
+def test_eig_su2_u_intertwiner_identity_like():
+    """U from SU(2) eig has identity-like intertwiner: one component, weights[0,0]=sqrt(irrep_dim)."""
+    T = _make_su2_2nd_order(seed=71)
+
+    U, _D = eig(T)
+
+    assert U.intw is not None
+    for key, bridge in U.intw.items():
+        q = key[0]
+        assert bridge.weights.shape == (1, 1), \
+            f"U bridge weights should be (1,1), got {bridge.weights.shape}"
+        expected = math.sqrt(T.group.irrep_dim(q))
+        assert abs(bridge.weights[0, 0].item() - expected) < 1e-6, \
+            f"U bridge weights[0,0] should be sqrt(irrep_dim({q}))={expected:.4f}"
+
+
+def test_eig_su2_u_data_blocks_have_trailing_component_dim():
+    """U blocks from SU(2) eig have a trailing OM axis of size 1."""
+    T = _make_su2_2nd_order(seed=72)
+
+    U, _D = eig(T)
+
+    for key, arr in U.data.items():
+        assert arr.ndim == 3, f"U block {key} should be 3D, got {arr.ndim}D"
+        assert arr.shape[-1] == 1, \
+            f"U block {key} trailing dim should be 1, got {arr.shape[-1]}"
+
+
+def test_eig_su2_eigendecomposition_relation():
+    """For each block: T_block @ U_block = U_block @ diag(D_block) (reduced matrix elements)."""
+    T = _make_su2_2nd_order(seed=73)
+
+    U, D = eig(T)
+
+    for key, t_arr in T.data.items():
+        q = key[0]
+        u_key = (q, q)
+        if u_key not in U.data:
+            continue
+
+        T_mat = t_arr.squeeze(-1).to(dtype=U.dtype)      # (d_q, d_q)
+        U_mat = U.data[u_key].squeeze(-1)                 # (d_q, rank)
+        D_vec = D[u_key]                                  # (rank,)
+
+        lhs = T_mat @ U_mat
+        rhs = U_mat @ torch.diag(D_vec.to(dtype=U.dtype))
+        assert torch.allclose(lhs, rhs, atol=1e-8), \
+            f"Eigendecomposition relation T@U = U@diag(D) failed for charge {q}, " \
+            f"max err={( lhs - rhs).abs().max():.2e}"
+
+
+def test_eig_su2_reconstruction():
+    """Physical tensor T = U @ diag(D) @ U† reconstructed via the tensor API."""
+    T = _make_su2_2nd_order(seed=76)
+
+    # Symmetrize so U is orthonormal and T = U @ diag(D) @ U† holds exactly.
+    for key in list(T.data.keys()):
+        mat = T.data[key].squeeze(-1)
+        T.data[key] = ((mat + mat.T.conj()) / 2).unsqueeze(-1)
+
+    # Clone BEFORE eig, which mutates T in-place via regularize().
+    # T_ref holds the physical values we want to reconstruct.
+    T_ref = T.clone()
+
+    U, D = eig(T)
+
+    # Build diagonal matrix tensor from eigenvalues.
+    # Give both bond axes the same itag as U's bond so contract's itag check passes.
+    bond_index = U.indices[1]
+    bond_tag = U.itags[1]
+    D_diag = diag(D, bond_index, itags=(bond_tag, bond_tag))
+
+    # Reconstruct: T = U @ D_diag @ U†
+    U_dag = U.conj()
+    D_Udag = contract(D_diag, U_dag, axes=(1, 1))
+    T_recon = contract(U, D_Udag, axes=(1, 0))
+    T_recon.retag(T_ref.itags)
+
+    assert_physical_tensors_equal(T_ref, T_recon, atol=1e-8,
+                                  msg="SU(2) eig physical reconstruction T = U@diag(D)@U†")
+
+
+def test_eig_su2_charge_neutral():
+    """U from SU(2) eig is charge neutral."""
+    T = _make_su2_2nd_order(seed=74)
+
+    U, _D = eig(T)
+
+    assert_charge_neutral(U)
+
+
+def test_eig_su2_truncation_nkeep():
+    """SU(2) eig with nkeep truncation produces the correct number of eigenvalues."""
+    T = _make_su2_2nd_order(seed=75)
+
+    U, D = eig(T, order="descend", trunc={"nkeep": 2})
+
+    total = sum(len(vals) for vals in D.values())
+    assert total == 2, f"Expected 2 eigenvalues after nkeep=2, got {total}"
+    assert U.intw is not None, "U.intw must not be None after truncation"
+    # intw keys must match U.data keys exactly
+    assert set(U.intw.keys()) == set(U.data.keys()), \
+        "U.intw keys must match U.data keys after nkeep truncation"

@@ -22,9 +22,12 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Tensor, contract, identity, trace, U1Group, Z2Group, permute, Index, Sector
-from nicole.symmetry.product import ProductGroup
-from ..utils import assert_charge_neutral
+from nicole import Direction, Tensor, contract, identity, trace, permute, Index, Sector
+from nicole import U1Group, Z2Group, SU2Group, ProductGroup
+from ..utils import (
+    assert_charge_neutral, assert_blocks_equal, assert_data_weights_equal,
+    assert_physical_tensors_equal, populate_random_weights,
+)
 
 
 # Basic contraction tests
@@ -255,8 +258,7 @@ def test_contract_named_vs_positional():
     positional = contract(A, B, axes=([2, 1], [0, 1]))
 
     assert list(named.itags) == list(positional.itags)
-    for key in named.data:
-        assert torch.allclose(named.data[key], positional.data[key])
+    assert_blocks_equal(named, positional)
 
 
 def test_contract_with_perm():
@@ -296,8 +298,7 @@ def test_contract_three_tensor_associativity():
     right = contract(A, contract(B, C))
 
     assert list(left.itags) == list(right.itags)
-    for key in left.data:
-        assert torch.allclose(left.data[key], right.data[key])
+    assert_blocks_equal(left, right)
 
 
 def test_contract_with_identity():
@@ -319,8 +320,7 @@ def test_contract_with_identity():
     direct = contract(A, B)
 
     assert list(bridge.itags) == list(direct.itags)
-    for key in bridge.data:
-        assert torch.allclose(bridge.data[key], direct.data[key])
+    assert_blocks_equal(bridge, direct)
 
 
 def test_contract_after_permuting():
@@ -340,8 +340,7 @@ def test_contract_after_permuting():
     res2 = contract(A, permuted_B)  # Automatic detection
 
     assert list(res1.itags) == list(res2.itags)
-    for key in res1.data:
-        assert torch.allclose(res1.data[key], res2.data[key])
+    assert_blocks_equal(res1, res2)
 
 
 # Edge cases and error handling
@@ -450,8 +449,7 @@ def test_contract_excl_exclude_from_A():
     # Verify equivalence with manual axes
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
-    for key in result.data:
-        assert torch.allclose(result.data[key], manual_result.data[key])
+    assert_blocks_equal(result, manual_result)
 
 
 def test_contract_excl_exclude_from_B():
@@ -478,8 +476,7 @@ def test_contract_excl_exclude_from_B():
     # Verify equivalence with manual axes
     manual_result = contract(A, B, axes=(1, 0))
     assert result.itags == manual_result.itags
-    for key in result.data:
-        assert torch.allclose(result.data[key], manual_result.data[key])
+    assert_blocks_equal(result, manual_result)
 
 
 def test_contract_excl_exclude_from_both():
@@ -526,8 +523,7 @@ def test_contract_excl_empty_exclusion():
     result_auto = contract(A, B)
     
     assert result_excl.itags == result_auto.itags
-    for key in result_excl.data:
-        assert torch.allclose(result_excl.data[key], result_auto.data[key])
+    assert_blocks_equal(result_excl, result_auto)
 
 
 def test_contract_excl_single_contraction():
@@ -578,8 +574,7 @@ def test_contract_axes_single_pair_concise_syntax():
     
     # Both should give same result
     assert result_concise.itags == result_verbose.itags
-    for key in result_concise.data:
-        assert torch.allclose(result_concise.data[key], result_verbose.data[key])
+    assert_blocks_equal(result_concise, result_verbose)
 
 
 def test_contract_axes_concise_with_permutation():
@@ -650,6 +645,646 @@ def test_contract_excl_with_permutation():
     # Result before perm: ["a", "b", "b", "d"], after perm (swap first two): ["b", "a", "b", "d"]
     assert list(result.itags) == ["b", "a", "b", "d"]
     assert_charge_neutral(result)
+
+
+# ProductGroup integration tests for contraction
+
+def test_contract_product_group():
+    """Test contracting two tensors with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    # A: OUT, OUT with charges
+    left_a = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 2),
+        Sector((1, 0), 1),
+    ))
+    right_a = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 1),
+        Sector((0, 1), 2),
+    ))
+    
+    # B: IN, OUT with charges (contract first index with A's second)
+    left_b = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 1),
+        Sector((0, 1), 2),
+    ))
+    right_b = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 0), 1),
+    ))
+    
+    A = Tensor.random([left_a, right_a], seed=42, itags=["a", "mid"])
+    B = Tensor.random([left_b, right_b], seed=43, itags=["mid", "b"])
+    
+    # Contract automatically on matching "mid" tag
+    C = contract(A, B)
+    
+    assert len(C.indices) == 2
+    assert C.itags == ("a", "b")
+    assert_charge_neutral(C)
+
+
+def test_contract_product_group_manual_pairs():
+    """Test manual contraction with ProductGroup."""
+    group = ProductGroup([U1Group(), U1Group()])
+    
+    left = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
+    right = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
+    
+    A = Tensor.random([left, left.dual()], seed=10, itags=["x", "y"])
+    B = Tensor.random([right, right.dual()], seed=11, itags=["x", "z"])
+    
+    # Contract using manual axes
+    C = contract(A, B, axes=(0, 0))
+    
+    assert len(C.indices) == 2  # y and z remain
+    assert C.itags == ("y", "z")
+    assert_charge_neutral(C)
+
+
+def test_contract_produces_scalar():
+    """Test that full contraction produces a scalar."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    
+    A = Tensor.random([idx_out, idx_in], seed=1, itags=["a", "b"])
+    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=2, itags=["b", "a"])
+    
+    # Contract all indices automatically (matching itags with opposite directions)
+    scalar = contract(A, B)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert len(scalar.itags) == 0
+    assert () in scalar.data
+
+
+def test_scalar_result_operations():
+    """Test operations on scalar results from contractions."""
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_out, idx_in], seed=10, itags=["a", "b"])
+    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=20, itags=["b", "a"])
+    
+    # Get two scalars from contractions
+    s1 = contract(A, B)
+    s2 = contract(B, A)
+    
+    # Operations on scalar results
+    s_sum = s1 + s2
+    assert s_sum.is_scalar()
+    
+    s_diff = s1 - s2
+    assert s_diff.is_scalar()
+    
+    s_scaled = s1 * 2.0
+    assert s_scaled.is_scalar()
+
+
+# SU(2) contraction tests
+
+def test_contract_su2_basic_2nd_order():
+    """Test basic SU(2) contraction with 2nd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=100, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=101, itags=["b", "c"])
+    populate_random_weights(A, seed=102)
+    populate_random_weights(B, seed=103)
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) via basic CG coefficients
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 2
+    assert list(C.itags) == ["a", "c"]
+    assert_charge_neutral(C)
+    
+    # Each block has trailing OM dimension for fusion components
+    for key, block in C.data.items():
+        assert block.ndim == 3, f"Block should be 3D with OM dimension, got {block.ndim}D"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_basic_3rd_order():
+    """Test basic SU(2) contraction with 3rd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=110, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d, idx_c.flip()], seed=111, itags=["b", "d", "c"])
+    populate_random_weights(A, seed=112)
+    populate_random_weights(B, seed=113)
+    
+    # A(a*, b, c*) ⊗ B(b*, d, c) → C(a*, d) via double contraction
+    C = contract(A, B, axes=([1, 2], [0, 2]))
+    
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 2
+    assert list(C.itags) == ["a", "d"]
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, f"Block should be 3D with OM dimension"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_basic_5th_order():
+    """Test basic SU(2) contraction with 5th order tensors (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=120, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f, idx_c.flip()], seed=121, itags=["b", "f", "c"])
+    populate_random_weights(A, seed=122)
+    populate_random_weights(B, seed=123)
+    
+    # Contract two pairs: A's (b,c) with B's (b,c)
+    C = contract(A, B, axes=([1, 2], [0, 2]))
+    
+    # Verify result structure
+    assert C.intw is not None, "Result should have intw dictionary for SU(2)"
+    assert len(C.indices) == 4
+    assert list(C.itags) == ["a", "d", "e", "f"]
+    assert_charge_neutral(C)
+    
+    # Check blocks have correct shape for high-order tensor
+    for key, block in C.data.items():
+        assert block.ndim == 5, f"Block should be 5D (4 physical + 1 OM dimension)"
+        assert key in C.intw, "Every block should have a corresponding Bridge"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1], "Number of components should match"
+
+
+def test_contract_su2_with_identity_2nd_order():
+    """Test contracting 2nd order SU(2) tensor with identity (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=200, itags=["a", "b"])
+    populate_random_weights(A, seed=201)
+    
+    # I(a, c*) acts as a relabeling operator: a → c
+    I = identity(idx_a.flip(), itags=["a", "c"])
+    
+    # A(a*, b) ⊗ I(a, c*) → result(b, c*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 2
+    assert list(result.itags) == ["b", "c"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_with_identity_3rd_order():
+    """Test contracting 3rd order SU(2) tensor with identity (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=210, itags=["a", "b", "c"])
+    populate_random_weights(A, seed=211)
+    
+    # I(a, a2*) relabels index a to a2
+    I = identity(idx_a.flip(), itags=["a", "a2"])
+    
+    # A(a*, b, c*) ⊗ I(a, a2*) → result(b, c*, a2*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 3
+    assert list(result.itags) == ["b", "c", "a2"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_with_identity_5th_order():
+    """Test contracting 5th order SU(2) tensor with identity (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=220, itags=["a", "b", "c", "d", "e"])
+    populate_random_weights(A, seed=221)
+    
+    # I(a, a2*) relabels index a to a2
+    I = identity(idx_a.flip(), itags=["a", "a2"])
+    
+    # A(a*, b, c*, d, e*) ⊗ I(a, a2*) → result(b, c*, d, e*, a2*) with ||result|| = ||A||
+    result = contract(A, I)
+    
+    assert len(result.indices) == 5
+    assert list(result.itags) == ["b", "c", "d", "e", "a2"]
+    assert result.intw is not None
+    assert_charge_neutral(result)
+    
+    norm_result = result.norm()
+    norm_A = A.norm()
+    assert math.isclose(norm_result, norm_A, rel_tol=1e-10, abs_tol=1e-12), \
+        f"Norm should be preserved: {norm_result} vs {norm_A}"
+
+
+def test_contract_su2_multiple_sectors_2nd_order():
+    """Test SU(2) contraction with multiple sectors in 2nd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    # Index a has 3 sectors (j=0,1,2), b has 2 sectors (j=0,1)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=300, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=301, itags=["b", "c"])
+    populate_random_weights(A, seed=302)
+    populate_random_weights(B, seed=303)
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with multiple fusion channels
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, "Block should be 3D"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_multiple_sectors_3rd_order():
+    """Test SU(2) contraction with multiple sectors in 3rd order tensors (basic CG)."""
+    group = SU2Group()
+    
+    # Index a has 3 sectors, testing multiple fusion channels
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=310, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d], seed=311, itags=["b", "d"])
+    populate_random_weights(A, seed=312)
+    populate_random_weights(B, seed=313)
+    
+    # A(a*, b, c*) ⊗ B(b*, d) → C(a*, c*, d) with rich sector structure
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 4, "Block should be 4D (3 physical + 1 component)"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_multiple_sectors_5th_order():
+    """Test SU(2) contraction with multiple sectors in 5th order tensors (high-order CG)."""
+    group = SU2Group()
+    
+    # Rich sector structure: a has 3, d has 3, testing complex fusion trees
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 3)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=320, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f], seed=321, itags=["b", "f"])
+    populate_random_weights(A, seed=322)
+    populate_random_weights(B, seed=323)
+    
+    # A(a*, b, c*, d, e*) ⊗ B(b*, f) → C(a*, c*, d, e*, f) with high-order fusion
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 6, "Block should be 6D (5 physical + 1 component)"
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_su2_charge_conservation():
+    """Test that SU(2) contraction respects charge conservation."""
+    group = SU2Group()
+    
+    # Create tensors with specific charges that constrain fusion channels
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 4)))  # j=0, j=2
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 3),))  # j=1 only
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1),))  # j=0 only
+    
+    A = Tensor.random([idx_a, idx_b], seed=400, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=401, itags=["b", "c"])
+    populate_random_weights(A, seed=402)
+    populate_random_weights(B, seed=403)
+    
+    # A(a*, b) ⊗ B(b*, c*) → C(a*, c*) with angular momentum conservation
+    C = contract(A, B, axes=(1, 0))
+    
+    # Angular momentum conservation: j_a + j_b ≥ j_result and |j_a - j_b| ≤ j_result
+    assert_charge_neutral(C)
+
+
+def test_contract_su2_preserves_dtype():
+    """Test that SU(2) contraction preserves dtype correctly."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=500, dtype=torch.float32, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=501, dtype=torch.float32, itags=["b", "a"])
+    populate_random_weights(A, seed=502)
+    populate_random_weights(B, seed=503)
+    
+    C = contract(A, B)
+    
+    # Both blocks and weights should maintain float32
+    assert C.dtype == torch.float32, "Result should maintain float32 dtype"
+    
+    for bridge in C.intw.values() if C.intw else []:
+        assert bridge.weights.dtype == torch.float32
+
+
+def test_contract_su2_promotes_dtype():
+    """Test that SU(2) contraction promotes dtype when mixing float32 and float64."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=600, dtype=torch.float32, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_a.flip()], seed=601, dtype=torch.float64, itags=["b", "a"])
+    populate_random_weights(A, seed=602)
+    populate_random_weights(B, seed=603)
+    
+    C = contract(A, B)
+    
+    assert C.dtype == torch.float64, "Result should be promoted to float64"
+
+
+def test_contract_su2_product_group():
+    """Test SU(2) contraction with ProductGroup (Z2 x SU2)."""
+    z2 = Z2Group()
+    su2 = SU2Group()
+    group = ProductGroup([z2, su2])
+    
+    # Charges are tuples (z2_charge, su2_spin)
+    idx_a = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((1, 1), 2)))
+    
+    A = Tensor.random([idx_a, idx_b], seed=700, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=701, itags=["b", "c"])
+    populate_random_weights(A, seed=702)
+    populate_random_weights(B, seed=703)
+    
+    # Contract b: SU(2) in product group should handle intw correctly
+    C = contract(A, B, axes=(1, 0))
+    
+    assert C.intw is not None, "ProductGroup with SU(2) should have intw"
+    assert_charge_neutral(C)
+    
+    for key, block in C.data.items():
+        assert block.ndim == 3, "Block should be 3D with OM dimension"
+        assert key in C.intw
+
+
+def test_contract_su2_associativity_2nd_order():
+    """Test associativity with 2nd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b], seed=600, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=601, itags=["b", "c"])
+    C = Tensor.random([idx_c.flip(), idx_e], seed=602, itags=["c", "e"])
+    populate_random_weights(A, seed=603)
+    populate_random_weights(B, seed=604)
+    populate_random_weights(C, seed=605)
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(1, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(1, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "e"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert_data_weights_equal(ABC_left, ABC_right)
+
+
+def test_contract_su2_associativity_3rd_order():
+    """Test associativity with 3rd order SU(2) tensors (basic CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=610, itags=["a", "b", "c"])
+    B = Tensor.random([idx_b.flip(), idx_d, idx_e], seed=611, itags=["b", "d", "e"])
+    C = Tensor.random([idx_e.flip(), idx_f], seed=612, itags=["e", "f"])
+    populate_random_weights(A, seed=613)
+    populate_random_weights(B, seed=614)
+    populate_random_weights(C, seed=615)
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(3, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(2, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "c", "d", "f"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert_data_weights_equal(ABC_left, ABC_right)
+
+
+def test_contract_su2_associativity_5th_order():
+    """Test associativity with 5th order SU(2) tensors (high-order CG): (A⊗B)⊗C = A⊗(B⊗C)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_f = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_g = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_h = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    A = Tensor.random([idx_a, idx_b, idx_c, idx_d, idx_e], seed=620, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b.flip(), idx_f, idx_g], seed=621, itags=["b", "f", "g"])
+    C = Tensor.random([idx_f.flip(), idx_h, idx_i], seed=622, itags=["f", "h", "i"])
+    populate_random_weights(A, seed=623)
+    populate_random_weights(B, seed=624)
+    populate_random_weights(C, seed=625)
+    
+    # Compute (A⊗B)⊗C
+    AB = contract(A, B, axes=(1, 0))
+    ABC_left = contract(AB, C, axes=(4, 0))
+    
+    # Compute A⊗(B⊗C)
+    BC = contract(B, C, axes=(1, 0))
+    ABC_right = contract(A, BC, axes=(1, 0))
+    
+    # Both association orders should give identical results
+    assert list(ABC_left.itags) == list(ABC_right.itags) == ["a", "c", "d", "e", "g", "h", "i"]
+    assert_charge_neutral(ABC_left)
+    assert_charge_neutral(ABC_right)
+    
+    assert_data_weights_equal(ABC_left, ABC_right)
+
+
+def test_contract_su2_identity_preserves_norm_2nd_order():
+    """Test that 2nd order SU(2) contraction with identity preserves norm (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    # I(a*, a2*) ⊗ A(a, c*) → result(a2*, c*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_c], seed=800, itags=["a", "c"])
+    populate_random_weights(A, seed=801)
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_identity_preserves_norm_3rd_order():
+    """Test that 3rd order SU(2) contraction with identity preserves norm (basic CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    
+    # I(a*, a2*) ⊗ A(a, b, c*) → result(a2*, b, c*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_b, idx_c], seed=810, itags=["a", "b", "c"])
+    populate_random_weights(A, seed=811)
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_identity_preserves_norm_5th_order():
+    """Test that 5th order SU(2) contraction with identity preserves norm (high-order CG)."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # I(a*, a2*) ⊗ A(a, b, c*, d, e*) → result(a2*, b, c*, d, e*) with ||result|| = ||A||
+    I = identity(idx_a, itags=["a", "a2"])
+    A = Tensor.random([idx_a.flip(), idx_b, idx_c, idx_d, idx_e], seed=820, itags=["a", "b", "c", "d", "e"])
+    populate_random_weights(A, seed=821)
+    
+    result = contract(I, A)
+    
+    assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12), \
+        f"Identity contraction should preserve norm: {result.norm()} vs {A.norm()}"
+    assert_charge_neutral(result)
+
+
+def test_contract_su2_automatic_detection():
+    """Test automatic contraction pair detection for SU(2) tensors."""
+    group = SU2Group()
+    
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b_out = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_c_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    idx_c_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_b_in = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+    
+    # A(a*, b*, c*) and B(c, b, d) share itags "b" and "c"
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out], seed=900, itags=["a", "b", "c"])
+    B = Tensor.random([idx_c_in, idx_b_in, idx_d], seed=901, itags=["c", "b", "d"])
+    populate_random_weights(A, seed=902)
+    populate_random_weights(B, seed=903)
+    
+    # Automatic detection should find matching itags (b, c) and contract them
+    result = contract(A, B)
+    
+    assert list(result.itags) == ["a", "d"]
+    assert_charge_neutral(result)
+    assert result.intw is not None
 
 
 # Trace tests
@@ -880,6 +1515,171 @@ def test_trace_exclusion_multiple():
     assert traced.indices == (idx_a, idx_b, idx_c, idx_d)
 
 
+def test_trace_raises_with_both_axes_and_excl():
+    """Test that trace raises error when both axes and excl are specified."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
+    
+    with pytest.raises(ValueError, match="Cannot specify both"):
+        trace(tensor, axes=(0, 1), excl=0)
+
+
+def test_trace_raises_same_direction_manual_axes():
+    """Test that trace raises ValueError when manually specified axes share the same direction.
+
+    Previously, same-direction pairs were silently skipped in block iteration,
+    producing an empty tensor instead of signalling the error. Now an explicit
+    ValueError must be raised upfront.
+    """
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    # Two OUT indices — cannot be a valid trace pair
+    tensor = Tensor.random([idx_out, idx_out, idx_out.flip()], seed=7, itags=["a", "a", "b"])
+
+    with pytest.raises(ValueError, match="same direction"):
+        trace(tensor, axes=(0, 1))
+
+
+def test_trace_product_group():
+    """Test trace operation with ProductGroup and verify numeric correctness."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    
+    left = Index(Direction.OUT, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
+    ))
+    right = Index(Direction.IN, group, sectors=(
+        Sector((0, 0), 3),
+        Sector((1, 1), 2),
+        Sector((-1, 1), 1),
+        Sector((2, 0), 2),
+    ))
+    
+    T = Tensor.random([left, right], seed=99, itags=["x", "x"])
+    
+    # Trace over both indices (automatic mode)
+    result = trace(T)
+    
+    assert result.is_scalar()
+    assert len(result.indices) == 0
+    assert_charge_neutral(result)
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (ql, qr), block in T.data.items():
+        if ql == qr:
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
+    
+    assert math.isclose(result.item(), manual_scalar.item())
+
+
+
+def test_trace_produces_scalar():
+    """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
+    ))
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["x", "x"])
+    
+    # Trace all indices (automatic mode)
+    scalar = trace(tensor)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    assert len(scalar.itags) == 0
+    assert () in scalar.data
+    
+    # Verify it's a valid scalar value
+    value = scalar.item()
+    assert isinstance(value, (int, float, complex))
+    
+    # Verify numeric correctness
+    manual_scalar = 0.0
+    for (qa, qb), block in tensor.data.items():
+        if qa == qb:
+            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
+    
+    assert math.isclose(value, manual_scalar.item())
+
+
+def test_trace_multiple_pairs_produces_scalar():
+    """Test that tracing multiple pairs can produce a scalar with numeric verification."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_b = Index(Direction.IN, group, sectors=(
+        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
+    ))
+    idx_c = Index(Direction.OUT, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    idx_d = Index(Direction.IN, group, sectors=(
+        Sector(0, 2), Sector(1, 1), Sector(2, 2)
+    ))
+    
+    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
+    
+    # Trace all pairs (automatic mode)
+    scalar = trace(tensor)
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+    
+    # Verify by contracting with identity tensors (sequential)
+    # For identical tags, automatic contraction works correctly
+    id_x = identity(idx_a, itags=("x", "x"))
+    contracted_x = contract(tensor, id_x)
+    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
+    contracted_both = contract(contracted_x, id_y)
+    
+    # Also verify with multi-pair trace
+    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
+    
+    # All three methods should match: automatic trace, identity contraction, and multi-pair trace
+    assert math.isclose(scalar.item(), traced_multi.item())
+    assert math.isclose(scalar.item(), contracted_both.item())
+
+
+def test_trace_ambiguous_raises():
+    """Test that ambiguous automatic pairing raises an error."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    # Create tensor with 3 indices with same tag "x": 2 OUT, 1 IN
+    # This is ambiguous: which OUT should pair with the IN?
+    tensor = Tensor.random([idx, idx, idx.flip()], seed=42, itags=["x", "x", "x"])
+    
+    with pytest.raises(ValueError, match="Ambiguous automatic trace"):
+        trace(tensor)
+
+
+def test_trace_manual_pair_syntax():
+    """Test trace with single pair using tuple syntax."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
+    
+    # Trace using single pair tuple syntax
+    scalar = trace(tensor, axes=(0, 1))
+    
+    assert scalar.is_scalar()
+    assert len(scalar.indices) == 0
+
+
+# Contract/trace consistency tests
+
 def test_contract_trace_consistency_high_order():
     """Test consistency: direct 3-index contraction vs 2-index contraction + trace.
     
@@ -936,264 +1736,152 @@ def test_contract_trace_consistency_high_order():
     assert_charge_neutral(traced_result)
     
     # Verify both methods give identical results
-    # Compare block keys
-    assert set(direct_result.data.keys()) == set(traced_result.data.keys()), \
-        f"Block keys mismatch: direct has {set(direct_result.data.keys())}, traced has {set(traced_result.data.keys())}"
-    
-    # Compare block values
-    for key in direct_result.data.keys():
-        # err_msg not supported in PyTorch
-        assert torch.allclose(
-            direct_result.data[key], 
-            traced_result.data[key], 
-            rtol=1e-10, 
-            atol=1e-12
-        ), f"Block {key} values differ between direct and traced methods"
-    
-    # Also verify norms match
-    assert abs(direct_result.norm() - traced_result.norm()) < 1e-10
+    assert_blocks_equal(direct_result, traced_result)
 
 
-def test_trace_raises_with_both_axes_and_excl():
-    """Test that trace raises error when both axes and excl are specified."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    tensor = Tensor.random([idx, idx.flip()], seed=1, itags=["a", "b"])
-    
-    with pytest.raises(ValueError, match="Cannot specify both"):
-        trace(tensor, axes=(0, 1), excl=0)
+# ── SU(2) trace tests ─────────────────────────────────────────────────────────
+
+def test_trace_su2_basic():
+    """Test that tracing a pair of SU(2) indices returns a tensor with correct structure."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2), Sector(2, 3))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8001, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=8001)
+
+    # Trace over the matching pair (a, b)
+    result = trace(T, axes=[(0, 1)])
+
+    assert len(result.indices) == 2
+    assert result.intw is not None
+    assert_charge_neutral(result)
+
+    # The trace is equivalent to contracting T with the reversed identity on the traced indices.
+    # idx_a.flip() gives the IN direction, so identity(idx_a.flip()) has edges (IN, OUT),
+    # which pair with T's (OUT, IN) in an opposite-direction contraction.
+    I_ab = identity(idx_a.flip(), itags=["a", "b"])
+    expected = contract(I_ab, T, axes=([0, 1], [0, 1]))
+
+    assert_physical_tensors_equal(result, expected)
 
 
-# ProductGroup integration tests for contraction
+def test_trace_su2_produces_scalar():
+    """Test that tracing all SU(2) indices produces a correct scalar."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
 
-def test_contract_product_group():
-    """Test contracting two tensors with ProductGroup."""
-    group = ProductGroup([U1Group(), U1Group()])
-    
-    # A: OUT, OUT with charges
-    left_a = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 2),
-        Sector((1, 0), 1),
-    ))
-    right_a = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 1),
-        Sector((0, 1), 2),
-    ))
-    
-    # B: IN, OUT with charges (contract first index with A's second)
-    left_b = Index(Direction.IN, group, sectors=(
-        Sector((0, 0), 1),
-        Sector((0, 1), 2),
-    ))
-    right_b = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 3),
-        Sector((1, 0), 1),
-    ))
-    
-    A = Tensor.random([left_a, right_a], seed=42, itags=["a", "mid"])
-    B = Tensor.random([left_b, right_b], seed=43, itags=["mid", "b"])
-    
-    # Contract automatically on matching "mid" tag
-    C = contract(A, B)
-    
-    assert len(C.indices) == 2
-    assert C.itags == ("a", "b")
-    assert_charge_neutral(C)
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
 
+    T = Tensor.random([idx_a, idx_b], seed=8002, itags=["a", "a"])
+    populate_random_weights(T, seed=8002)
 
-def test_contract_product_group_manual_pairs():
-    """Test manual contraction with ProductGroup."""
-    group = ProductGroup([U1Group(), U1Group()])
-    
-    left = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
-    right = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, -1), 1)))
-    
-    A = Tensor.random([left, left.dual()], seed=10, itags=["x", "y"])
-    B = Tensor.random([right, right.dual()], seed=11, itags=["x", "z"])
-    
-    # Contract using manual axes
-    C = contract(A, B, axes=(0, 0))
-    
-    assert len(C.indices) == 2  # y and z remain
-    assert C.itags == ("y", "z")
-    assert_charge_neutral(C)
-
-
-def test_trace_product_group():
-    """Test trace operation with ProductGroup and verify numeric correctness."""
-    group = ProductGroup([U1Group(), Z2Group()])
-    
-    left = Index(Direction.OUT, group, sectors=(
-        Sector((0, 0), 3),
-        Sector((1, 1), 2),
-        Sector((-1, 1), 1),
-        Sector((2, 0), 2),
-    ))
-    right = Index(Direction.IN, group, sectors=(
-        Sector((0, 0), 3),
-        Sector((1, 1), 2),
-        Sector((-1, 1), 1),
-        Sector((2, 0), 2),
-    ))
-    
-    T = Tensor.random([left, right], seed=99, itags=["x", "x"])
-    
-    # Trace over both indices (automatic mode)
     result = trace(T)
-    
+
     assert result.is_scalar()
     assert len(result.indices) == 0
-    assert_charge_neutral(result)
-    
-    # Verify numeric correctness
-    manual_scalar = 0.0
-    for (ql, qr), block in T.data.items():
-        if ql == qr:
-            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
-    
-    assert math.isclose(result.item(), manual_scalar.item())
+
+    # Must match contracting T with the reversed identity (IN, OUT edges pair with T's OUT, IN).
+    I = identity(idx_a.flip(), itags=["a", "a"])
+    expected = contract(I, T, axes=([0, 1], [0, 1]))
+
+    assert math.isclose(result.item(), expected.item(), rel_tol=1e-10, abs_tol=1e-12)
 
 
-# Scalar result tests
+def test_trace_su2_4th_order_produces_scalar():
+    """Test that tracing both pairs of a 4th-order SU(2) tensor produces a correct scalar."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
 
-def test_trace_produces_scalar():
-    """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1), Sector(2, 2)
-    ))
-    
-    tensor = Tensor.random([idx_a, idx_b], seed=30, itags=["x", "x"])
-    
-    # Trace all indices (automatic mode)
-    scalar = trace(tensor)
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
-    assert len(scalar.itags) == 0
-    assert () in scalar.data
-    
-    # Verify it's a valid scalar value
-    value = scalar.item()
-    assert isinstance(value, (int, float, complex))
-    
-    # Verify numeric correctness
-    manual_scalar = 0.0
-    for (qa, qb), block in tensor.data.items():
-        if qa == qb:
-            manual_scalar += torch.diagonal(block).sum(dim=-1) if block.ndim > 2 else torch.diagonal(block).sum()
-    
-    assert math.isclose(value, manual_scalar.item())
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8005, itags=["a", "a", "c", "c"])
+    populate_random_weights(T, seed=8005)
+
+    result = trace(T)
+
+    assert result.is_scalar()
+    assert len(result.indices) == 0
+
+    # Must match contracting T with reversed identities on both traced pairs.
+    I_a = identity(idx_a.flip(), itags=["a", "a"])
+    I_c = identity(idx_c.flip(), itags=["c", "c"])
+    expected = contract(contract(I_a, T, axes=([0, 1], [0, 1])), I_c, axes=([0, 1], [0, 1]))
+
+    assert math.isclose(result.item(), expected.item(), rel_tol=1e-10, abs_tol=1e-12)
 
 
-def test_contract_produces_scalar():
-    """Test that full contraction produces a scalar."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    
-    A = Tensor.random([idx_out, idx_in], seed=1, itags=["a", "b"])
-    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=2, itags=["b", "a"])
-    
-    # Contract all indices automatically (matching itags with opposite directions)
-    scalar = contract(A, B)
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
-    assert len(scalar.itags) == 0
-    assert () in scalar.data
+def test_trace_su2_explicit_multi_pair():
+    """Test SU(2) explicit multi-pair trace and verify order independence."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
+
+    idx_a = Index(Direction.OUT, group, sectors=sectors)
+    idx_b = Index(Direction.IN,  group, sectors=sectors)
+    idx_c = Index(Direction.OUT, group, sectors=sectors)
+    idx_d = Index(Direction.IN,  group, sectors=sectors)
+
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=8006, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=8006)
+
+    # Multi-pair trace with explicit axes
+    traced_multi = trace(T, axes=[(0, 1), (2, 3)])
+    assert traced_multi.is_scalar()
+
+    # Sequential trace: first (0, 1), then (0, 1) [c, d shift to positions 0, 1]
+    traced_seq1 = trace(trace(T, axes=(0, 1)), axes=(0, 1))
+    assert traced_seq1.is_scalar()
+
+    # Sequential trace in different order: first (2, 3), then (0, 1) [a, b shift to positions 0, 1]
+    traced_seq2 = trace(trace(T, axes=(2, 3)), axes=(0, 1))
+    assert traced_seq2.is_scalar()
+
+    # All three methods must give the same scalar
+    assert math.isclose(traced_multi.item(), traced_seq1.item(), rel_tol=1e-10, abs_tol=1e-12)
+    assert math.isclose(traced_multi.item(), traced_seq2.item(), rel_tol=1e-10, abs_tol=1e-12)
 
 
-def test_trace_multiple_pairs_produces_scalar():
-    """Test that tracing multiple pairs can produce a scalar with numeric verification."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_b = Index(Direction.IN, group, sectors=(
-        Sector(0, 3), Sector(1, 2), Sector(-1, 1)
-    ))
-    idx_c = Index(Direction.OUT, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    idx_d = Index(Direction.IN, group, sectors=(
-        Sector(0, 2), Sector(1, 1), Sector(2, 2)
-    ))
-    
-    tensor = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=601, itags=["x", "x", "y", "y"])
-    
-    # Trace all pairs (automatic mode)
-    scalar = trace(tensor)
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
-    
-    # Verify by contracting with identity tensors (sequential)
-    # For identical tags, automatic contraction works correctly
-    id_x = identity(idx_a, itags=("x", "x"))
-    contracted_x = contract(tensor, id_x)
-    id_y = identity(contracted_x.indices[0], itags=("y", "y"))
-    contracted_both = contract(contracted_x, id_y)
-    
-    # Also verify with multi-pair trace
-    traced_multi = trace(tensor, axes=[(0, 1), (2, 3)])
-    
-    # All three methods should match: automatic trace, identity contraction, and multi-pair trace
-    assert math.isclose(scalar.item(), traced_multi.item())
-    assert math.isclose(scalar.item(), contracted_both.item())
+def test_trace_su2_consistency_with_contract():
+    """Test SU(2): contracting 3 indices at once equals contracting 2 then tracing 1."""
+    group = SU2Group()
+    sectors = (Sector(0, 1), Sector(1, 2))
 
+    idx_b_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_c_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_d_out = Index(Direction.OUT, group, sectors=sectors)
+    idx_a    = Index(Direction.OUT, group, sectors=sectors)
+    idx_e    = Index(Direction.IN,  group, sectors=sectors)
 
-def test_trace_ambiguous_raises():
-    """Test that ambiguous automatic pairing raises an error."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    
-    # Create tensor with 3 indices with same tag "x": 2 OUT, 1 IN
-    # This is ambiguous: which OUT should pair with the IN?
-    tensor = Tensor.random([idx, idx, idx.flip()], seed=42, itags=["x", "x", "x"])
-    
-    with pytest.raises(ValueError, match="Ambiguous automatic trace"):
-        trace(tensor)
+    idx_b_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_c_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_d_in = Index(Direction.IN,  group, sectors=sectors)
+    idx_f    = Index(Direction.OUT, group, sectors=sectors)
+    idx_g    = Index(Direction.IN,  group, sectors=sectors)
 
+    A = Tensor.random([idx_a, idx_b_out, idx_c_out, idx_d_out, idx_e],
+                      seed=8003, itags=["a", "b", "c", "d", "e"])
+    B = Tensor.random([idx_b_in, idx_c_in, idx_d_in, idx_f, idx_g],
+                      seed=8004, itags=["b", "c", "d", "f", "g"])
+    populate_random_weights(A, seed=8003)
+    populate_random_weights(B, seed=8004)
 
-def test_scalar_result_operations():
-    """Test operations on scalar results from contractions."""
-    group = U1Group()
-    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_in = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    
-    A = Tensor.random([idx_out, idx_in], seed=10, itags=["a", "b"])
-    B = Tensor.random([idx_in.flip(), idx_out.flip()], seed=20, itags=["b", "a"])
-    
-    # Get two scalars from contractions
-    s1 = contract(A, B)
-    s2 = contract(B, A)
-    
-    # Operations on scalar results
-    s_sum = s1 + s2
-    assert s_sum.is_scalar()
-    
-    s_diff = s1 - s2
-    assert s_diff.is_scalar()
-    
-    s_scaled = s1 * 2.0
-    assert s_scaled.is_scalar()
+    # Method 1: contract all 3 pairs at once
+    direct = contract(A, B, axes=([1, 2, 3], [0, 1, 2]))
 
+    # Method 2: contract 2, then trace the third
+    partial = contract(A, B, axes=([1, 2], [0, 1]))
+    # After contracting A's [b,c] with B's [b,c], the result has [a, d_out, e, d_in, f, g]
+    # d_out is at position 1 (OUT), d_in is at position 3 (IN)
+    traced  = trace(partial, axes=[(1, 3)])
 
-def test_trace_manual_pair_syntax():
-    """Test trace with single pair using tuple syntax."""
-    group = U1Group()
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
-    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2),))
-    
-    tensor = Tensor.random([idx_a, idx_b], seed=31, itags=["a", "b"])
-    
-    # Trace using single pair tuple syntax
-    scalar = trace(tensor, axes=(0, 1))
-    
-    assert scalar.is_scalar()
-    assert len(scalar.indices) == 0
+    assert set(direct.data.keys()) == set(traced.data.keys())
+    assert_physical_tensors_equal(direct, traced)
 

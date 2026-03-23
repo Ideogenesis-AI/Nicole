@@ -23,8 +23,9 @@ import torch
 
 from .index import Index, Direction, Sector
 from .tensor import Tensor
-from .symmetry import U1Group, Z2Group
+from .symmetry import U1Group, Z2Group, SU2Group
 from .symmetry import ProductGroup
+from .symmetry import delegate as dg
 
 
 def load_space(
@@ -42,9 +43,12 @@ def load_space(
     preserv : str
         Symmetry to preserve:
         - "U1" for U(1) charge conservation
+        - "SU2" for full SU(2) spin rotation (Spin only)
         - "Z2" for Z2 parity
         - "Z2,U1" for Z2 parity + U1 spin (Band only)
         - "U1,U1" for U1 particle number + U1 spin (Band only)
+        - "U1,SU2" for U1 particle number + full SU(2) spin (Band only)
+        - "Z2,SU2" for Z2 parity + full SU(2) spin (Band only)
     option : dict, optional
         Additional options specific to the system:
         - For "Spin": {"J": float} where J is the total spin (half-integer)
@@ -57,23 +61,47 @@ def load_space(
         Physical space index containing all sectors of the local Hilbert space
     Op : dict[str, Tensor | Index]
         Dictionary of operators and indices.
-        For spin systems: {"Sp", "Sm", "Sz", "vac"}
-        - Sz: 2-index tensor (OUT, IN) - charge neutral
-        - Sp: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
-        - Sm: 3-index tensor (OUT, IN, auxiliary) - charge neutral with auxiliary index
-        - vac: Index representing trivial vacuum space with charge 0
-        For spinless fermion systems: {"F", "Z", "vac"}
-        - F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
-        - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral
-        - vac: Index representing trivial vacuum space with charge 0
-        For spinful fermion (Band) systems: {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
-        - F_up: 3-index tensor (IN, OUT, auxiliary) - spin-up annihilation operator
-        - F_dn: 3-index tensor (IN, OUT, auxiliary) - spin-down annihilation operator
-        - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string
-        - Sz: 2-index tensor (IN, OUT) - spin z-component
-        - Sp: 3-index tensor (IN, OUT, auxiliary) - spin raising operator
-        - Sm: 3-index tensor (IN, OUT, auxiliary) - spin lowering operator
-        - vac: Index representing trivial vacuum space
+
+    Description
+    -----------
+    For spin systems with U(1): {"Sp", "Sm", "Sz", "vac"}
+    - Sz: 2-index tensor (IN, OUT) - charge neutral
+    - Sp: 3-index tensor (IN, OUT, auxiliary) - charge neutral with auxiliary index
+    - Sm: 3-index tensor (IN, OUT, auxiliary) - charge neutral with auxiliary index
+    - vac: Index representing trivial vacuum space with charge 0
+
+    For spin systems with SU(2): {"S", "vac"}
+    - S: 3-index tensor (IN, OUT, auxiliary) - rank-1 spherical tensor (spin operator)
+        Stores the reduced matrix element split as:
+        data block = sqrt(J(J+1)), Bridge weight = sqrt(2J+1)
+    - vac: Index representing trivial vacuum space with charge 0
+
+    For spinless fermion systems: {"F", "Z", "vac"}
+    - F: 3-index tensor (IN, OUT, auxiliary) - annihilation operator, charge neutral
+    - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string, charge neutral
+    - vac: Index representing trivial vacuum space with charge 0
+
+    For spinful fermion (Band) systems with U(1)xU(1) or Z2xU(1):
+        {"F_up", "F_dn", "Z", "Sz", "Sp", "Sm", "vac"}
+    - F_up: 3-index tensor (IN, OUT, auxiliary) - spin-up annihilation operator
+    - F_dn: 3-index tensor (IN, OUT, auxiliary) - spin-down annihilation operator
+    - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string
+    - Sz: 2-index tensor (IN, OUT) - spin z-component
+    - Sp: 3-index tensor (IN, OUT, auxiliary) - spin raising operator
+    - Sm: 3-index tensor (IN, OUT, auxiliary) - spin lowering operator
+    - vac: Index representing trivial vacuum space
+
+    For spinful fermion (Band) systems with U(1)xSU(2) or Z2xSU(2): {"F", "Z", "S", "vac"}
+    - F: 3-index tensor (IN, OUT, auxiliary) - rank-1/2 fermionic annihilation operator
+        Stores the reduced matrix element split as:
+        data block = 1.0, Bridge weight = sqrt(2)
+        Full RME: ⟨j'||F||j⟩ = sqrt(2) for all transitions
+    - Z: 2-index tensor (IN, OUT) - Jordan-Wigner string (scalar, rank-0)
+    - S: 3-index tensor (IN, OUT, auxiliary) - rank-1 spin tensor
+        Stores the reduced matrix element split as:
+        data block = sqrt(3/4), Bridge weight = sqrt(2)
+        Full RME: ⟨J=1/2||T^1||J=1/2⟩ = sqrt(3/2)
+    - vac: Index representing trivial vacuum space
     
     Raises
     ------
@@ -94,6 +122,15 @@ def load_space(
     >>> Spc.dim  # 3 states: m_z = -1, 0, +1
     3
     
+    >>> # Create spin-1/2 system with full SU(2) symmetry
+    >>> Spc, Op = load_space("Spin", "SU2", {"J": 0.5})
+    >>> Spc.dim       # 1 multiplet (multiplicity space)
+    1
+    >>> Spc.num_states  # 2 physical states: m_z = ±1/2
+    2
+    >>> list(Op.keys())
+    ['S', 'vac']
+    
     >>> # Create spinless fermion system with U(1) symmetry
     >>> Spc, Op = load_space("Ferm", "U1")
     >>> Spc.dim  # 2 states: |0⟩, |1⟩
@@ -107,6 +144,15 @@ def load_space(
     4
     >>> list(Op.keys())
     ['F_up', 'F_dn', 'Z', 'Sz', 'Sp', 'Sm', 'vac']
+    
+    >>> # Create spinful fermion system with U(1)xSU(2) symmetry
+    >>> Spc, Op = load_space("Band", "U1,SU2")
+    >>> Spc.dim       # 3 multiplets: |0⟩, {|↑⟩,|↓⟩}, |↑↓⟩
+    3
+    >>> Spc.num_states  # 4 physical states
+    4
+    >>> list(Op.keys())
+    ['F', 'Z', 'S', 'vac']
     """
     if option is None:
         option = {}
@@ -127,7 +173,7 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Parameters
     ----------
     preserv : str
-        Symmetry to preserve
+        Symmetry to preserve: "U1" or "SU2"
     option : dict
         Options including "J" (total spin)
     
@@ -136,11 +182,18 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Spc : Index
         Physical space index for spin
     Op : dict[str, Tensor | Index]
-        Spin operators and indices {Sp, Sm, Sz, vac}
+        Spin operators and indices
     """
-    if preserv != "U1":
-        raise ValueError(f"Unsupported symmetry '{preserv}' for Spin. Currently only 'U1' is implemented.")
-    
+    if preserv == "U1":
+        return _load_spin_u1(option)
+    elif preserv == "SU2":
+        return _load_spin_su2(option)
+    else:
+        raise ValueError(f"Unsupported symmetry '{preserv}' for Spin. Supported: 'U1', 'SU2'.")
+
+
+def _validate_spin_J(option: Dict[str, Any]) -> float:
+    """Validate and return J from option dict. Shared by U1 and SU2 spin loaders."""
     if "J" not in option:
         raise ValueError("Option 'J' (total spin) is required for Spin systems.")
     
@@ -153,7 +206,26 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         raise ValueError(f"J must be non-negative, got {J}")
     if not (2 * float(J)).is_integer():
         raise ValueError(f"J must be a half-integer (0, 0.5, 1, 1.5, ...), got {J}")
+    return float(J)
+
+
+def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spin space and operators with U(1) symmetry.
     
+    Parameters
+    ----------
+    option : dict
+        Options including "J" (total spin)
+    
+    Returns
+    -------
+    Spc : Index
+        Physical space index for spin (2J+1 sectors, one per m_z value)
+    Op : dict[str, Tensor | Index]
+        Spin operators and indices {Sp, Sm, Sz, vac}
+    """
+    J = _validate_spin_J(option)
+
     # Create physical space index
     # For spin-J system: m_z ranges from -J to J in steps of 1
     # Each m_z value is a separate sector with dimension 1
@@ -278,6 +350,94 @@ def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     )
     Op["vac"] = vac_index
     
+    return Spc, Op
+
+
+def _load_spin_su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spin space and operators with full SU(2) symmetry.
+
+    Under SU(2) the full spin-J multiplet forms a single irreducible sector.
+    Operators are stored as reduced matrix elements (Wigner-Eckart theorem);
+    the full matrix element is recovered externally via Clebsch-Gordan coefficients.
+
+    The reduced matrix element of the rank-1 spherical tensor T^1 is split as:
+        ⟨J||T^1||J⟩ = sqrt(J(J+1)(2J+1))
+                     = sqrt(J(J+1))        [stored in data block]
+                       × sqrt(2J+1)        [stored in Bridge weight]
+
+    Parameters
+    ----------
+    option : dict
+        Options including "J" (total spin)
+
+    Returns
+    -------
+    Spc : Index
+        Physical space index: one sector (charge=2J, dim=1); Spc.num_states = 2J+1
+    Op : dict[str, Tensor | Index]
+        {"S": rank-1 spin tensor, "vac": vacuum Index}
+    """
+    J = _validate_spin_J(option)
+    two_J = int(round(2 * J))
+
+    group = SU2Group()
+
+    # Physical space: single irrep labeled by 2J, multiplicity 1.
+    # Spc.dim = 1 (one multiplet), Spc.num_states = 2J+1 (physical states).
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=two_J, dim=1),)
+    )
+
+    # Auxiliary index carrying the rank-1 (spin-1) tensor character.
+    aux_S = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=2, dim=1),)
+    )
+
+    directions = [Direction.IN, Direction.OUT, Direction.OUT]
+
+    S_data: Dict = {}
+    S_intw: Dict = {}
+
+    if J > 0:
+        # Charge conservation forbids the block (0, 0, 2) for J=0, since
+        # fuse_channels(0, 0, 2) = (2,) which does not contain neutral 0.
+        key = (two_J, two_J, 2)
+
+        # Bridge weight = sqrt(2J+1); data value = sqrt(J(J+1)).
+        # Together: full RME = sqrt(J(J+1)) * sqrt(2J+1) = sqrt(J(J+1)(2J+1)).
+        bridge_weights = torch.sqrt(torch.tensor(
+            [[2 * J + 1]], dtype=torch.float64
+        ))
+        S_intw[key] = dg.Bridge.from_block(
+            group, key, directions, weights=bridge_weights, dtype=torch.float64
+        )
+
+        # Block shape: (dim_out, dim_in, dim_aux, num_components) = (1, 1, 1, 1).
+        S_data[key] = torch.sqrt(torch.tensor(
+            [[[[J * (J + 1)]]]], dtype=torch.float64
+        ))
+
+    Op: Dict = {}
+    Op["S"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_S),
+        itags=("_init_", "_init_", "_aux_"),
+        data=S_data,
+        intw=S_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=0, dim=1),)
+    )
+    Op["vac"] = vac_index
+
     return Spc, Op
 
 
@@ -469,7 +629,7 @@ def _load_band_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Parameters
     ----------
     preserv : str
-        Symmetry to preserve: "U1,U1" or "Z2,U1"
+        Symmetry to preserve: "U1,U1", "Z2,U1", "U1,SU2", or "Z2,SU2"
     option : dict
         Options (none required for Band systems)
     
@@ -478,7 +638,7 @@ def _load_band_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
     Spc : Index
         Physical space index for spinful fermion (4 states: empty, up, down, doubly occupied)
     Op : dict[str, Tensor | Index]
-        Fermionic and spin operators {F_up, F_dn, Z, Sz, Sp, Sm, vac}
+        Fermionic and spin operators
     """
     # Normalize: remove spaces for comparison
     preserv_normalized = preserv.replace(" ", "")
@@ -487,8 +647,15 @@ def _load_band_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[
         return _load_band_u1u1(option)
     elif preserv_normalized == "Z2,U1":
         return _load_band_z2u1(option)
+    elif preserv_normalized == "U1,SU2":
+        return _load_band_u1su2(option)
+    elif preserv_normalized == "Z2,SU2":
+        return _load_band_z2su2(option)
     else:
-        raise ValueError(f"Unsupported symmetry '{preserv}' for Band. Supported: 'U1, U1', 'Z2, U1'.")
+        raise ValueError(
+            f"Unsupported symmetry '{preserv}' for Band. "
+            f"Supported: 'U1,U1', 'Z2,U1', 'U1,SU2', 'Z2,SU2'."
+        )
 
 
 def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
@@ -601,7 +768,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["Sz"].trim_zero_sectors()
+    Op["Sz"].trim_zero_blocks()
     
     # Build Sp operator (spin raising: |↓⟩ → |↑⟩)
     # (0,1) = (0,-1) + q_aux → q_aux = (0, 2)
@@ -764,7 +931,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["Sz"].trim_zero_sectors()
+    Op["Sz"].trim_zero_blocks()
     
     # Build Sp operator (|↓⟩ → |↑⟩)
     # Following spherical tensor convention (consistent with Spin preset)
@@ -818,4 +985,320 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     )
     Op["vac"] = vac_index
     
+    return Spc, Op
+
+
+def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinful fermion space with U(1)xSU(2) symmetry (particle number, full spin).
+
+    Under U(1)xSU(2) the spin-1/2 doublet {|↑⟩, |↓⟩} forms one irreducible
+    sector, so the four physical states collapse to three symmetry sectors.
+    Operators carrying spin are stored as reduced matrix elements (Wigner-Eckart
+    theorem); full matrix elements are recovered externally via Clebsch-Gordan
+    coefficients.
+
+    States and sectors (U1 charge = particle number offset by -1, SU2 label = 2j):
+    - |0⟩:       charge = (-1, 0), dim = 1, irrep_dim = 1
+    - {|↑⟩,|↓⟩}: charge = ( 0, 1), dim = 1, irrep_dim = 2
+    - |↑↓⟩:      charge = (+1, 0), dim = 1, irrep_dim = 1
+
+    Spc.dim = 3 (three multiplets), Spc.num_states = 4 (physical states).
+    """
+    group = ProductGroup([U1Group(), SU2Group()])
+
+    # Physical space: three sectors
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=(-1, 0), dim=1),   # |0⟩: U1 = -1, SU2 singlet
+            Sector(charge=(0, 1), dim=1),    # {|↑⟩,|↓⟩}: U1 = 0, SU2 doublet
+            Sector(charge=(1, 0), dim=1),    # |↑↓⟩: U1 = +1, SU2 singlet
+        )
+    )
+
+    Op = {}
+
+    # ------------------------------------------------------------------ F ---
+    # F (fermionic annihilation): removes one particle and carries spin-1/2.
+    # Rank-1/2 tensor: transforms as SU(2) doublet with U1 charge = -1.
+    # Auxiliary index: charge = (-1, 1) = (U1=-1, SU2=spin-1/2).
+    #
+    # Non-zero blocks (charge_out + charge_aux = charge_in, in OUT convention):
+    #   (-1, 0) + (-1, 1) fused channels contain (0, 1) ✓  → block ((-1,0), (0,1), (-1,1))
+    #   ( 0, 1) + (-1, 1) fused channels contain (1, 0) ✓  → block (( 0,1), (1,0), (-1,1))
+    #
+    # RME = sqrt(2), split as: data = 1.0, Bridge weight = sqrt(2).
+    aux_F = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(-1, 1), dim=1),)
+    )
+
+    F_directions = [Direction.IN, Direction.OUT, Direction.OUT]
+    F_data = {}
+    F_intw = {}
+
+    # Block: out=(-1,0), in=(0,1), aux=(-1,1)
+    k_F1 = ((-1, 0), (0, 1), (-1, 1))
+    F_intw[k_F1] = dg.Bridge.from_block(
+        group, k_F1, F_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    F_data[k_F1] = torch.ones((1, 1, 1, 1), dtype=torch.float64)
+
+    # Block: out=(0,1), in=(1,0), aux=(-1,1)
+    k_F2 = ((0, 1), (1, 0), (-1, 1))
+    F_intw[k_F2] = dg.Bridge.from_block(
+        group, k_F2, F_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    F_data[k_F2] = torch.ones((1, 1, 1, 1), dtype=torch.float64)
+
+    Op["F"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_data,
+        intw=F_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # ------------------------------------------------------------------ Z ---
+    # Z (Jordan-Wigner string): scalar operator, no spin auxiliary index.
+    # Z|0⟩ = +|0⟩,  Z|↑⟩ = -|↑⟩,  Z|↓⟩ = -|↓⟩,  Z|↑↓⟩ = +|↑↓⟩.
+    # For a scalar (rank-0) operator with non-Abelian SU(2), the block shape
+    # gains a trailing num_components = 1 dimension: (dim_out, dim_in, 1).
+    Z_directions = [Direction.IN, Direction.OUT]
+    Z_data = {}
+    Z_intw = {}
+
+    for q, val in [((-1, 0), 1.0), ((0, 1), -1.0), ((1, 0), 1.0)]:
+        key = (q, q)
+        # weights = sqrt(irrep_dim) = sqrt(2j+1) for the SU(2) part of the sector.
+        # Singlet sectors (2j=0) get weight 1; the doublet (2j=1) gets sqrt(2).
+        irrep_dim = group.irrep_dim(q)
+        Z_intw[key] = dg.Bridge.from_block(
+            group, key, Z_directions,
+            weights=torch.sqrt(torch.tensor([[irrep_dim]], dtype=torch.float64)),
+            dtype=torch.float64
+        )
+        Z_data[key] = torch.tensor([[[val]]], dtype=torch.float64)
+
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        intw=Z_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # ------------------------------------------------------------------ S ---
+    # S (rank-1 spin tensor): acts only on the spin-1/2 sector (charge (0,1)).
+    # Auxiliary index: charge = (0, 2) = (U1=0, SU2=spin-1).
+    #
+    # Non-zero block: out=(0,1), in=(0,1), aux=(0,2).
+    # RME = sqrt(J(J+1)(2J+1)) at J=1/2 = sqrt(3/2).
+    # Split: data = sqrt(3/4), Bridge weight = sqrt(2).
+    aux_S = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, 2), dim=1),)
+    )
+
+    S_directions = [Direction.IN, Direction.OUT, Direction.OUT]
+    S_data = {}
+    S_intw = {}
+
+    key_S = ((0, 1), (0, 1), (0, 2))
+    S_intw[key_S] = dg.Bridge.from_block(
+        group, key_S, S_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    S_data[key_S] = torch.sqrt(torch.tensor([[[[3.0 / 4.0]]]], dtype=torch.float64))
+
+    Op["S"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_S),
+        itags=("_init_", "_init_", "_aux_"),
+        data=S_data,
+        intw=S_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # --------------------------------------------------------------- vac ---
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=(0, 0), dim=1),)
+    )
+    Op["vac"] = vac_index
+
+    return Spc, Op
+
+
+def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
+    """Load spinful fermion space with Z2xSU(2) symmetry (parity, full spin).
+
+    Under Z2xSU(2) the two-particle singlet |↑↓⟩ and the vacuum |0⟩ share
+    the same Z2 parity (even), while {|↑⟩, |↓⟩} have odd parity.  The SU(2)
+    doublet {|↑⟩, |↓⟩} forms one irreducible sector.
+
+    States and sectors (Z2 charge = particle parity mod 2, SU2 label = 2j):
+    - |0⟩, |↑↓⟩:  charge = (0, 0), dim = 2, irrep_dim = 1  (even, singlet)
+    - {|↑⟩, |↓⟩}: charge = (1, 1), dim = 1, irrep_dim = 2  (odd, doublet)
+
+    Within the (0, 0) sector, the ordering is:  index 0 → |0⟩, index 1 → |↑↓⟩.
+
+    Spc.dim = 3 (three multiplets), Spc.num_states = 4 (physical states).
+    """
+    group = ProductGroup([Z2Group(), SU2Group()])
+
+    # Physical space: two sectors
+    Spc = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(
+            Sector(charge=(0, 0), dim=2),   # |0⟩ (idx 0) and |↑↓⟩ (idx 1)
+            Sector(charge=(1, 1), dim=1),   # {|↑⟩, |↓⟩}: doublet
+        )
+    )
+
+    Op = {}
+
+    # ------------------------------------------------------------------ F ---
+    # F (fermionic annihilation): rank-1/2 tensor, flips Z2 parity.
+    # Auxiliary index: charge = (1, 1) = (Z2=odd, SU2=spin-1/2).
+    #
+    # Non-zero blocks (charge conservation with OUT convention):
+    #   (0,0) → can receive from (1,1) via aux (1,1): block ((0,0), (1,1), (1,1))
+    #   (1,1) → can receive from (0,0) via aux (1,1): block ((1,1), (0,0), (1,1))
+    #
+    # RME = sqrt(2), split as: data = 1.0, Bridge weight = sqrt(2).
+    # The dim=2 multiplicity of sector (0,0) yields non-trivial block shapes.
+    aux_F = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(1, 1), dim=1),)
+    )
+
+    F_directions = [Direction.IN, Direction.OUT, Direction.OUT]
+    F_data = {}
+    F_intw = {}
+
+    # Block: out=(0,0), in=(1,1), aux=(1,1)
+    # Shape: (dim_out=2, dim_in=1, dim_aux=1, num_components=1)
+    # Row 0 = |0⟩ receives from {|↑⟩,|↓⟩}; row 1 = |↑↓⟩ receives nothing here.
+    k_F1 = ((0, 0), (1, 1), (1, 1))
+    F_intw[k_F1] = dg.Bridge.from_block(
+        group, k_F1, F_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    F_data[k_F1] = torch.tensor([[[[1.0]]], [[[0.0]]]], dtype=torch.float64)
+
+    # Block: out=(1,1), in=(0,0), aux=(1,1)
+    # Shape: (dim_out=1, dim_in=2, dim_aux=1, num_components=1)
+    # Col 0 = |0⟩ contributes nothing; col 1 = |↑↓⟩ annihilates to {|↑⟩,|↓⟩}.
+    k_F2 = ((1, 1), (0, 0), (1, 1))
+    F_intw[k_F2] = dg.Bridge.from_block(
+        group, k_F2, F_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    F_data[k_F2] = torch.tensor([[[[0.0]], [[1.0]]]], dtype=torch.float64)
+
+    Op["F"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_F),
+        itags=("_init_", "_init_", "_aux_"),
+        data=F_data,
+        intw=F_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # ------------------------------------------------------------------ Z ---
+    # Z (Jordan-Wigner string): scalar operator.
+    # Z|0⟩ = +|0⟩,  Z|↑↓⟩ = +|↑↓⟩,  Z|↑⟩ = -|↑⟩,  Z|↓⟩ = -|↓⟩.
+    # Block shape for scalar: (1, dim_out, dim_in) with trailing num_components.
+    Z_directions = [Direction.IN, Direction.OUT]
+    Z_data = {}
+    Z_intw = {}
+
+    # (0,0) sector: shape (dim_out=2, dim_in=2, num_components=1)
+    # +1 diagonal for both |0⟩ and |↑↓⟩; SU(2) singlet → irrep_dim = 1, weights = 1.
+    k_Z1 = ((0, 0), (0, 0))
+    Z_intw[k_Z1] = dg.Bridge.from_block(
+        group, k_Z1, Z_directions,
+        weights=torch.sqrt(torch.tensor(
+            [[group.irrep_dim((0, 0))]], dtype=torch.float64
+        )),
+        dtype=torch.float64
+    )
+    Z_data[k_Z1] = torch.tensor([[[1.0], [0.0]], [[0.0], [1.0]]], dtype=torch.float64)
+
+    # (1,1) sector: shape (dim_out=1, dim_in=1, num_components=1)
+    # SU(2) doublet → irrep_dim = 2, weights = sqrt(2).
+    k_Z2 = ((1, 1), (1, 1))
+    Z_intw[k_Z2] = dg.Bridge.from_block(
+        group, k_Z2, Z_directions,
+        weights=torch.sqrt(torch.tensor(
+            [[group.irrep_dim((1, 1))]], dtype=torch.float64
+        )),
+        dtype=torch.float64
+    )
+    Z_data[k_Z2] = torch.tensor([[[-1.0]]], dtype=torch.float64)
+
+    Op["Z"] = Tensor(
+        indices=(Spc, Spc.flip()),
+        itags=("_init_", "_init_"),
+        data=Z_data,
+        intw=Z_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # ------------------------------------------------------------------ S ---
+    # S (rank-1 spin tensor): acts only on the spin-1/2 sector (charge (1,1)).
+    # Auxiliary index: charge = (0, 2) = (Z2=even, SU2=spin-1).
+    # Same RME split as U1xSU2 case: data = sqrt(3/4), Bridge weight = sqrt(2).
+    aux_S = Index(
+        direction=Direction.OUT,
+        group=group,
+        sectors=(Sector(charge=(0, 2), dim=1),)
+    )
+
+    S_directions = [Direction.IN, Direction.OUT, Direction.OUT]
+    S_data = {}
+    S_intw = {}
+
+    key_S = ((1, 1), (1, 1), (0, 2))
+    S_intw[key_S] = dg.Bridge.from_block(
+        group, key_S, S_directions,
+        weights=torch.sqrt(torch.tensor([[2.0]], dtype=torch.float64)),
+        dtype=torch.float64
+    )
+    S_data[key_S] = torch.sqrt(torch.tensor([[[[3.0 / 4.0]]]], dtype=torch.float64))
+
+    Op["S"] = Tensor(
+        indices=(Spc, Spc.flip(), aux_S),
+        itags=("_init_", "_init_", "_aux_"),
+        data=S_data,
+        intw=S_intw,
+        dtype=torch.float64,
+        label="Operator"
+    )
+
+    # --------------------------------------------------------------- vac ---
+    vac_index = Index(
+        direction=Direction.IN,
+        group=group,
+        sectors=(Sector(charge=(0, 0), dim=1),)
+    )
+    Op["vac"] = vac_index
+
     return Spc, Op

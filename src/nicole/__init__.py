@@ -22,11 +22,12 @@ from .contract import contract, trace
 from .decomp import decomp
 from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
-from .operators import conj, permute, transpose
-from .operators import oplus, diag, inv
-from .operators import subsector, merge_axes
+from .maneuver import conj, permute, transpose
+from .maneuver import oplus, diag, inv
+from .maneuver import subsector, merge_axes, capcup
 from .space import load_space
 from .symmetry.abelian import U1Group, Z2Group
+from .symmetry.unitary import SU2Group
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
@@ -39,6 +40,7 @@ __all__ = [
     "Tensor",
     "U1Group",
     "Z2Group",
+    "SU2Group",
     "ProductGroup",
     "contract",
     "trace",
@@ -54,6 +56,7 @@ __all__ = [
     "isometry_n",
     "subsector",
     "merge_axes",
+    "capcup",
     "load_space",
 ]
 

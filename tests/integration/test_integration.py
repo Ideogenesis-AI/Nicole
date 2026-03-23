@@ -23,7 +23,7 @@ import torch
 
 from nicole import Direction, Tensor, contract, decomp, identity, isometry, U1Group, Z2Group, permute, conj
 from nicole import Index, Sector
-from .utils import assert_charge_neutral, assert_blocks_equal
+from ..utils import assert_charge_neutral, assert_blocks_equal
 
 
 # Construction → Contract → SVD → Reconstruct workflows

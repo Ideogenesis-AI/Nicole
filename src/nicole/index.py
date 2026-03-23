@@ -20,10 +20,10 @@ from __future__ import annotations
 
 """Index utilities for symmetry-aware tensor networks.
 
-The `Index` dataclass models a single tensor leg annotated with symmetry
-information. Each instance records whether the leg is incoming or outgoing,
+The `Index` dataclass models a single tensor index annotated with symmetry
+information. Each instance records whether the index is incoming or outgoing,
 the associated symmetry group, and the available sectors (charge, dimension
-pairs) on that leg. The helper functions `combine_indices` and `split_index`
+pairs) on that index. The helper functions `combine_indices` and `split_index`
 encapsulate a consistent way to fuse or validate indices while respecting the
 charge rules enforced by the symmetry group.
 
@@ -41,7 +41,7 @@ from itertools import product
 from typing import Dict, Sequence, Tuple
 
 from .typing import Charge, Direction, Sector
-from .symmetry.base import AbelianGroup, SymmetryGroup
+from .symmetry.base import SymmetryGroup
 from .symmetry.product import ProductGroup
 
 
@@ -49,19 +49,19 @@ from .symmetry.product import ProductGroup
 @dataclass(frozen=True)
 class Index:
     """Symmetry-aware tensor index capturing direction, group, and charge sectors.
-    Keeps tensor legs self-consistent so fusion and splitting utilities can rely
+    Keeps tensor indices self-consistent so fusion and splitting utilities can rely
     on validated charges. The flipping pair streamline common tensor network rewrites.
 
     Attributes
     ----------
     direction:
-        Orientation of the index (e.g. bra vs ket leg). Flips determine how
+        Orientation of the index (e.g. bra vs ket index). Flips determine how
         charge conjugation is applied.
     group:
         Symmetry group object responsible for validating and fusing charges.
     sectors:
         Tuple of `(charge, dim)` pairs describing the block structure available
-        on this leg.
+        on this index.
     dim (property):
         Property returning the total dimension derived from `sectors`.
 
@@ -91,6 +91,11 @@ class Index:
     def dim(self) -> int:
         """Total dimension of the index after summing over all sectors."""
         return sum(s.dim for s in self.sectors)
+
+    @property
+    def num_states(self) -> int:
+        """Total number of physical states accounting for irrep dimensions."""
+        return sum(s.dim * self.group.irrep_dim(s.charge) for s in self.sectors)
 
     def __str__(self) -> str:
         """Return a formatted multiline summary of the Index."""
@@ -125,15 +130,19 @@ class Index:
 
 def combine_indices(direction: Direction, *inds: Index) -> Index:
     """Fuse multiple indices into one, accumulating sector dimensions.
+    
+    For Abelian groups, fuses any number of indices using unique fusion.
+    For non-Abelian groups, only supports pairwise fusion (exactly 2 indices).
 
     Parameters
     ----------
     direction:
         Direction applied to the resulting index. This does not need to match
         any individual input index directions because the caller typically
-        controls the orientation of the fused leg.
+        controls the orientation of the fused index.
     *inds:
         Component indices, each using the same symmetry group.
+        For non-Abelian groups, must be exactly 2 indices.
 
     Returns
     -------
@@ -142,35 +151,59 @@ def combine_indices(direction: Direction, *inds: Index) -> Index:
         inputs, summed across all compatible charge tuples.
     """
 
-    # Sanity checks
+    # Sanity checks: no indices to combine, or indices have mismatched groups
     if not inds:
         raise ValueError("No indices to combine")
     group = inds[0].group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Only Abelian/Product combine supported")
     if any(ind.group != group for ind in inds):
         raise ValueError("All indices must share the same group to combine")
 
+    # Non-Abelian groups only support pairwise fusion (exactly 2 indices)
+    if not group.is_abelian and len(inds) != 2:
+        raise ValueError(
+            f"Non-Abelian group {group.name} only supports pairwise fusion. "
+            f"Got {len(inds)} indices, expected exactly 2."
+        )
+    
     # Fuse the charges from each component index using the group's fusion rule,
     # keeping track of the cumulative dimension contributed by the block tuple.
-    # Apply direction-aware charge contributions: OUT uses charge as-is, IN uses inverse.
+    # Apply direction-aware charge contributions: OUT uses charge as-is, IN uses dual.
     charge_to_dim: Dict[Charge, int] = {}
-    for sectors_tuple in product(*(ind.sectors for ind in inds)):
-        # Compute the sum of direction-aware contributions from input indices
-        # Charges being fused (IN) contribute as-is, charges fused (OUT) contribute dual
-        total_contrib = group.neutral
-        dim = 1
-        for ind, sector in zip(inds, sectors_tuple):
-            contrib = sector.charge if ind.direction == Direction.IN else group.dual(sector.charge)
-            total_contrib = group.fuse(total_contrib, contrib)
-            dim *= sector.dim
-        
-        # The fused index contains the result (outgoing)
-        # Dual when direction is IN
-        fused_charge = group.dual(total_contrib) if direction == Direction.IN else total_contrib
-        charge_to_dim[fused_charge] = charge_to_dim.get(fused_charge, 0) + dim
 
-    # Build the fused index by sorting charges for deterministic ordering.
+    # Branch based on group type
+    if group.is_abelian:
+        # Abelian: unique fusion for any number of indices
+        for sectors_tuple in product(*(ind.sectors for ind in inds)):
+            # Compute direction-aware contributions
+            total_contrib = group.neutral
+            dim = 1
+            for ind, sector in zip(inds, sectors_tuple):
+                contrib = sector.charge if ind.direction == Direction.IN else group.dual(sector.charge)
+                total_contrib = group.fuse_unique(total_contrib, contrib)
+                dim *= sector.dim
+            
+            # Apply output direction
+            fused_charge = group.dual(total_contrib) if direction == Direction.IN else total_contrib
+            charge_to_dim[fused_charge] = charge_to_dim.get(fused_charge, 0) + dim
+    else:
+        # Non-Abelian: pairwise fusion with multiple channels
+        ind1, ind2 = inds
+        for sector1, sector2 in product(ind1.sectors, ind2.sectors):
+            # Compute direction-aware contributions
+            contrib1 = sector1.charge if ind1.direction == Direction.IN else group.dual(sector1.charge)
+            contrib2 = sector2.charge if ind2.direction == Direction.IN else group.dual(sector2.charge)
+            
+            # Get all possible fusion channels
+            channels = group.fuse_channels(contrib1, contrib2)
+            
+            # Each channel contributes to the result
+            dim = sector1.dim * sector2.dim
+            for channel in channels:
+                # Apply output direction
+                fused_charge = group.dual(channel) if direction == Direction.IN else channel
+                charge_to_dim[fused_charge] = charge_to_dim.get(fused_charge, 0) + dim
+
+    # Build the fused index by sorting charges for deterministic ordering
     sectors = tuple(Sector(q, d) for q, d in sorted(charge_to_dim.items(), key=lambda x: str(x[0])))
     # Return the fused index with the accumulated sectors and direction.
     return Index(direction=direction, group=group, sectors=sectors)
@@ -182,6 +215,8 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
     This helper mirrors `combine_indices` by fusing the proposed child indices
     and confirming that the resulting sector map matches the parent. No new
     indices are created; the original `parts` are returned once validated.
+    
+    For non-Abelian groups, only supports pairwise splits (exactly 2 parts).
 
     Parameters
     ----------
@@ -189,6 +224,7 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
         The index expected to be reconstructed from `parts`.
     parts:
         Sequence of indices that should collectively match the parent's sectors.
+        For non-Abelian groups, must be exactly 2 indices.
 
     Returns
     -------
@@ -196,12 +232,8 @@ def split_index(parent: Index, parts: Sequence[Index]) -> Tuple[Index, ...]:
         The validated input sequence for ergonomic chaining.
     """
 
-    # Sanity checks
-    group = parent.group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Only Abelian/Product split supported")
-
     # Reuse `combine_indices` to ensure the proposed parts reproduce the parent.
+    # This will enforce the pairwise restriction for non-Abelian groups.
     fused = combine_indices(parent.direction, *parts)
     if fused.sector_dim_map() != parent.sector_dim_map():
         # Any mismatch implies the supplied indices do not faithfully represent

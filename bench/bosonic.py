@@ -198,7 +198,7 @@ def iter_diag_spin(
         AK = contract(Anow, V, axes=(1, 0), perm=[0, 2, 1])
         
         # Store AK for this iteration
-        mps.append(AK.copy())
+        mps.append(AK.clone())
         
         # Create diagonal Hprev from truncated eigenvalues
         bond_index = V.indices[1]  # Update bond index for next iteration
@@ -324,22 +324,22 @@ def build_heisenberg(
     
     # Prepare base 4-index tensors (will copy and retag for each site)
     # Identity with both bonds: (left, right, bra, ket)
-    I4 = I.copy()
+    I4 = I.clone()
     I4.insert_index(0, direction=Direction.IN, itag="L")
     I4.insert_index(1, direction=Direction.OUT, itag="R")
     
     # Zero with both bonds: (left, right, bra, ket)
-    zero4 = (I * 0.0).copy()
+    zero4 = (I * 0.0).clone()
     zero4.insert_index(0, direction=Direction.IN, itag="L")
     zero4.insert_index(1, direction=Direction.OUT, itag="R")
     
     # S with left bond: (bra, ket, op) -> (left, bra, ket, op) -> (left, op, bra, ket)
-    S4 = S.copy()
+    S4 = S.clone()
     S4.insert_index(0, direction=Direction.IN, itag="L")
     S4 = permute(S4, [0, 3, 1, 2])
     
     # S† with right bond: (bra, ket, op) -> (bra, ket, op, right) -> (op, right, bra, ket)
-    S4dag = Sdag.copy()
+    S4dag = Sdag.clone()
     S4dag.insert_index(3, direction=Direction.OUT, itag="R")
     S4dag = permute(S4dag, [2, 3, 0, 1])
     
@@ -348,14 +348,14 @@ def build_heisenberg(
     for i in range(N):
         if i == 0:
             # First site: row vector [0, S, I]
-            W = zero4.copy()
+            W = zero4.clone()
             W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            S_copy = S4.copy()
+            S_copy = S4.clone()
             S_copy.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
             W = oplus(W, S_copy, axes=[1])
             
-            I_copy = I4.copy()
+            I_copy = I4.clone()
             I_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             W = oplus(W, I_copy, axes=[1])
             
@@ -363,14 +363,14 @@ def build_heisenberg(
             
         elif i == N - 1:
             # Last site: column vector [I, S†, 0]^T
-            W = I4.copy()
+            W = I4.clone()
             W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            Sdag_copy = S4dag.copy()
+            Sdag_copy = S4dag.clone()
             Sdag_copy.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             W = oplus(W, Sdag_copy, axes=[0])
             
-            zero_copy = zero4.copy()
+            zero_copy = zero4.clone()
             zero_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             W = oplus(W, zero_copy, axes=[0])
             
@@ -379,39 +379,39 @@ def build_heisenberg(
         else:
             # Middle sites: 3x3 matrix [[I, 0, 0], [S†, 0, 0], [0, S, I]]
             # Row 0: [I, 0, 0]
-            row0_col0 = I4.copy()
+            row0_col0 = I4.clone()
             row0_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row0_col1 = S4.copy() * 0
+            row0_col1 = S4.clone() * 0
             row0_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row0_col2 = zero4.copy()
+            row0_col2 = zero4.clone()
             row0_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
             row0 = oplus(row0_col0, row0_col1, axes=[1])
             row0 = oplus(row0, row0_col2, axes=[1])
             
             # Row 1: [S†, 0, 0]
-            row1_col0 = S4dag.copy()
+            row1_col0 = S4dag.clone()
             row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row1_col1 = S4dag.copy() * 0 + S4.copy() * 0
+            row1_col1 = S4dag.clone() * 0 + S4.clone() * 0
             row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row1_col2 = S4dag.copy() * 0
+            row1_col2 = S4dag.clone() * 0
             row1_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
             row1 = oplus(row1_col0, row1_col1, axes=[1])
             row1 = oplus(row1, row1_col2, axes=[1])
             
             # Row 2: [0, S, I]
-            row2_col0 = zero4.copy()
+            row2_col0 = zero4.clone()
             row2_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row2_col1 = S4.copy()
+            row2_col1 = S4.clone()
             row2_col1.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row2_col2 = I4.copy()
+            row2_col2 = I4.clone()
             row2_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
             row2 = oplus(row2_col0, row2_col1, axes=[1])

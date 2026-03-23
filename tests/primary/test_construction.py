@@ -22,7 +22,7 @@ import math
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group
 from nicole.blocks import BlockSchema
 from nicole.symmetry.product import ProductGroup
 from ..utils import assert_charge_neutral
@@ -44,7 +44,7 @@ def test_tensor_zeros_basic():
     assert_charge_neutral(tensor)
 
 
-def test_tensor_zeros_two_indices():
+def test_tensor_zeros_2nd_order():
     """Test Tensor.zeros with minimum two indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
@@ -90,6 +90,54 @@ def test_tensor_zeros_z2():
     
     # Neutral blocks: (0,0) and (1,1)
     assert set(tensor.data.keys()) == {(0, 0), (1, 1)}
+
+
+def test_tensor_zeros_3rd_order():
+    """Test Tensor.zeros with three indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(-1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], itags=["A", "B", "C"])
+    
+    assert_charge_neutral(tensor)
+    for block in tensor.data.values():
+        assert torch.allclose(block, torch.zeros_like(block))
+
+
+def test_tensor_zeros_su2():
+    """Test Tensor.zeros with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
+
+
+def test_tensor_zeros_abelian_no_intw():
+    """Test that Abelian tensors have no intertwiner (intw=None)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 1)))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    
+    # Abelian groups should have no intertwiner
+    assert tensor.intw is None
 
 
 def test_tensor_random_basic():
@@ -149,6 +197,28 @@ def test_tensor_random_no_itags():
     assert tensor.itags[1] == "_init_"
 
 
+def test_tensor_random_su2():
+    """Test Tensor.random with SU2Group."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42, itags=["a", "b", "c"])
+    
+    # Verify intertwiner is populated
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify each Bridge
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights.dtype == torch.float64
+        assert bridge.om_dimension > 0
+        assert bridge.weights[0, 0] == 1.0
+
+
 def test_tensor_norm_matches_manual():
     """Test that Tensor.norm() matches manual computation."""
     idx = Index(Direction.OUT, U1Group(), sectors=(Sector(0, 3), Sector(1, 2)))
@@ -175,6 +245,144 @@ def test_tensor_norm_empty():
     tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data={}, dtype=torch.float64)
     
     assert tensor.norm() == 0.0
+
+
+def test_tensor_norm_su2_basic():
+    """Test Tensor.norm() for SU(2) tensors."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["A", "B"])
+    
+    # Compute norm manually using Gram matrix approach
+    manual_total_gram = 0.0
+    manual_total_direct = 0.0
+    for key, block in tensor.data.items():
+        bridge = tensor.intw[key]
+        weights = bridge.weights
+        r_flat = block.flatten(0, -2)
+        
+        # Method 1: Gram matrix approach
+        gram = r_flat.T.conj() @ r_flat
+        gw = gram @ weights
+        norm_sq_gram = torch.sum(weights.conj() * gw)
+        manual_total_gram += norm_sq_gram.real.item()
+        
+        # Method 2: Direct matrix norm approach
+        expanded = r_flat @ weights
+        norm_sq_direct = torch.linalg.matrix_norm(expanded, ord='fro') ** 2
+        manual_total_direct += norm_sq_direct.item()
+    
+    manual_norm_gram = math.sqrt(manual_total_gram)
+    manual_norm_direct = math.sqrt(manual_total_direct)
+    
+    # Both manual methods should match each other
+    assert math.isclose(tensor.norm(), manual_norm_direct, rel_tol=1e-9)
+    # And match the tensor.norm() result
+    assert math.isclose(tensor.norm(), manual_norm_gram, rel_tol=1e-9)
+
+
+def test_tensor_norm_su2_zero():
+    """Test Tensor.norm() for zero SU(2) tensor."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], itags=["A", "B"])
+    
+    assert tensor.norm() == 0.0
+
+
+def test_tensor_norm_su2_custom_weights():
+    """Test Tensor.norm() for SU(2) tensor with custom weights."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    # Create tensor with custom weights
+    tensor = Tensor.random([idx1, idx2], seed=99, itags=["A", "B"])
+    
+    # Modify weights for one block
+    key = (1, 1)
+    bridge = tensor.intw[key]
+    om_dim = bridge.om_dimension
+    
+    # Create custom weights with multiple components
+    new_weights = torch.randn(3, om_dim, dtype=torch.float64)
+    new_bridge = dg.Bridge(cgspec=bridge.cgspec, weights=new_weights)
+    
+    # Update block shape to match new num_components
+    old_block = tensor.data[key]
+    new_block = torch.randn(2, 2, 3, dtype=torch.float64)
+    
+    # Create new tensor with updated bridge and block
+    new_data = {key: new_block}
+    new_intw = {key: new_bridge}
+    tensor_custom = Tensor(
+        indices=(idx1, idx2),
+        itags=("A", "B"),
+        data=new_data,
+        intw=new_intw,
+        dtype=torch.float64
+    )
+    
+    # Verify norm is computed correctly using both approaches
+    r_flat = new_block.flatten(0, -2)
+    
+    # Method 1: Gram matrix approach
+    gram = r_flat.T.conj() @ r_flat
+    gw = gram @ new_weights
+    norm_sq_gram = torch.sum(new_weights.conj() * gw)
+    expected_norm_gram = math.sqrt(norm_sq_gram.real.item())
+    
+    # Method 2: Direct matrix norm approach
+    expanded = r_flat @ new_weights
+    norm_sq_direct = torch.linalg.matrix_norm(expanded, ord='fro') ** 2
+    expected_norm_direct = math.sqrt(norm_sq_direct.item())
+    
+    # Both manual methods should match each other
+    assert math.isclose(tensor_custom.norm(), expected_norm_direct, rel_tol=1e-9)
+    # And match the tensor.norm() result
+    assert math.isclose(tensor_custom.norm(), expected_norm_gram, rel_tol=1e-9)
+
+
+def test_tensor_norm_su2_product_group():
+    """Test Tensor.norm() for ProductGroup with SU(2) using default weights.
+    
+    With default weights (1 component, first OM channel = 1), the norm should
+    match the direct Frobenius norm of the reduced tensors.
+    """
+    from nicole import ProductGroup
+    
+    u1 = U1Group()
+    su2 = SU2Group()
+    group = ProductGroup([u1, su2])
+    
+    # Create 4-index tensor
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx4 = Index(Direction.IN, group, sectors=(Sector((0, 0), 1),))
+    
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=123, itags=["A", "B", "C", "D"])
+    
+    # Should use non-Abelian norm computation
+    assert tensor.intw is not None
+    
+    # Verify all bridges have default weights (1 component, first element = 1)
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_components == 1
+        assert bridge.weights.shape[0] == 1
+        assert math.isclose(bridge.weights[0, 0].item(), 1.0)
+    
+    # With default weights, SU(2) norm should match direct Frobenius norm of reduced tensors
+    direct_norm_sq = sum(torch.sum(torch.abs(block) ** 2).item() for block in tensor.data.values())
+    direct_norm = math.sqrt(direct_norm_sq)
+    
+    assert math.isclose(tensor.norm(), direct_norm, rel_tol=1e-9)
 
 
 def test_tensor_validation_mismatched_itags():
@@ -224,6 +432,58 @@ def test_tensor_validation_rejects_single_index():
     
     with pytest.raises(ValueError, match="exactly 1 index"):
         Tensor.random([idx], seed=1, itags=["A"])
+
+
+def test_tensor_validation_su2_missing_intw():
+    """Test that non-Abelian tensor without intertwiner raises error."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    with pytest.raises(ValueError, match="Generic.*tensors must have intertwiner"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=None, dtype=torch.float64)
+
+
+def test_tensor_validation_intw_keys_mismatch():
+    """Test that mismatched intertwiner keys vs data keys raises error."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    # Create intw with wrong keys
+    intw = {
+        (1, 2): dg.Bridge.from_block(group, (1, 2), [Direction.IN, Direction.OUT], dtype=torch.float64)
+    }
+    
+    with pytest.raises(ValueError, match="Intertwiner.*keys must match block keys"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=intw, dtype=torch.float64)
+
+
+def test_tensor_validation_bridge_wrong_num_external():
+    """Test that Bridge with wrong number of external edges raises error."""
+    import nicole.symmetry.delegate as dg
+    
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    data = {(1, 1): torch.zeros(2, 2)}
+    
+    # Create a valid Bridge with 3 edges: 1/2 ⊗ 1/2 ⊗ 1 → 0
+    bridge_3edges = dg.Bridge.from_block(
+        group, (1, 1, 2), [Direction.IN, Direction.IN, Direction.OUT], dtype=torch.float64
+    )
+    # Use it for a 2-edge tensor (mismatch)
+    intw = {(1, 1): bridge_3edges}
+    
+    with pytest.raises(ValueError, match="Bridge for key.*has 3 edges, expected 2"):
+        Tensor(indices=(idx1, idx2), itags=("a", "b"), data=data, intw=intw, dtype=torch.float64)
 
 
 # Scalar (0D tensor) tests
@@ -290,14 +550,14 @@ def test_tensor_scalar_norm():
     assert math.isclose(s_complex.norm(), 5.0)  # |3+4j| = 5
 
 
-def test_tensor_scalar_copy():
-    """Test copying scalar tensors."""
+def test_tensor_scalar_clone():
+    """Test cloning scalar tensors."""
     s = Tensor.from_scalar(42.0)
-    s_copy = s.copy()
+    s_clone = s.clone()
     
-    assert s_copy.is_scalar()
-    assert s_copy.item() == s.item()
-    assert s_copy.data[()] is not s.data[()]  # Different array objects
+    assert s_clone.is_scalar()
+    assert s_clone.item() == s.item()
+    assert s_clone.data[()] is not s.data[()]  # Different array objects
 
 
 def test_tensor_scalar_display():
@@ -369,20 +629,6 @@ def test_tensor_construction_complex64():
     assert tensor.data[(0, 0)].dtype == torch.complex64
 
 
-def test_tensor_zeros_three_indices():
-    """Test Tensor.zeros with three indices."""
-    group = U1Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 2)))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(-1, 1)))
-    
-    tensor = Tensor.zeros([idx1, idx2, idx3], itags=["A", "B", "C"])
-    
-    assert_charge_neutral(tensor)
-    for block in tensor.data.values():
-        assert torch.allclose(block, torch.zeros_like(block))
-
-
 # ProductGroup integration tests
 
 def test_tensor_zeros_product_group_u1_u1():
@@ -451,6 +697,25 @@ def test_tensor_zeros_product_group_u1_z2():
     assert tensor.data[((1, 1), (1, 1))].shape == (1, 2)
 
 
+def test_tensor_zeros_product_group_su2():
+    """Test Tensor.zeros with ProductGroup containing SU2."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx1 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2), Sector((1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((0, 2), 3)))
+    
+    tensor = Tensor.zeros([idx1, idx2, idx3], dtype=torch.float64)
+    
+    # Non-Abelian ProductGroup should have intertwiner
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify Bridge properties
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+
+
 def test_tensor_random_product_group():
     """Test Tensor.random with ProductGroup."""
     group = ProductGroup([U1Group(), U1Group()])
@@ -475,6 +740,26 @@ def test_tensor_random_product_group():
     # Check that blocks are not all zeros
     assert not torch.allclose(tensor.data[((0, 0), (0, 0))], torch.zeros_like(tensor.data[((0, 0), (0, 0))]))
     assert tensor.norm() > 0.0
+
+
+def test_tensor_random_product_group_su2():
+    """Test Tensor.random with ProductGroup containing SU2."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx1 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2), Sector((1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 1), 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 1), Sector((0, 2), 3)))
+    
+    tensor = Tensor.random([idx1, idx2, idx3], dtype=torch.float64, seed=42)
+    
+    # Non-Abelian ProductGroup should have intertwiner
+    assert tensor.intw is not None
+    assert set(tensor.intw.keys()) == set(tensor.data.keys())
+    
+    # Verify Bridge properties
+    for key, bridge in tensor.intw.items():
+        assert bridge.num_external == 3
+        assert bridge.num_components == 1
+        assert bridge.weights[0, 0] == 1.0
 
 
 # ============================================================================
@@ -876,7 +1161,7 @@ def test_rand_fill_product_group():
 
 
 def test_rand_fill_different_dtypes():
-    """Test rand_fill works with different numpy dtypes."""
+    """Test rand_fill works with different torch dtypes."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))

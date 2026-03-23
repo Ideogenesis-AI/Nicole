@@ -55,7 +55,7 @@ test_construction.py
 
 test_identity.py
     Tests for identity and isometry tensor construction:
-    - identity(): 2-leg identity tensors
+    - identity(): 2nd-order identity tensors
     - isometry(): 2-to-1 fusion isometries
     - isometry_n(): N-to-1 general isometries
     - Symmetry-preserving properties
