@@ -85,8 +85,9 @@ def test_contract_su2_isometry_orthonormality():
             assert_charge_neutral(result)
 
             I_expected = identity(V.indices[2], itags=["f'", "f"])
-            assert_data_weights_equal(result, I_expected,
-                                      msg=f"isometry orthonormality for directions ({dir_a}, {dir_b})")
+            # Weights may differ by row-normalization gauge; compare physical tensors.
+            assert_physical_tensors_equal(result, I_expected,
+                                          msg=f"isometry orthonormality for directions ({dir_a}, {dir_b})")
 
 
 def test_contract_u1su2_isometry_orthonormality():
@@ -108,8 +109,9 @@ def test_contract_u1su2_isometry_orthonormality():
             assert_charge_neutral(result)
 
             I_expected = identity(V.indices[2], itags=["f'", "f"])
-            assert_data_weights_equal(result, I_expected,
-                                      msg=f"isometry orthonormality for directions ({dir_a}, {dir_b})")
+            # Weights may differ by row-normalization gauge; compare physical tensors.
+            assert_physical_tensors_equal(result, I_expected,
+                                          msg=f"isometry orthonormality for directions ({dir_a}, {dir_b})")
 
 
 # isometry_n

@@ -70,8 +70,8 @@ def test_contract_su2_identity_value_preservation_matrix():
     assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12)
     
     # Identity only has diagonal blocks, so result has same block keys as A
-    # Verify each block and its weights match exactly
-    assert_data_weights_equal(A, result)
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(A, result)
 
 
 def test_contract_su2_identity_value_preservation_basic():
@@ -99,8 +99,8 @@ def test_contract_su2_identity_value_preservation_basic():
     assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12)
     
     # Identity only has diagonal blocks, so result has same block keys as A
-    # Verify each block and its weights match exactly
-    assert_data_weights_equal(A, result)
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(A, result)
 
 
 def test_contract_su2_identity_value_preservation_high_order():
@@ -130,8 +130,8 @@ def test_contract_su2_identity_value_preservation_high_order():
     assert math.isclose(result.norm(), A.norm(), rel_tol=1e-10, abs_tol=1e-12)
     
     # Identity only has diagonal blocks, so result has same block keys as A
-    # Verify each block and its weights match exactly
-    assert_data_weights_equal(A, result)
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(A, result)
 
 
 def test_contract_su2_double_identity_contraction():
@@ -191,9 +191,9 @@ def test_contract_su2_identity_permutation_equivalence_matrix():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 def test_contract_su2_identity_permutation_equivalence_basic():
@@ -223,9 +223,9 @@ def test_contract_su2_identity_permutation_equivalence_basic():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 def test_contract_su2_identity_permutation_equivalence_high_order():
@@ -257,9 +257,9 @@ def test_contract_su2_identity_permutation_equivalence_high_order():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 # Distributivity tests
@@ -733,8 +733,8 @@ def test_contract_u1su2_identity_value_preservation_matrix():
     
     result = contract(A, I, axes=(1, 0))
     
-    # Verify exact data and weights equality with original A
-    assert_data_weights_equal(result, A, msg="identity contraction")
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(result, A, msg="identity contraction")
 
 
 def test_contract_u1su2_identity_value_preservation_basic():
@@ -763,8 +763,8 @@ def test_contract_u1su2_identity_value_preservation_basic():
     # Result has indices in order: [a*, c*, b'*], permute to [a*, b'*, c*]
     result_perm = permute(result, [0, 2, 1])
     
-    # Verify exact data and weights equality with original A
-    assert_data_weights_equal(result_perm, A, msg="identity contraction")
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(result_perm, A, msg="identity contraction")
 
 
 def test_contract_u1su2_identity_value_preservation_high_order():
@@ -799,8 +799,8 @@ def test_contract_u1su2_identity_value_preservation_high_order():
     # Result has indices in order: [a*, c*, d, e*, b'*], permute to [a*, b'*, c*, d, e*]
     result_perm = permute(result, [0, 4, 1, 2, 3])
     
-    # Verify exact data and weights equality with original A
-    assert_data_weights_equal(result_perm, A, msg="identity contraction")
+    # Weights may differ by row-normalization gauge; compare physical tensors.
+    assert_physical_tensors_equal(result_perm, A, msg="identity contraction")
 
 
 def test_contract_u1su2_double_identity_contraction():
@@ -874,9 +874,9 @@ def test_contract_u1su2_identity_permutation_equivalence_matrix():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 def test_contract_u1su2_identity_permutation_equivalence_basic():
@@ -914,9 +914,9 @@ def test_contract_u1su2_identity_permutation_equivalence_basic():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 def test_contract_u1su2_identity_permutation_equivalence_high_order():
@@ -960,9 +960,9 @@ def test_contract_u1su2_identity_permutation_equivalence_high_order():
         # Retag to match original (last index has different tag)
         result_restored.retag(A.itags)
         
-        # Should match original tensor exactly
-        assert_data_weights_equal(A, result_restored, 
-                                 msg=f"identity contraction on index {i}")
+        # Weights may differ by row-normalization gauge; compare physical tensors.
+        assert_physical_tensors_equal(A, result_restored, 
+                                      msg=f"identity contraction on index {i}")
 
 
 # Distributivity tests
