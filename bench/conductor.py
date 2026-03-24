@@ -49,7 +49,6 @@ import numpy as np
 from nicole import Tensor, load_space
 from nicole import contract, identity, isometry, conj, permute, transpose, diag
 from nicole.decomp import eig
-from fermionic import exact_halffilling_energy
 
 
 _ABELIAN_SYMMETRIES    = ("U1,U1", "Z2,U1")
@@ -71,6 +70,9 @@ def exact_halffilling_energy_band(N: int, t: float = 1.0) -> float:
 
         E = 2 × Σ_{k=1}^{⌊N/2⌋} (-2t cos(k π / (N+1)))
 
+    Uses the analytic single-particle spectrum of the open-boundary chain:
+        ε_k = -2t cos(k π / (N+1)),  k = 1, …, N
+
     Parameters
     ----------
     N : int
@@ -83,7 +85,11 @@ def exact_halffilling_energy_band(N: int, t: float = 1.0) -> float:
     float
         Exact ground state energy at half-filling.
     """
-    return 2.0 * exact_halffilling_energy(N, t)
+    n_particles = N // 2
+    if n_particles == 0:
+        return 0.0
+    k = np.arange(1, n_particles + 1)
+    return float(-4 * t * np.sum(np.cos(k * np.pi / (N + 1))))
 
 
 # ---------------------------------------------------------------------------
