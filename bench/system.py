@@ -27,7 +27,8 @@ import torch
 def build_heisenberg(
     N: int = 50,
     J: float = 1.0,
-    spin: float = 0.5
+    spin: float = 0.5,
+    symmetry: str = "U1",
 ) -> list[Tensor]:
     """Build MPO representation of the Heisenberg Hamiltonian.
     
@@ -39,7 +40,10 @@ def build_heisenberg(
         Spin-spin coupling constant (default: 1.0)
     spin : float, optional
         Total spin quantum number for each site (default: 0.5 for spin-1/2)
-    
+    symmetry : str, optional
+        Symmetry to exploit: ``"U1"`` (Sz conservation) or ``"SU2"`` (full
+        spin rotation). Default: ``"U1"``.
+
     Returns
     -------
     list of Tensor
@@ -63,12 +67,15 @@ def build_heisenberg(
     >>> mpo = build_heisenberg(N=10, J=1.0, spin=0.5)
     """
     # Load spin operators
-    Spc, Op = load_space("Spin", "U1", {"J": spin})
-    
-    # Construct S = S+ + S- + Sz (total spin operator)
-    # Sp and Sm have (bra, ket, op), Sz needs op index inserted
-    Op["Sz"].insert_index(2, direction=Direction.OUT)
-    S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Now all have (bra, ket, op)
+    Spc, Op = load_space("Spin", symmetry, {"J": spin})
+
+    # Construct S with (bra, ket, op) axes
+    if symmetry == "SU2":
+        S = Op["S"]
+    else:
+        # U1: assemble from Sp, Sm, Sz (Sz needs op index inserted)
+        Op["Sz"].insert_index(2, direction=Direction.OUT)
+        S = Op["Sp"] + Op["Sm"] + Op["Sz"]
     
     # Conjugate for the other side: Sdag has (bra, ket, op)
     Sdag = permute(conj(S), [1, 0, 2]) * J
@@ -96,7 +103,41 @@ def build_heisenberg(
     S4dag = Sdag.clone()
     S4dag.insert_index(3, direction=Direction.OUT, itag="R")
     S4dag = permute(S4dag, [2, 3, 0, 1])
-    
+
+    # zero4p: zero tensor with S's op sectors on the bond axes.  Needed when
+    # the op has no charge-0 sector (e.g. SU(2) has only {2:1}) so that
+    # row1_col1 is structurally compatible with row1_col0 during oplus.
+    # Diagonal blocks (lc, lc, bc, bc) satisfy charge conservation for any
+    # Abelian or non-Abelian symmetry group.
+    _op_sdm  = S.indices[2].sector_dim_map()
+    _bra_sdm = zero4.indices[2].sector_dim_map()
+    _ket_sdm = zero4.indices[3].sector_dim_map()
+    _zp_idx  = (S.indices[2].flip(), S.indices[2], zero4.indices[2], zero4.indices[3])
+    _zp_dirs = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    _zp_data = {}
+    _zp_intw = {} if zero4.intw is not None else None
+    for (lc, ld) in _op_sdm.items():
+        for (bc, bd) in _bra_sdm.items():
+            kd = _ket_sdm.get(bc, 0)
+            if kd == 0:
+                continue
+            key = (lc, lc, bc, bc)
+            if _zp_intw is None:
+                # Abelian: 4-D block (ld, rd, bd, kd)
+                _zp_data[key] = torch.zeros(ld, ld, bd, kd, dtype=torch.float64)
+            else:
+                # Non-Abelian (SU2): use Bridge to get num_components, shape
+                # is (ld, rd, bd, kd, num_components) — trailing multiplicity.
+                from nicole.symmetry.delegate import Bridge as _Bridge
+                _group = S.indices[2].group
+                bridge = _Bridge.from_block(_group, key, _zp_dirs)
+                _zp_data[key] = torch.zeros(ld, ld, bd, kd, bridge.num_components, dtype=torch.float64)
+                _zp_intw[key] = bridge
+    zero4p = zero4.clone()
+    zero4p.indices = _zp_idx
+    zero4p.data    = _zp_data
+    zero4p.intw    = _zp_intw
+
     mpo = []
     
     for i in range(N):
@@ -149,7 +190,7 @@ def build_heisenberg(
             row1_col0 = S4dag.clone()
             row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row1_col1 = S4dag.clone() * 0 + S4.clone() * 0
+            row1_col1 = zero4p.clone()
             row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
             row1_col2 = S4dag.clone() * 0
