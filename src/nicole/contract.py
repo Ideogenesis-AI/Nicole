@@ -824,6 +824,18 @@ def trace(
     if out_intw is not None and len(out_indices) == 0:
         out_intw = None
 
-    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw, dtype=T.dtype)
+    out_tensor = Tensor(
+        indices=out_indices, itags=out_itags, data=out_blocks,
+        intw=out_intw, dtype=T.dtype
+    )
+
+    # Trace always reduces order by 2, so OM always drops. Regularize first so
+    # that the SVD cutoff in compress operates on well-scaled rows; the condition
+    # is unconditional here (unlike contract) because order reduction is guaranteed.
+    if out_intw is not None:
+        out_tensor.regularize()
+        out_tensor.compress()
+
+    return out_tensor
 
 
