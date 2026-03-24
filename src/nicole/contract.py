@@ -487,6 +487,18 @@ def contract(
     # prevent weights from decaying across successive contractions.
     out_tensor.regularize()
 
+    # When order drops, OM typically drops, making accumulated components from
+    # block_add likely to exceed OM. Compress to remove genuine rank deficiency.
+    # The order-reduction condition is a heuristic to balance the performance
+    # gain from compression against the SVD cost: order-preserving or
+    # order-increasing contractions tend to have growing OM, so components are
+    # unlikely to be redundant and SVD overhead is not justified.
+    # Regularize first so that the SVD cutoff operates on well-scaled rows;
+    # after compress the new weights (Vh rows) are already orthonormal, so no
+    # second regularize is needed.
+    if out_intw is not None and len(out_indices) < max(len(A.indices), len(B.indices)):
+        out_tensor.compress()
+
     # Apply permutation if requested.
     if perm is not None:
         out_tensor.permute(perm, in_place=True)
