@@ -238,14 +238,13 @@ def iter_diag_band(
     Z = Op["Z"]
     Z.retag(["s00", "s00"])
 
-    if is_abelian:
-        F_up = Op["F_up"]
-        F_dn = Op["F_dn"]
-        F_up.retag(["s00", "s00", "op"])
-        F_dn.retag(["s00", "s00", "op"])
-    else:
-        F = Op["F"]
-        F.retag(["s00", "s00", "op"])
+    # For Abelian symmetries, sum F_up and F_dn into a single F. Tensor addition
+    # takes the union of charge sectors, so the result has blocks for both aux
+    # charges (-1,−1) and (-1,+1) — a combined F that carries both spin
+    # components, exactly like the non-Abelian F. The loop logic is then
+    # identical for all symmetries.
+    F = Op["F_up"] + Op["F_dn"] if is_abelian else Op["F"]
+    F.retag(["s00", "s00", "op"])
 
     # Zero on-site Hamiltonian (pure hopping model)
     H0 = I * 1e-30
@@ -255,30 +254,18 @@ def iter_diag_band(
     A0 = permute(isometry(Op["vac"], Spc), [0, 2, 1])
     A0.retag(["L00", "R00", "s00"])
 
-    Eg        = np.zeros(N)
+    Eg         = np.zeros(N)
     bond_index = None
     mps        = []
-
-    # Accumulators for the edge (Z × F) operator(s)
-    if is_abelian:
-        ZF_up_prev = None
-        ZF_dn_prev = None
-    else:
-        ZFprev = None
+    ZFprev     = None   # accumulated (Z × F) at the left-block edge
 
     for itN in range(1, N + 1):
 
         Z_now = Z.clone()
         Z_now.retag([f"s{itN-1:02d}", f"s{itN-1:02d}"])
 
-        if is_abelian:
-            F_up_now = F_up.clone()
-            F_dn_now = F_dn.clone()
-            F_up_now.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
-            F_dn_now.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
-        else:
-            Fnow = F.clone()
-            Fnow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
+        Fnow = F.clone()
+        Fnow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
 
         if itN == 1:
             Anow = A0
@@ -293,16 +280,9 @@ def iter_diag_band(
             Hnow = contract(Hprev, Anow, axes=(1, 0))
             Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [0, 2]))
 
-            # Hopping term (with JW string: use accumulated Z×F, not bare F)
-            # For Abelian: sum contributions from spin-up and spin-down separately
-            # For non-Abelian: single F carries both spins via its j=1/2 auxiliary index
-            if is_abelian:
-                HFF = (
-                    _compute_hff(ZF_up_prev, F_up_now, Anow)
-                    + _compute_hff(ZF_dn_prev, F_dn_now, Anow)
-                )
-            else:
-                HFF = _compute_hff(ZFprev, Fnow, Anow)
+            # Hopping term with JW string: (Z×F)†_prev × F_now.
+            # The aux-index contraction sums over all spin components automatically.
+            HFF = _compute_hff(ZFprev, Fnow, Anow)
 
             HFF = (HFF + transpose(conj(HFF))) * (-t)
             Hnow = Hnow + HFF
@@ -329,17 +309,11 @@ def iter_diag_band(
         Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
 
         # Accumulate (Z × F) through AK for the next step's hopping JW string
-        if is_abelian:
-            ZF_up_prev = _push_zf(Z_now, F_up_now, AK)
-            ZF_dn_prev = _push_zf(Z_now, F_dn_now, AK)
-        else:
-            ZFprev = _push_zf(Z_now, Fnow, AK)
+        ZFprev = _push_zf(Z_now, Fnow, AK)
 
         if verbose:
-            dim_fn   = (lambda idx: idx.num_states) if is_su2 else (lambda idx: idx.dim)
-            NK       = dim_fn(AK.indices[0])
-            Hnow_dim = dim_fn(Hnow.indices[1])
-            disptime(f"#{itN:02d}/{N:02d} : NK={NK}/{Hnow_dim}")
+            dim_fn = (lambda idx: idx.num_states) if is_su2 else (lambda idx: idx.dim)
+            disptime(f"#{itN:02d}/{N:02d} : NK={dim_fn(AK.indices[0])}/{dim_fn(Hnow.indices[1])}")
 
     Egs = Eg / np.arange(1, N + 1)
 
