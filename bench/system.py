@@ -18,10 +18,73 @@
 
 """Hamiltonian builders for standard quantum lattice models (MPO form)."""
 
+import torch
+
 from nicole import Direction, Tensor
 from nicole import identity, conj, permute, oplus, capcup
+from nicole.index import Index
 from nicole.space import load_space
-import torch
+from nicole.symmetry.delegate import Bridge
+
+
+def _make_zero_mid(op_idx: Index, zero4: Tensor) -> Tensor:
+    """Build a zero tensor whose bond axes carry an operator's charge sectors.
+
+    In an MPO matrix, the off-diagonal zero blocks in an operator row must
+    have bond indices that are *structurally compatible* with the non-zero
+    operator block in the same row.  When the operator has no charge-0 sector
+    (e.g. SU(2) spin operator, or fermionic annihilation/creation), the naïve
+    ``op * 0`` tensor carries the wrong bond sector set, causing ``oplus`` to
+    fail.  This helper builds the correct zero tensor for those positions.
+
+    The block key ``(lc, lc, bc, bc)`` (diagonal in both the bond charge and
+    the physical charge) satisfies charge conservation for any Abelian or
+    non-Abelian symmetry group.  For non-Abelian groups the corresponding
+    ``Bridge`` intertwiner is computed via ``Bridge.from_block``.
+
+    Parameters
+    ----------
+    op_idx : Index
+        The *op* axis (axis 2) of the operator tensor, e.g. ``S.indices[2]``
+        or ``G.indices[2]``.  Its charge sectors determine the bond sectors of
+        the output tensor.
+    zero4 : Tensor
+        A zero tensor with shape ``(left, right, bra, ket)`` built from the
+        physical identity.  Its ``bra`` (axis 2) and ``ket`` (axis 3) indices
+        provide the physical charge sectors, and its ``intw`` field indicates
+        whether the symmetry group is Abelian (``intw is None``) or not.
+
+    Returns
+    -------
+    Tensor
+        A zero tensor with indices
+        ``(op_idx.flip(), op_idx, zero4.indices[2], zero4.indices[3])``.
+    """
+    _op_sdm  = op_idx.sector_dim_map()
+    _bra_sdm = zero4.indices[2].sector_dim_map()
+    _ket_sdm = zero4.indices[3].sector_dim_map()
+    _zp_idx  = (op_idx.flip(), op_idx, zero4.indices[2], zero4.indices[3])
+    _zp_data = {}
+    _zp_intw = {} if zero4.intw is not None else None
+    for lc, ld in _op_sdm.items():
+        for bc, bd in _bra_sdm.items():
+            kd = _ket_sdm.get(bc, 0)
+            if kd == 0:
+                continue
+            key = (lc, lc, bc, bc)
+            if _zp_intw is None:
+                _zp_data[key] = torch.zeros(ld, ld, bd, kd, dtype=torch.float64)
+            else:
+                bridge = Bridge.from_block(
+                    op_idx.group, key, list(_zp_idx[i].direction for i in range(4))
+                )
+                _zp_data[key] = torch.zeros(ld, ld, bd, kd, bridge.num_components, dtype=torch.float64)
+                _zp_intw[key] = bridge
+    zero_mid = zero4.clone()
+    zero_mid.indices = _zp_idx
+    zero_mid.data    = _zp_data
+    zero_mid.intw    = _zp_intw
+    return zero_mid
 
 
 def build_heisenberg(
@@ -104,39 +167,7 @@ def build_heisenberg(
     S4dag.insert_index(3, direction=Direction.OUT, itag="R")
     S4dag = permute(S4dag, [2, 3, 0, 1])
 
-    # zero4p: zero tensor with S's op sectors on the bond axes.  Needed when
-    # the op has no charge-0 sector (e.g. SU(2) has only {2:1}) so that
-    # row1_col1 is structurally compatible with row1_col0 during oplus.
-    # Diagonal blocks (lc, lc, bc, bc) satisfy charge conservation for any
-    # Abelian or non-Abelian symmetry group.
-    _op_sdm  = S.indices[2].sector_dim_map()
-    _bra_sdm = zero4.indices[2].sector_dim_map()
-    _ket_sdm = zero4.indices[3].sector_dim_map()
-    _zp_idx  = (S.indices[2].flip(), S.indices[2], zero4.indices[2], zero4.indices[3])
-    _zp_dirs = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
-    _zp_data = {}
-    _zp_intw = {} if zero4.intw is not None else None
-    for (lc, ld) in _op_sdm.items():
-        for (bc, bd) in _bra_sdm.items():
-            kd = _ket_sdm.get(bc, 0)
-            if kd == 0:
-                continue
-            key = (lc, lc, bc, bc)
-            if _zp_intw is None:
-                # Abelian: 4-D block (ld, rd, bd, kd)
-                _zp_data[key] = torch.zeros(ld, ld, bd, kd, dtype=torch.float64)
-            else:
-                # Non-Abelian (SU2): use Bridge to get num_components, shape
-                # is (ld, rd, bd, kd, num_components) — trailing multiplicity.
-                from nicole.symmetry.delegate import Bridge as _Bridge
-                _group = S.indices[2].group
-                bridge = _Bridge.from_block(_group, key, _zp_dirs)
-                _zp_data[key] = torch.zeros(ld, ld, bd, kd, bridge.num_components, dtype=torch.float64)
-                _zp_intw[key] = bridge
-    zero4p = zero4.clone()
-    zero4p.indices = _zp_idx
-    zero4p.data    = _zp_data
-    zero4p.intw    = _zp_intw
+    zero_mid = _make_zero_mid(S.indices[2], zero4)
 
     mpo = []
     
@@ -190,9 +221,9 @@ def build_heisenberg(
             row1_col0 = S4dag.clone()
             row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
-            row1_col1 = zero4p.clone()
+            row1_col1 = zero_mid.clone()
             row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
+
             row1_col2 = S4dag.clone() * 0
             row1_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
             
@@ -320,22 +351,7 @@ def build_freefermion(
     zero4.insert_index(0, direction=Direction.IN,  itag="L")
     zero4.insert_index(1, direction=Direction.OUT, itag="R")
 
-    # zero4p: zero tensor whose bond axes carry G's op sectors (instead of the
-    # trivial {0:1} of zero4), needed so that row1_col1 is structurally
-    # compatible with row1_col0 during oplus.  Blocks are diagonal in both the
-    # bond charge (lc=rc) and the physical charge (bc=kc), which automatically
-    # satisfies charge conservation for any Abelian symmetry group.
-    _op_sdm  = G.indices[2].sector_dim_map()
-    _bra_sdm = zero4.indices[2].sector_dim_map()
-    _ket_sdm = zero4.indices[3].sector_dim_map()
-    zero4p = zero4.clone()
-    zero4p.indices = (G.indices[2].flip(), G.indices[2], zero4.indices[2], zero4.indices[3])
-    zero4p.data = {
-        (lc, lc, bc, bc): torch.zeros(ld, ld, bd, _ket_sdm[bc], dtype=torch.float64)
-        for (lc, ld) in _op_sdm.items()
-        for (bc, bd) in _bra_sdm.items()
-        if bc in _ket_sdm
-    }
+    zero_mid = _make_zero_mid(G.indices[2], zero4)
 
     # G with left bond: (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
     G4 = G.clone()
@@ -400,7 +416,7 @@ def build_freefermion(
             row1_col0 = G4dag.clone()
             row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
 
-            row1_col1 = zero4p.clone()
+            row1_col1 = zero_mid.clone()
             row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
 
             row1_col2 = G4dag.clone() * 0
