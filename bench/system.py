@@ -16,11 +16,12 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Hamiltonian builders for standard quantum spin models (MPO form)."""
+"""Hamiltonian builders for standard quantum lattice models (MPO form)."""
 
 from nicole import Direction, Tensor
-from nicole import identity, conj, permute, oplus
+from nicole import identity, conj, permute, oplus, capcup
 from nicole.space import load_space
+import torch
 
 
 def build_heisenberg(
@@ -176,4 +177,214 @@ def build_heisenberg(
             
             mpo.append(W)
     
+    return mpo
+
+
+def build_freefermion(
+    N: int = 50,
+    t: float = 1.0,
+    symmetry: str = "U1",
+) -> list[Tensor]:
+    """Build MPO representation of the free spinless tight-binding Hamiltonian.
+
+    Parameters
+    ----------
+    N : int
+        Chain length (default: 50).
+    t : float, optional
+        Nearest-neighbor hopping amplitude (default: 1.0).
+    symmetry : str, optional
+        Symmetry to exploit: ``"U1"`` (particle number) or ``"Z2"`` (fermion
+        parity). Default: ``"U1"``.
+
+    Returns
+    -------
+    list of Tensor
+        MPO tensors, each with shape (left, right, phys_out, phys_in)
+        with directions (IN, OUT, IN, OUT) and itags
+        ``["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]``.
+
+    Notes
+    -----
+    The Hamiltonian is:
+
+        H = -t Σ_i (c†_i c_{i+1} + h.c.)
+
+    The MPO uses bond dimension 3, structurally identical to the Heisenberg
+    MPO.  Define:
+
+        F    — annihilation operator (op=OUT convention)
+        C    — F† in the complementary "left" convention (op=IN after conj)
+        Fd   — h.c. of F  (op=IN)
+        Cd   — h.c. of C  (op=OUT, same data as F for real operators)
+
+    ``capcup`` flips the op-axis direction of C (IN→OUT) and Cd (OUT→IN)
+    without changing numerical contractions.  After the flip:
+
+        G    = F + C      (both op=OUT, carries annihilation and creation)
+        Gdag = (Fd+Cd)*(-t)  (both op=IN, the scaled Hermitian conjugate)
+
+    The MPO matrix is:
+
+        First site:   [0, G, I]
+        Middle sites: [[I, 0, 0], [Gdag, 0, 0], [0, G, I]]
+        Last site:    [I, Gdag, 0]^T
+
+    When contracted in the charge-neutral sector, Gdag_i G_{i+1} gives
+    -t (c†_i c_{i+1} + c_i c†_{i+1}) summed over i.
+
+    Examples
+    --------
+    >>> mpo = build_freefermion(N=10, t=1.0, symmetry="U1")
+    >>> mpo = build_freefermion(N=10, t=1.0, symmetry="Z2")
+    """
+    # Load spinless fermion operators
+    Spc, Op = load_space("Ferm", symmetry)
+
+    # F  : annihilation, directions (bra=IN, ket=OUT, op=OUT)
+    # C  : F† in the "left" convention — conj flips all directions,
+    #      so C has (IN, OUT, op=IN)
+    # Fd : h.c. of F, same data as C for real F but an independent object
+    # Cd : h.c. of C, same data as F for real C but an independent object
+    F  = Op["F"]
+    C  = conj(permute(F, [1, 0, 2]))
+    Fd = permute(conj(F), [1, 0, 2])
+    Cd = permute(conj(C), [1, 0, 2])
+
+    # capcup(C, 2, Cd, 2) inverts the op-axis direction of both tensors:
+    #   C  : op IN  → OUT   (now matches F, so F + C is valid)
+    #   Cd : op OUT → IN    (now matches Fd, so Fd + Cd is valid)
+    # Numerical contractions are unchanged by this operation.
+    capcup(C, 2, Cd, 2)
+
+    # G    = F + C  : both op=OUT, union of charge sectors gives a single
+    #                 tensor carrying both annihilation (charge -2) and
+    #                 creation (charge +2) — analogous to S = Sp+Sm+Sz.
+    # Gdag = (Fd + Cd) * (-t) : both op=IN, the scaled Hermitian conjugate.
+    G    = F + C
+    Gdag = (Fd + Cd) * (-t)
+
+    # Identity operator: (bra, ket)
+    I = identity(Spc)
+
+    # ---- Prepare base 4-index tensors (retagged per site in the loop) --------
+
+    # Identity with both bonds: (left, right, bra, ket)
+    I4 = I.clone()
+    I4.insert_index(0, direction=Direction.IN,  itag="L")
+    I4.insert_index(1, direction=Direction.OUT, itag="R")
+
+    # Zero with both bonds: (left, right, bra, ket)
+    zero4 = (I * 0.0).clone()
+    zero4.insert_index(0, direction=Direction.IN,  itag="L")
+    zero4.insert_index(1, direction=Direction.OUT, itag="R")
+
+    # zero4p: zero tensor whose bond axes carry G's op sectors (instead of the
+    # trivial {0:1} of zero4), needed so that row1_col1 is structurally
+    # compatible with row1_col0 during oplus.  Blocks are diagonal in both the
+    # bond charge (lc=rc) and the physical charge (bc=kc), which automatically
+    # satisfies charge conservation for any Abelian symmetry group.
+    _op_sdm  = G.indices[2].sector_dim_map()
+    _bra_sdm = zero4.indices[2].sector_dim_map()
+    _ket_sdm = zero4.indices[3].sector_dim_map()
+    zero4p = zero4.clone()
+    zero4p.indices = (G.indices[2].flip(), G.indices[2], zero4.indices[2], zero4.indices[3])
+    zero4p.data = {
+        (lc, lc, bc, bc): torch.zeros(ld, ld, bd, _ket_sdm[bc], dtype=torch.float64)
+        for (lc, ld) in _op_sdm.items()
+        for (bc, bd) in _bra_sdm.items()
+        if bc in _ket_sdm
+    }
+
+    # G with left bond: (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
+    G4 = G.clone()
+    G4.insert_index(0, direction=Direction.IN, itag="L")
+    G4 = permute(G4, [0, 3, 1, 2])
+
+    # Gdag with right bond: (bra, ket, op) → (bra, ket, op, right) → (op, right, bra, ket)
+    G4dag = Gdag.clone()
+    G4dag.insert_index(3, direction=Direction.OUT, itag="R")
+    G4dag = permute(G4dag, [2, 3, 0, 1])
+
+    mpo = []
+
+    for i in range(N):
+        if i == 0:
+            # First site: row vector [0, G, I]
+            W = zero4.clone()
+            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            G_copy = G4.clone()
+            G_copy.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, G_copy, axes=[1])
+
+            I_copy = I4.clone()
+            I_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, I_copy, axes=[1])
+
+            mpo.append(W)
+
+        elif i == N - 1:
+            # Last site: column vector [I, Gdag, 0]^T
+            W = I4.clone()
+            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            Gdag_copy = G4dag.clone()
+            Gdag_copy.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, Gdag_copy, axes=[0])
+
+            zero_copy = zero4.clone()
+            zero_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, zero_copy, axes=[0])
+
+            mpo.append(W)
+
+        else:
+            # Middle sites: 3×3 block matrix [[I, 0, 0], [Gdag, 0, 0], [0, G, I]]
+
+            # Row 0: [I, 0, 0]
+            row0_col0 = I4.clone()
+            row0_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0_col1 = G4.clone() * 0
+            row0_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0_col2 = zero4.clone()
+            row0_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0 = oplus(row0_col0, row0_col1, axes=[1])
+            row0 = oplus(row0, row0_col2, axes=[1])
+
+            # Row 1: [Gdag, 0, 0]
+            row1_col0 = G4dag.clone()
+            row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1_col1 = zero4p.clone()
+            row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1_col2 = G4dag.clone() * 0
+            row1_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1 = oplus(row1_col0, row1_col1, axes=[1])
+            row1 = oplus(row1, row1_col2, axes=[1])
+
+            # Row 2: [0, G, I]
+            row2_col0 = zero4.clone()
+            row2_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2_col1 = G4.clone()
+            row2_col1.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2_col2 = I4.clone()
+            row2_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2 = oplus(row2_col0, row2_col1, axes=[1])
+            row2 = oplus(row2, row2_col2, axes=[1])
+
+            # Combine rows
+            W = oplus(row0, row1, axes=[0])
+            W = oplus(W, row2, axes=[0])
+
+            mpo.append(W)
+
     return mpo
