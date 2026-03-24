@@ -250,5 +250,5 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
     # At the right boundary, all indices have dimension 1
     # Extract the scalar from the first (and only) block and divide by number of sites
     
-    value = E.block(1).item()  # Extract single element from numpy array
+    value = E.block(1).item()  # Extract single element from torch tensor
     return value / len(mps)
