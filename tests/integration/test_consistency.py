@@ -1535,8 +1535,14 @@ def _make_insert_test_tensor(order: int, last_dir: Direction, seed: int) -> Tens
 
 
 def _assert_insert_terminal_equals_leading_permute(T: Tensor, inserted_dir: Direction) -> None:
-    """Assert that inserting at the terminal position equals inserting at position 0
-    and permuting the new axis to the last position."""
+    """Assert that inserting at the terminal position gives the same physical
+    tensor as inserting at position 0 and then permuting the new axis to the end.
+
+    Inserting at the terminal position demotes the previous terminal edge to a
+    leading role, which can introduce a non-trivial recoupling phase. This test
+    verifies that ``Bridge.insert_edge`` accounts for that phase via the R-symbol,
+    making terminal and leading-then-permute insertion physically equivalent.
+    """
     N = len(T.indices)
 
     # Path 1: insert directly at the terminal (last) position
