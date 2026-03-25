@@ -771,8 +771,10 @@ class Tensor:
         The symmetry group for the new index is taken from the existing indices.
         
         For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is updated
-        by inserting a neutral-charge edge at the same position, which preserves
-        the OM dimension since the neutral irrep does not contribute to coupling.
+        via ``Bridge.insert_edge``, which inserts the neutral-charge edge and
+        applies the appropriate R-symbol so that the result is consistent with
+        a direct permutation of the new index to ``position``. The OM dimension
+        is preserved exactly since the neutral irrep does not participate in coupling.
         """
         # Validate position
         n = len(self.indices)
@@ -834,8 +836,8 @@ class Tensor:
         Parameters
         ----------
         eps : float or None
-            Relative tolerance.  A block is considered zero when its maximum absolute
-            value is less than ``eps * self.norm()``.  Defaults to
+            Relative tolerance. A block is considered zero when its maximum absolute
+            value is less than ``eps * self.norm()``. Defaults to
             ``torch.finfo(torch.float64).eps`` (~2.2e-16) when ``None``.
 
         Notes
