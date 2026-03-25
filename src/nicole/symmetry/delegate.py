@@ -285,9 +285,16 @@ class Bridge:
     def insert_edge(self, position: int, direction: Direction) -> Bridge:
         """Return a new Bridge with a trivial neutral edge inserted at the given position.
         
-        Inserts a neutral (spin-0) edge into the CGSpec at ``position``, leaving
-        the weight matrix unchanged. Because the neutral representation does not
-        participate in coupling, the OM dimension is preserved exactly.
+        Inserts a neutral (spin-0) edge into the CGSpec at ``position``.  The
+        insertion is performed in three steps:
+
+        1. Insert the new edge at position 0 to obtain a well-defined CGSpec.
+        2. Compute the R-symbol for the permutation that moves position 0 to
+           ``position`` while keeping all other edges in their original order.
+        3. Apply ``new_weights = old_weights @ R`` and return the permuted Bridge.
+
+        Because the neutral representation does not participate in coupling,
+        the OM dimension is preserved exactly.
         This is the building block for ``Tensor.insert_index()`` on SU(2) tensors.
         
         Parameters
@@ -300,18 +307,31 @@ class Bridge:
         Returns
         -------
         Bridge
-            New Bridge instance with the neutral edge inserted and the same weights.
+            New Bridge instance with the neutral edge inserted and weights
+            updated by the appropriate R-symbol.
         """
         neutral_charge = yuzuha.Spin(0)
         if direction == Direction.IN:
             new_edge = yuzuha.Edge.incoming(neutral_charge)
         else:
             new_edge = yuzuha.Edge.outgoing(neutral_charge)
-        
-        edges = list(self.cgspec.edges)
-        edges.insert(position, new_edge)
-        new_cgspec = yuzuha.CGSpec.from_edges(edges)
-        return Bridge(cgspec=new_cgspec, weights=self.weights)
+
+        # Step 1: insert at position 0
+        edges_at_0 = [new_edge] + list(self.cgspec.edges)
+        cgspec_at_0 = yuzuha.CGSpec.from_edges(edges_at_0)
+
+        if position == 0:
+            return Bridge(cgspec=cgspec_at_0, weights=self.weights)
+
+        # Step 2: permutation [1, 2, ..., position, 0, position+1, ..., N-1]
+        N = len(edges_at_0)
+        perm = list(range(1, position + 1)) + [0] + list(range(position + 1, N))
+        r_array, cgspec_final = yuzuha.compute_rsymbol(cgspec_at_0, perm)
+        r_symbol = torch.from_numpy(r_array)
+
+        # Step 3: apply R-symbol  (weights: num_components × om_dim)
+        new_weights = self.weights @ r_symbol
+        return Bridge(cgspec=cgspec_final, weights=new_weights)
 
     @staticmethod
     def from_block(
