@@ -30,12 +30,12 @@ Key features:
 - Exact reference from single-particle diagonalization (spin-degenerate levels)
 
 Because the Hamiltonian is spin-diagonal it decouples into two identical spinless
-chains.  At half-filling (2 electrons per site) each spin species fills ⌊N/2⌋
+chains. At half-filling (2 electrons per site) each spin species fills ⌊N/2⌋
 levels of
 
     ε_k = -2t cos(k π / (N+1)),  k = 1, …, N
 
-giving an exact ground state energy of 2 × E_spinless(N, t).  For large N this
+giving an exact ground state energy of 2 × E_spinless(N, t). For large N this
 converges to
 
     E / N  →  -4t/π  ≈  -1.2732 t  per site.
@@ -65,7 +65,7 @@ def exact_halffilling_energy_band(N: int, t: float = 1.0) -> float:
     """Exact ground state energy of an N-site spinful tight-binding chain at half-filling.
 
     The Hamiltonian is spin-diagonal, so each spin species (↑ and ↓) is an
-    independent spinless chain.  At half-filling (⌊N/2⌋ particles per spin) the
+    independent spinless chain. At half-filling (⌊N/2⌋ particles per spin) the
     total energy is twice that of a single spinless chain:
 
         E = 2 × Σ_{k=1}^{⌊N/2⌋} (-2t cos(k π / (N+1)))
@@ -100,7 +100,7 @@ def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
     """Compute the one-body hopping contribution for a single fermionic species.
 
     ``ZFprev`` must be the accumulated (Z × F) operator on the left-block edge,
-    NOT the bare F operator.  This encodes the Jordan-Wigner string
+    NOT the bare F operator. This encodes the Jordan-Wigner string
 
         c†_{σ,i} c_{σ,i+1}  =  F†_{σ,i}  Z_{total,i}  F_{σ,i+1}
 
@@ -109,7 +109,7 @@ def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
 
     Returns the un-scaled, un-symmetrized term
         (Z F)†_{i} F_{i+1}  =  F†_{i} Z_{i} F_{i+1}
-    expressed in the current effective Hilbert space.  The caller is responsible
+    expressed in the current effective Hilbert space. The caller is responsible
     for adding the Hermitian conjugate and the scale -t.
     """
     # (ZF)†_now = conj(permute(Fnow, [2, 1, 0]))   → (op*, ket*, bra*)

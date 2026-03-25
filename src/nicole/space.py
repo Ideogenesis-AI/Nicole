@@ -1153,7 +1153,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     """Load spinful fermion space with Z2xSU(2) symmetry (parity, full spin).
 
     Under Z2xSU(2) the two-particle singlet |↑↓⟩ and the vacuum |0⟩ share
-    the same Z2 parity (even), while {|↑⟩, |↓⟩} have odd parity.  The SU(2)
+    the same Z2 parity (even), while {|↑⟩, |↓⟩} have odd parity. The SU(2)
     doublet {|↑⟩, |↓⟩} forms one irreducible sector.
 
     States and sectors (Z2 charge = particle parity mod 2, SU2 label = 2j):

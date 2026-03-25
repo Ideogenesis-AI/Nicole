@@ -1092,12 +1092,12 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     -----
     The FS phase is absorbed into B's intertwiner weights, which are much
     smaller than the data blocks (shape ``(num_components, om_dimension)``
-    vs. ``(d1, ..., dn, num_components)``).  For Abelian groups no phase
+    vs. ``(d1, ..., dn, num_components)``). For Abelian groups no phase
     is applied.
 
     In yuzuha's left-associative CG fusion tree the first (n−1) axes are
     *leading* axes and the last axis is the *terminal* axis (the total coupled
-    representation).  The FS phase ``(-1)^{2j}`` is applied if and only if
+    representation). The FS phase ``(-1)^{2j}`` is applied if and only if
     both bonds are at the same axis type — both leading or both terminal —
     because only then does the combined X-symbol transformation require a
     non-trivial correction.

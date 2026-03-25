@@ -159,7 +159,7 @@ def svd(
     # Used both for block-key reordering and as the R-symbol argument for intw.
     perm = [left_axis] + right_axes
     # For non-Abelian tensors each data block has a trailing OM axis that must
-    # be kept last.  The array-level permutation appends that axis index.
+    # be kept last. The array-level permutation appends that axis index.
     perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices
@@ -317,7 +317,7 @@ def svd(
         
         # Vd intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
         # Vd's index order is [bond, right_indices_in_original_order], which equals T's
-        # index order permuted by perm.  Applying compute_rsymbol(bridge, perm) gives the
+        # index order permuted by perm. Applying compute_rsymbol(bridge, perm) gives the
         # correctly recoupled Bridge for Vd's edge ordering.
         # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
         # so the weights are copied unchanged.
@@ -415,7 +415,7 @@ def qr(
     # Build permutation to place left axis first
     perm = [left_axis] + right_axes
     # For non-Abelian tensors each data block has a trailing OM axis that must
-    # be kept last.  The array-level permutation appends that axis index.
+    # be kept last. The array-level permutation appends that axis index.
     perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices

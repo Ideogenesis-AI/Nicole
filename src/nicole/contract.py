@@ -394,7 +394,7 @@ def contract(
                     # Scalar: contract components using weight overlap matrix.
                     # The CG-basis overlap <CG_A|CG_B> = conj_phase·δ only
                     # when the contracted edges of A and B appear in the same internal
-                    # slot order.  When axesA ≠ axesB, a relative permutation
+                    # slot order. When axesA ≠ axesB, a relative permutation
                     # align_perm = axesB ∘ axesA⁻¹ misaligns the two CG trees; we correct
                     # this by applying the corresponding R-symbol to bridge_b's weights
                     # before forming the overlap matrix.
@@ -772,7 +772,7 @@ def trace(
         else:
             # Non-Abelian (SU(2) / ProductGroup with SU(2)).
             # Tracing axes a and b is equivalent to contracting with a 2nd order identity
-            # tensor on those indices.  Build bridge_I at charge q = qa = qb with directions
+            # tensor on those indices. Build bridge_I at charge q = qa = qb with directions
             # reversed from T's traced indices and weight √(irrep_dim(q)), exactly as
             # identity() does, then get the X-symbol for that virtual contraction.
             q = qa
