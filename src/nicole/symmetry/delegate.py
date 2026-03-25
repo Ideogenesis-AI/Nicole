@@ -285,7 +285,7 @@ class Bridge:
     def insert_edge(self, position: int, direction: Direction) -> Bridge:
         """Return a new Bridge with a trivial neutral edge inserted at the given position.
         
-        Inserts a neutral (spin-0) edge into the CGSpec at ``position``.  The
+        Inserts a neutral (spin-0) edge into the CGSpec at ``position``. The
         insertion is performed in three steps:
 
         1. Insert the new edge at position 0 to obtain a well-defined CGSpec.
@@ -296,7 +296,28 @@ class Bridge:
         Because the neutral representation does not participate in coupling,
         the OM dimension is preserved exactly.
         This is the building block for ``Tensor.insert_index()`` on SU(2) tensors.
-        
+
+        **Developer's note: Why insert at position 0 first, then permute?**
+
+        In the SU(2) CG fusion tree the terminal edge (the last one) plays a
+        distinguished role: it represents the total coupled representation of all
+        preceding (leading) edges. Consequently, the CG coefficients depend on
+        whether an edge is leading or terminal.
+
+        Inserting the trivial j=0 edge directly at any leading position leaves the
+        terminal edge unchanged, so no extra phase arises. Inserting it directly at
+        the terminal position, however, demotes the previous terminal edge to a
+        leading role, which can introduce a non-trivial recoupling phase (equal to
+        `fs_phase(j_last)` when the old terminal is fermionic).
+
+        By always inserting at position 0 first — where j=0 simply becomes the
+        outermost leading edge and nothing else changes — we obtain a well-defined
+        starting CGSpec with no ambiguity. We then compute the R-symbol for the
+        permutation that slides the j=0 edge from position 0 to the requested
+        `position`. This R-symbol captures exactly the phase (or lack thereof)
+        produced by the change in leading/terminal status, making the result correct
+        for every target position.
+
         Parameters
         ----------
         position : int
