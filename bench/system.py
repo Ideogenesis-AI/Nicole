@@ -291,10 +291,20 @@ def build_freefermion(
         Cd   — h.c. of C  (op=OUT, same data as F for real operators)
 
     ``capcup`` flips the op-axis direction of C (IN→OUT) and Cd (OUT→IN)
-    without changing numerical contractions. After the flip:
+    without changing numerical contractions. All four operators are then
+    normalised to the full physical index ``Spc`` so that ``oplus`` can
+    merge the op axis regardless of which individual bra/ket sectors each
+    operator occupies. After the flip and normalisation:
 
-        G    = F + C      (both op=OUT, carries annihilation and creation)
-        Gdag = (Fd+Cd)*(-t)  (both op=IN, the scaled Hermitian conjugate)
+        G    = oplus(F, C, axes=2)      (op=OUT, dim-2 within charge-1 sector)
+        Gdag = oplus(Fd, Cd, axes=2)*(-t)  (op=IN,  the scaled Hermitian conjugate)
+
+    Using ``oplus`` on the op axis (rather than plain ``+``) keeps the
+    annihilation channel (F, position 0) and creation channel (C, position 1)
+    in separate op-index slots.  This prevents the MPO bond from generating
+    spurious c†c† / cc cross-terms, which would otherwise appear under Z2
+    symmetry because both operators share the same Z2 charge (= 1) and would
+    collapse to the same dim-1 bond slot with plain addition.
 
     The MPO matrix is:
 
@@ -324,17 +334,28 @@ def build_freefermion(
     Cd = permute(conj(C), [1, 0, 2])
 
     # capcup(C, 2, Cd, 2) inverts the op-axis direction of both tensors:
-    #   C  : op IN  → OUT   (now matches F, so F + C is valid)
-    #   Cd : op OUT → IN    (now matches Fd, so Fd + Cd is valid)
+    #   C  : op IN  → OUT   (now matches F, so oplus along op is valid)
+    #   Cd : op OUT → IN    (now matches Fd, so oplus along op is valid)
     # Numerical contractions are unchanged by this operation.
     capcup(C, 2, Cd, 2)
 
-    # G    = F + C  : both op=OUT, union of charge sectors gives a single
-    #                 tensor carrying both annihilation (charge -2) and
-    #                 creation (charge +2) — analogous to S = Sp+Sm+Sz.
-    # Gdag = (Fd + Cd) * (-t) : both op=IN, the scaled Hermitian conjugate.
-    G    = F + C
-    Gdag = (Fd + Cd) * (-t)
+    # Normalise all four operators to the full physical index so that oplus
+    # can merge the op axis (axis 2) regardless of which bra/ket sectors each
+    # operator individually occupies.  (Same pattern as build_conductor.)
+    for op in (F, C, Fd, Cd):
+        op.indices = (Spc, Spc.flip()) + op.indices[2:]
+
+    # G    = oplus(F, C, axes=2)  : op=OUT, dim-2 within the charge-1 sector.
+    #   F occupies op-position 0 (annihilation channel).
+    #   C occupies op-position 1 (creation channel).
+    # Keeping them in separate op-positions prevents the MPO bond from
+    # cross-pairing annihilation at site i with creation at site i+1 AND
+    # creation at site i with creation at site i+1 (spurious c†c† / cc
+    # terms that appear when both channels collapse to the same dim-1 slot,
+    # as happens with plain F+C under Z2 symmetry).
+    # Gdag = oplus(Fd, Cd, axes=2) * (-t) : op=IN, the scaled Hermitian conjugate.
+    G    = oplus(F, C, axes=2)
+    Gdag = oplus(Fd, Cd, axes=2) * (-t)
 
     # Identity operator: (bra, ket)
     I = identity(Spc)
