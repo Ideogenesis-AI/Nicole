@@ -1,19 +1,19 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 """Tests for symmetry groups: U1Group and Z2Group."""
@@ -39,28 +39,29 @@ def test_u1_dual():
     assert group.dual(0) == 0
 
 
-def test_u1_fuse_two():
-    """Test U1Group fuse with two charges."""
+def test_u1_irrep_dim():
+    """Test U1Group irrep_dim method (always 1 for Abelian)."""
     group = U1Group()
-    assert group.fuse(2, 3) == 5
-    assert group.fuse(-1, 4) == 3
-    assert group.fuse(0, 0) == 0
+    assert group.irrep_dim(0) == 1
+    assert group.irrep_dim(1) == 1
+    assert group.irrep_dim(-5) == 1
+    assert group.irrep_dim(100) == 1
 
 
-def test_u1_fuse_many():
-    """Test U1Group fuse with multiple charges."""
+def test_u1_fuse_unique_two():
+    """Test U1Group fuse_unique with two charges."""
     group = U1Group()
-    assert group.fuse(2, 3, -5) == 0
-    assert group.fuse(1, 2, 3, 4) == 10
-    assert group.fuse() == 0  # Empty fusion gives neutral
+    assert group.fuse_unique(2, 3) == 5
+    assert group.fuse_unique(-1, 4) == 3
+    assert group.fuse_unique(0, 0) == 0
 
 
-def test_u1_fuse_many_method():
-    """Test U1Group fuse_many method."""
+def test_u1_fuse_unique_many():
+    """Test U1Group fuse_unique with multiple charges."""
     group = U1Group()
-    assert group.fuse_many([2, 3, -5]) == 0
-    assert group.fuse_many([1, 2, 3, 4]) == 10
-    assert group.fuse_many([]) == 0
+    assert group.fuse_unique(2, 3, -5) == 0
+    assert group.fuse_unique(1, 2, 3, 4) == 10
+    assert group.fuse_unique() == 0  # Empty fusion gives neutral
 
 
 def test_u1_equal():
@@ -99,6 +100,12 @@ def test_u1_name():
     assert group.name == "U1"
 
 
+def test_u1_is_abelian():
+    """Test U1Group is_abelian property."""
+    group = U1Group()
+    assert group.is_abelian is True
+
+
 # Z2Group tests
 
 def test_z2_neutral():
@@ -114,32 +121,30 @@ def test_z2_dual():
     assert group.dual(1) == 1
 
 
-def test_z2_fuse_two():
-    """Test Z2Group fuse with two charges."""
+def test_z2_irrep_dim():
+    """Test Z2Group irrep_dim method (always 1 for Abelian)."""
     group = Z2Group()
-    assert group.fuse(0, 0) == 0
-    assert group.fuse(0, 1) == 1
-    assert group.fuse(1, 0) == 1
-    assert group.fuse(1, 1) == 0
+    assert group.irrep_dim(0) == 1
+    assert group.irrep_dim(1) == 1
 
 
-def test_z2_fuse_many():
-    """Test Z2Group fuse with multiple charges."""
+def test_z2_fuse_unique_two():
+    """Test Z2Group fuse_unique with two charges."""
     group = Z2Group()
-    assert group.fuse(1, 1) == 0
-    assert group.fuse(1, 0, 1) == 0
-    assert group.fuse(1, 1, 1) == 1
-    assert group.fuse(0, 0, 0) == 0
-    assert group.fuse() == 0
+    assert group.fuse_unique(0, 0) == 0
+    assert group.fuse_unique(0, 1) == 1
+    assert group.fuse_unique(1, 0) == 1
+    assert group.fuse_unique(1, 1) == 0
 
 
-def test_z2_fuse_many_method():
-    """Test Z2Group fuse_many method."""
+def test_z2_fuse_unique_many():
+    """Test Z2Group fuse_unique with multiple charges."""
     group = Z2Group()
-    assert group.fuse_many([1, 1]) == 0
-    assert group.fuse_many([1, 0, 1]) == 0
-    assert group.fuse_many([1, 1, 1]) == 1
-    assert group.fuse_many([]) == 0
+    assert group.fuse_unique(1, 1) == 0
+    assert group.fuse_unique(1, 0, 1) == 0
+    assert group.fuse_unique(1, 1, 1) == 1
+    assert group.fuse_unique(0, 0, 0) == 0
+    assert group.fuse_unique() == 0
 
 
 def test_z2_equal():
@@ -184,6 +189,12 @@ def test_z2_name():
     """Test Z2Group name property."""
     group = Z2Group()
     assert group.name == "Z2"
+
+
+def test_z2_is_abelian():
+    """Test Z2Group is_abelian property."""
+    group = Z2Group()
+    assert group.is_abelian is True
 
 
 # Cross-group tests

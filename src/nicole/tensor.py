@@ -1,19 +1,19 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ charge conservation dictated by the index metadata.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional
 
 import torch
 
@@ -35,7 +35,8 @@ from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
 from .typing import normalize_dtype_for_device
-from .symmetry.base import SymmetryGroup
+from .symmetry import SymmetryGroup
+from .symmetry import delegate as dg
 
 # Disable autograd by default for performance (tensor networks rarely need gradients)
 torch.set_grad_enabled(False)
@@ -61,6 +62,8 @@ class Tensor:
         Ordered tuple of human-readable labels for each index.
     data:
         Mapping from block keys (one charge per axis) to dense PyTorch tensors.
+    intw:
+        Mapping from block keys to intertwiners delegated to Yuzuha protocol.
     dtype:
         Data type for the dense blocks. Defaults to double precision real values.
     label:
@@ -82,14 +85,14 @@ class Tensor:
         Extract the scalar value from a 0D tensor.
     norm()
         Compute the Frobenius norm aggregated across all dense blocks.
-    copy()
-        Create a deep copy of this tensor with independent block data.
+    clone()
+        Create a deep clone of this tensor with independent block data.
     rand_fill()
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
-    trim_zero_sectors()
-        In-place: Remove sectors where all data is below double precision.
+    trim_zero_blocks()
+        In-place: Remove blocks where all data is below double precision.
     device
         Property returning the device where tensor blocks are stored.
     to()
@@ -112,6 +115,10 @@ class Tensor:
         Access the i-th block by integer index (1-indexed, matching display).
     show()
         Display selected blocks without max_line limits.
+    compress()
+        In-place: Reduce redundant intertwiner components via SVD truncation.
+    regularize()
+        In-place: Canonicalize or regularize Bridge weights.
     conj()
         In-place: Complex conjugate every dense block, and revert all index directions.
     permute()
@@ -126,12 +133,13 @@ class Tensor:
     Notes
     -----
     For functional (non-mutating) versions of conj, permute, and transpose that return
-    new tensor instances, use the standalone functions from `nicole.operators`.
+    new tensor instances, use the standalone functions from `nicole.maneuver`.
     """
 
     indices: Tuple[Index, ...]
     itags: Tuple[str, ...]
     data: MutableMapping[BlockKey, torch.Tensor]
+    intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = field(default=None)
     dtype: torch.dtype = torch.float64
     label: str = "Tensor"
     _sorted_keys: Optional[Tuple[BlockKey, ...]] = field(default=None, repr=False, compare=False)
@@ -172,7 +180,22 @@ class Tensor:
             # Set default label for scalars if still using the default "Tensor" label
             if self.label == "Tensor":
                 object.__setattr__(self, 'label', "Scalar")
-        BlockSchema.validate_blocks(self.indices, self.data)
+        # Validate intertwiners (intw) and block shapes for generic groups
+        if len(self.indices) > 0:
+            group = self.indices[0].group
+            if not group.is_abelian:
+                if self.intw is None:
+                    raise ValueError("Generic (non-Abelian) tensors must have intertwiner (intw) populated")
+                # Validate each Bridge has correct number of external edges
+                for key, bridge in self.intw.items():
+                    if bridge.num_external != len(self.indices):
+                        raise ValueError(
+                            f"Bridge for key {key} has {bridge.num_external} edges, "
+                            f"expected {len(self.indices)}"
+                        )
+        
+        # Validate block shapes (includes intw validation for generic groups)
+        BlockSchema.validate_blocks(self.indices, self.data, self.intw)
         for key in self.data:
             if not BlockSchema.charges_conserved(self.indices, key):
                 raise ValueError(
@@ -215,6 +238,9 @@ class Tensor:
         
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
+        
+        For generic symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
             device = torch.get_default_device()
@@ -229,19 +255,35 @@ class Tensor:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
+        
+        # Create intertwiner (intw) for generic groups first
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: Dict[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in BlockSchema.iter_admissible_keys(indices_tuple):
+                if not BlockSchema.charges_conserved(indices_tuple, key):
+                    continue
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         data: Dict[BlockKey, torch.Tensor] = {}
         # Iterate over all admissible charge assignments for the provided indices.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
             # Determine the dense shape implied by the current key and allocate zeros.
-            shape = BlockSchema.shape_for_key(indices_tuple, key)
+            if intw is not None and key in intw:
+                # Non-Abelian: append trailing reduced multiplicity dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key, num_components=intw[key].num_components)
+            else: # Abelian: no trailing dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key)
             block = torch.zeros(shape, dtype=dtype, device=device, requires_grad=requires_grad)
             data[key] = block
         
         # normalize indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
-        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=dtype)
+        return cls(indices=normalized_indices, itags=itags_tuple, data=data, intw=intw, dtype=dtype)
 
     @classmethod
     def random(
@@ -278,6 +320,9 @@ class Tensor:
         
         MPS (Apple Silicon) doesn't support float64/complex128. If creating on MPS with
         these dtypes, they will be automatically downgraded to float32/complex64.
+        
+        For generic symmetry groups (e.g., SU2), intertwiners (intw) are automatically
+        populated with Bridge objects containing default Clebsch-Gordan specifications.
         """
         if device is None:
             device = torch.get_default_device()
@@ -298,12 +343,30 @@ class Tensor:
             itags_tuple = tuple(f"_init_" for _ in indices_tuple)
         else:
             itags_tuple = tuple(itags)
+        
+        # Create intertwiner (intw) for generic (non-Abelian) groups first
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if indices_tuple and not indices_tuple[0].group.is_abelian:
+            intw: Dict[BlockKey, dg.Bridge] = {}
+            directions = [idx.direction for idx in indices_tuple]
+            for key in BlockSchema.iter_admissible_keys(indices_tuple):
+                if not BlockSchema.charges_conserved(indices_tuple, key):
+                    continue
+                intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
+                    key=key, directions=directions, dtype=dtype)
+        
         data: Dict[BlockKey, torch.Tensor] = {}
         # Walk through admissible blocks in the same fashion as `zeros`.
         for key in BlockSchema.iter_admissible_keys(indices_tuple):
             if not BlockSchema.charges_conserved(indices_tuple, key):
                 continue
-            shape = BlockSchema.shape_for_key(indices_tuple, key)
+            # Determine the dense shape implied by the current key
+            if intw is not None and key in intw:
+                # Non-Abelian: append trailing reduced multiplicity dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key, num_components=intw[key].num_components)
+            else: # Abelian: no trailing dimension
+                shape = BlockSchema.shape_for_key(indices_tuple, key)
+            
             if dtype.is_complex:
                 real = torch.randn(shape, generator=gen, device=device,
                     dtype=torch.float64 if dtype == torch.complex128 else torch.float32)
@@ -319,10 +382,13 @@ class Tensor:
         
         # Prune indices to only include sectors that actually appear in the data
         normalized_indices = cls._prune_unused_sectors(indices_tuple, data)
-        return cls(indices=normalized_indices, itags=itags_tuple, data=data, dtype=dtype)
+        return cls(indices=normalized_indices, itags=itags_tuple, data=data, intw=intw, dtype=dtype)
 
     @staticmethod
-    def _prune_unused_sectors(indices: Tuple[Index, ...], data: Dict[BlockKey, torch.Tensor]) -> Tuple[Index, ...]:
+    def _prune_unused_sectors(
+        indices: Tuple[Index, ...],
+        data: MutableMapping[BlockKey, torch.Tensor]
+    ) -> Tuple[Index, ...]:
         """Remove sectors from indices that don't appear in any block."""
         if not data:
             # No blocks, return empty indices
@@ -417,8 +483,8 @@ class Tensor:
     def __str__(self) -> str:
         """Return a formatted multiline summary generated by `tensor_summary`."""
         from .display import tensor_summary
-        return tensor_summary(self.indices, self.itags, self.data, self.dtype, 
-                              self.label, self.norm(), self.sorted_keys)
+        return tensor_summary(self.indices, self.itags, self.data, self.intw,
+                              self.dtype, self.label, self.norm(), self.sorted_keys)
 
     __repr__ = __str__
 
@@ -433,7 +499,7 @@ class Tensor:
         selected_keys = [self.key(i) for i in block_indices]
         
         # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
-        print(tensor_summary(self.indices, self.itags, self.data, self.dtype, self.label, self.norm(),
+        print(tensor_summary(self.indices, self.itags, self.data, self.intw, self.dtype, self.label, self.norm(),
                              sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
     
     # ------------------------------------------------------------
@@ -480,14 +546,15 @@ class Tensor:
             # Just move to new device
             new_data = {k: v.to(device) for k, v in self.data.items()}
         
-        result = Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=new_dtype,
-            label=self.label,
+        # Move intertwiner to new device/dtype
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw = {k: bridge.to(device, dtype=new_dtype) for k, bridge in self.intw.items()}
+        
+        return Tensor(
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=new_dtype, label=self.label
         )
-        return result
     
     def cpu(self) -> 'Tensor':
         """Move tensor to CPU."""
@@ -591,26 +658,41 @@ class Tensor:
         block.backward()
 
     # ------------------------------------------------------------
-    #   Utility methods: norm, copy, and sector access
+    #   Utility methods: norm, clone, and sector access
     # ------------------------------------------------------------
 
     def norm(self) -> float:
         """Compute the Frobenius norm aggregated across all dense blocks."""
         if not self.data:
             return 0.0
-        return float(
-            torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
-        )
+        
+        # Abelian: direct Frobenius norm
+        if not self.indices or self.indices[0].group.is_abelian:
+            return float(
+                torch.sqrt(sum(torch.sum(torch.abs(block) ** 2) for block in self.data.values()))
+            )
+        else:
+            # Generic: ||T||² = Σ_blocks Tr(W† R† R W)
+            total = 0.0
+            for key, block in self.data.items():
+                r_flat = block.flatten(0, -2)  # (d₁...dₙ, r)
+                weights = self.intw[key].weights  # (r, μ)
+                gram = r_flat.T.conj() @ r_flat  # (r, r)
+                total += torch.sum(weights.conj() * (gram @ weights)).real
+            return float(torch.sqrt(total))
 
-    def copy(self) -> Tensor:
-        """Create a deep copy of this tensor."""
+    def clone(self) -> Tensor:
+        """Create a deep clone of this tensor."""
         new_data = {k: v.clone() for k, v in self.data.items()}
+        
+        # Deep clone intertwiner
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw = {k: bridge.clone() for k, bridge in self.intw.items()}
+        
         return Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=self.dtype,
-            label=self.label,
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=self.dtype, label=self.label
         )
 
     def _invalidate_sorted_keys(self) -> None:
@@ -687,6 +769,12 @@ class Tensor:
         - Updating block keys to include the neutral charge at the new position
         
         The symmetry group for the new index is taken from the existing indices.
+        
+        For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is updated
+        via ``Bridge.insert_edge``, which inserts the neutral-charge edge and
+        applies the appropriate R-symbol so that the result is consistent with
+        a direct permutation of the new index to ``position``. The OM dimension
+        is preserved exactly since the neutral irrep does not participate in coupling.
         """
         # Validate position
         n = len(self.indices)
@@ -716,7 +804,11 @@ class Tensor:
         self.itags = tuple(itags_list)
         
         # Update data blocks: insert neutral charge in keys and add singleton dimension
-        new_data = {}
+        new_data: Dict[BlockKey, torch.Tensor] = {}
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw = {}
+        
         for key, arr in self.data.items():
             # Insert neutral charge at the appropriate position in the key
             key_list = list(key)
@@ -725,33 +817,60 @@ class Tensor:
             
             # Add singleton dimension at the appropriate axis
             new_data[new_key] = torch.unsqueeze(arr, dim=position)
+            
+            if new_intw is not None:
+                new_intw[new_key] = self.intw[key].insert_edge(position, direction)
         
         self.data = new_data
+        self.intw = new_intw
         self._invalidate_sorted_keys()
 
-    def trim_zero_sectors(self) -> None:
-        """Remove sectors where all data elements have absolute value below double precision.
-        
+    def trim_zero_blocks(self, eps: Optional[float] = None) -> None:
+        """Remove blocks whose data is negligible relative to the tensor's overall scale.
+
         This operation modifies the tensor in-place by:
-        - Removing blocks from self.data where max(abs(values)) < machine epsilon for float64
+        - Removing blocks from self.data where max(abs(values)) < eps * norm
+        - For generic groups, also removing blocks where all weights are similarly negligible
         - Updating each index to only include sectors that still have data in remaining blocks
-        
+
+        Parameters
+        ----------
+        eps : float or None
+            Relative tolerance. A block is considered zero when its maximum absolute
+            value is less than ``eps * self.norm()``. Defaults to
+            ``torch.finfo(torch.float64).eps`` (~2.2e-16) when ``None``.
+
         Notes
         -----
-        Uses torch.finfo(torch.float64).eps as the threshold for numerical zero.
-        Sectors are only removed if no blocks remain that reference their charges.
+        Using the Frobenius norm as the scale makes the criterion fully relative: a block
+        is trimmed only when it is negligible compared to the tensor as a whole, regardless
+        of the absolute magnitude of individual entries.
+
+        If the tensor is identically zero (norm == 0) all blocks are removed.
         """
-        # Define threshold as double precision machine epsilon
-        eps = torch.finfo(torch.float64).eps
-        
+        if eps is None:
+            eps = torch.finfo(torch.float64).eps
+
+        threshold = eps * self.norm()  # == 0.0 when tensor is identically zero
+
         # Step 1: Identify and remove blocks with all near-zero values
         blocks_to_remove = []
         for key, arr in self.data.items():
-            if torch.max(torch.abs(arr)) < eps:
+            is_data_zero = torch.max(torch.abs(arr)).item() <= threshold
+            is_weights_zero = False
+
+            # For generic groups: also check if weights are zero (T = R @ 0 = 0)
+            if self.intw is not None and key in self.intw:
+                weights = self.intw[key].weights
+                is_weights_zero = torch.max(torch.abs(weights)).item() <= threshold
+            
+            if is_data_zero or is_weights_zero:
                 blocks_to_remove.append(key)
         
         for key in blocks_to_remove:
             del self.data[key]
+            if self.intw is not None and key in self.intw:
+                del self.intw[key]
         
         # Step 2: Determine which charges are still present at each index position
         n_indices = len(self.indices)
@@ -803,13 +922,18 @@ class Tensor:
         return self, other
 
     def __add__(self, other: Tensor) -> Tensor:
-        """Element-wise addition while preserving symmetry metadata."""
+        """Element-wise addition while preserving symmetry metadata.
+        
+        For generic groups (SU(2)), handles intertwiner weights:
+        - If weights match: adds reduced tensors directly
+        - If weights differ: concatenates along reduced multiplicity dimension
+        """
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
-            result_data = self.data[()] + other.data[()]
+            scalar_data = self.data[()] + other.data[()]
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
@@ -824,32 +948,50 @@ class Tensor:
         # Perform addition on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        for k in keys:
-            a = self.data.get(k)
-            b = other.data.get(k)
-            if a is None:
-                new_data[k] = (+b)
-            elif b is None:
-                new_data[k] = (+a)
-            else:
-                new_data[k] = a + b
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        
+        # Abelian groups: direct block addition
+        if not self.indices or self.indices[0].group.is_abelian:
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                if a is None:
+                    new_data[k] = (+b)
+                elif b is None:
+                    new_data[k] = (+a)
+                else:
+                    new_data[k] = a + b
+        else:
+            # Non-Abelian groups: handle intertwiners
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                bridge_a = self.intw.get(k) if a is not None else None
+                bridge_b = other.intw.get(k) if b is not None else None
+                
+                new_data[k], new_intw[k] = BlockSchema.block_add(
+                    a, bridge_a, b, bridge_b, rtol=1e-12, atol=1e-15
+                )
         
         return Tensor(
-            indices=new_indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=torch.promote_types(self.dtype, other.dtype),
-            label=self.label,
+            indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
         )
 
     def __sub__(self, other: Tensor) -> Tensor:
-        """Element-wise subtraction while preserving symmetry metadata."""
+        """Element-wise subtraction while preserving symmetry metadata.
+        
+        For generic groups (SU(2)), handles intertwiner weights:
+        - If weights match: subtracts reduced tensors directly
+        - If weights differ: concatenates along reduced multiplicity dimension
+        """
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
-            result_data = self.data[()] - other.data[()]
+            scalar_data = self.data[()] - other.data[()]
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
             )
         
@@ -864,22 +1006,36 @@ class Tensor:
         # Perform subtraction on blocks
         keys = set(self.data.keys()) | set(other.data.keys())
         new_data: Dict[BlockKey, torch.Tensor] = {}
-        for k in keys:
-            a = self.data.get(k)
-            b = other.data.get(k)
-            if a is None:
-                new_data[k] = -b
-            elif b is None:
-                new_data[k] = +a
-            else:
-                new_data[k] = a - b
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        
+        # Abelian groups: direct block subtraction
+        if not self.indices or self.indices[0].group.is_abelian:
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                if a is None:
+                    new_data[k] = -b
+                elif b is None:
+                    new_data[k] = +a
+                else:
+                    new_data[k] = a - b
+        else:
+            # Generic (non-Abelian) groups: handle intertwiners
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for k in keys:
+                a = self.data.get(k)
+                b = other.data.get(k)
+                bridge_a = self.intw.get(k) if a is not None else None
+                bridge_b = other.intw.get(k) if b is not None else None
+                
+                new_data[k], new_intw[k] = BlockSchema.block_add(
+                    a, bridge_a, -b if b is not None else None, bridge_b,
+                    rtol=1e-12, atol=1e-15
+                )
         
         return Tensor(
-            indices=new_indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=torch.promote_types(self.dtype, other.dtype),
-            label=self.label,
+            indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
         )
 
     def __mul__(self, scalar: Union[int, float, complex]) -> Tensor:
@@ -887,7 +1043,7 @@ class Tensor:
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
             # Perform operation on torch tensor to preserve computational graph
-            result_data = self.data[()] * scalar
+            scalar_data = self.data[()] * scalar
             # Determine scalar dtype for promotion
             if isinstance(scalar, complex):
                 scalar_dtype = torch.complex128
@@ -896,7 +1052,7 @@ class Tensor:
             else:  # int
                 scalar_dtype = torch.int64
             return Tensor(
-                indices=(), itags=(), data={(): result_data},
+                indices=(), itags=(), data={(): scalar_data},
                 dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
             )
         
@@ -909,56 +1065,328 @@ class Tensor:
         else:  # int
             scalar_dtype = torch.int64
         return Tensor(
-            indices=self.indices,
-            itags=self.itags,
-            data=new_data,
-            dtype=torch.promote_types(self.dtype, scalar_dtype),
-            label=self.label,
+            indices=self.indices, itags=self.itags, data=new_data, intw=self.intw,
+            dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
         )
 
     __rmul__ = __mul__
 
     # ------------------------------------------------------------
+    #   Compression: reduce redundant components
+    # ------------------------------------------------------------
+
+    def compress(
+        self, 
+        keys: Optional[Sequence[BlockKey]] = None, 
+        cutoff: float = 1e-14
+    ) -> None:
+        """Compress intertwiner weights by removing linearly dependent components (in-place).
+        
+        For generic groups, performs SVD on weight matrices and truncates
+        singular values below the cutoff threshold. This reduces the reduced
+        multiplicity dimension when weight rows are linearly dependent.
+        
+        The compression preserves the physical tensor: T = R @ W is decomposed as
+        R @ (U @ S @ Vh) ≈ (R @ U @ S) @ Vh, where small singular values are removed.
+        
+        This operation modifies the tensor in place.
+        
+        Parameters
+        ----------
+        keys : Sequence[BlockKey], optional
+            Block keys to compress. If None, compresses all blocks with num_components >= 2.
+        cutoff : float, optional
+            Singular value threshold for truncation. Default: 1e-14.
+        
+        Examples
+        --------
+        >>> # After adding tensors with different weights, compress redundancy
+        >>> C = A + B  # May have redundant components
+        >>> C.compress(cutoff=1e-12)  # Modifies C in place
+        """
+        # Abelian groups: no compression needed
+        if not self.indices or self.indices[0].group.is_abelian:
+            return
+        
+        # Determine which keys to compress
+        if keys is None:
+            # Compress all blocks with num_components >= 2
+            keys_to_compress = [k for k, bridge in self.intw.items() if bridge.num_components >= 2]
+        else:
+            keys_to_compress = list(keys)
+        
+        # If no blocks to compress, nothing to do
+        if not keys_to_compress:
+            return
+        
+        # Perform compression on specified keys
+        for key in keys_to_compress:
+            block = self.data[key]
+            bridge = self.intw[key]
+            
+            # Perform SVD compression
+            U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+            
+            # Truncate small singular values (keep at least 1)
+            k = max(1, (S >= cutoff).sum().item())
+            
+            if k < bridge.num_components:
+                # Compression: absorb U[:, :k] @ diag(S[:k]) into data, keep Vh[:k, :]
+                r_flat = block.flatten(0, -2)
+                r_new = (r_flat @ (U[:, :k] * S[:k])).reshape(block.shape[:-1] + (k,))
+                
+                # Update in place
+                self.data[key] = r_new
+                self.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=Vh[:k, :])
+
+    # ------------------------------------------------------------
+    #   Weights canonicalisation or regularisation
+    # ------------------------------------------------------------
+
+    def regularize(self) -> None:
+        """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
+
+        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data ``R``
+        and the Bridge weight ``W`` satisfy::
+
+            physical block  ≈  R  ×  W
+
+        The method absorbs the deviation of each block's weight from the
+        canonical value ``sqrt(irrep_dim(q))`` into ``R``, so that after the
+        call the tensor uses the same Bridge-weight convention as
+        :func:`identity`::
+
+            physical block  ≈  R_new  ×  sqrt(irrep_dim(q))
+
+        Both branches use a row-normalisation strategy, differing only in target:
+
+        - **2nd-order**: By Schur's lemma ``om = 1``, so each weight row is a
+          single scalar ``W[i, 0]``. The factor is absorbed into the
+          corresponding data component so that the canonical positive value
+          ``sqrt(irrep_dim(q))`` is enforced:
+
+              factor[i] = W[i, 0] / sqrt(irrep_dim(q))
+              W_new[i, 0] = sqrt(irrep_dim(q))
+              R_new[..., i] = R[..., i] * factor[i]
+
+        - **Higher-order**: each row is normalised to unit norm, with the
+          norm absorbed into the data:
+
+              norms[i] = ‖W[i, :]‖
+              W_new[i, :] = W[i, :] / norms[i]
+              R_new[..., i] = R[..., i] * norms[i]
+
+        Has no effect on Abelian tensors or tensors without an intertwiner.
+        """
+        if self.intw is None:
+            return
+
+        group = self.indices[0].group
+        _sp_eps = torch.finfo(torch.float32).eps
+
+        if len(self.indices) == 2:
+            # 2nd order (matrix): normalise each weight to sqrt(irrep_dim(q))
+            for key, arr in self.data.items():
+                bridge = self.intw.get(key)
+                if bridge is None:
+                    continue
+
+                q = key[0]
+                target = torch.sqrt(torch.tensor(group.irrep_dim(q), dtype=self.dtype))
+                factors = bridge.weights[:, 0] / target         # (k,) signed ratio
+                bridge.weights[:] = target                      # all rows → +target
+                self.data[key] = arr * factors                  # (..., k) * (k,)
+        else:
+            # Higher-order: row-normalise Bridge weight matrix.
+            # norms[i] = ‖W[i,:]‖; absorbed into the trailing component axis of R.
+            for key, arr in self.data.items():
+                bridge = self.intw.get(key)
+                if bridge is None:
+                    continue
+
+                norms = bridge.weights.norm(dim=1)          # (k,)
+                safe_norms = norms.clamp(min=1e-12)
+                bridge.weights[:] = bridge.weights / safe_norms[:, None]
+                self.data[key] = arr * norms                # (..., k) * (k,)
+
+    # ------------------------------------------------------------
     #   Tensor operations: conj, permute, transpose
     # ------------------------------------------------------------
 
-    def conj(self) -> None:
-        """Complex conjugate every dense block if dtype is complex, and revert all index directions."""
-        # Only conjugate data if dtype is complex
+    def conj(self, in_place: bool = False) -> Tensor:
+        """Complex conjugate every dense block if dtype is complex, and revert all index directions.
+        
+        Parameters
+        ----------
+        in_place : bool, optional
+            If True, modifies this tensor in-place and returns self.
+            If False (default), returns a new Tensor instance with conjugated data
+            (as views for complex dtype) and flipped directions. The underlying torch
+            tensors are not cloned - torch.conj() returns a view for complex dtypes,
+            and real dtypes share the same tensors.
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        
+        Examples
+        --------
+        >>> # Functional style (default, efficient with sharing)
+        >>> t2 = t1.conj()
+        >>> t2 is not t1  # Different Tensor instances
+        >>> # But for complex dtype, t2.data shares storage with t1.data (as conjugate views)
+        >>> 
+        >>> # In-place style (allows chaining)
+        >>> result = t1.conj(in_place=True)
+        >>> result is t1  # Returns self for chaining
+        """
+        # Prepare conjugated data
         if self.dtype.is_complex:
-            for k in self.data:
-                self.data[k] = torch.conj(self.data[k])
+            new_data = {k: torch.conj(v) for k, v in self.data.items()}
+        else:
+            new_data = dict(self.data)  # Shallow copy: share tensors
+        
         # Flip all index directions
-        self.indices = tuple(idx.flip() for idx in self.indices)
+        new_indices = tuple(idx.flip() for idx in self.indices)
+        
+        # Update intw with flipped directions
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for key, bridge in self.intw.items():
+                new_intw[key] = bridge.conj()
+        
+        if in_place:
+            # Modify in-place and return self for chaining
+            self.data = new_data
+            self.indices = new_indices
+            self.intw = new_intw
+            return self
+        else:
+            # Return new instance
+            return Tensor(
+                indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
+                dtype=self.dtype, label=self.label
+            )
 
-    def permute(self, order: Sequence[int]) -> None:
-        """Permute tensor axes according to the provided reordering."""
+    def permute(self, order: Sequence[int], in_place: bool = False) -> Tensor:
+        """Permute tensor axes according to the provided reordering.
+        
+        Parameters
+        ----------
+        order : Sequence[int]
+            Sequence of integer axes specifying the new ordering. Must be a
+            permutation of range(len(self.indices)).
+        in_place : bool, optional
+            If False (default), returns a new Tensor instance with permuted axes.
+            The data blocks share the same underlying storage (torch.permute
+            creates views). If True, modifies this tensor in-place and returns
+            self.
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        
+        Notes
+        -----
+        For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
+        the outer multiplicity (OM) indices. The weights are updated by matrix
+        multiplication with the R-symbol: new_weights = R @ old_weights.
+        
+        Examples
+        --------
+        >>> # Functional style (default, efficient with sharing)
+        >>> t2 = t.permute([2, 0, 1])
+        >>> t2 is not t  # Different Tensor instances
+        >>> # But t2.data blocks share storage with t.data (as permuted views)
+        >>> 
+        >>> # In-place style (allows chaining)
+        >>> result = t.permute([2, 0, 1], in_place=True)
+        >>> result is t  # Returns self for chaining
+        """
         if sorted(order) != list(range(len(self.indices))):
             raise ValueError("Invalid permutation order")
         
-        # Update indices and itags
-        self.indices = tuple(self.indices[i] for i in order)
-        self.itags = tuple(self.itags[i] for i in order)
+        # Create new indices and itags
+        new_indices = tuple(self.indices[i] for i in order)
+        new_itags = tuple(self.itags[i] for i in order)
         
-        # Update data blocks
-        new_data = {}
-        for key, arr in self.data.items():
-            new_key = tuple(key[i] for i in order)
-            new_data[new_key] = torch.permute(arr, order)
-        self.data = new_data
-        self._invalidate_sorted_keys()
+        # Permute data blocks (always use trailing OM axis if present)
+        new_data: Dict[BlockKey, torch.Tensor] = {}
+        if self.intw is not None:
+            # Non-Abelian: data has trailing OM axis, permute all but last
+            order_with_om = tuple(order) + (len(order),)
+            for key, arr in self.data.items():
+                new_key = tuple(key[i] for i in order)
+                new_data[new_key] = torch.permute(arr, order_with_om)
+        else:
+            # Abelian: standard permutation
+            for key, arr in self.data.items():
+                new_key = tuple(key[i] for i in order)
+                new_data[new_key] = torch.permute(arr, order)
+        
+        # Update intw with R-symbols for non-Abelian case
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for key, bridge in self.intw.items():
+                # Compute R-symbol for this permutation
+                r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
+                
+                # Update weights: new_weights = R @ old_weights
+                # R has shape (om_original, om_permuted)
+                # weights has shape (num_components, om_original)
+                # Result: (num_components, om_permuted)
+                new_weights = bridge.weights @ r_symbol
+                
+                # Create new Bridge with permuted spec and updated weights
+                new_key = tuple(key[i] for i in order)
+                new_intw[new_key] = dg.Bridge(cgspec=spec_permuted, weights=new_weights)
+        
+        if in_place:
+            # Modify in-place and return self for chaining
+            self.indices = new_indices
+            self.itags = new_itags
+            self.data = new_data
+            self.intw = new_intw
+            self._invalidate_sorted_keys()
+            return self
+        else:
+            # Return new instance
+            return Tensor(
+                indices=new_indices, itags=new_itags, data=new_data, intw=new_intw,
+                dtype=self.dtype, label=self.label
+            )
 
-    def transpose(self, *order: int) -> None:
-        """Transpose tensor axes; defaults to reversing the index order."""
+    def transpose(self, *order: int, in_place: bool = True) -> Tensor:
+        """Transpose tensor axes; defaults to reversing the index order.
+        
+        Parameters
+        ----------
+        *order : int
+            Optional integer axes specifying the new ordering. If not provided,
+            reverses the index order.
+        in_place : bool, optional
+            If True (default), modifies this tensor in-place and returns self.
+            If False, returns a new Tensor instance with transposed axes.
+        
+        Returns
+        -------
+        Tensor
+            Self if in_place=True, new Tensor instance if in_place=False.
+        """
         if not order:
             order = tuple(reversed(range(len(self.indices))))
-        self.permute(order)
+        return self.permute(order, in_place=in_place)
 
     def invert(self, positions: Union[int, Sequence[int]]) -> None:
         """Invert the direction of specified index/indices while maintaining charge conservation.
         
-        This operation flips both the direction and conjugates the charges using Index.dual(),
-        effectively inverting the tensor's index structure at the specified positions.
+        This operation inverts the direction(s) and conjugates the charge(s)
+        using Index.dual(), effectively inverting the tensor's index structure
+        at the specified positions.
         
         Parameters
         ----------
@@ -968,7 +1396,7 @@ class Tensor:
         
         Notes
         -----
-        This operation uses Index.dual() to flip both the direction and conjugate
+        This operation uses Index.dual() to invert both the direction and conjugate
         the charges, ensuring charge conservation is maintained. Both the index
         metadata and the block keys are updated to reflect the conjugated charges.
         The tensor data arrays themselves remain unchanged.
@@ -976,6 +1404,12 @@ class Tensor:
         This differs from Index.flip() which only reverses direction without
         conjugating charges. The tensor invert operation performs a complete
         inversion of the index structure (direction + charge conjugation).
+        
+        For non-Abelian groups (e.g. SU(2)), the intertwiner (Bridge) at each
+        affected block has its edge directions inverted at the corresponding
+        positions without any additional phase factor, ensuring that two
+        successive calls to invert() with the same positions restore the
+        original tensor exactly.
         
         Examples
         --------
@@ -997,17 +1431,18 @@ class Tensor:
         
         # Get the symmetry group
         if n == 0:
-            return  # Scalar tensor, nothing to flip
+            return  # Scalar tensor, nothing to invert
         group = self.indices[0].group
         
-        # Create new indices with dual (flipped direction + conjugated charges) at specified positions
+        # Create new indices with dual (inverted direction + conjugated charges)
+        # at the specified positions
         indices_list = list(self.indices)
         for pos in positions:
             indices_list[pos] = indices_list[pos].dual()
         self.indices = tuple(indices_list)
         
-        # Update block keys: conjugate charges at flipped positions
-        new_data = {}
+        # Update block keys: conjugate charges at inverted positions
+        new_data: Dict[BlockKey, torch.Tensor] = {}
         for key, arr in self.data.items():
             key_list = list(key)
             for pos in positions:
@@ -1015,6 +1450,18 @@ class Tensor:
             new_key = tuple(key_list)
             new_data[new_key] = arr
         self.data = new_data
+        
+        # Update intw: invert edge directions at specified positions, update keys
+        if self.intw is not None:
+            new_intw: Dict[BlockKey, dg.Bridge] = {}
+            for key, bridge in self.intw.items():
+                key_list = list(key)
+                for pos in positions:
+                    key_list[pos] = group.dual(key_list[pos])
+                new_key = tuple(key_list)
+                new_intw[new_key] = bridge.invert_edges(positions)
+            self.intw = new_intw
+        
         self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------

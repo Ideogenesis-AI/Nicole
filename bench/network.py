@@ -1,19 +1,19 @@
 # Copyright (C) 2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 """Tensor network utilities for MPS manipulation and canonicalization."""
@@ -71,7 +71,7 @@ def canonical(
         raise ValueError(f"direction must be 'left' or 'right', got '{direction}'")
     
     # Create a copy to avoid modifying the original
-    mps_new = [tensor.copy() for tensor in mps]
+    mps_new = [tensor.clone() for tensor in mps]
     
     if direction == "right":
         # Convert left-canonical to right-canonical
@@ -247,8 +247,12 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
         # Note: right_mps and right_mps_conj have the same itag
     
     # After all sites, E has shape (right_mps_conj, right_mpo, right_mps)
-    # At the right boundary, all indices have dimension 1
-    # Extract the scalar from the first (and only) block and divide by number of sites
+    # At the right boundary, all indices have dimension 1.
+    # Extract the scalar as data × Bridge weight. For Abelian symmetries intw is
+    # None (implicit weight 1); for non-Abelian groups the Bridge encodes the
+    # CG normalisation that must be included for the correct physical value.
+    k, v = next(iter(E.data.items()))
+    weight = 1.0 if E.intw is None else E.intw[k].weights[0, 0].item()
+    value = v.item() * weight
     
-    value = E.block(1).item()  # Extract single element from numpy array
     return value / len(mps)

@@ -1,24 +1,24 @@
 # Copyright (C) 2025 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 from __future__ import annotations
 
-"""Concrete Abelian symmetry groups shipped with Nicole (TN)."""
+"""Concrete Abelian symmetry groups shipped with Nicole library."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -42,7 +42,7 @@ class U1Group(AbelianGroup):
         self.validate_charge(q)
         return -q
 
-    def fuse(self, *qs: int) -> int:
+    def fuse_unique(self, *qs: int) -> int:
         s = 0
         for q in qs:
             self.validate_charge(q)
@@ -74,7 +74,7 @@ class Z2Group(AbelianGroup):
         self.validate_charge(q)
         return q & 1
 
-    def fuse(self, *qs: int) -> int:
+    def fuse_unique(self, *qs: int) -> int:
         acc = 0
         for q in qs:
             self.validate_charge(q)

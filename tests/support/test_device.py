@@ -1,19 +1,19 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 """Tests for device management and GPU support."""
@@ -21,7 +21,7 @@
 import torch
 import pytest
 
-from nicole import Direction, Index, Sector, Tensor, U1Group
+from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
 from ..utils import assert_blocks_equal
 
 
@@ -138,6 +138,59 @@ def test_tensor_to_mps():
         dtype=torch.float32,
     )
     assert_blocks_equal(tensor_cpu_f32, tensor_back)
+
+
+def test_tensor_to_cpu_su2_preserves_intw():
+    """Test that to('cpu') preserves intertwiner for SU2."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    
+    # Move to same device (should be no-op)
+    moved = tensor.to('cpu')
+    assert moved is tensor  # Same object
+    
+    # Verify intw is present
+    assert tensor.intw is not None
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_tensor_to_cuda_su2_moves_intw():
+    """Test that to('cuda') moves intertwiner weights for SU2."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2], dtype=torch.float64)
+    tensor_cuda = tensor.to('cuda')
+    
+    # Verify intw was moved
+    assert tensor_cuda.intw is not None
+    assert tensor_cuda.intw is not tensor.intw  # Different dict
+    
+    for key in tensor.intw.keys():
+        # Weights moved to CUDA
+        assert tensor_cuda.intw[key].weights.device.type == 'cuda'
+        # Original still on CPU
+        assert tensor.intw[key].weights.device.type == 'cpu'
+
+
+def test_tensor_to_device_abelian_no_intw():
+    """Test that to() preserves intw=None for Abelian."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor.zeros([idx1, idx2])
+    
+    # Verify original has no intw
+    assert tensor.intw is None
+    
+    # Move to same device
+    moved = tensor.to('cpu')
+    assert moved.intw is None
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
@@ -307,8 +360,8 @@ def test_operations_preserve_device():
     result = t1 * 2.0
     assert result.device == torch.device('cpu')
     
-    # Test copy preserves device
-    result = t1.copy()
+    # Test clone preserves device
+    result = t1.clone()
     assert result.device == torch.device('cpu')
 
 
@@ -333,8 +386,8 @@ def test_operations_on_cuda():
     result = t1 * 2.0
     assert result.device.type == 'cuda'
     
-    # Test copy on CUDA
-    result = t1.copy()
+    # Test clone on CUDA
+    result = t1.clone()
     assert result.device.type == 'cuda'
 
 
