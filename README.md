@@ -14,7 +14,7 @@
   <a href="https://pypi.org/project/nicole/"><img src="https://img.shields.io/pypi/status/nicole?color=4b0082" alt="Status"></a>
 </p>
 
-Nicole is a Python library for symmetry-aware tensor computations, specifically designed for quantum many-body physics and tensor network algorithms. It provides efficient block-sparse tensor operations that respect Abelian symmetries (U(1), Z₂, etc.), enabling memory-efficient and computationally optimized tensor network calculations.
+Nicole is a Python library for symmetry-aware tensor computations, specifically designed for quantum many-body physics and tensor network algorithms. It provides efficient block-sparse tensor operations that respect both Abelian (U(1), Z₂) and non-Abelian (SU(2)) symmetries, enabling memory-efficient and computationally optimized tensor network calculations with exact quantum number conservation.
 
 With the assistance of various AI coding agents, Nicole reimagines the block-symmetric tensor approach with a Python-native API built upon PyTorch, making it accessible to the broader scientific Python ecosystem while maintaining the mathematical rigor needed for quantum physics applications.
 
@@ -23,13 +23,14 @@ With the assistance of various AI coding agents, Nicole reimagines the block-sym
 
 - **Block-Sparse Tensors**: Memory-efficient representation of tensors with conserved quantum numbers
 - **Abelian Symmetries**: Built-in support for U(1) (particle number, magnetization) and Z₂ (parity), etc.
+- **Non-Abelian SU(2)**: Full SU(2) spin symmetry via Clebsch-Gordan intertwiners powered by [Yuzuha](https://github.com/Ideogenesis-AI/Yuzuha)
 - **Charge Conservation**: Automatic enforcement of selection rules through symmetry-aware indices
 - **PyTorch Backend**: Python implementation using PyTorch for high-performance dense block operations
 - **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations on large tensors
-- **Autograd Control**: Optional gradient tracking for efficient optimization tasks
-- **Tensor Operations**: Essential operations including contraction, trace, SVD decompositions, and more
-- **Type-Safe API**: Modern Python with type hints for better IDE support and fewer runtime errors
-- **Extensible Design**: Clean abstractions for adding custom symmetry groups
+- **Autograd Control**: Optional automatic gradient tracking for efficient optimization tasks
+- **Tensor Operations**: Essential operations including contraction, decompositions, and more
+- **Type-Safe API**: Modern Python with type hints for better IDE/AI support and fewer runtime errors
+- **Extensible Design**: Clean abstractions for adding custom symmetry groups (following Yuzuha protocol)
 
 
 ## Contributing
@@ -55,7 +56,7 @@ Nicole is created and maintained by [Changkai Zhang](https://chx-zh.cc) as part 
 
 ## Acknowledgments
 
-Nicole is inspired by the [QSpace](https://bitbucket.org/qspace4u/) tensor library developed for MATLAB. While QSpace excels in complex symmetries (e.g. SU(N), Sp(N), SO(N)) with a C++ backend, Nicole focuses on providing a Python implementation for Abelian symmetries (SU(2) or more will come as a plugin) with an emphasis on clarity, extensibility, and integration with the scientific Python ecosystem.
+Nicole is inspired by the [QSpace](https://bitbucket.org/qspace4u/) tensor library developed for MATLAB. While QSpace excels in complex symmetries (e.g. SU(N), Sp(N), SO(N)) with a C++ backend, Nicole focuses on providing a Python implementation supporting both Abelian (U(1), Z₂) and non-Abelian (SU(2)) symmetries, with an emphasis on clarity, extensibility, and integration with the scientific Python ecosystem.
 
 
 ## License
