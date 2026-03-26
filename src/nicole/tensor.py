@@ -514,7 +514,7 @@ class Tensor:
         # All blocks must be on same device
         return next(iter(self.data.values())).device
     
-    def to(self, device: Union[str, torch.device]) -> 'Tensor':
+    def to(self, device: Union[str, torch.device]) -> Tensor:
         """Move tensor to specified device.
         
         Parameters
@@ -556,11 +556,11 @@ class Tensor:
             dtype=new_dtype, label=self.label
         )
     
-    def cpu(self) -> 'Tensor':
+    def cpu(self) -> Tensor:
         """Move tensor to CPU."""
         return self.to('cpu')
     
-    def cuda(self) -> 'Tensor':
+    def cuda(self) -> Tensor:
         """Move tensor to CUDA device."""
         return self.to('cuda')
     
@@ -912,7 +912,7 @@ class Tensor:
     #   Binary operations: add, sub, mul
     # ------------------------------------------------------------
 
-    def _align_for_binary(self, other: "Tensor") -> Tuple["Tensor", "Tensor"]:
+    def _align_for_binary(self, other: Tensor) -> Tuple[Tensor, Tensor]:
         """Ensure two tensors are compatible for element-wise binary operations."""
         if len(self.indices) != len(other.indices):
             raise ValueError("Cannot add/sub tensors with different order")
