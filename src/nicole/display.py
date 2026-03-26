@@ -289,17 +289,24 @@ def tensor_summary(
 
             # Display block information for each charge sector.
             block_bytes = arr.nbytes
+            # For SU(2) blocks whose weight matrix is a single value, append sign indicator.
+            sign_suffix = ""
+            if intw is not None and key in intw and intw[key].weights.numel() == 1:
+                w = intw[key].weights.item()
+                sign_suffix = "{+}" if w >= 0 else "{-}"
             if arr.numel() == 1:
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {value_repr:>7}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}"
+                    f"  {value_repr:>7}  {sign_suffix:>3}"
                 )
             else:
                 # High-dimensional array — display dims and byte footprint.
                 byte_repr = _format_bytes(block_bytes)
                 block_lines.append(
-                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}  {byte_repr:>6}"
+                    f"  {idx_num:>4}.  {state_dims:<7} |  {cgc_dims:<7} {charges_repr}"
+                    f"  {byte_repr:>6}  {sign_suffix:>4}"
                 )
 
         # If more than max_lines blocks, note how many are omitted.
