@@ -21,7 +21,7 @@
 import torch
 
 from nicole import Direction, Tensor
-from nicole import identity, conj, permute, oplus, capcup
+from nicole import identity, conj, permute, oplus, capcup, contract
 from nicole.index import Index
 from nicole.space import load_space
 from nicole.symmetry.delegate import Bridge
@@ -32,25 +32,25 @@ def _make_zero_mid(op_idx: Index, zero4: Tensor) -> Tensor:
 
     In an MPO matrix, the off-diagonal zero blocks in an operator row must
     have bond indices that are *structurally compatible* with the non-zero
-    operator block in the same row.  When the operator has no charge-0 sector
+    operator block in the same row. When the operator has no charge-0 sector
     (e.g. SU(2) spin operator, or fermionic annihilation/creation), the naïve
     ``op * 0`` tensor carries the wrong bond sector set, causing ``oplus`` to
-    fail.  This helper builds the correct zero tensor for those positions.
+    fail. This helper builds the correct zero tensor for those positions.
 
     The block key ``(lc, lc, bc, bc)`` (diagonal in both the bond charge and
     the physical charge) satisfies charge conservation for any Abelian or
-    non-Abelian symmetry group.  For non-Abelian groups the corresponding
+    non-Abelian symmetry group. For non-Abelian groups the corresponding
     ``Bridge`` intertwiner is computed via ``Bridge.from_block``.
 
     Parameters
     ----------
     op_idx : Index
         The *op* axis (axis 2) of the operator tensor, e.g. ``S.indices[2]``
-        or ``G.indices[2]``.  Its charge sectors determine the bond sectors of
+        or ``G.indices[2]``. Its charge sectors determine the bond sectors of
         the output tensor.
     zero4 : Tensor
         A zero tensor with shape ``(left, right, bra, ket)`` built from the
-        physical identity.  Its ``bra`` (axis 2) and ``ket`` (axis 3) indices
+        physical identity. Its ``bra`` (axis 2) and ``ket`` (axis 3) indices
         provide the physical charge sectors, and its ``intw`` field indicates
         whether the symmetry group is Abelian (``intw is None``) or not.
 
@@ -283,7 +283,7 @@ def build_freefermion(
         H = -t Σ_i (c†_i c_{i+1} + h.c.)
 
     The MPO uses bond dimension 3, structurally identical to the Heisenberg
-    MPO.  Define:
+    MPO. Define:
 
         F    — annihilation operator (op=OUT convention)
         C    — F† in the complementary "left" convention (op=IN after conj)
@@ -291,7 +291,7 @@ def build_freefermion(
         Cd   — h.c. of C  (op=OUT, same data as F for real operators)
 
     ``capcup`` flips the op-axis direction of C (IN→OUT) and Cd (OUT→IN)
-    without changing numerical contractions.  After the flip:
+    without changing numerical contractions. After the flip:
 
         G    = F + C      (both op=OUT, carries annihilation and creation)
         Gdag = (Fd+Cd)*(-t)  (both op=IN, the scaled Hermitian conjugate)
@@ -354,6 +354,228 @@ def build_freefermion(
     zero_mid = _make_zero_mid(G.indices[2], zero4)
 
     # G with left bond: (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
+    G4 = G.clone()
+    G4.insert_index(0, direction=Direction.IN, itag="L")
+    G4 = permute(G4, [0, 3, 1, 2])
+
+    # Gdag with right bond: (bra, ket, op) → (bra, ket, op, right) → (op, right, bra, ket)
+    G4dag = Gdag.clone()
+    G4dag.insert_index(3, direction=Direction.OUT, itag="R")
+    G4dag = permute(G4dag, [2, 3, 0, 1])
+
+    mpo = []
+
+    for i in range(N):
+        if i == 0:
+            # First site: row vector [0, G, I]
+            W = zero4.clone()
+            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            G_copy = G4.clone()
+            G_copy.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, G_copy, axes=[1])
+
+            I_copy = I4.clone()
+            I_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, I_copy, axes=[1])
+
+            mpo.append(W)
+
+        elif i == N - 1:
+            # Last site: column vector [I, Gdag, 0]^T
+            W = I4.clone()
+            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            Gdag_copy = G4dag.clone()
+            Gdag_copy.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, Gdag_copy, axes=[0])
+
+            zero_copy = zero4.clone()
+            zero_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+            W = oplus(W, zero_copy, axes=[0])
+
+            mpo.append(W)
+
+        else:
+            # Middle sites: 3×3 block matrix [[I, 0, 0], [Gdag, 0, 0], [0, G, I]]
+
+            # Row 0: [I, 0, 0]
+            row0_col0 = I4.clone()
+            row0_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0_col1 = G4.clone() * 0
+            row0_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0_col2 = zero4.clone()
+            row0_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row0 = oplus(row0_col0, row0_col1, axes=[1])
+            row0 = oplus(row0, row0_col2, axes=[1])
+
+            # Row 1: [Gdag, 0, 0]
+            row1_col0 = G4dag.clone()
+            row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1_col1 = zero_mid.clone()
+            row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1_col2 = G4dag.clone() * 0
+            row1_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row1 = oplus(row1_col0, row1_col1, axes=[1])
+            row1 = oplus(row1, row1_col2, axes=[1])
+
+            # Row 2: [0, G, I]
+            row2_col0 = zero4.clone()
+            row2_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2_col1 = G4.clone()
+            row2_col1.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2_col2 = I4.clone()
+            row2_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
+
+            row2 = oplus(row2_col0, row2_col1, axes=[1])
+            row2 = oplus(row2, row2_col2, axes=[1])
+
+            # Combine rows
+            W = oplus(row0, row1, axes=[0])
+            W = oplus(W, row2, axes=[0])
+
+            mpo.append(W)
+
+    return mpo
+
+
+def build_conductor(
+    N: int = 50,
+    t: float = 1.0,
+    symmetry: str = "U1,SU2",
+) -> list[Tensor]:
+    """Build MPO representation of the free spinful tight-binding Hamiltonian.
+
+    Parameters
+    ----------
+    N : int
+        Chain length (default: 50).
+    t : float, optional
+        Nearest-neighbor hopping amplitude (default: 1.0).
+    symmetry : str, optional
+        Symmetry to exploit. Accepted values (Band preset):
+
+        * ``"U1,U1"``  — spin-up and spin-down particle numbers separately
+        * ``"Z2,U1"``  — fermion parity × spin-z particle number
+        * ``"U1,SU2"`` — particle number × full spin-rotation (default)
+        * ``"Z2,SU2"`` — fermion parity × full spin-rotation
+
+    Returns
+    -------
+    list of Tensor
+        MPO tensors, each with shape (left, right, phys_out, phys_in)
+        with directions (IN, OUT, IN, OUT) and itags
+        ``["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]``.
+
+    Notes
+    -----
+    The Hamiltonian is:
+
+        H = -t Σ_{i,σ} (c†_{i,σ} c_{i+1,σ} + h.c.)
+
+    The MPO uses bond dimension 3, structurally identical to
+    :func:`build_freefermion`. For Abelian symmetries the two spin-flavour
+    annihilation operators are merged first:
+
+        F = F_up + F_dn   (Abelian: "U1,U1" or "Z2,U1")
+        F = Op["F"]       (non-Abelian: "U1,SU2" or "Z2,SU2")
+
+    The hopping term with the correct Jordan-Wigner (JW) string is:
+
+        G    = oplus(ZF, (ZF)†, axes=2)  — JW-dressed operators at the LEFT site
+        Gdag = oplus(Fd, F, axes=2) * (-t)  — bare operators at the RIGHT site
+
+    where ZF = Z × F, Z = (-1)^N is the total-parity operator.
+    ``oplus`` along the op axis keeps the annihilator and creator channels
+    block-diagonally separate even when they collide in the same op charge
+    sector (which happens for Z2-based symmetries, since Z2 is self-dual).
+    All four operators are first normalised to the full physical index ``Spc``
+    so that ``oplus`` succeeds regardless of which individual bra/ket sectors
+    each operator occupies.
+
+    Examples
+    --------
+    >>> mpo = build_conductor(N=10, t=1.0, symmetry="U1,SU2")
+    >>> mpo = build_conductor(N=10, t=1.0, symmetry="Z2,SU2")
+    >>> mpo = build_conductor(N=10, t=1.0, symmetry="U1,U1")
+    >>> mpo = build_conductor(N=10, t=1.0, symmetry="Z2,U1")
+    """
+    # Load spinful fermion operators
+    Spc, Op = load_space("Band", symmetry)
+
+    # For Abelian symmetries, spin flavours have distinct op charges and can be
+    # combined by ordinary tensor addition. For non-Abelian (SU2), a single
+    # spin-doublet operator F already encodes both flavours.
+    is_abelian = "SU2" not in symmetry
+    if is_abelian:
+        F = Op["F_up"] + Op["F_dn"]
+    else:
+        F = Op["F"]
+
+    # The Band preset treats each site as a 4-state system (|0>, |↑>, |↓>, |↑↓>).
+    # For nearest-neighbor hopping between such sites, the Jordan-Wigner (JW)
+    # string Z_i = (-1)^{N_i} belongs on the LEFT site of each bond:
+    #
+    #   c†_{i,σ} c_{i+1,σ}  =  (ZF)†_{i,σ} ⊗ F_{i+1,σ}
+    #   c_{i,σ} c†_{i+1,σ}  =  (ZF)_{i,σ}  ⊗ F†_{i+1,σ}
+    #
+    # So the MPO operators are:
+    #
+    #   G    = ZF + (ZF)†    (JW-dressed annihilator + creator — LEFT site)
+    #   Gdag = (Fd + F)*(-t) (bare creator + annihilator    — RIGHT site)
+    #
+    # This matches iter_diag_band, which accumulates ZF = Z×F from the left
+    # block and pairs it with the bare F† at the new (right) site.
+    Z    = Op["Z"]
+    ZF   = contract(Z, F, axes=(1, 0))  # ZF = Z×F, annihilator with JW (op=OUT)
+    C_ZF = conj(permute(ZF, [1, 0, 2]))  # (ZF)†, JW creator (op=IN → flipped below)
+
+    # Gdag uses bare operators (no Z): creator Fd and annihilator F_copy
+    Fd     = permute(conj(F), [1, 0, 2])  # bare creator  (op=IN)
+    F_copy = F.clone()                    # bare annihilator (op=OUT → flipped below)
+
+    # Normalise all four operators to the full physical index so that oplus can
+    # merge the op axis (axis 2) regardless of which bra/ket sectors each
+    # operator individually occupies.
+    for op in (ZF, C_ZF, Fd, F_copy):
+        op.indices = (Spc, Spc.flip()) + op.indices[2:]
+
+    # capcup: C_ZF IN  → OUT  (to match ZF's op=OUT for G    = oplus(ZF, C_ZF))
+    #         F_copy OUT → IN  (to match Fd's op=IN  for Gdag = oplus(Fd, F_copy))
+    # This is needed to ensure that bond direction inversion works correctly.
+    # CANNOT BE REPLACED BY TWO INDIVIDUAL INVERSIONS!
+    capcup(C_ZF, 2, F_copy, 2)
+
+    # oplus along the op axis keeps the annihilator and creator channels
+    # block-diagonally separate even when they share the same op charge sector
+    # (which happens for Z2-based symmetries).
+    G    = oplus(ZF, C_ZF, axes=2)
+    Gdag = oplus(Fd, F_copy, axes=2) * (-t)
+
+    # Identity operator: (bra, ket)
+    I = identity(Spc)
+
+    # ---- Prepare base 4-index tensors (retagged per site in the loop) --------
+
+    I4 = I.clone()
+    I4.insert_index(0, direction=Direction.IN,  itag="L")
+    I4.insert_index(1, direction=Direction.OUT, itag="R")
+
+    zero4 = (I * 0.0).clone()
+    zero4.insert_index(0, direction=Direction.IN,  itag="L")
+    zero4.insert_index(1, direction=Direction.OUT, itag="R")
+
+    zero_mid = _make_zero_mid(G.indices[2], zero4)
+
+    # G with left bond:   (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
     G4 = G.clone()
     G4.insert_index(0, direction=Direction.IN, itag="L")
     G4 = permute(G4, [0, 3, 1, 2])
