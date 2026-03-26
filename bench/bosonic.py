@@ -231,9 +231,9 @@ def iter_diag_spin(
         
         # Display progress
         if verbose:
-            NK = AK.indices[0].dim  # Size of truncated space
-            Hnow_dim = Hnow.indices[1].dim  # Size of Hilbert space before truncation
-            disptime(f"#{itN:02d}/{N:02d} : NK={NK}/{Hnow_dim}")
+            # SU2: report physical states; U1: report sector dimensions (= states)
+            dim_fn = (lambda idx: idx.num_states) if symmetry == "SU2" else (lambda idx: idx.dim)
+            disptime(f"#{itN:02d}/{N:02d} : NK={dim_fn(AK.indices[0])}/{dim_fn(Hnow.indices[1])}")
     
     # Ground state energy per site
     Egs = Eg / np.arange(1, N + 1)

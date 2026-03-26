@@ -312,6 +312,7 @@ def iter_diag_band(
         ZFprev = _push_zf(Z_now, Fnow, AK)
 
         if verbose:
+            # SU2: report physical states; U1/Z2: report sector dimensions (= states)
             dim_fn = (lambda idx: idx.num_states) if is_su2 else (lambda idx: idx.dim)
             disptime(f"#{itN:02d}/{N:02d} : NK={dim_fn(AK.indices[0])}/{dim_fn(Hnow.indices[1])}")
 
