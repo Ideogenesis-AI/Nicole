@@ -519,7 +519,7 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+    Op["F"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
@@ -597,7 +597,7 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+    Op["F"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
@@ -713,7 +713,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F_up"].indices = Tensor._prune_unused_sectors(Op["F_up"].indices, Op["F_up"].data)
+    Op["F_up"].normalize_sectors()
 
     # Build F_dn operator (annihilates spin-down electron)
     # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = -|↑⟩
@@ -739,7 +739,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F_dn"].indices = Tensor._prune_unused_sectors(Op["F_dn"].indices, Op["F_dn"].data)
+    Op["F_dn"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string)
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
@@ -881,7 +881,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F_up"].indices = Tensor._prune_unused_sectors(Op["F_up"].indices, Op["F_up"].data)
+    Op["F_up"].normalize_sectors()
 
     # Build F_dn operator
     # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = |↑⟩
@@ -905,7 +905,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F_dn"].indices = Tensor._prune_unused_sectors(Op["F_dn"].indices, Op["F_dn"].data)
+    Op["F_dn"].normalize_sectors()
 
     # Build Z operator
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
@@ -1071,7 +1071,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+    Op["F"].normalize_sectors()
 
     # ------------------------------------------------------------------ Z ---
     # Z (Jordan-Wigner string): scalar operator, no spin auxiliary index.
@@ -1136,7 +1136,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["S"].indices = Tensor._prune_unused_sectors(Op["S"].indices, Op["S"].data)
+    Op["S"].normalize_sectors()
 
     # --------------------------------------------------------------- vac ---
     vac_index = Index(
@@ -1228,7 +1228,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+    Op["F"].normalize_sectors()
 
     # ------------------------------------------------------------------ Z ---
     # Z (Jordan-Wigner string): scalar operator.
@@ -1301,7 +1301,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    Op["S"].indices = Tensor._prune_unused_sectors(Op["S"].indices, Op["S"].data)
+    Op["S"].normalize_sectors()
 
     # --------------------------------------------------------------- vac ---
     vac_index = Index(
