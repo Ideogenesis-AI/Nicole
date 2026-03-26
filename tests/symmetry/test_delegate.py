@@ -1,0 +1,910 @@
+# Copyright (C) 2026 Changkai Zhang.
+#
+# This file is part of Nicole library.
+#
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
+# by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
+
+
+"""Tests for Bridge class and yuzuha integration."""
+
+import pytest
+import torch
+import yuzuha
+
+from nicole import Direction, ProductGroup, SU2Group, U1Group, Z2Group
+from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol, fs_phase
+
+
+def test_bridge_basic_instantiation():
+    """Test basic Bridge instantiation with valid CGSpec and weights."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    
+    edges = [
+        yuzuha.Edge.incoming(j_half),
+        yuzuha.Edge.incoming(j_half),
+        yuzuha.Edge.outgoing(j_one),
+    ]
+    
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    assert bridge.cgspec == cgspec
+    assert bridge.weights.shape == (1, om_dim)
+    assert bridge.om_dimension == om_dim
+    assert bridge.num_components == 1
+    assert bridge.num_external == 3
+
+
+def test_bridge_multiple_components():
+    """Test Bridge with multiple component rows."""
+    j_one = yuzuha.Spin(2)
+    
+    edges = [
+        yuzuha.Edge.incoming(j_one),
+        yuzuha.Edge.incoming(j_one),
+        yuzuha.Edge.outgoing(j_one),
+    ]
+    
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(5, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    assert bridge.num_components == 5
+    assert bridge.om_dimension == om_dim
+    assert bridge.weights.shape == (5, om_dim)
+
+
+def test_bridge_various_dtypes():
+    """Test Bridge with different torch dtypes."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    
+    edges = [
+        yuzuha.Edge.incoming(j_half),
+        yuzuha.Edge.incoming(j_half),
+        yuzuha.Edge.outgoing(j_one),
+    ]
+    
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    for dtype in [torch.float32, torch.float64, torch.complex64, torch.complex128]:
+        weights = torch.zeros(1, om_dim, dtype=dtype)
+        bridge = Bridge(cgspec, weights)
+        assert bridge.weights.dtype == dtype
+
+
+def test_bridge_invalid_weights_not_tensor():
+    """Test Bridge raises TypeError when weights is not a tensor."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    edges = [yuzuha.Edge.incoming(j_half), yuzuha.Edge.incoming(j_half), yuzuha.Edge.outgoing(j_one)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    
+    with pytest.raises(TypeError, match="weights must be a torch.Tensor"):
+        Bridge(cgspec, [[1.0, 2.0]])
+
+
+def test_bridge_invalid_weights_not_2d():
+    """Test Bridge raises ValueError when weights is not 2D."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    edges = [yuzuha.Edge.incoming(j_half), yuzuha.Edge.incoming(j_half), yuzuha.Edge.outgoing(j_one)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    # 1D tensor
+    weights_1d = torch.zeros(om_dim, dtype=torch.float64)
+    with pytest.raises(ValueError, match="weights must be a 2D tensor"):
+        Bridge(cgspec, weights_1d)
+    
+    # 3D tensor
+    weights_3d = torch.zeros(1, om_dim, 2, dtype=torch.float64)
+    with pytest.raises(ValueError, match="weights must be a 2D tensor"):
+        Bridge(cgspec, weights_3d)
+
+
+def test_bridge_invalid_weights_zero_components():
+    """Test Bridge raises ValueError when weights has zero rows."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    edges = [yuzuha.Edge.incoming(j_half), yuzuha.Edge.incoming(j_half), yuzuha.Edge.outgoing(j_one)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(0, om_dim, dtype=torch.float64)
+    with pytest.raises(ValueError, match="weights must have at least 1 component"):
+        Bridge(cgspec, weights)
+
+
+def test_bridge_invalid_weights_wrong_om_dimension():
+    """Test Bridge raises ValueError when weights shape doesn't match OM dimension."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    edges = [yuzuha.Edge.incoming(j_half), yuzuha.Edge.incoming(j_half), yuzuha.Edge.outgoing(j_one)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    # Wrong OM dimension
+    weights = torch.zeros(1, om_dim + 5, dtype=torch.float64)
+    with pytest.raises(ValueError, match=f"weights shape\\[1\\] must match OM dimension {om_dim}"):
+        Bridge(cgspec, weights)
+
+
+def test_bridge_complex_edges():
+    """Test Bridge with more complex edge configurations."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    j_three_half = yuzuha.Spin(3)
+    
+    # Valid configuration: 1/2 ⊗ 3/2 ⊗ 1 can couple to 0
+    # Possible paths: (1/2 ⊗ 3/2) = 1,2 then 1⊗1=0,1,2 or 2⊗1=1,2,3
+    edges = [
+        yuzuha.Edge.incoming(j_half),
+        yuzuha.Edge.incoming(j_three_half),
+        yuzuha.Edge.incoming(j_one),
+        yuzuha.Edge.outgoing(j_one),
+    ]
+    
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.ones(3, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    assert bridge.num_external == 4
+    assert bridge.num_components == 3
+    assert bridge.om_dimension == om_dim
+
+
+def test_bridge_frozen():
+    """Test that Bridge is immutable (frozen dataclass)."""
+    j_half = yuzuha.Spin(1)
+    j_one = yuzuha.Spin(2)
+    edges = [yuzuha.Edge.incoming(j_half), yuzuha.Edge.incoming(j_half), yuzuha.Edge.outgoing(j_one)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    with pytest.raises(AttributeError):
+        bridge.weights = torch.ones(1, om_dim, dtype=torch.float64)
+
+
+def test_bridge_from_block_su2group():
+    """Test from_block constructor with pure SU2Group."""
+    group = SU2Group()
+    
+    # BlockKey: three edges with spins 1/2, 1/2, 1 (2j: 1, 1, 2)
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    bridge = Bridge.from_block(group, key, directions)
+    
+    assert bridge.num_external == 3
+    assert bridge.num_components == 1
+    assert bridge.om_dimension == 1  # Only one way to couple to j=0
+    assert bridge.weights.shape == (1, 1)
+    assert bridge.weights.dtype == torch.float64
+
+
+def test_bridge_from_block_product_group():
+    """Test from_block constructor with ProductGroup(U1×SU2)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    
+    # BlockKey: three edges with (U1, SU2) charges
+    # (0, 1), (1, 1), (-1, 2) - U1 charges and SU(2) 2j values
+    key = ((0, 1), (1, 1), (-1, 2))
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    bridge = Bridge.from_block(group, key, directions)
+    
+    assert bridge.num_external == 3
+    assert bridge.num_components == 1
+    assert bridge.om_dimension == 1
+    assert bridge.weights.dtype == torch.float64
+    
+    # Verify CGSpec has correct spins (extracted from SU(2) part)
+    spins = bridge.cgspec.get_spins()
+    assert spins == [1, 1, 2]
+
+
+def test_bridge_from_block_custom_dtype():
+    """Test from_block with custom dtype."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    bridge = Bridge.from_block(group, key, directions, dtype=torch.complex128)
+    
+    assert bridge.num_components == 1
+    assert bridge.weights.dtype == torch.complex128
+    assert bridge.weights.shape == (1, 1)
+
+
+def test_bridge_from_block_invalid_group():
+    """Test from_block raises TypeError for non-SU(2) groups."""
+    group = U1Group()
+    key = (0, 1, -1)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    with pytest.raises(TypeError, match="Bridge.from_block requires SU2Group or ProductGroup with SU2Group"):
+        Bridge.from_block(group, key, directions)
+
+
+def test_bridge_from_block_mismatched_lengths():
+    """Test from_block raises ValueError when key and directions lengths differ."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.OUT]  # Only 2 directions for 3 charges
+    
+    with pytest.raises(ValueError, match="Number of charges in key .* must match number of directions"):
+        Bridge.from_block(group, key, directions)
+
+
+def test_bridge_from_block_various_directions():
+    """Test from_block with different direction combinations."""
+    group = SU2Group()
+    
+    # All IN
+    key = (2, 2, 2, 2)  # Four spin-1 edges coupling to j=0
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge1 = Bridge.from_block(group, key, directions)
+    assert bridge1.num_external == 4
+    
+    # Mixed directions
+    key = (1, 1, 2)
+    directions = [Direction.OUT, Direction.OUT, Direction.IN]
+    bridge2 = Bridge.from_block(group, key, directions)
+    assert bridge2.num_external == 3
+
+
+def test_bridge_from_block_default_weights():
+    """Test from_block default weights initialization (first element 1, rest 0)."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)  # Four spin-1 edges
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Check shape: always 1 component by default
+    assert bridge.num_components == 1
+    
+    # Check first element is 1, rest are 0
+    assert bridge.weights[0, 0] == 1.0
+    
+    # Check all other elements are 0
+    if bridge.om_dimension > 1:
+        assert torch.all(bridge.weights[0, 1:] == 0.0)
+
+
+def test_bridge_from_block_provided_weights():
+    """Test from_block with provided custom weights."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    # Create custom weights
+    custom_weights = torch.tensor([[0.5, 0.8]], dtype=torch.float64)
+    
+    # Since om_dimension for this config might be 1, let's first check
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(2))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    # Create appropriate custom weights
+    custom_weights = torch.randn(2, om_dim, dtype=torch.float64)
+    
+    bridge = Bridge.from_block(group, key, directions, weights=custom_weights)
+    
+    assert bridge.num_components == 2
+    assert torch.equal(bridge.weights, custom_weights)
+
+
+def test_bridge_from_block_provided_weights_validation():
+    """Test from_block validates provided weights shape."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    
+    # Get actual om_dimension
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(2))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    # Wrong shape: wrong om_dimension
+    bad_weights = torch.zeros(1, om_dim + 5, dtype=torch.float64)
+    with pytest.raises(ValueError, match="weights shape\\[1\\] must match OM dimension"):
+        Bridge.from_block(group, key, directions, weights=bad_weights)
+    
+    # Wrong shape: 1D
+    bad_weights_1d = torch.zeros(om_dim, dtype=torch.float64)
+    with pytest.raises(ValueError, match="weights must be a 2D tensor"):
+        Bridge.from_block(group, key, directions, weights=bad_weights_1d)
+    
+    # Wrong type
+    with pytest.raises(TypeError, match="weights must be a torch.Tensor"):
+        Bridge.from_block(group, key, directions, weights=[[1.0, 2.0]])
+
+
+def test_bridge_device_property():
+    """Test Bridge.device property."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    assert bridge.device == torch.device('cpu')
+
+
+def test_bridge_clone():
+    """Test Bridge.clone() creates deep copy."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    cloned = bridge.clone()
+    
+    # Verify it's a different object
+    assert cloned is not bridge
+    assert cloned.weights is not bridge.weights
+    
+    # Verify cgspec is shared (immutable)
+    assert cloned.cgspec is bridge.cgspec
+    
+    # Verify values are identical
+    assert torch.allclose(cloned.weights, bridge.weights)
+    
+    # Verify independence
+    cloned.weights[0, 0] = 999.0
+    assert not torch.allclose(cloned.weights, bridge.weights)
+
+
+def test_bridge_to_same_device():
+    """Test Bridge.to() returns self when already on target device."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.zeros(1, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    moved = bridge.to('cpu')
+    assert moved is bridge  # Same object
+
+
+def test_bridge_to_different_dtype():
+    """Test Bridge.to() with dtype conversion."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    bridge_f32 = bridge.to('cpu', dtype=torch.float32)
+    
+    assert bridge_f32.weights.dtype == torch.float32
+    assert bridge.weights.dtype == torch.float64  # Original unchanged
+    assert torch.allclose(bridge_f32.weights, bridge.weights.to(dtype=torch.float32))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_bridge_to_cuda():
+    """Test Bridge.to() moves weights to CUDA."""
+    edges = [yuzuha.Edge.incoming(yuzuha.Spin(1)), 
+             yuzuha.Edge.outgoing(yuzuha.Spin(1))]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    om_dim = cgspec.om_dimension()
+    
+    weights = torch.randn(2, om_dim, dtype=torch.float64)
+    bridge = Bridge(cgspec, weights)
+    
+    bridge_gpu = bridge.to('cuda')
+    
+    assert bridge_gpu.device.type == 'cuda'
+    assert bridge.device.type == 'cpu'  # Original unchanged
+    assert torch.allclose(bridge_gpu.weights.cpu(), bridge.weights)
+
+
+def test_compute_xsymbol_basic():
+    """Test compute_xsymbol for basic contraction."""
+    group = SU2Group()
+    
+    # Bridge A: two spin-1/2 in, one spin-1 out
+    key_a = (1, 1, 2)
+    dirs_a = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge_a = Bridge.from_block(group, key_a, dirs_a)
+    
+    # Bridge B: one spin-1 in, one spin-1/2 in, one spin-1/2 out
+    key_b = (2, 1, 1)
+    dirs_b = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge_b = Bridge.from_block(group, key_b, dirs_b)
+    
+    # Contract spin-1 edges (A's edge 2 with B's edge 0)
+    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, [2], [0])
+    
+    # Check result properties
+    assert isinstance(x_symbol, torch.Tensor)
+    assert x_symbol.ndim == 3
+    assert x_symbol.shape[0] == bridge_a.om_dimension
+    assert x_symbol.shape[1] == bridge_b.om_dimension
+    assert x_symbol.shape[2] == spec_c.om_dimension()
+    
+    # Check output CGSpec
+    assert spec_c.num_external() == 4  # 2 from A + 2 from B (minus 2 contracted)
+
+
+def test_compute_xsymbol_multiple_edges():
+    """Test compute_xsymbol contracting multiple edges."""
+    group = SU2Group()
+    
+    # Bridge A: three spin-1 in, one spin-1 out
+    key_a = (2, 2, 2, 2)
+    dirs_a = [Direction.IN, Direction.IN, Direction.IN, Direction.OUT]
+    bridge_a = Bridge.from_block(group, key_a, dirs_a)
+    
+    # Bridge B: two spin-1 in, two spin-1 out
+    key_b = (2, 2, 2, 2)
+    dirs_b = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge_b = Bridge.from_block(group, key_b, dirs_b)
+    
+    # Contract two spin-1 edges
+    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, [0, 1], [2, 3])
+    
+    assert isinstance(x_symbol, torch.Tensor)
+    assert x_symbol.ndim == 3
+    assert spec_c.num_external() == 4  # 2 from A + 2 from B
+
+
+def test_compute_rsymbol_basic():
+    """Test compute_rsymbol for basic permutation."""
+    group = SU2Group()
+    
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Identity permutation
+    r_symbol, spec_perm = compute_rsymbol(bridge, [0, 1, 2])
+    
+    assert isinstance(r_symbol, torch.Tensor)
+    assert r_symbol.ndim == 2
+    assert r_symbol.shape[0] == bridge.om_dimension
+    assert r_symbol.shape[1] == spec_perm.om_dimension()
+    
+    # For identity permutation, R should be identity matrix
+    assert torch.allclose(r_symbol, torch.eye(bridge.om_dimension, dtype=r_symbol.dtype))
+
+
+def test_compute_rsymbol_swap():
+    """Test compute_rsymbol for edge swap."""
+    group = SU2Group()
+    
+    # Use a configuration with non-trivial OM space
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Swap first two edges
+    r_symbol, spec_perm = compute_rsymbol(bridge, [1, 0, 2, 3])
+    
+    assert isinstance(r_symbol, torch.Tensor)
+    assert r_symbol.shape[0] == bridge.om_dimension
+    assert r_symbol.shape[1] == spec_perm.om_dimension()
+    
+    # R-symbol should be unitary (R†R = I)
+    if r_symbol.shape[0] > 1:
+        identity = torch.matmul(r_symbol.T, r_symbol)
+        assert torch.allclose(identity, torch.eye(r_symbol.shape[1], dtype=r_symbol.dtype), atol=1e-10)
+
+
+def test_compute_rsymbol_invalid_permutation():
+    """Test compute_rsymbol raises on invalid permutation."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    # Wrong length
+    with pytest.raises(ValueError):
+        compute_rsymbol(bridge, [0, 1])
+    
+    # Duplicate index
+    with pytest.raises(ValueError):
+        compute_rsymbol(bridge, [0, 0, 2])
+
+
+# Bridge.conj() tests
+
+def test_bridge_conj_flips_directions():
+    """Test that Bridge.conj() flips all edge directions."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_conj = bridge.conj()
+    
+    # Verify all directions are flipped
+    orig_edges = bridge.cgspec.edges
+    conj_edges = bridge_conj.cgspec.edges
+    
+    for orig, conj in zip(orig_edges, conj_edges):
+        assert orig.dir == conj.dir.flip()
+        # Spins should remain the same
+        assert orig.j.twice() == conj.j.twice()
+
+
+def test_bridge_conj_weights_scaled_by_phase():
+    """Test that Bridge.conj() scales weights by the FS phase."""
+    group = SU2Group()
+
+    # (in, in, out) → phase = +1
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    bridge_conj = bridge.conj()
+    phase, _ = yuzuha.compute_conjugate(bridge.cgspec)
+    assert phase == 1.0
+    assert bridge_conj.weights is not bridge.weights
+    assert torch.allclose(bridge_conj.weights, bridge.weights * phase)
+
+    # (out, in, out) → phase = -1
+    directions_neg = [Direction.OUT, Direction.IN, Direction.OUT]
+    bridge_neg = Bridge.from_block(group, key, directions_neg)
+    bridge_neg_conj = bridge_neg.conj()
+    phase_neg, _ = yuzuha.compute_conjugate(bridge_neg.cgspec)
+    assert phase_neg == -1.0
+    assert bridge_neg_conj.weights is not bridge_neg.weights
+    assert torch.allclose(bridge_neg_conj.weights, bridge_neg.weights * phase_neg)
+
+
+def test_bridge_conj_double_application():
+    """Test that conjugating twice returns to original directions and weights."""
+    group = SU2Group()
+    key = (1, 1, 2)
+
+    for directions in (
+        [Direction.IN, Direction.IN, Direction.OUT],   # phase = +1
+        [Direction.OUT, Direction.IN, Direction.OUT],  # phase = -1
+    ):
+        bridge = Bridge.from_block(group, key, directions)
+        bridge_double_conj = bridge.conj().conj()
+
+        # Directions should match original
+        orig_edges = bridge.cgspec.edges
+        final_edges = bridge_double_conj.cgspec.edges
+        for orig, final in zip(orig_edges, final_edges):
+            assert orig.dir == final.dir
+            assert orig.j.twice() == final.j.twice()
+
+        # Double conjugation always yields phase^2 = +1, so weights are numerically equal
+        assert torch.allclose(bridge.weights, bridge_double_conj.weights)
+
+
+def test_bridge_conj_multiple_sectors():
+    """Test Bridge.conj() with multiple sectors."""
+    group = SU2Group()
+    key = (0, 2, 3, 1)
+    directions = [Direction.OUT, Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    
+    bridge_conj = bridge.conj()
+    
+    # Verify all 4 edges have flipped directions
+    orig_edges = bridge.cgspec.edges
+    conj_edges = bridge_conj.cgspec.edges
+    
+    assert len(orig_edges) == 4
+    assert len(conj_edges) == 4
+    
+    for orig, conj in zip(orig_edges, conj_edges):
+        assert orig.dir == conj.dir.flip()
+
+
+def test_bridge_conj_with_custom_weights():
+    """Test Bridge.conj() with custom weight matrix, covering both FS phases."""
+    group = SU2Group()
+    key = (1, 1, 2)
+
+    for directions, expected_phase in (
+        ([Direction.IN, Direction.IN, Direction.OUT], 1.0),   # phase = +1
+        ([Direction.OUT, Direction.IN, Direction.OUT], -1.0), # phase = -1
+    ):
+        bridge = Bridge.from_block(group, key, directions)
+        custom_weights = torch.randn(3, bridge.om_dimension, dtype=torch.float64)
+        bridge_custom = Bridge(cgspec=bridge.cgspec, weights=custom_weights)
+
+        bridge_conj = bridge_custom.conj()
+
+        # Verify assumed phase matches yuzuha
+        phase, _ = yuzuha.compute_conjugate(bridge_custom.cgspec)
+        assert phase == expected_phase
+
+        # Weights should be a new tensor scaled by the FS phase (±1)
+        assert bridge_conj.weights is not bridge_custom.weights
+        assert torch.allclose(bridge_conj.weights, bridge_custom.weights * phase)
+
+        # Directions should be flipped
+        orig_edges = bridge_custom.cgspec.edges
+        conj_edges = bridge_conj.cgspec.edges
+        for orig, conj in zip(orig_edges, conj_edges):
+            assert orig.dir == conj.dir.flip()
+
+
+# Bridge.invert_edges() tests
+
+def test_invert_edges_single_position():
+    """Test that invert_edges flips only the specified edge direction."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    assert new_edges[0].dir == orig_edges[0].dir.flip()
+    assert new_edges[1].dir == orig_edges[1].dir
+    assert new_edges[2].dir == orig_edges[2].dir
+
+
+def test_invert_edges_multiple_positions():
+    """Test that invert_edges flips all specified positions and leaves others unchanged."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 3])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    assert new_edges[0].dir == orig_edges[0].dir.flip()
+    assert new_edges[1].dir == orig_edges[1].dir
+    assert new_edges[2].dir == orig_edges[2].dir
+    assert new_edges[3].dir == orig_edges[3].dir.flip()
+
+
+def test_invert_edges_preserves_spins():
+    """Test that invert_edges does not alter the spin values."""
+    group = SU2Group()
+    key = (1, 2, 3, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 1, 2, 3])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.j.twice() == new.j.twice()
+
+
+def test_invert_edges_shares_weights():
+    """Test that invert_edges shares the weight tensor (no copy)."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0])
+
+    assert result.weights is bridge.weights
+
+
+def test_invert_edges_double_application_restores():
+    """Test that applying invert_edges twice with the same positions is an involution."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([0, 2]).invert_edges([0, 2])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.dir == new.dir
+        assert orig.j.twice() == new.j.twice()
+
+
+def test_invert_edges_empty_positions_is_noop():
+    """Test that invert_edges([]) returns an equivalent Bridge unchanged."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.invert_edges([])
+
+    orig_edges = bridge.cgspec.edges
+    new_edges = result.cgspec.edges
+    for orig, new in zip(orig_edges, new_edges):
+        assert orig.dir == new.dir
+
+
+# Bridge.insert_edge() tests
+
+def test_insert_edge_neutral_spin():
+    """Test that the inserted edge has spin-0 (neutral) charge."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.insert_edge(0, Direction.IN)
+
+    assert result.cgspec.edges[0].j.twice() == 0
+
+
+def test_insert_edge_direction():
+    """Test that the inserted edge has the requested direction."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result_in = bridge.insert_edge(1, Direction.IN)
+    assert result_in.cgspec.edges[1].is_incoming()
+
+    result_out = bridge.insert_edge(1, Direction.OUT)
+    assert result_out.cgspec.edges[1].is_outgoing()
+
+
+def test_insert_edge_position_beginning():
+    """Test inserting at position 0 shifts all original edges right."""
+    group = SU2Group()
+    key = (1, 2, 3)
+    directions = [Direction.IN, Direction.OUT, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(0, Direction.OUT)
+    new_edges = result.cgspec.edges
+
+    assert len(new_edges) == len(orig_edges) + 1
+    for i, orig in enumerate(orig_edges):
+        assert new_edges[i + 1].j.twice() == orig.j.twice()
+        assert new_edges[i + 1].dir == orig.dir
+
+
+def test_insert_edge_position_end():
+    """Test inserting at the last position appends without affecting other edges."""
+    group = SU2Group()
+    key = (1, 1, 2)
+    directions = [Direction.IN, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(len(orig_edges), Direction.IN)
+    new_edges = result.cgspec.edges
+
+    assert len(new_edges) == len(orig_edges) + 1
+    for i, orig in enumerate(orig_edges):
+        assert new_edges[i].j.twice() == orig.j.twice()
+        assert new_edges[i].dir == orig.dir
+    assert new_edges[-1].j.twice() == 0
+
+
+def test_insert_edge_preserves_other_edges():
+    """Test that non-inserted edges retain their spins and directions."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.OUT, Direction.IN, Direction.OUT]
+    bridge = Bridge.from_block(group, key, directions)
+    orig_edges = bridge.cgspec.edges
+
+    result = bridge.insert_edge(2, Direction.IN)
+    new_edges = result.cgspec.edges
+
+    for new_i, orig_i in [(0, 0), (1, 1), (3, 2), (4, 3)]:
+        assert new_edges[new_i].j.twice() == orig_edges[orig_i].j.twice()
+        assert new_edges[new_i].dir == orig_edges[orig_i].dir
+
+
+def test_insert_edge_shares_weights():
+    """Test that the weight matrix is shared, not copied."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+
+    result = bridge.insert_edge(0, Direction.OUT)
+
+    assert result.weights is bridge.weights
+
+
+def test_insert_edge_preserves_om_dimension():
+    """Test that the OM dimension is unchanged after inserting a neutral edge."""
+    group = SU2Group()
+    key = (2, 2, 2, 2)
+    directions = [Direction.IN, Direction.IN, Direction.IN, Direction.IN]
+    bridge = Bridge.from_block(group, key, directions)
+    om_before = bridge.om_dimension
+
+    result = bridge.insert_edge(1, Direction.OUT)
+
+    assert result.om_dimension == om_before
+
+
+# ── fs_phase tests ─────────────────────────────────────────────────────────────
+
+def test_fs_phase_abelian_u1_is_one():
+    """Abelian groups always return +1."""
+    group = U1Group()
+    for charge in [0, 1, -1, 2]:
+        assert fs_phase(group, charge) == 1.0
+
+
+def test_fs_phase_abelian_product_is_one():
+    """Abelian ProductGroup (U1×U1) always returns +1."""
+    group = ProductGroup([U1Group(), U1Group()])
+    for charge in [(0, 0), (1, -1), (-2, 3)]:
+        assert fs_phase(group, charge) == 1.0
+
+
+def test_fs_phase_su2():
+    """SU(2): phase is (-1)^{2j}, alternating sign with 2j."""
+    group = SU2Group()
+    assert fs_phase(group, 0) == +1.0  # spin-0:   (-1)^0 = +1
+    assert fs_phase(group, 1) == -1.0  # spin-1/2: (-1)^1 = -1
+    assert fs_phase(group, 2) == +1.0  # spin-1:   (-1)^2 = +1
+    assert fs_phase(group, 3) == -1.0  # spin-3/2: (-1)^3 = -1
+    assert fs_phase(group, 4) == +1.0  # spin-2:   (-1)^4 = +1
+    assert fs_phase(group, 5) == -1.0  # spin-5/2: (-1)^5 = -1
+
+
+def test_fs_phase_z2_su2_product():
+    """Z2×SU2 ProductGroup: phase is determined by the SU(2) part (last element)."""
+    group = ProductGroup([Z2Group(), SU2Group()])
+    # Phase depends only on two_j, not on the Z2 component
+    for z2 in [0, 1]:
+        assert fs_phase(group, (z2, 0)) == +1.0
+        assert fs_phase(group, (z2, 1)) == -1.0
+        assert fs_phase(group, (z2, 2)) == +1.0
+        assert fs_phase(group, (z2, 3)) == -1.0
+
+
+def test_fs_phase_u1_su2_product():
+    """U1×SU2 ProductGroup: phase is determined by the SU(2) part (last element)."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    # Phase depends only on two_j, not on the U1 component
+    for u1 in [-1, 0, 1]:
+        assert fs_phase(group, (u1, 0)) == +1.0
+        assert fs_phase(group, (u1, 1)) == -1.0
+        assert fs_phase(group, (u1, 2)) == +1.0
+        assert fs_phase(group, (u1, 3)) == -1.0

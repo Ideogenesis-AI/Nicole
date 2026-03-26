@@ -1,19 +1,19 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 from __future__ import annotations
@@ -32,11 +32,10 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import torch
 
-from .blocks import BlockKey
+from .blocks import BlockKey, BlockSchema
 from .index import Index
-from .symmetry.base import SymmetryGroup
-from .symmetry.base import AbelianGroup
-from .symmetry.product import ProductGroup
+from .symmetry import SymmetryGroup
+from .symmetry.delegate import compute_xsymbol, compute_rsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
 
@@ -44,8 +43,6 @@ from .typing import Charge, Direction
 def _dir_weight(idx: Index, charge: Charge) -> Tuple[SymmetryGroup, Charge]:
     """Return the symmetry group and orientation-adjusted charge contribution."""
     group = idx.group
-    if not isinstance(group, (AbelianGroup, ProductGroup)):
-        raise NotImplementedError("Only Abelian/Product contraction supported")
     return group, (charge if idx.direction == Direction.OUT else group.dual(charge))
 
 
@@ -321,6 +318,7 @@ def contract(
 
     # Allocate the output blocks.
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
+    out_intw: Optional[Dict[BlockKey, Bridge]] = {} if A.intw is not None else None
     # Iterate over all admissible blocks in the input tensors.
     for keyA, arrA in A.data.items():
         for keyB, arrB in B.data.items():
@@ -330,9 +328,19 @@ def contract(
                 # Validate charge conservation for the pair.
                 group, qa = _dir_weight(A.indices[ia], keyA[ia])
                 _, qb = _dir_weight(B.indices[ib], keyB[ib])
-                if not group.equal(group.fuse(qa, qb), group.neutral):
-                    ok = False
-                    break
+                
+                # Check if fusion to neutral is allowed
+                if group.is_abelian:
+                    # Abelian: use fuse_unique
+                    if not group.equal(group.fuse_unique(qa, qb), group.neutral):
+                        ok = False
+                        break
+                else:
+                    # Non-Abelian: check if neutral is in fuse_channels
+                    if group.neutral not in group.fuse_channels(qa, qb):
+                        ok = False
+                        break
+                
                 # Ensure matching dimensions.
                 if arrA.shape[ia] != arrB.shape[ib]:
                     ok = False
@@ -342,34 +350,160 @@ def contract(
             # Perform the tensor contraction.
             axesA = [ia for ia, _ in axes_list]
             axesB = [ib for _, ib in axes_list]
-            res = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+            
             # Build the output charge key from the surviving axes.
             out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
                 keyB[i] for i in range(len(keyB)) if i not in contracted_B
             )
+            
+            # For generic (non-Abelian) tensors, check if output block satisfies charge conservation
+            if A.intw is not None:
+                if not BlockSchema.charges_conserved(out_indices, out_key):
+                    continue
+            
+            # Handle Abelian vs non-Abelian contraction
+            if A.intw is None:
+                # Abelian: simple tensordot
+                res = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+                bridge_res = None
+            else:
+                # Non-Abelian (SU(2)): contract physical axes only, preserve component dimensions
+                # Block A: (...phys_A..., k_a), Block B: (...phys_B..., k_b)
+                # Contract ONLY physical axes, keeping component dimensions separate
+                
+                # Promote dtype if needed (tensordot requires matching dtypes)
+                dtype_result = torch.promote_types(arrA.dtype, arrB.dtype)
+                if arrA.dtype != dtype_result:
+                    arrA = arrA.to(dtype_result)
+                if arrB.dtype != dtype_result:
+                    arrB = arrB.to(dtype_result)
+                
+                res_phys = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
+                
+                # After tensordot, the component dimensions are scattered in the result
+                # We need to identify their positions and move them to the end
+                
+                bridge_a = A.intw[keyA]
+                bridge_b = B.intw[keyB]
+                k_a = bridge_a.num_components
+                k_b = bridge_b.num_components
+                n_kept_a = len(A.indices) - len(axesA)
+                n_kept_b = len(B.indices) - len(axesB)
+                
+                if n_kept_a == 0 and n_kept_b == 0:
+                    # Scalar: contract components using weight overlap matrix.
+                    # The CG-basis overlap <CG_A|CG_B> = conj_phase·δ only
+                    # when the contracted edges of A and B appear in the same internal
+                    # slot order. When axesA ≠ axesB, a relative permutation
+                    # align_perm = axesB ∘ axesA⁻¹ misaligns the two CG trees; we correct
+                    # this by applying the corresponding R-symbol to bridge_b's weights
+                    # before forming the overlap matrix.
+                    weights_a = bridge_a.weights.to(dtype_result)
+                    weights_b = bridge_b.weights.to(dtype_result)
+
+                    # Compute align_perm such that align_perm[axesA[k]] = axesB[k]:
+                    # this maps B's CG-tree edge slots into the same contracted
+                    # order as A, so the OM-basis overlap becomes diagonal (δ).
+                    align_perm = [0] * len(axesA)
+                    for k, a in enumerate(axesA):
+                        align_perm[a] = axesB[k]
+
+                    # Apply R-symbol only when align_perm is non-trivial
+                    if align_perm != list(range(len(axesA))):
+                        r_b, _ = compute_rsymbol(bridge_b, align_perm)
+                        weights_b = weights_b @ r_b.to(dtype_result)
+
+                    weight_overlap = weights_a @ weights_b.T
+                    res = (res_phys * weight_overlap).sum().reshape(())
+
+                    # Conjugation phase from bridge_a (accounts for FS signs in A's
+                    # CG tree; B's basis is now aligned to A's ordering)
+                    phase = bridge_a.conj_phase()
+                    res = res * phase
+
+                    bridge_res = None
+                else:
+                    # Non-scalar: recouple k_a × k_b → k_c via X-symbol
+                    k_c = k_a * k_b
+                    
+                    # Compute X-symbol and output CGSpec
+                    x_symbol, spec_c = compute_xsymbol(bridge_a, bridge_b, axesA, axesB)
+                    
+                    # Component dims are at positions n_kept_a and (n_kept_a + 1 + n_kept_b)
+                    # Move them to end: (...phys..., k_a, k_b) → (...phys..., k_c)
+                    pos_k_a = n_kept_a
+                    pos_k_b = n_kept_a + 1 + n_kept_b
+                    res_phys = torch.moveaxis(res_phys, [pos_k_a, pos_k_b], [-2, -1])
+                    res = res_phys.reshape(list(res_phys.shape[:-2]) + [k_c])
+                    
+                    # Combine weights: (k_a, om_a) ⊗ (k_b, om_b) × X(om_a, om_b, om_c) → (k_c, om_c)
+                    weights_a = bridge_a.weights
+                    weights_b = bridge_b.weights
+                    weights_c = torch.einsum('ia,jb,abc->ijc', weights_a, weights_b, x_symbol)
+                    
+                    # Reshape to (k_a * k_b, om_c)
+                    weights_c = weights_c.reshape(k_c, x_symbol.shape[2])
+                    
+                    # Create output bridge
+                    bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
+            
             # Add the result to the output blocks.
             if out_key in out_blocks:
-                out_blocks[out_key] = out_blocks[out_key] + res
+                if A.intw is None:
+                    # Abelian: simple addition
+                    out_blocks[out_key] = out_blocks[out_key] + res
+                elif bridge_res is None:
+                    # Non-Abelian scalar: simple addition
+                    out_blocks[out_key] = out_blocks[out_key] + res
+                else:
+                    # Non-Abelian: use block_add to combine blocks and weights
+                    out_blocks[out_key], out_intw[out_key] = BlockSchema.block_add(
+                        out_blocks[out_key], out_intw[out_key],
+                        res, bridge_res
+                    )
             else:
                 out_blocks[out_key] = res
+                if out_intw is not None and bridge_res is not None:
+                    out_intw[out_key] = bridge_res
     
     # For 0D scalars, ensure the result is a proper tensor
     # PyTorch maintains tensor type through operations, so this is less critical
     if len(out_indices) == 0 and () in out_blocks:
         out_blocks[()] = torch.as_tensor(out_blocks[()])
 
-    result = Tensor(
-        indices=out_indices,
-        itags=out_itags,
-        data=out_blocks,
+    # For scalar results or when all bridges are None, set intw to None
+    if out_intw is not None:
+        if len(out_indices) == 0:  # Scalar result
+            out_intw = None
+        elif out_intw and all(v is None for v in out_intw.values()):
+            out_intw = None
+    
+    out_tensor = Tensor(
+        indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw,
         dtype=torch.promote_types(A.dtype, B.dtype)
     )
 
+    # Row-normalize intertwiner weights and redistribute norms into data to
+    # prevent weights from decaying across successive contractions.
+    out_tensor.regularize()
+
+    # When order drops, OM typically drops, making accumulated components from
+    # block_add likely to exceed OM. Compress to remove genuine rank deficiency.
+    # The order-reduction condition is a heuristic to balance the performance
+    # gain from compression against the SVD cost: order-preserving or
+    # order-increasing contractions tend to have growing OM, so components are
+    # unlikely to be redundant and SVD overhead is not justified.
+    # Regularize first so that the SVD cutoff operates on well-scaled rows;
+    # after compress the new weights (Vh rows) are already orthonormal, so no
+    # second regularize is needed.
+    if out_intw is not None and len(out_indices) < max(len(A.indices), len(B.indices)):
+        out_tensor.compress()
+
     # Apply permutation if requested.
     if perm is not None:
-        result.permute(perm)
+        out_tensor.permute(perm, in_place=True)
     
-    return result
+    return out_tensor
 
 
 def _detect_trace_pairs(T: Tensor, excl: set[int] = None) -> list[tuple[int, int]]:
@@ -477,8 +611,6 @@ def trace(
 
     Raises
     ------
-    NotImplementedError
-        If the tensor uses non-Abelian symmetry groups.
     ValueError
         If both axes and excl are specified, or if paired indices have the same direction,
         mismatched charges, incompatible dimensions, or if no valid pairs are found,
@@ -596,46 +728,114 @@ def trace(
     
     # Base case: single pair to trace
     a, b = pairs[0]
-    
+
+    # Validate the pair upfront before touching any block data
+    if T.indices[a].direction == T.indices[b].direction:
+        raise ValueError(
+            f"Trace axes {a} and {b} have the same direction "
+            f"({T.indices[a].direction}). Traced pairs must have opposite directions."
+        )
+
+    group = T.indices[a].group
+
     contracted = {a, b}
     keep_axes = [i for i in range(len(T.indices)) if i not in contracted]
     out_indices = tuple(T.indices[i] for i in keep_axes)
     out_itags = tuple(T.itags[i] for i in keep_axes)
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
-    
+    out_intw: Optional[Dict[BlockKey, Bridge]] = {} if T.intw is not None else None
+
     for key, arr in T.data.items():
-        group = T.indices[a].group
-        if not isinstance(group, (AbelianGroup, ProductGroup)):
-            raise NotImplementedError("Only Abelian/Product trace supported")
         qa = key[a]
         qb = key[b]
-        
-        # Check constraints for this pair
-        if T.indices[a].direction == T.indices[b].direction:
-            continue
+
+        # Skip blocks where charges don't match or dimensions are incompatible
         if not group.equal(qa, qb):
             continue
         if arr.shape[a] != arr.shape[b]:
             continue
-        
-        # Trace this pair
-        # torch.trace() only works for 2D tensors, use diagonal() for multi-dimensional
-        # torch.diagonal moves the diagonal to the last axis, sum over it
+
+        # Data part: identical for Abelian and non-Abelian.
+        # torch.diagonal moves the traced diagonal to the last axis; summing collapses it.
+        # For non-Abelian blocks arr has a trailing component axis k that is preserved.
         diag = torch.diagonal(arr, dim1=a, dim2=b).sum(dim=-1)
         
         # Ensure diag is a proper tensor (not a scalar)
         if not isinstance(diag, torch.Tensor):
             diag = torch.tensor(diag)
-        
+
         out_key = tuple(key[i] for i in keep_axes)
-        if out_key in out_blocks:
-            result_block = out_blocks[out_key] + diag
-            if not isinstance(result_block, torch.Tensor):
-                result_block = torch.tensor(result_block)
-            out_blocks[out_key] = result_block
+
+        if T.intw is None:
+            # Abelian: plain accumulation.
+            out_blocks[out_key] = out_blocks.get(out_key, 0) + diag
         else:
-            out_blocks[out_key] = diag
-    
-    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, dtype=T.dtype)
+            # Non-Abelian (SU(2) / ProductGroup with SU(2)).
+            # Tracing axes a and b is equivalent to contracting with a 2nd order identity
+            # tensor on those indices. Build bridge_I at charge q = qa = qb with directions
+            # reversed from T's traced indices and weight √(irrep_dim(q)), exactly as
+            # identity() does, then get the X-symbol for that virtual contraction.
+            q = qa
+            irrep_dim = group.irrep_dim(q)
+            w_I = torch.full((1, 1), float(irrep_dim ** 0.5), dtype=T.dtype)
+            bridge_I = Bridge.from_block(
+                group, (q, q),
+                [T.indices[a].direction.reverse(), T.indices[b].direction.reverse()],
+                weights=w_I,
+            )
+            bridge_T = T.intw[key]
+
+            if len(keep_axes) == 0:
+                # Scalar output: yuzuha cannot build a 0-edge CGSpec, so use the
+                # weight-overlap formula directly (mirrors the scalar path in contract()).
+                weight_overlap = bridge_I.weights @ bridge_T.weights.T  # (1, k_T)
+                scalar_contrib = (diag.unsqueeze(0) * weight_overlap).sum()
+                scalar_contrib = (scalar_contrib * bridge_I.conj_phase()).reshape(())
+                if () in out_blocks:
+                    out_blocks[()] = out_blocks[()] + scalar_contrib
+                else:
+                    out_blocks[()] = scalar_contrib
+                # out_intw is set to None after the loop for scalar results
+            else:
+                # Skip blocks whose remaining charges cannot form a neutral tensor;
+                # their trace contribution is zero by SU(2) selection rules.
+                if not BlockSchema.charges_conserved(out_indices, out_key):
+                    continue
+
+                # Non-scalar: recouple via X-symbol.
+                x_symbol, spec_c = compute_xsymbol(bridge_T, bridge_I, [a, b], [0, 1])
+
+                # Combine weights: (k_T, om_T) ⊗ (1, 1) × X(om_T, 1, om_c) → (k_T, om_c)
+                weights_c = torch.einsum(
+                    'ia,jb,abc->ijc', bridge_T.weights, bridge_I.weights, x_symbol
+                ).reshape(bridge_T.num_components, x_symbol.shape[2])
+                bridge_res = Bridge(cgspec=spec_c, weights=weights_c)
+
+                if out_key in out_blocks:
+                    out_blocks[out_key], out_intw[out_key] = BlockSchema.block_add(
+                        out_blocks[out_key], out_intw[out_key],
+                        diag, bridge_res,
+                    )
+                else:
+                    out_blocks[out_key] = diag
+                    out_intw[out_key] = bridge_res
+
+    # Scalar non-Abelian results carry no intertwiner.
+    if out_intw is not None and len(out_indices) == 0:
+        out_intw = None
+
+    out_tensor = Tensor(
+        indices=out_indices, itags=out_itags, data=out_blocks,
+        intw=out_intw, dtype=T.dtype
+    )
+
+    # Trace always reduces order by 2, so OM always drops. Regularize first so
+    # that the SVD cutoff in compress operates on well-scaled rows; the condition
+    # is unconditional here (unlike contract) because order reduction is guaranteed.
+    if out_intw is not None:
+        out_tensor.regularize()
+        out_tensor.compress()
+
+    return out_tensor
 
 

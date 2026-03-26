@@ -1,29 +1,29 @@
-# Copyright (C) 2025 Changkai Zhang.
+# Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Test suite for the Nicole (TN) symmetry-aware tensor network library.
+"""Test suite for the Nicole symmetry-aware tensor network library.
 
 This package contains comprehensive unit tests and integration tests for all
 components of the Nicole library, organized into thematic subdirectories.
 
 Test Organization
 -----------------
-The tests are organized into four main categories:
+The tests are organized into five main categories:
 
 primary/
     Core data structures and tensor construction:
@@ -39,22 +39,31 @@ operations/
     - test_contract.py: Tensor contractions and traces
     - test_decomp.py: SVD, eigendecomposition, and other decompositions
     - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
-    - test_manipulation.py: Permutation, transposition, conjugation, merging
+    - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
 
 symmetry/
     Symmetry group operations:
     - test_group_elem.py: Elementary symmetry group operations (U1, Z2)
     - test_group_prod.py: Product group operations and multi-symmetry
+    - test_group_su2.py: SU(2) group operations and recoupling
+    - test_delegate.py: Bridge and CG tensor delegation
 
 support/
     Utilities and secondary features:
-    - test_copy_access.py: Tensor copying and element access
+    - test_helpers.py: Tensor cloning and element access
     - test_display.py: Tensor display and formatting
     - test_types.py: Type definitions and enumerations
+    - test_autograd.py: Automatic differentiation support
+    - test_device.py: Multi-device tensor operations
+
+integration/
+    Multi-component interaction tests:
+    - test_consistency.py: Algebraic consistency (distributivity, linearity)
+    - test_unitarity.py: Unitarity properties (isometries, conjugation)
+    - test_integration.py: End-to-end workflow tests
 
 Root level:
-    - test_integration.py: End-to-end workflow tests
     - utils.py: Shared test utilities and helpers
 
 Running Tests
@@ -67,6 +76,7 @@ Run tests in a specific category:
     $ pytest tests/operations/
     $ pytest tests/symmetry/
     $ pytest tests/support/
+    $ pytest tests/integration/
 
 Run specific test file:
     $ pytest tests/operations/test_contract.py

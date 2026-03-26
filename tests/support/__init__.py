@@ -1,25 +1,25 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 """Tests for utilities and secondary features.
 
 This module contains tests for supporting functionality that enhances
-usability and developer experience, including copying behavior, display
+usability and developer experience, including cloning behavior, display
 formatting, and type definitions. While not central to tensor algebra,
 these features are important for practical use of the library.
 
@@ -34,10 +34,10 @@ test_autograd.py
     - Differentiable decompositions
     - Gradient checking and validation
 
-test_copy_access.py
-    Tests for tensor copying and element access:
-    - Deep copy vs. shallow copy behavior
-    - Copy semantics for tensors and indices
+test_helpers.py
+    Tests for tensor cloning and element access:
+    - Deep clone vs. shallow copy behavior
+    - Clone semantics for tensors and indices
     - Element-wise access to tensor blocks
     - Data sharing and mutation safety
     - Memory management and ownership
@@ -74,7 +74,7 @@ test_types.py
 Key Features Tested
 -------------------
 - Automatic differentiation and gradient flow
-- Copy semantics and data safety
+- Clone semantics and data safety
 - Device management and GPU acceleration
 - User-friendly tensor inspection
 - Clear error messages and diagnostics
@@ -86,7 +86,7 @@ Developer Experience
 These tests ensure that Nicole provides:
 - Seamless PyTorch integration with autograd support
 - Flexible device management for CPU/GPU workflows
-- Intuitive copying behavior without surprises
+- Intuitive cloning behavior without surprises
 - Clear visualization of tensor structure
 - Strong typing for better IDE support
 - Helpful error messages and debugging tools

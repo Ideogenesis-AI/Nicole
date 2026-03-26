@@ -1,19 +1,19 @@
 # Copyright (C) 2025-2026 Changkai Zhang.
 #
-# This file is part of Nicole (TN) library.
+# This file is part of Nicole library.
 #
-# Nicole (TN) is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published
+# Nicole is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published
 # by the Free Software Foundation, either version 3 of the License,
 # or (at your option) any later version.
 #
-# Nicole (TN) is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# Nicole is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Nicole (TN). If not, see <https://www.gnu.org/licenses/>.
+# along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ Implementation approach
 1. Lightweight formatting helpers (_format_bytes, _format_single_value, _format_count_list)
    handle recurring presentation tasks so the main summariser stays readable.
 2. `_charge_components` and `_group_signature` normalise charge data regardless of whether
-   the tensor uses simple integers or tuple-based non-Abelian multiplet identifiers.
+   the tensor uses simple integers or tuple-based product group identifiers.
 3. `tensor_summary` orchestrates the process: it first builds the heading lines, then
    computes global padding for charges so every printed sector column aligns. Finally it
    assembles per-block information, truncating after a configurable number of lines for brevity.
@@ -84,7 +84,7 @@ def _group_signature(indices: Sequence[Index], components_per_charge: int) -> st
         # Other Abelian groups use their name
         return group.name
     else:
-        # Non-Abelian groups
+        # Generic groups
         gname = getattr(group, "name", "")
         label = gname.upper() if gname else "?"
         count = max(components_per_charge, 1)
@@ -112,8 +112,8 @@ def _format_single_value(arr: torch.Tensor) -> str:
         real_part = f"{val.real:.4g}"
         imag_part = f"{abs(val.imag):.4g}"
         sign = "+" if val.imag >= 0 else "-"
-        return f"{real_part}{sign}{imag_part}i."
-    return f"{val:.4g}."
+        return f"{real_part}{sign}{imag_part}i"
+    return f"{val:.4g}" + ("." if "." not in f"{val:.4g}" and "e" not in f"{val:.4g}" else "")
 
 
 def _format_count_list(counts: Sequence[int]) -> str:
@@ -127,9 +127,10 @@ def tensor_summary(
     indices: Sequence[Index],
     itags: Sequence[str],
     data: Mapping[Tuple[Charge, ...], torch.Tensor],
-    dtype: torch.dtype,
-    label: str,
-    norm: float,
+    intw = None,
+    dtype: torch.dtype = torch.float64,
+    label: str = "Tensor",
+    norm: float = 0.0,
     sorted_keys: Sequence[Tuple[Charge, ...]] = None,
     max_lines: Optional[int] = 9,
     block_numbers: Optional[Sequence[int]] = None,
@@ -143,7 +144,10 @@ def tensor_summary(
     itags:
         Ordered tuple of human-readable labels for each index.
     data:
-        Mapping from block keys (one charge per leg) to dense NumPy arrays.
+        Mapping from block keys (one charge per index) to torch tensors.
+    intw:
+        Optional mapping from block keys to Bridge objects for generic tensors.
+        Used to determine the reduced multiplicity dimension to trim from display.
     dtype:
         Data type of the tensor entries.
     label:
@@ -210,7 +214,7 @@ def tensor_summary(
     # -------------------------------------------------------------------
     sym_signature = _group_signature(indices, sample_components)
     itag_list = ", ".join(
-        f"{tag}{'*' if idx.direction > 0 else ''}" for tag, idx in zip(itags, indices)
+        f"{tag}{'*' if idx.direction == Direction.OUT else ''}" for tag, idx in zip(itags, indices)
     )
     info_line = (
         f"\n  info:  {order}x {{ {num_blocks} x {sample_components or 1} }}  "
@@ -223,14 +227,7 @@ def tensor_summary(
     dtype_name = str(dtype).replace('torch.', '')
     multiplet_counts_list = [idx.dim for idx in indices]
     multiplet_counts = _format_count_list(multiplet_counts_list)
-    state_counts_list = []
-    for idx in indices:
-        if isinstance(idx.group, AbelianGroup):
-            state_counts_list.append(idx.dim)
-        else:
-            # TODO: For non-Abelian groups, this should be sector.dim x degeneracy
-            # when degeneracy is implemented. For now, use the same as Abelian.
-            state_counts_list.append(idx.dim)
+    state_counts_list = [idx.num_states for idx in indices]
     state_counts = _format_count_list(state_counts_list)
     data_line = (
         f"  data:  {order}-D {dtype_name} ({_format_bytes(total_bytes)})    "
@@ -245,7 +242,7 @@ def tensor_summary(
         # Determine padding for charges across all keys and positions.
         components_per_position: List[List[str]] = []
         for key in data:
-            # `key` = tuple of charges, one per leg. Collect each component string.
+            # `key` = tuple of charges, one per index. Collect each component string.
             for pos, comps in enumerate(_charge_components(charge) for charge in key):
                 while len(components_per_position) <= pos:
                     components_per_position.append([])
@@ -269,9 +266,18 @@ def tensor_summary(
             display_numbers = list(range(1, len(blocks_to_show) + 1))
         
         for idx_num, (key, arr) in zip(display_numbers, blocks_to_show):
-            # Dense dims (state space) and trivial CGC placeholder (Abelian => all ones).
-            state_dims = "x".join(str(dim) for dim in arr.shape) or "1"
-            cgc_dims = "x".join("1" for _ in arr.shape) or "1"
+            # Dense dims (state space) and CGC dims (irrep dimensions).
+            # For generic tensors, trim the trailing reduced multiplicity dimension.
+            if intw is not None:
+                # Generic: trim last axis (reduced multiplicity)
+                state_shape = arr.shape[:-1]
+                cgc_dims_list = [str(indices[i].group.irrep_dim(key[i])) for i in range(len(key))]
+                cgc_dims = "x".join(cgc_dims_list) or "1"
+            else:
+                # Abelian: use full shape, all irrep_dims are 1
+                state_shape = arr.shape
+                cgc_dims = "x".join("1" for _ in arr.shape) or "1"
+            state_dims = "x".join(str(dim) for dim in state_shape) or "1"
 
             # Format charges, reusing global padding so columns line up across blocks.
             charge_components = [_charge_components(charge) for charge in key]

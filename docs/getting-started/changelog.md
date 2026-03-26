@@ -84,8 +84,8 @@ Release version 0.2.1 of Nicole, introducing QR decomposition for orthogonal ten
 
 #### Test Organization
 - Refactored decomposition tests into focused modules:
-  - `test_decomp.py`: High-level `decomp()` API tests
-  - `test_factorize.py`: Low-level SVD, QR, EIG function tests
+    - `test_decomp.py`: High-level `decomp()` API tests
+    - `test_factorize.py`: Low-level SVD, QR, EIG function tests
 - Enhanced test clarity with descriptive names and documentation
 - Renamed "flip" tests to "invert" for consistency with API changes
 
