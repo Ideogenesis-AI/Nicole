@@ -247,8 +247,12 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
         # Note: right_mps and right_mps_conj have the same itag
     
     # After all sites, E has shape (right_mps_conj, right_mpo, right_mps)
-    # At the right boundary, all indices have dimension 1
-    # Extract the scalar from the first (and only) block and divide by number of sites
+    # At the right boundary, all indices have dimension 1.
+    # Extract the scalar as data × Bridge weight. For Abelian symmetries intw is
+    # None (implicit weight 1); for non-Abelian groups the Bridge encodes the
+    # CG normalisation that must be included for the correct physical value.
+    k, v = next(iter(E.data.items()))
+    weight = 1.0 if E.intw is None else E.intw[k].weights[0, 0].item()
+    value = v.item() * weight
     
-    value = E.block(1).item()  # Extract single element from torch tensor
     return value / len(mps)
