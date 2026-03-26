@@ -519,7 +519,8 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
     # This is a diagonal 2-index tensor
@@ -596,7 +597,8 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
+
     # Build Z operator (Jordan-Wigner string / Z-string)
     # Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
     # This is a diagonal 2-index tensor
@@ -711,7 +713,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F_up"].indices = Tensor._prune_unused_sectors(Op["F_up"].indices, Op["F_up"].data)
+
     # Build F_dn operator (annihilates spin-down electron)
     # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = -|↑⟩
     # For |↓⟩ → |0⟩: q₀=(-1,0), q₁=(0,-1)
@@ -736,7 +739,8 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F_dn"].indices = Tensor._prune_unused_sectors(Op["F_dn"].indices, Op["F_dn"].data)
+
     # Build Z operator (Jordan-Wigner string)
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
     Z_data = {}
@@ -877,7 +881,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F_up"].indices = Tensor._prune_unused_sectors(Op["F_up"].indices, Op["F_up"].data)
+
     # Build F_dn operator
     # F_dn|↓⟩ = |0⟩, F_dn|↑↓⟩ = |↑⟩
     # -(0,0) + (1,-1) + q_aux = 0 (mod 2, exact) → q_aux = (1, 1)
@@ -900,7 +905,8 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
-    
+    Op["F_dn"].indices = Tensor._prune_unused_sectors(Op["F_dn"].indices, Op["F_dn"].data)
+
     # Build Z operator
     # Z|0⟩ = |0⟩, Z|↑⟩ = -|↑⟩, Z|↓⟩ = -|↓⟩, Z|↑↓⟩ = |↑↓⟩
     Z_data = {}
@@ -1065,6 +1071,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
+    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
 
     # ------------------------------------------------------------------ Z ---
     # Z (Jordan-Wigner string): scalar operator, no spin auxiliary index.
@@ -1129,6 +1136,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
+    Op["S"].indices = Tensor._prune_unused_sectors(Op["S"].indices, Op["S"].data)
 
     # --------------------------------------------------------------- vac ---
     vac_index = Index(
@@ -1145,7 +1153,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     """Load spinful fermion space with Z2xSU(2) symmetry (parity, full spin).
 
     Under Z2xSU(2) the two-particle singlet |↑↓⟩ and the vacuum |0⟩ share
-    the same Z2 parity (even), while {|↑⟩, |↓⟩} have odd parity.  The SU(2)
+    the same Z2 parity (even), while {|↑⟩, |↓⟩} have odd parity. The SU(2)
     doublet {|↑⟩, |↓⟩} forms one irreducible sector.
 
     States and sectors (Z2 charge = particle parity mod 2, SU2 label = 2j):
@@ -1220,6 +1228,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
+    Op["F"].indices = Tensor._prune_unused_sectors(Op["F"].indices, Op["F"].data)
 
     # ------------------------------------------------------------------ Z ---
     # Z (Jordan-Wigner string): scalar operator.
@@ -1292,6 +1301,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         dtype=torch.float64,
         label="Operator"
     )
+    Op["S"].indices = Tensor._prune_unused_sectors(Op["S"].indices, Op["S"].data)
 
     # --------------------------------------------------------------- vac ---
     vac_index = Index(

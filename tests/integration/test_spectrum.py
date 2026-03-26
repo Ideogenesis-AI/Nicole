@@ -724,7 +724,7 @@ def _build_ss_band_from_F(preserv: str):
     The resulting two-site operator is S₁·S₂, with eigenvalues matching those
     produced by _build_ss_band_from_S, which serves as the consistency check.
     """
-    _, Op = load_space("Band", preserv=preserv)
+    Spc, Op = load_space("Band", preserv=preserv)
     F = Op["F"]
     Fd = F.conj().permute([1, 0, 2])
 
@@ -733,7 +733,7 @@ def _build_ss_band_from_F(preserv: str):
     T = contract(Fd, F, axes=(1, 0))
     T_perm = T.permute([0, 2, 1, 3])           # (bra, ket, aux_F†, aux_F)
     T_merged, _ = merge_axes(T_perm, (2, 3), merged_tag="_aux_")
-    # T_merged: (merged_aux/IN, ket/OUT, bra/IN)
+    # T_merged: (merged_aux/OUT, ket/IN, bra/OUT)
     # Index 0 of T_merged is the merged aux with sectors (0,0) and (0,2).
 
     # Isolate the spin-1 (0,2) sector to obtain S_from_F ∝ Op["S"]
@@ -752,7 +752,6 @@ def _build_ss_band_from_F(preserv: str):
         intw=S_intw,
         dtype=T_merged.dtype,
     )
-    # S_from_F: (aux_spin1/IN, ket/OUT, bra/IN)
 
     # The merging of the two spin-½ aux indices via Clebsch-Gordan essentially
     # applies a −1/√2 · σ factor relative to Op["S"]'s RME convention.
@@ -802,7 +801,7 @@ def _build_ss_band_from_fierz(preserv: str):
     6. compress() collapses the num_components > 1 that arise from the sum of
        two tensors back to 1, making _eigvalsh_block applicable.
     """
-    _, Op = load_space("Band", preserv=preserv)
+    Spc, Op = load_space("Band", preserv=preserv)
     F = Op["F"]
     Fd = F.conj().permute([1, 0, 2])
 
@@ -872,13 +871,11 @@ def test_spin_spin_band_u1su2():
 
     Block keys are ((total_U1, 2·J_total), same):
 
-    ((0, 0), (0, 0)) — 3×3, combining:
-        • |0₁,↑↓₂⟩ and |↑↓₁,0₂⟩: S is zero on empty/doubly-occupied → eigenvalue 0
-        • singlet (|↑₁↓₂⟩ − |↓₁↑₂⟩)/√2: S₁·S₂ = −¾ (one state)
-        eigenvalues: {−¾, 0, 0}
+    Both Op["S"] and F are pruned to the singly-occupied sector (0,1), so SS
+    only covers (0,1)⊗(0,1).
 
-    ((0, 2), (0, 2)) — 1×1, triplet of two singly-occupied sites:
-        S₁·S₂ = +¼
+    ((0, 0), (0, 0)) — 1×1, singlet (|↑₁↓₂⟩ − |↓₁↑₂⟩)/√2: S₁·S₂ = −¾
+    ((0, 2), (0, 2)) — 1×1, triplet: S₁·S₂ = +¼
     """
     SS  = _build_ss_band_from_S("U1,SU2")
     SS2 = _build_ss_band_from_F("U1,SU2")
@@ -892,18 +889,18 @@ def test_spin_spin_band_u1su2():
         f"Fierz key mismatch: SS={set(SS.data.keys())}, SS3={set(SS3.data.keys())}"
     )
 
-    # --- absent blocks: S is zero outside the singly-occupied sector ---
+    # --- only singly-occupied sector survives after pruning ---
     for key, label in [
-        (((-2, 0), (-2, 0)), "vacuum"),
-        (((-1, 1), (-1, 1)), "N=1 single-particle"),
-        ((( 1, 1), ( 1, 1)), "N=3 single-hole"),
-        ((( 2, 0), ( 2, 0)), "doubly-occupied"),
+        (((-2, 0), (-2, 0)), "vacuum ⊗ vacuum"),
+        (((-1, 1), (-1, 1)), "vacuum ⊗ singly-occ"),
+        ((( 1, 1), ( 1, 1)), "singly-occ ⊗ doubly-occ"),
+        ((( 2, 0), ( 2, 0)), "doubly-occ ⊗ doubly-occ"),
     ]:
         assert key not in SS.data, f"block {key} ({label}) should be absent"
 
     # --- analytic eigenvalues ---
     key = ((0, 0), (0, 0))
-    expected_singlet = torch.tensor([-0.75, 0.0, 0.0], dtype=torch.float64)
+    expected_singlet = torch.tensor([-0.75], dtype=torch.float64)
     assert torch.allclose(_eigvalsh_block(SS,  key), expected_singlet, atol=1e-6), (
         f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
     )
@@ -927,39 +924,40 @@ def test_spin_spin_band_u1su2():
 def test_spin_spin_band_z2su2():
     """S₁·S₂ for a two-site Z2×SU(2) Band system: three independent routes.
 
-    Z2 combines the empty |0⟩ and doubly-occupied |↑↓⟩ states (both even parity)
-    with the singly-occupied doublet |↑⟩/|↓⟩ (odd parity).
+    Z2 combines the empty |0⟩ and doubly-occupied |↑↓⟩ states in a single dim=2
+    sector (0,0), while the singly-occupied doublet {|↑⟩,|↓⟩} forms sector (1,1).
 
-    All three constructions (Op["S"], T_merged, Fierz) must give the same S₁·S₂
-    operator.  Block keys are ((Z2_parity, 2·J_total), same):
+    Op["S"] is pruned to the singly-occupied sector (1,1), so SS covers only
+    (1,1)⊗(1,1).  The F and Fierz operators cannot be restricted to this sector
+    because F's blocks involve the dim=2 (0,0) sector (connecting |0⟩↔{↑,↓} and
+    {↑,↓}↔|↑↓⟩), so SS2/SS3 span the full physical space and the singlet block
+    carries extra zero-eigenvalue states.
 
-    ((0, 0), (0, 0)) — 5×5, combining:
-        • 4 even-parity pairs: {|0₁0₂⟩, |0₁↑↓₂⟩, |↑↓₁0₂⟩, |↑↓₁↑↓₂⟩}
-          → S zero on each, eigenvalue 0 (×4)
-        • 1 singlet from (1,1)⊗(1,1)→(0,0): S₁·S₂ = −¾
-        eigenvalues: {−¾, 0, 0, 0, 0}
-
-    ((0, 2), (0, 2)) — 1×1, triplet: S₁·S₂ = +¼
+    SS  (Op["S"]):         ((0,0),(0,0)) 1×1 → {−¾};   ((0,2),(0,2)) 1×1 → {+¼}
+    SS2 (T_merged) / SS3 (Fierz): ((0,0),(0,0)) 5×5 → {−¾, 0, 0, 0, 0};
+                                   ((0,2),(0,2)) 1×1 → {+¼}
     """
     SS  = _build_ss_band_from_S("Z2,SU2")
     SS2 = _build_ss_band_from_F("Z2,SU2")
     SS3 = _build_ss_band_from_fierz("Z2,SU2")
 
-    # --- all three produce the same non-trivial block keys ---
-    assert SS.data.keys() == SS2.data.keys(), (
-        f"T_merged key mismatch: SS={set(SS.data.keys())}, SS2={set(SS2.data.keys())}"
+    # --- F and Fierz agree on the full space ---
+    assert SS2.data.keys() == SS3.data.keys(), (
+        f"Fierz key mismatch: SS2={set(SS2.data.keys())}, SS3={set(SS3.data.keys())}"
     )
-    assert SS.data.keys() == SS3.data.keys(), (
-        f"Fierz key mismatch: SS={set(SS.data.keys())}, SS3={set(SS3.data.keys())}"
-    )
+    for key in SS2.data:
+        ev2 = _eigvalsh_block(SS2, key)
+        ev3 = _eigvalsh_block(SS3, key)
+        assert torch.allclose(ev2, ev3, atol=1e-6), (
+            f"T_merged vs Fierz mismatch at {key}: got {ev3.tolist()}, expected {ev2.tolist()}"
+        )
 
-    # --- absent: odd-parity doublet block (one site always empty or doubly occ) ---
+    # --- Op["S"] covers the singly-occupied sector only ---
     key = ((1, 1), (1, 1))
-    assert key not in SS.data, f"block {key} should be absent"
+    assert key not in SS.data, f"block {key} should be absent from Op['S']-derived SS"
 
-    # --- analytic eigenvalues ---
     key = ((0, 0), (0, 0))
-    expected_singlet = torch.tensor([-0.75, 0.0, 0.0, 0.0, 0.0], dtype=torch.float64)
+    expected_singlet = torch.tensor([-0.75], dtype=torch.float64)
     assert torch.allclose(_eigvalsh_block(SS, key), expected_singlet, atol=1e-6), (
         f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
     )
@@ -970,11 +968,13 @@ def test_spin_spin_band_z2su2():
         f"Op['S'] block {key}: got {_eigvalsh_block(SS, key).tolist()}"
     )
 
-    # --- all three routes agree on every block ---
+    # --- non-zero eigenvalues in SS2/SS3 match SS on the singly-occupied sector ---
     for key in SS.data:
-        ev = _eigvalsh_block(SS, key)
+        ev_ss = _eigvalsh_block(SS, key)
         for name, other in [("T_merged", SS2), ("Fierz", SS3)]:
             ev_other = _eigvalsh_block(other, key)
-            assert torch.allclose(ev_other, ev, atol=1e-6), (
-                f"{name} mismatch at {key}: got {ev_other.tolist()}, expected {ev.tolist()}"
+            ev_nz = ev_other[ev_other.abs() > 1e-8]
+            assert torch.allclose(ev_nz, ev_ss, atol=1e-6), (
+                f"{name} non-zero eigenvalues mismatch at {key}: "
+                f"got {ev_nz.tolist()}, expected {ev_ss.tolist()}"
             )

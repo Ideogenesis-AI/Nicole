@@ -44,7 +44,7 @@ from typing import Tuple
 import numpy as np
 
 from nicole import Direction, Tensor, load_space
-from nicole import contract, identity, isometry, conj, permute, transpose, oplus, diag
+from nicole import contract, identity, isometry, conj, permute, transpose, diag
 from nicole.decomp import eig
 
 
@@ -59,6 +59,7 @@ def iter_diag_spin(
     Nkeep: int = 300,
     J: float = 1.0,
     spin: float = 0.5,
+    symmetry: str = "U1",
     verbose: bool = True
 ) -> Tuple[np.ndarray, np.ndarray, list]:
     """Run iterative diagonalization for spin chain (Heisenberg model).
@@ -68,12 +69,21 @@ def iter_diag_spin(
     N : int, optional
         Maximum chain length (default: 50)
     Nkeep : int, optional
-        Maximum number of states to keep after truncation (default: 300)
+        Maximum number of states to keep after truncation (default: 300).
+        For symmetry="U1" this counts individual states; for symmetry="SU2"
+        this counts SU(2) multiplets (each contributes 2*spin+1 physical states).
     J : float, optional
         Spin-spin coupling constant (default: 1.0)
     spin : float, optional
         Total spin quantum number for each site (default: 0.5 for spin-1/2)
         Must be a half-integer: 0.5, 1.0, 1.5, 2.0, etc.
+    symmetry : str, optional
+        Symmetry sector to exploit (default: "U1").
+        - "U1": conserve total S^z (block-diagonal in m_z)
+        - "SU2": exploit full SU(2) spin-rotation symmetry (block-diagonal in
+          total spin J). The Hamiltonian is stored as reduced matrix elements
+          (Wigner-Eckart theorem); each block covers an entire multiplet.
+          Convergence is typically faster than "U1" for the same Nkeep.
     verbose : bool, optional
         Print progress messages (default: True)
     
@@ -97,7 +107,7 @@ def iter_diag_spin(
     
     Examples
     --------
-    >>> # Run with default parameters
+    >>> # Run with default parameters (U(1) symmetry)
     >>> Eg, Egs, mps = iter_diag_spin()
     
     >>> # Longer chain with more states kept
@@ -105,14 +115,23 @@ def iter_diag_spin(
     
     >>> # Spin-1 chain
     >>> Eg, Egs, mps = iter_diag_spin(spin=1.0)
+    
+    >>> # Use full SU(2) symmetry for faster convergence
+    >>> Eg, Egs, mps = iter_diag_spin(symmetry="SU2")
     """
     
+    if symmetry not in ("U1", "SU2"):
+        raise ValueError(f"Unsupported symmetry '{symmetry}'. Use 'U1' or 'SU2'.")
+
     tol = Nkeep * 100 * np.finfo(float).eps  # numerical tolerance for degeneracy
     
     # Get local spin space and operators
-    Spc, Op = load_space("Spin", "U1", {"J": spin})
-    Op["Sz"].insert_index(2, direction=Direction.OUT)
-    S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Sum of all spin operators
+    Spc, Op = load_space("Spin", symmetry, {"J": spin})
+    if symmetry == "U1":
+        Op["Sz"].insert_index(2, direction=Direction.OUT)
+        S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Sum of all spin operators
+    else:  # SU2
+        S = Op["S"]  # Single rank-1 spherical tensor
     I = identity(Spc)  # Identity operator
     
     # Set itags for spin operators
@@ -141,7 +160,7 @@ def iter_diag_spin(
     
     for itN in range(1, N + 1):
         # Create spin operator for the current site with proper itags
-        Snow = Op["Sp"] + Op["Sm"] + Op["Sz"]
+        Snow = S.clone()
         Snow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
         
         if itN == 1:
@@ -178,12 +197,12 @@ def iter_diag_spin(
         
         # Diagonalize
         if itN == 1:
-            V, D = eig(Hnow_sym)
+            V, D = eig(Hnow_sym, is_hermitian=True)
         elif itN == N:
             # Last site: keep only the ground state
-            V, D = eig(Hnow_sym, trunc={"nkeep": 1})
+            V, D = eig(Hnow_sym, trunc={"nkeep": 1}, is_hermitian=True)
         else:
-            V, D = eig(Hnow_sym, trunc={"nkeep": Nkeep})
+            V, D = eig(Hnow_sym, trunc={"nkeep": Nkeep}, is_hermitian=True)
         
         # Set itags for eigenvectors
         V.retag([f"R{itN-1:02d}", f"R{itN-1:02d}"])
@@ -212,9 +231,9 @@ def iter_diag_spin(
         
         # Display progress
         if verbose:
-            NK = AK.indices[0].dim  # Size of truncated space
-            Hnow_dim = Hnow.indices[1].dim  # Size of Hilbert space before truncation
-            disptime(f"#{itN:02d}/{N:02d} : NK={NK}/{Hnow_dim}")
+            # SU2: report physical states; U1: report sector dimensions (= states)
+            dim_fn = (lambda idx: idx.num_states) if symmetry == "SU2" else (lambda idx: idx.dim)
+            disptime(f"#{itN:02d}/{N:02d} : NK={dim_fn(AK.indices[0])}/{dim_fn(Hnow.indices[1])}")
     
     # Ground state energy per site
     Egs = Eg / np.arange(1, N + 1)
@@ -253,6 +272,11 @@ def main():
         help="Total spin quantum number (default: 0.5)"
     )
     parser.add_argument(
+        "-Y", "--symmetry", type=str, default="U1",
+        choices=["U1", "SU2"],
+        help="Symmetry to exploit: 'U1' (default) or 'SU2'"
+    )
+    parser.add_argument(
         "-q", "--quiet", action="store_true",
         help="Suppress progress messages"
     )
@@ -264,166 +288,11 @@ def main():
         Nkeep=args.nkeep,
         J=args.coupling,
         spin=args.spin,
+        symmetry=args.symmetry,
         verbose=not args.quiet
     )
     
     return Eg, Egs, mps
-
-
-def build_heisenberg(
-    N: int = 50,
-    J: float = 1.0,
-    spin: float = 0.5
-) -> list[Tensor]:
-    """Build MPO representation of the Heisenberg Hamiltonian.
-    
-    Parameters
-    ----------
-    N : int
-        Chain length (default: 50)
-    J : float, optional
-        Spin-spin coupling constant (default: 1.0)
-    spin : float, optional
-        Total spin quantum number for each site (default: 0.5 for spin-1/2)
-    
-    Returns
-    -------
-    list of Tensor
-        MPO tensors, each with shape (left, right, phys_out, phys_in)
-        with directions (IN, OUT, IN, OUT) and itags ["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]
-        
-    Notes
-    -----
-    The Heisenberg Hamiltonian is:
-        H = J * sum_i (S_i^+ S_{i+1}^- + S_i^- S_{i+1}^+ + S_i^z S_{i+1}^z)
-          = J * sum_i S_i† · S_{i+1}
-    
-    The MPO uses a bond dimension of 3 with structure:
-        First site: [0, S, I]
-        Middle sites: [[I, 0, 0], [S†, 0, 0], [0, S, I]]
-        Last site: [I, S†, 0]^T
-    
-    Examples
-    --------
-    >>> # Build MPO for N=10 spin chain
-    >>> mpo = build_heisenberg(N=10, J=1.0, spin=0.5)
-    """
-    # Load spin operators
-    Spc, Op = load_space("Spin", "U1", {"J": spin})
-    
-    # Construct S = S+ + S- + Sz (total spin operator)
-    # Sp and Sm have (bra, ket, op), Sz needs op index inserted
-    Op["Sz"].insert_index(2, direction=Direction.OUT)
-    S = Op["Sp"] + Op["Sm"] + Op["Sz"]  # Now all have (bra, ket, op)
-    
-    # Conjugate for the other side: Sdag has (bra, ket, op)
-    Sdag = permute(conj(S), [1, 0, 2]) * J
-    
-    # Identity operator: (bra, ket)
-    I = identity(Spc)
-    
-    # Prepare base 4-index tensors (will copy and retag for each site)
-    # Identity with both bonds: (left, right, bra, ket)
-    I4 = I.clone()
-    I4.insert_index(0, direction=Direction.IN, itag="L")
-    I4.insert_index(1, direction=Direction.OUT, itag="R")
-    
-    # Zero with both bonds: (left, right, bra, ket)
-    zero4 = (I * 0.0).clone()
-    zero4.insert_index(0, direction=Direction.IN, itag="L")
-    zero4.insert_index(1, direction=Direction.OUT, itag="R")
-    
-    # S with left bond: (bra, ket, op) -> (left, bra, ket, op) -> (left, op, bra, ket)
-    S4 = S.clone()
-    S4.insert_index(0, direction=Direction.IN, itag="L")
-    S4 = permute(S4, [0, 3, 1, 2])
-    
-    # S† with right bond: (bra, ket, op) -> (bra, ket, op, right) -> (op, right, bra, ket)
-    S4dag = Sdag.clone()
-    S4dag.insert_index(3, direction=Direction.OUT, itag="R")
-    S4dag = permute(S4dag, [2, 3, 0, 1])
-    
-    mpo = []
-    
-    for i in range(N):
-        if i == 0:
-            # First site: row vector [0, S, I]
-            W = zero4.clone()
-            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            S_copy = S4.clone()
-            S_copy.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
-            W = oplus(W, S_copy, axes=[1])
-            
-            I_copy = I4.clone()
-            I_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            W = oplus(W, I_copy, axes=[1])
-            
-            mpo.append(W)
-            
-        elif i == N - 1:
-            # Last site: column vector [I, S†, 0]^T
-            W = I4.clone()
-            W.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            Sdag_copy = S4dag.clone()
-            Sdag_copy.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            W = oplus(W, Sdag_copy, axes=[0])
-            
-            zero_copy = zero4.clone()
-            zero_copy.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            W = oplus(W, zero_copy, axes=[0])
-            
-            mpo.append(W)
-            
-        else:
-            # Middle sites: 3x3 matrix [[I, 0, 0], [S†, 0, 0], [0, S, I]]
-            # Row 0: [I, 0, 0]
-            row0_col0 = I4.clone()
-            row0_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row0_col1 = S4.clone() * 0
-            row0_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row0_col2 = zero4.clone()
-            row0_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row0 = oplus(row0_col0, row0_col1, axes=[1])
-            row0 = oplus(row0, row0_col2, axes=[1])
-            
-            # Row 1: [S†, 0, 0]
-            row1_col0 = S4dag.clone()
-            row1_col0.retag([1, 2, 3], [f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row1_col1 = S4dag.clone() * 0 + S4.clone() * 0
-            row1_col1.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row1_col2 = S4dag.clone() * 0
-            row1_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row1 = oplus(row1_col0, row1_col1, axes=[1])
-            row1 = oplus(row1, row1_col2, axes=[1])
-            
-            # Row 2: [0, S, I]
-            row2_col0 = zero4.clone()
-            row2_col0.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row2_col1 = S4.clone()
-            row2_col1.retag([0, 2, 3], [f"W{i:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row2_col2 = I4.clone()
-            row2_col2.retag([0, 1, 2, 3], [f"W{i:02d}", f"W{i+1:02d}", f"s{i:02d}", f"s{i:02d}"])
-            
-            row2 = oplus(row2_col0, row2_col1, axes=[1])
-            row2 = oplus(row2, row2_col2, axes=[1])
-            
-            # Combine rows
-            W = oplus(row0, row1, axes=[0])
-            W = oplus(W, row2, axes=[0])
-            
-            mpo.append(W)
-    
-    return mpo
 
 
 if __name__ == "__main__":

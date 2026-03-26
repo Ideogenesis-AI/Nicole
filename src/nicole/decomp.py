@@ -159,7 +159,7 @@ def svd(
     # Used both for block-key reordering and as the R-symbol argument for intw.
     perm = [left_axis] + right_axes
     # For non-Abelian tensors each data block has a trailing OM axis that must
-    # be kept last.  The array-level permutation appends that axis index.
+    # be kept last. The array-level permutation appends that axis index.
     perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices
@@ -317,7 +317,7 @@ def svd(
         
         # Vd intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
         # Vd's index order is [bond, right_indices_in_original_order], which equals T's
-        # index order permuted by perm.  Applying compute_rsymbol(bridge, perm) gives the
+        # index order permuted by perm. Applying compute_rsymbol(bridge, perm) gives the
         # correctly recoupled Bridge for Vd's edge ordering.
         # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
         # so the weights are copied unchanged.
@@ -415,7 +415,7 @@ def qr(
     # Build permutation to place left axis first
     perm = [left_axis] + right_axes
     # For non-Abelian tensors each data block has a trailing OM axis that must
-    # be kept last.  The array-level permutation appends that axis index.
+    # be kept last. The array-level permutation appends that axis index.
     perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
     
     # Get indices
@@ -539,7 +539,8 @@ def eig(
     T: Tensor,
     itag: Optional[str] = None,
     order: Literal["ascend", "descend"] = "ascend",
-    trunc: Optional[Dict[str, Union[int, float]]] = None
+    trunc: Optional[Dict[str, Union[int, float]]] = None,
+    is_hermitian: bool = False,
 ) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor]]:
     """Perform eigenvalue decomposition of a square matrix tensor.
 
@@ -565,6 +566,11 @@ def eig(
           order="descend", keeps eigenvalues >= t. With order="ascend", keeps
           eigenvalues <= t.
         Both can be specified together: thresh is applied first, then nkeep.
+    is_hermitian:
+        If True, asserts that T is Hermitian and uses ``torch.linalg.eigh`` for every
+        block, guaranteeing real eigenvalues and orthonormal eigenvectors even in the
+        presence of degeneracies. Works for both real symmetric and complex Hermitian
+        blocks. Default is False.
 
     Returns
     -------
@@ -668,10 +674,14 @@ def eig(
         # Perform eigendecomposition on the reduced matrix.
         # For non-Abelian tensors the block has a trailing OM axis of size 1;
         # squeeze it away before calling eig (eig requires a 2-D input).
-        # torch.linalg.eig returns (eigenvalues, eigenvectors)
+        # Use eigh when the caller explicitly asserts Hermiticity (is_hermitian=True).
+        # eigh handles both real symmetric and complex Hermitian blocks, and
+        # guarantees real eigenvalues and orthonormal eigenvectors even for
+        # degenerate matrices (e.g. particle-hole symmetry in fermionic models).
+        _arr = arr if T.intw is None else arr.squeeze(-1)
+        # torch.linalg.eig or torch.linalg.eigh returns (eigenvalues, eigenvectors)
         # eigenvectors[:, i] is the eigenvector for eigenvalues[i]
-        eigenvalues, eigenvectors = torch.linalg.eig(arr) if T.intw is None \
-            else torch.linalg.eig(arr.squeeze(-1))
+        eigenvalues, eigenvectors = (torch.linalg.eigh if is_hermitian else torch.linalg.eig)(_arr)
         
         # Sort eigenvalues according to order parameter
         # For real eigenvalues, sorts by value; for complex, sorts by real part
@@ -743,39 +753,27 @@ def eig(
     U_blocks: Dict[BlockKey, torch.Tensor] = {}
     D_blocks: Dict[BlockKey, torch.Tensor] = {}
     
-    # Determine if eigenvalues and eigenvectors are actually complex
-    # If all eigenvalues and eigenvectors are real, we can use real dtype
-    all_real = all(
-        (torch.allclose(eigvals.imag, torch.zeros_like(eigvals.imag)) if eigvals.is_complex() else True) and 
-        (torch.allclose(eigvecs.imag, torch.zeros_like(eigvecs.imag)) if eigvecs.is_complex() else True)
-        for eigvecs, eigvals in eig_results.values()
-    )
-    
-    # Choose appropriate dtype
-    if all_real:
-        # Eigenvalues and eigenvectors are real
-        D_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype == torch.float32 \
-            else torch.promote_types(T.dtype, torch.float64)
-        U_dtype = D_dtype
+    # Choose dtype based on the solver used.
+    # eigh (is_hermitian=True) always returns real eigenvalues; infer the dtype directly
+    # from the first result block (avoids dependence on Nicole's Tensor.dtype API).
+    # eig  (is_hermitian=False) returns complex; promote to the corresponding complex dtype.
+    if is_hermitian:
+        sample_eigvals = next(iter(eig_results.values()))[1] if eig_results else None
+        D_dtype = U_dtype = sample_eigvals.dtype if sample_eigvals is not None else T.dtype
     else:
-        # Complex eigenvalues/eigenvectors
-        D_dtype = torch.promote_types(T.dtype, torch.complex128)
-        U_dtype = D_dtype
+        D_dtype = U_dtype = torch.promote_types(T.dtype, torch.complex128)
     
     for q, (eigvecs, eigvals) in eig_results.items():
         # For U tensor: indices (row_index, bond_index)
         # Block key: (q, q) since bond charge equals row charge
         U_key = (q, q)
-        # When all_real is True, explicitly take real part to avoid casting warning.
         # For non-Abelian tensors add trailing OM axis of size 1 to match convention.
-        u_block = eigvecs.real.to(dtype=U_dtype) if all_real else eigvecs.to(dtype=U_dtype)
+        u_block = eigvecs.to(dtype=U_dtype)
         U_blocks[U_key] = u_block if T.group.is_abelian else u_block.unsqueeze(-1)
         
         # For D: store eigenvalues as 1D array (memory efficient)
         # Block key: (q, q)
-        D_key = (q, q)
-        # When all_real is True, explicitly take real part to avoid casting warning
-        D_blocks[D_key] = eigvals.real.to(dtype=D_dtype) if all_real else eigvals.to(dtype=D_dtype)
+        D_blocks[(q, q)] = eigvals.to(dtype=D_dtype)
     
     # Build identity-like intertwiner for non-Abelian (SU(2)) tensors.
     # Iterates over bond_charge_dims (post-truncation), so nkeep truncation is

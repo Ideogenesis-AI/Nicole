@@ -394,7 +394,7 @@ def contract(
                     # Scalar: contract components using weight overlap matrix.
                     # The CG-basis overlap <CG_A|CG_B> = conj_phase·δ only
                     # when the contracted edges of A and B appear in the same internal
-                    # slot order.  When axesA ≠ axesB, a relative permutation
+                    # slot order. When axesA ≠ axesB, a relative permutation
                     # align_perm = axesB ∘ axesA⁻¹ misaligns the two CG trees; we correct
                     # this by applying the corresponding R-symbol to bridge_b's weights
                     # before forming the overlap matrix.
@@ -486,6 +486,18 @@ def contract(
     # Row-normalize intertwiner weights and redistribute norms into data to
     # prevent weights from decaying across successive contractions.
     out_tensor.regularize()
+
+    # When order drops, OM typically drops, making accumulated components from
+    # block_add likely to exceed OM. Compress to remove genuine rank deficiency.
+    # The order-reduction condition is a heuristic to balance the performance
+    # gain from compression against the SVD cost: order-preserving or
+    # order-increasing contractions tend to have growing OM, so components are
+    # unlikely to be redundant and SVD overhead is not justified.
+    # Regularize first so that the SVD cutoff operates on well-scaled rows;
+    # after compress the new weights (Vh rows) are already orthonormal, so no
+    # second regularize is needed.
+    if out_intw is not None and len(out_indices) < max(len(A.indices), len(B.indices)):
+        out_tensor.compress()
 
     # Apply permutation if requested.
     if perm is not None:
@@ -760,7 +772,7 @@ def trace(
         else:
             # Non-Abelian (SU(2) / ProductGroup with SU(2)).
             # Tracing axes a and b is equivalent to contracting with a 2nd order identity
-            # tensor on those indices.  Build bridge_I at charge q = qa = qb with directions
+            # tensor on those indices. Build bridge_I at charge q = qa = qb with directions
             # reversed from T's traced indices and weight √(irrep_dim(q)), exactly as
             # identity() does, then get the X-symbol for that virtual contraction.
             q = qa
@@ -812,6 +824,18 @@ def trace(
     if out_intw is not None and len(out_indices) == 0:
         out_intw = None
 
-    return Tensor(indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw, dtype=T.dtype)
+    out_tensor = Tensor(
+        indices=out_indices, itags=out_itags, data=out_blocks,
+        intw=out_intw, dtype=T.dtype
+    )
+
+    # Trace always reduces order by 2, so OM always drops. Regularize first so
+    # that the SVD cutoff in compress operates on well-scaled rows; the condition
+    # is unconditional here (unlike contract) because order reduction is guaranteed.
+    if out_intw is not None:
+        out_tensor.regularize()
+        out_tensor.compress()
+
+    return out_tensor
 
 

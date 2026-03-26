@@ -658,8 +658,9 @@ def test_contract_su2_permutation_commutativity_4th_order():
     # Results should match
     assert list(C1_perm.itags) == list(C2_perm.itags) == ["c", "e", "a"]
     
-    # Verify data and weights match exactly
-    assert_data_weights_equal(C1_perm, C2_perm, msg="permutation commutativity")
+    # compress() may produce different (but equivalent) orthonormal bases for the
+    # weight subspace across computation paths, so compare physical tensors R@W.
+    assert_physical_tensors_equal(C1_perm, C2_perm, msg="permutation commutativity")
     
     # Norms should definitely match
     assert math.isclose(C1_perm.norm(), C2_perm.norm(), rel_tol=1e-10, abs_tol=1e-12)
@@ -698,8 +699,9 @@ def test_contract_su2_permutation_commutativity_5th_order():
     # Results should match
     assert list(C1_perm.itags) == list(C2_perm.itags) == ["e", "a", "f", "c"]
     
-    # Verify data and weights match exactly
-    assert_data_weights_equal(C1_perm, C2_perm, msg="permutation commutativity")
+    # compress() may produce different (but equivalent) orthonormal bases for the
+    # weight subspace across computation paths, so compare physical tensors R@W.
+    assert_physical_tensors_equal(C1_perm, C2_perm, msg="permutation commutativity")
     
     # Norms should definitely match
     assert math.isclose(C1_perm.norm(), C2_perm.norm(), rel_tol=1e-10, abs_tol=1e-12)
@@ -1513,3 +1515,103 @@ def test_contract_u1su2_bilinearity():
     assert math.isclose(result_combined.data[()].item(), result_separate, 
                        rel_tol=1e-10, abs_tol=1e-12), \
         "Bilinearity should hold for U(1)×SU(2) scalar products"
+
+
+# ============================================================================
+#  insert_index consistency: terminal insert vs leading insert + permute
+# ============================================================================
+
+def _make_insert_test_tensor(order: int, last_dir: Direction, seed: int) -> Tensor:
+    """SU(2) tensor of given *order* whose last axis has direction *last_dir*."""
+    group = SU2Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_in  = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+    last    = idx_out if last_dir == Direction.OUT else idx_in
+    leading = [idx_out if i % 2 == 0 else idx_in for i in range(order - 1)]
+    itags   = [chr(ord('a') + i) for i in range(order)]
+    T = Tensor.random(leading + [last], seed=seed, itags=itags)
+    populate_random_weights(T, seed=seed + 1)
+    return T
+
+
+def _assert_insert_terminal_equals_leading_permute(T: Tensor, inserted_dir: Direction) -> None:
+    """Assert that inserting at the terminal position gives the same physical
+    tensor as inserting at position 0 and then permuting the new axis to the end.
+
+    Inserting at the terminal position demotes the previous terminal edge to a
+    leading role, which can introduce a non-trivial recoupling phase. This test
+    verifies that ``Bridge.insert_edge`` accounts for that phase via the R-symbol,
+    making terminal and leading-then-permute insertion physically equivalent.
+    """
+    N = len(T.indices)
+
+    # Path 1: insert directly at the terminal (last) position
+    T1 = T.clone()
+    T1.insert_index(N, inserted_dir, itag="x")
+
+    # Path 2: insert at position 0 (leading), then permute "x" to the end
+    T2 = T.clone()
+    T2.insert_index(0, inserted_dir, itag="x")
+    T2 = permute(T2, list(range(1, N + 1)) + [0])
+
+    assert list(T1.itags) == list(T2.itags)
+    assert_physical_tensors_equal(
+        T1, T2,
+        msg=f"insert terminal vs leading+permute, order={N}, inserted_dir={inserted_dir}",
+    )
+
+
+def test_insert_index_terminal_vs_permute_su2_2nd_order_last_out():
+    """2nd-order SU(2) tensor, last axis OUT: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=2, last_dir=Direction.OUT, seed=7000)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_2nd_order_last_in():
+    """2nd-order SU(2) tensor, last axis IN: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=2, last_dir=Direction.IN, seed=7010)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_3rd_order_last_out():
+    """3rd-order SU(2) tensor, last axis OUT: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=3, last_dir=Direction.OUT, seed=7020)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_3rd_order_last_in():
+    """3rd-order SU(2) tensor, last axis IN: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=3, last_dir=Direction.IN, seed=7030)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_4th_order_last_out():
+    """4th-order SU(2) tensor, last axis OUT: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=4, last_dir=Direction.OUT, seed=7040)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_4th_order_last_in():
+    """4th-order SU(2) tensor, last axis IN: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=4, last_dir=Direction.IN, seed=7050)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_6th_order_last_out():
+    """6th-order SU(2) tensor, last axis OUT: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=6, last_dir=Direction.OUT, seed=7060)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+def test_insert_index_terminal_vs_permute_su2_6th_order_last_in():
+    """6th-order SU(2) tensor, last axis IN: terminal insert == leading insert + permute."""
+    T = _make_insert_test_tensor(order=6, last_dir=Direction.IN, seed=7070)
+    for d in (Direction.OUT, Direction.IN):
+        _assert_insert_terminal_equals_leading_permute(T, d)
