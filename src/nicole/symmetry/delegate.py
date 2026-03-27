@@ -349,6 +349,7 @@ class Bridge:
         perm = list(range(1, position + 1)) + [0] + list(range(position + 1, N))
         r_array, cgspec_final = yuzuha.compute_rsymbol(cgspec_at_0, perm)
         r_symbol = torch.from_numpy(r_array)
+        r_symbol = r_symbol.to(device=self.weights.device, dtype=self.weights.dtype)
 
         # Step 3: apply R-symbol  (weights: num_components × om_dim)
         new_weights = self.weights @ r_symbol
@@ -361,6 +362,7 @@ class Bridge:
         directions: Sequence[Direction],
         weights: Optional[torch.Tensor] = None,
         dtype: torch.dtype = torch.float64,
+        device: Optional[torch.device] = None,
     ) -> Bridge:
         """Construct a Bridge from a BlockKey and corresponding directions.
         
@@ -387,6 +389,9 @@ class Bridge:
         dtype : torch.dtype, optional
             Data type for the weight matrix. Only used if weights is None.
             Defaults to torch.float64.
+        device : torch.device or str, optional
+            Device for the weight matrix. Only used if weights is None.
+            If None, defaults to ``torch.get_default_device()``.
         
         Returns
         -------
@@ -464,8 +469,11 @@ class Bridge:
         
         # Initialize weight matrix if not provided
         if weights is None:
+            if device is None:
+                device = torch.get_default_device()
+            device = torch.device(device)
             # Default: 1 component with first element as 1, rest as 0
-            weights = torch.zeros(1, om_dim, dtype=dtype)
+            weights = torch.zeros(1, om_dim, dtype=dtype, device=device)
             weights[0, 0] = 1.0
         
         return Bridge(cgspec, weights)
@@ -565,6 +573,7 @@ def compute_xsymbol(
     x_array, spec_c = yuzuha.compute_xsymbol(bridge_a.cgspec, bridge_b.cgspec, contraction)
     
     x_symbol = torch.from_numpy(x_array)
+    x_symbol = x_symbol.to(device=bridge_a.weights.device, dtype=bridge_a.weights.dtype)
     return x_symbol, spec_c
 
 
@@ -618,4 +627,5 @@ def compute_rsymbol(
     r_array, spec_permuted = yuzuha.compute_rsymbol(bridge.cgspec, list(permutation))
     
     r_symbol = torch.from_numpy(r_array)
+    r_symbol = r_symbol.to(device=bridge.weights.device, dtype=bridge.weights.dtype)
     return r_symbol, spec_permuted
