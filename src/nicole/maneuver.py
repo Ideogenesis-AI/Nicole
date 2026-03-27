@@ -501,7 +501,7 @@ def oplus(
                     out_shape.append(dim_map_A[charge])
             
             # Initialize output block with zeros
-            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
+            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype), device=A.device)
             
             # Place block from A if it exists
             if charge_key in A.data:
@@ -563,7 +563,7 @@ def oplus(
                 om_A = block_A.shape[-1]
                 # Create padded block with OM dimension from A
                 padded_shape = out_shape + [om_A]
-                padded_A = torch.zeros(padded_shape, dtype=A.dtype)
+                padded_A = torch.zeros(padded_shape, dtype=A.dtype, device=A.device)
                 
                 # Build slices for placing block_A
                 slices_A = []
@@ -588,7 +588,7 @@ def oplus(
                 om_B = block_B.shape[-1]
                 # Create padded block with OM dimension from B
                 padded_shape = out_shape + [om_B]
-                padded_B = torch.zeros(padded_shape, dtype=B.dtype)
+                padded_B = torch.zeros(padded_shape, dtype=B.dtype, device=B.device)
                 
                 # Build slices for placing block_B
                 slices_B = []
@@ -621,7 +621,8 @@ def diag(
     S_blocks: Dict[BlockKey, torch.Tensor],
     bond_index: Index,
     itags: Optional[Tuple[str, str]] = None,
-    dtype: Optional[torch.dtype] = None
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
 ) -> Tensor:
     """Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
     
@@ -728,6 +729,11 @@ def diag(
             dtype = sample_arr.dtype
         else:
             dtype = torch.float64
+
+    # Determine device
+    if device is None:
+        device = torch.get_default_device()
+    device = torch.device(device)
     
     # Check if group is Abelian or generic (non-Abelian)
     group = bond_index.group
@@ -760,7 +766,7 @@ def diag(
             
             # Create Bridge with actual index directions
             intw[key] = dg.Bridge.from_block(
-                group, key, [left.direction, right.direction], dtype=dtype
+                group, key, [left.direction, right.direction], dtype=dtype, device=device
             )
             
             # Apply normalization: weights = √(irrep_dim)
@@ -1044,6 +1050,7 @@ def merge_axes(
         itags=tuple(tags_to_merge) + (merged_tag,),
         direction=direction,
         dtype=tensor.dtype,
+        device=tensor.device,
     )
 
     # Contract isometry with tensor to merge axes
