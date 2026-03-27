@@ -32,7 +32,7 @@ permute(tensor, order)
     Return a new tensor with permuted axes according to the provided order.
 transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
-subsector(tensor, block_indices)
+filter_blocks(tensor, block_indices)
     Return a new tensor containing only the specified blocks with pruned sectors.
 oplus(A, B, axes=None)
     Direct sum of two tensors with selective axis merging.
@@ -214,7 +214,7 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     return permute(tensor, order)
 
 
-def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tensor:
+def filter_blocks(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tensor:
     """Return a new tensor containing only the specified blocks with pruned sectors.
     
     Parameters
@@ -240,10 +240,10 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     
     Examples
     --------
-    >>> from nicole import subsector, Tensor
+    >>> from nicole import filter_blocks, Tensor
     >>> # Assuming t has 5 blocks numbered 1-5 in display
-    >>> t_sub = subsector(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
-    >>> t_single = subsector(t, 2)  # Extract just block 2
+    >>> t_sub = filter_blocks(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
+    >>> t_single = filter_blocks(t, 2)  # Extract just block 2
     """
     # Convert single integer to sequence
     if isinstance(block_indices, int):
