@@ -309,8 +309,9 @@ def svd(
         for q_left in bond_charge_dims:
             # Create intertwiner with correct directions and dtype
             directions = [left_index.direction, bond_index.direction]
-            U_intw[(q_left, q_left)] = \
-                dg.Bridge.from_block(T.group, (q_left, q_left), directions, dtype=T.dtype)
+            U_intw[(q_left, q_left)] = dg.Bridge.from_block(
+                T.group, (q_left, q_left), directions, dtype=T.dtype, device=T.device
+            ) # Device control for Bridge.weights
             # Set intertwiner weights to sqrt(irrep_dim(q))
             U_intw[(q_left, q_left)].weights[0, 0] = \
                 torch.sqrt(torch.tensor(T.group.irrep_dim(q_left), dtype=T.dtype))
@@ -506,8 +507,9 @@ def qr(
         Q_intw: Dict[BlockKey, dg.Bridge] = {}
         for q_left in bond_charge_dims:
             directions = [left_index.direction, bond_index.direction]
-            Q_intw[(q_left, q_left)] = \
-                dg.Bridge.from_block(T.group, (q_left, q_left), directions, dtype=T.dtype)
+            Q_intw[(q_left, q_left)] = dg.Bridge.from_block(
+                T.group, (q_left, q_left), directions, dtype=T.dtype, device=T.device
+            ) # Device control for Bridge.weights
             Q_intw[(q_left, q_left)].weights[0, 0] = \
                 torch.sqrt(torch.tensor(T.group.irrep_dim(q_left), dtype=T.dtype))
 
@@ -783,7 +785,9 @@ def eig(
         U_intw = {}
         for q in bond_charge_dims:
             directions = [row_index.direction, bond_index.direction]
-            U_intw[(q, q)] = dg.Bridge.from_block(T.group, (q, q), directions, dtype=U_dtype)
+            U_intw[(q, q)] = dg.Bridge.from_block(
+                T.group, (q, q), directions, dtype=U_dtype, device=T.device
+            ) # Device control for Bridge.weights
             U_intw[(q, q)].weights[0, 0] = \
                 torch.sqrt(torch.tensor(T.group.irrep_dim(q), dtype=U_dtype))
 
@@ -996,7 +1000,9 @@ def decomp(
                 S_diag_blocks[key] = torch.diag(s_array).unsqueeze(-1)
                 # Create intertwiner with correct directions and dtype
                 directions = [bond_flip_index.direction, bond_index.direction]
-                S_intw[key] = dg.Bridge.from_block(T.group, key, directions, dtype=target_dtype)
+                S_intw[key] = dg.Bridge.from_block(
+                    T.group, key, directions, dtype=target_dtype, device=T.device
+                ) # Device control for Bridge.weights
                 # Set intertwiner weights to sqrt(irrep_dim(q))
                 S_intw[key].weights[0, 0] = \
                     torch.sqrt(torch.tensor(T.group.irrep_dim(key[0]), dtype=target_dtype))

@@ -185,14 +185,18 @@ def populate_random_weights(tensor: Tensor, seed: int, min_components: int = 3, 
         # Random component count for this block
         num_comp = torch.randint(min_components, max_components, (1,), generator=gen).item()
         
-        # Expand block to new component count
+        # Expand block to new component count; generate on CPU for generator compatibility,
+        # then transfer to the tensor's device.
         block = tensor.data[key]
         phys_shape = list(block.shape[:-1])
-        tensor.data[key] = torch.randn(phys_shape + [num_comp], dtype=tensor.dtype, generator=gen)
-        
+        device = block.device
+        tensor.data[key] = torch.randn(phys_shape + [num_comp], dtype=tensor.dtype,
+            generator=gen).to(device)
+
         # Create new weights for this block
         bridge = tensor.intw[key]
-        weights = torch.randn(num_comp, bridge.om_dimension, dtype=tensor.dtype, generator=gen)
+        weights = torch.randn(num_comp, bridge.om_dimension, dtype=tensor.dtype,
+            generator=gen).to(device)
         tensor.intw[key] = Bridge(bridge.cgspec, weights)
 
 

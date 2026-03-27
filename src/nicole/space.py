@@ -167,6 +167,14 @@ def load_space(
         raise ValueError(f"Unsupported system preset '{preset}'. Supported types: 'Spin', 'Ferm', 'Band'.")
 
 
+def _get_device(option: Dict[str, Any]) -> torch.device:
+    """Return the device specified in option, defaulting to torch.get_default_device()."""
+    device = option.get('device', None)
+    if device is None:
+        device = torch.get_default_device()
+    return torch.device(device)
+
+
 def _load_spin_space(preserv: str, option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     """Load spin space and operators.
     
@@ -224,6 +232,7 @@ def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     Op : dict[str, Tensor | Index]
         Spin operators and indices {Sp, Sm, Sz, vac}
     """
+    device = _get_device(option)
     J = _validate_spin_J(option)
 
     # Create physical space index
@@ -269,7 +278,7 @@ def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sz_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build S^+ operator (raising operator)
     # S^+ |m_z⟩ = sqrt(J(J+1) - m_z(m_z+1)) |m_z+1⟩
@@ -305,7 +314,7 @@ def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sp_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build S^- operator (lowering operator)
     # S^- |m_z⟩ = sqrt(J(J+1) - m_z(m_z-1)) |m_z-1⟩
@@ -340,7 +349,7 @@ def _load_spin_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sm_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Create vacuum index (trivial space with charge 0)
     vac_index = Index(
@@ -377,6 +386,7 @@ def _load_spin_su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     Op : dict[str, Tensor | Index]
         {"S": rank-1 spin tensor, "vac": vacuum Index}
     """
+    device = _get_device(option)
     J = _validate_spin_J(option)
     two_J = int(round(2 * J))
 
@@ -429,7 +439,7 @@ def _load_spin_su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=S_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
 
     vac_index = Index(
         direction=Direction.IN,
@@ -478,6 +488,7 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     Returns F (annihilation) and Z (Jordan-Wigner string) operators.
     """
+    device = _get_device(option)
     group = U1Group()
     
     # Create physical space: two sectors for |0⟩ and |1⟩
@@ -518,7 +529,7 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string / Z-string)
@@ -534,7 +545,7 @@ def _load_ferm_u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Z_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Create vacuum index (trivial space with charge 0)
     vac_index = Index(
@@ -556,6 +567,7 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     
     Returns F (annihilation) and Z (Jordan-Wigner string) operators.
     """
+    device = _get_device(option)
     group = Z2Group()
     
     # Create physical space: two sectors for |0⟩ and |1⟩
@@ -596,7 +608,7 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string / Z-string)
@@ -612,7 +624,7 @@ def _load_ferm_z2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Z_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Create vacuum index (trivial space with parity 0)
     vac_index = Index(
@@ -669,6 +681,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     - |↓⟩: spin-down, charge = (0, -1)  [2*Sz = -1]
     - |↑↓⟩: doubly occupied, charge = (1, 0)
     """
+    device = _get_device(option)
     group = ProductGroup([U1Group(), U1Group()])
     
     # Create physical space: four sectors
@@ -712,7 +725,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_up_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F_up"].normalize_sectors()
 
     # Build F_dn operator (annihilates spin-down electron)
@@ -738,7 +751,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_dn_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F_dn"].normalize_sectors()
 
     # Build Z operator (Jordan-Wigner string)
@@ -755,7 +768,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Z_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build Sz operator (spin z-component)
     # Sz|0⟩ = 0, Sz|↑⟩ = +1/2|↑⟩, Sz|↓⟩ = -1/2|↓⟩, Sz|↑↓⟩ = 0
@@ -771,7 +784,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sz_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["Sz"].trim_zero_blocks()
     
     # Build Sp operator (spin raising: |↓⟩ → |↑⟩)
@@ -793,7 +806,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sp_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build Sm operator (spin lowering: |↑⟩ → |↓⟩)
     # (0,-1) = (0,1) + q_aux → q_aux = (0, -2)
@@ -814,7 +827,7 @@ def _load_band_u1u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sm_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Create vacuum index
     vac_index = Index(
@@ -836,6 +849,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
     - |↓⟩: spin-down, charge = (1, -1)  [odd parity, 2*Sz = -1]
     - |↑↓⟩: doubly occupied, charge = (0, 0)  [even parity]
     """
+    device = _get_device(option)
     group = ProductGroup([Z2Group(), U1Group()])
     
     # Create physical space: three sectors
@@ -880,7 +894,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_up_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F_up"].normalize_sectors()
 
     # Build F_dn operator
@@ -904,7 +918,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=F_dn_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F_dn"].normalize_sectors()
 
     # Build Z operator
@@ -921,7 +935,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Z_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build Sz operator
     Sz_data = {}
@@ -936,7 +950,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sz_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["Sz"].trim_zero_blocks()
     
     # Build Sp operator (|↓⟩ → |↑⟩)
@@ -959,7 +973,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sp_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Build Sm operator (|↑⟩ → |↓⟩)
     # Following spherical tensor convention (consistent with Spin preset)
@@ -981,7 +995,7 @@ def _load_band_z2u1(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         data=Sm_data,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     
     # Create vacuum index
     vac_index = Index(
@@ -1010,6 +1024,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
 
     Spc.dim = 3 (three multiplets), Spc.num_states = 4 (physical states).
     """
+    device = _get_device(option)
     group = ProductGroup([U1Group(), SU2Group()])
 
     # Physical space: three sectors
@@ -1070,7 +1085,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=F_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F"].normalize_sectors()
 
     # ------------------------------------------------------------------ Z ---
@@ -1101,7 +1116,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=Z_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
 
     # ------------------------------------------------------------------ S ---
     # S (rank-1 spin tensor): acts only on the spin-1/2 sector (charge (0,1)).
@@ -1135,7 +1150,7 @@ def _load_band_u1su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=S_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["S"].normalize_sectors()
 
     # --------------------------------------------------------------- vac ---
@@ -1164,6 +1179,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
 
     Spc.dim = 3 (three multiplets), Spc.num_states = 4 (physical states).
     """
+    device = _get_device(option)
     group = ProductGroup([Z2Group(), SU2Group()])
 
     # Physical space: two sectors
@@ -1227,7 +1243,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=F_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["F"].normalize_sectors()
 
     # ------------------------------------------------------------------ Z ---
@@ -1269,7 +1285,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=Z_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
 
     # ------------------------------------------------------------------ S ---
     # S (rank-1 spin tensor): acts only on the spin-1/2 sector (charge (1,1)).
@@ -1300,7 +1316,7 @@ def _load_band_z2su2(option: Dict[str, Any]) -> Tuple[Index, Dict[str, Tensor]]:
         intw=S_intw,
         dtype=torch.float64,
         label="Operator"
-    )
+    ).to(device)
     Op["S"].normalize_sectors()
 
     # --------------------------------------------------------------- vac ---

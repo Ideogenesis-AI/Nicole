@@ -265,7 +265,7 @@ class Tensor:
                 if not BlockSchema.charges_conserved(indices_tuple, key):
                     continue
                 intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
-                    key=key, directions=directions, dtype=dtype)
+                    key=key, directions=directions, dtype=dtype, device=device)
         
         data: Dict[BlockKey, torch.Tensor] = {}
         # Iterate over all admissible charge assignments for the provided indices.
@@ -353,7 +353,7 @@ class Tensor:
                 if not BlockSchema.charges_conserved(indices_tuple, key):
                     continue
                 intw[key] = dg.Bridge.from_block(group=indices_tuple[0].group,
-                    key=key, directions=directions, dtype=dtype)
+                    key=key, directions=directions, dtype=dtype, device=device)
         
         data: Dict[BlockKey, torch.Tensor] = {}
         # Walk through admissible blocks in the same fashion as `zeros`.
@@ -1203,7 +1203,9 @@ class Tensor:
                     continue
 
                 q = key[0]
-                target = torch.sqrt(torch.tensor(group.irrep_dim(q), dtype=self.dtype))
+                target = torch.sqrt(
+                    torch.tensor(group.irrep_dim(q), dtype=self.dtype, device=self.device)
+                )
                 factors = bridge.weights[:, 0] / target         # (k,) signed ratio
                 bridge.weights[:] = target                      # all rows → +target
                 self.data[key] = arr * factors                  # (..., k) * (k,)

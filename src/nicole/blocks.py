@@ -298,7 +298,8 @@ class BlockSchema:
             cos_theta_sq = (dot / (norm_a * norm_b)) ** 2
             
             # Check if parallel (|cos(θ)| ≈ 1)
-            if torch.allclose(cos_theta_sq, torch.tensor(1.0, dtype=cos_theta_sq.dtype), rtol=rtol, atol=atol):
+            one = torch.tensor(1.0, dtype=cos_theta_sq.dtype, device=cos_theta_sq.device)
+            if torch.allclose(cos_theta_sq, one, rtol=rtol, atol=atol):
                 scale = (dot / torch.dot(wa_flat, wa_flat)).item()
                 return (True, scale)
         

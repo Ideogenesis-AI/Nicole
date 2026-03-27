@@ -777,12 +777,9 @@ def trace(
             # identity() does, then get the X-symbol for that virtual contraction.
             q = qa
             irrep_dim = group.irrep_dim(q)
-            w_I = torch.full((1, 1), float(irrep_dim ** 0.5), dtype=T.dtype)
-            bridge_I = Bridge.from_block(
-                group, (q, q),
-                [T.indices[a].direction.reverse(), T.indices[b].direction.reverse()],
-                weights=w_I,
-            )
+            w_I = torch.full((1, 1), float(irrep_dim ** 0.5), dtype=T.dtype, device=T.device)
+            directions = [T.indices[a].direction.reverse(), T.indices[b].direction.reverse()]
+            bridge_I = Bridge.from_block(group, (q, q), directions, weights=w_I, device=T.device)
             bridge_T = T.intw[key]
 
             if len(keep_axes) == 0:
