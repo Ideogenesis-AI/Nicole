@@ -16,12 +16,12 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor helper operations: clone, sorted_keys, blocks, subsector, regularize."""
+"""Tests for tensor helper operations: clone, sorted_keys, blocks, filter_blocks, regularize."""
 
 import torch
 import pytest
 
-from nicole import Direction, Tensor, U1Group, SU2Group, subsector, Index, Sector
+from nicole import Direction, Tensor, U1Group, SU2Group, filter_blocks, Index, Sector
 
 
 # Clone tests
@@ -298,29 +298,29 @@ def test_display_numbering_matches_block_index():
         assert tensor.key(i) == key
 
 
-# subsector tests
+# filter_blocks tests
 
-def test_subsector_returns_new_instance():
-    """Test that subsector returns a new tensor instance."""
+def test_filter_blocks_returns_new_instance():
+    """Test that filter_blocks returns a new tensor instance."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=200, itags=["A", "B"])
 
-    sub = subsector(tensor, [1, 2])
+    sub = filter_blocks(tensor, [1, 2])
 
     assert sub is not tensor
 
 
-def test_subsector_contains_only_specified_blocks():
-    """Test that subsector returns only the specified blocks."""
+def test_filter_blocks_contains_only_specified_blocks():
+    """Test that filter_blocks returns only the specified blocks."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=201, itags=["A", "B"])
 
     indices_to_get = [1, 3]
-    sub = subsector(tensor, indices_to_get)
+    sub = filter_blocks(tensor, indices_to_get)
 
     # Should have exactly the specified number of blocks
     assert len(sub.data) == len(indices_to_get)
@@ -330,14 +330,14 @@ def test_subsector_contains_only_specified_blocks():
     assert set(sub.data.keys()) == expected_keys
 
 
-def test_subsector_data_is_cloned():
-    """Test that subsector creates independent cloned data."""
+def test_filter_blocks_data_is_cloned():
+    """Test that filter_blocks creates independent cloned data."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=202, itags=["A", "B"])
 
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
     
     # Modify the sub tensor's data
     for key in sub.data:
@@ -347,35 +347,35 @@ def test_subsector_data_is_cloned():
         assert torch.equal(tensor.data[key], original_value)
 
 
-def test_subsector_preserves_metadata():
-    """Test that subsector preserves itags, dtype, and label."""
+def test_filter_blocks_preserves_metadata():
+    """Test that filter_blocks preserves itags, dtype, and label."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=203, dtype=torch.complex128, itags=["left", "right"])
     tensor.label = "TestTensor"
 
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
 
     assert sub.itags == tensor.itags
     assert sub.dtype == tensor.dtype
     assert sub.label == tensor.label
 
 
-def test_subsector_prunes_unused_sectors():
-    """Test that subsector removes sectors not present in selected blocks."""
+def test_filter_blocks_prunes_unused_sectors():
+    """Test that filter_blocks removes sectors not present in selected blocks."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1), Sector(1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=203, itags=["A", "B"])
 
     # Get only first block
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
 
-    # The subsector should only have sectors that appear in block 1
+    # filter_blocks should only have sectors that appear in block 1
     key_1 = tensor.key(1)
     
-    # Check that subsector indices only contain used charges
+    # Check that filter_blocks indices only contain used charges
     for axis, charge in enumerate(key_1):
         used_charges = [s.charge for s in sub.indices[axis].sectors]
         assert charge in used_charges
@@ -383,21 +383,21 @@ def test_subsector_prunes_unused_sectors():
         assert len(sub.indices[axis].sectors) <= len(tensor.indices[axis].sectors)
 
 
-def test_subsector_single_block():
-    """Test subsector with a single block index."""
+def test_filter_blocks_single_block():
+    """Test filter_blocks with a single block index."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=204, itags=["A", "B"])
 
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
 
     assert len(sub.data) == 1
     key = tensor.key(1)
     assert torch.equal(sub.data[key], tensor.data[key])
 
 
-def test_subsector_integer_vs_list_syntax():
+def test_filter_blocks_integer_vs_list_syntax():
     """Test that single integer and list syntax produce identical results."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(-1, 1)))
@@ -405,10 +405,10 @@ def test_subsector_integer_vs_list_syntax():
     tensor = Tensor.random([idx_a, idx_b], seed=207, itags=["A", "B"])
 
     # Get block using single integer syntax
-    sub_int = subsector(tensor, 2)
+    sub_int = filter_blocks(tensor, 2)
     
     # Get same block using list syntax
-    sub_list = subsector(tensor, [2])
+    sub_list = filter_blocks(tensor, [2])
 
     # Both should have the same number of blocks
     assert len(sub_int.data) == len(sub_list.data) == 1
@@ -426,23 +426,23 @@ def test_subsector_integer_vs_list_syntax():
     assert sub_int.dtype == sub_list.dtype
 
 
-def test_subsector_all_blocks():
-    """Test subsector with all block indices."""
+def test_filter_blocks_all_blocks():
+    """Test filter_blocks with all block indices."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
     idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(-1, 1)))
     tensor = Tensor.random([idx_a, idx_b], seed=205, itags=["A", "B"])
 
     all_indices = list(range(1, len(tensor.data) + 1))
-    sub = subsector(tensor, all_indices)
+    sub = filter_blocks(tensor, all_indices)
 
     assert len(sub.data) == len(tensor.data)
     for key in tensor.data:
         assert torch.equal(sub.data[key], tensor.data[key])
 
 
-def test_subsector_raises_on_invalid_index():
-    """Test that subsector raises IndexError for invalid indices."""
+def test_filter_blocks_raises_on_invalid_index():
+    """Test that filter_blocks raises IndexError for invalid indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     tensor = Tensor.random([idx, idx.flip()], seed=206, itags=["A", "B"])
@@ -451,24 +451,24 @@ def test_subsector_raises_on_invalid_index():
 
     # Test with sequence syntax
     with pytest.raises(IndexError):
-        subsector(tensor, [0])  # 0 is invalid (1-indexed)
+        filter_blocks(tensor, [0])  # 0 is invalid (1-indexed)
 
     with pytest.raises(IndexError):
-        subsector(tensor, [num_blocks + 1])  # Out of range
+        filter_blocks(tensor, [num_blocks + 1])  # Out of range
 
     with pytest.raises(IndexError):
-        subsector(tensor, [1, num_blocks + 1])  # One valid, one invalid
+        filter_blocks(tensor, [1, num_blocks + 1])  # One valid, one invalid
 
     # Test with single integer syntax
     with pytest.raises(IndexError):
-        subsector(tensor, 0)  # 0 is invalid (1-indexed)
+        filter_blocks(tensor, 0)  # 0 is invalid (1-indexed)
 
     with pytest.raises(IndexError):
-        subsector(tensor, num_blocks + 1)  # Out of range
+        filter_blocks(tensor, num_blocks + 1)  # Out of range
 
 
-def test_subsector_su2_single_block():
-    """Test subsector with SU(2) single block extraction."""
+def test_filter_blocks_su2_single_block():
+    """Test filter_blocks with SU(2) single block extraction."""
     from nicole.identity import identity
     
     group = SU2Group()
@@ -480,7 +480,7 @@ def test_subsector_su2_single_block():
     assert tensor.intw is not None
     
     # Extract block 2
-    sub = subsector(tensor, 2)
+    sub = filter_blocks(tensor, 2)
     
     # Should have only 1 block
     assert len(sub.data) == 1
@@ -494,8 +494,8 @@ def test_subsector_su2_single_block():
     assert torch.equal(sub.intw[key].weights, tensor.intw[key].weights)
 
 
-def test_subsector_su2_multiple_blocks():
-    """Test subsector with SU(2) multiple block extraction."""
+def test_filter_blocks_su2_multiple_blocks():
+    """Test filter_blocks with SU(2) multiple block extraction."""
     group = SU2Group()
     indices = [
         Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2))),
@@ -509,7 +509,7 @@ def test_subsector_su2_multiple_blocks():
     
     # Extract several blocks
     block_indices = [1, 3, min(5, num_blocks)]
-    sub = subsector(tensor, block_indices)
+    sub = filter_blocks(tensor, block_indices)
     
     # Should have specified number of blocks
     assert len(sub.data) == len(block_indices)
@@ -524,8 +524,8 @@ def test_subsector_su2_multiple_blocks():
         assert torch.equal(sub.intw[key].weights, tensor.intw[key].weights)
 
 
-def test_subsector_su2_preserves_cgspec():
-    """Test that subsector preserves CGSpec structure in intw."""
+def test_filter_blocks_su2_preserves_cgspec():
+    """Test that filter_blocks preserves CGSpec structure in intw."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 2)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -534,7 +534,7 @@ def test_subsector_su2_preserves_cgspec():
     assert tensor.intw is not None
     
     # Extract block 1
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
     
     key = tensor.key(1)
     
@@ -553,8 +553,8 @@ def test_subsector_su2_preserves_cgspec():
         assert orig_e.dir == sub_e.dir
 
 
-def test_subsector_su2_clones_weights():
-    """Test that subsector clones weights for independence."""
+def test_filter_blocks_su2_clones_weights():
+    """Test that filter_blocks clones weights for independence."""
     group = SU2Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -563,7 +563,7 @@ def test_subsector_su2_clones_weights():
     assert tensor.intw is not None
     
     # Extract block 1
-    sub = subsector(tensor, 1)
+    sub = filter_blocks(tensor, 1)
     
     key = tensor.key(1)
     
