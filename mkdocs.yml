@@ -12,6 +12,7 @@ hooks:
 
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: images/nicole-font-awesome.png
   favicon: images/nicole.png
   palette:
