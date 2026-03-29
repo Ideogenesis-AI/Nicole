@@ -22,6 +22,33 @@
     margin-top: -0.8rem;
 }
 
+/* ── Nicole color scheme ──────────────────────────────────────────────────── */
+[data-md-color-scheme="nicole"] {
+  --md-primary-fg-color:              #D29188;
+  --md-primary-fg-color--light:       #E8C8C4;
+  --md-primary-fg-color--dark:        #A8746C;
+  --md-accent-fg-color:               #D29188;
+  --md-accent-fg-color--transparent:  rgba(210, 145, 136, 0.1);
+  --md-typeset-a-color:               #D29188;
+}
+
+/* Accent color and links for slate (dark) mode */
+[data-md-color-scheme="slate"] {
+  --md-accent-fg-color:               #D29188;
+  --md-accent-fg-color--transparent:  rgba(210, 145, 136, 0.1);
+  --md-typeset-a-color:               #D29188;
+}
+
+/* Direct rules to beat Material's inline palette <style> in dark mode */
+[data-md-color-scheme="slate"] .md-typeset a {
+  color: #D29188;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link--active,
+[data-md-color-scheme="slate"] .md-nav__link:is(:focus, :hover) {
+  color: #D29188;
+}
+
 /* ── Hero section ─────────────────────────────────────────────────────────── */
 .mdx-hero {
     position: relative;
