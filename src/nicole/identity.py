@@ -21,8 +21,9 @@ from __future__ import annotations
 """Utilities for constructing canonical identity and fusion tensors.
 
 This module provides helpers that build symmetry-aware tensors commonly used in
-tensor network algorithms: a 2nd order identity and a 3rd order fusion isometry.
-Both routines respect the block structure defined by Nicole indices and ensure
+tensor network algorithms: a 2nd order identity, a 3rd order fusion isometry,
+and an n-to-1 isometry that fuses any number of indices sequentially.
+All routines respect the block structure defined by Nicole indices and ensure
 charge conservation across all generated blocks.
 """
 
