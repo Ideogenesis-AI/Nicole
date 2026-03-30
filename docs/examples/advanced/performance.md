@@ -180,11 +180,11 @@ if torch.cuda.is_available():
 ```python
 # BAD: Creates copies
 for i in range(100):
-    T_copy = tensor.copy()  # Expensive!
-    # ... use T_copy
+    T_clone = tensor.clone()  # Expensive!
+    # ... use T_clone
 
-# GOOD: Use original or copy once
-T_working = tensor.copy()
+# GOOD: Use original or clone once
+T_working = tensor.clone()
 for i in range(100):
     # ... modify T_working in place
 ```
