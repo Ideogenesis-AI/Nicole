@@ -34,6 +34,18 @@ Sorting order for eigenvalues:
 - `"descend"`: Descending order (largest to smallest)
   - Use for finding dominant modes (most positive eigenvalues)
 
+### is_hermitian
+If `True`, asserts that `T` is Hermitian (real symmetric or complex Hermitian) and uses `torch.linalg.eigh` for each block instead of the general `torch.linalg.eig`. This guarantees:
+
+- **Real eigenvalues** even for complex Hermitian inputs
+- **Orthonormal eigenvectors** (U is exactly unitary), including in the presence of degeneracies
+- Better numerical stability and performance
+
+Default is `False`, which uses the general eigensolver and may return complex eigenvalues.
+
+!!! tip
+    Always set `is_hermitian=True` when diagonalising Hamiltonians or density matrices — it is both faster and numerically more reliable.
+
 ### trunc
 Optional truncation specification as a dictionary:
 - `"nkeep"`: Keep at most n eigenvalues globally
@@ -83,6 +95,12 @@ U, D_blocks = eig(T, order="ascend", trunc={"thresh": -0.5})
 
 # Apply both: keep eigenvalues >= 0.1, then keep top 5
 U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1, "nkeep": 5})
+
+# Hermitian eigensolver — real eigenvalues, orthonormal eigenvectors
+U, D_blocks = eig(T, is_hermitian=True)
+
+# Hermitian + keep 5 lowest eigenvalues (e.g. ground state and low-lying excitations)
+U, D_blocks = eig(T, is_hermitian=True, order="ascend", trunc={"nkeep": 5})
 ```
 
 ## See Also
@@ -99,4 +117,5 @@ U, D_blocks = eig(T, order="descend", trunc={"thresh": 0.1, "nkeep": 5})
 - Use `order="descend"` to find dominant modes (largest/most positive eigenvalues)
 - For complex eigenvalues, sorting is by real part only
 - When both thresh and nkeep specified: thresh is applied per-block first, then nkeep globally
-- Eigenvectors are stored as columns of U, normalized to be unitary (or as close as possible)
+- Use `is_hermitian=True` for Hamiltonians and density matrices: eigenvalues are guaranteed real and eigenvectors are exactly orthonormal
+- Without `is_hermitian=True`, eigenvalues may be complex and eigenvectors are only column-normalised
