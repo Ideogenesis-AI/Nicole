@@ -19,7 +19,7 @@ This is useful for converting the singular values dict from `svd()` or eigenvalu
 from nicole import decomp, diag, contract
 
 # Perform decomposition to get singular value dict
-U, S_blocks, Vh = decomp(T, axes=0, mode="UR")
+U, S_blocks, Vh = decomp(T, axes=0, mode="SVD")
 
 # Convert S_blocks (dict of 1D arrays) to diagonal matrix tensor
 S_diag = diag(S_blocks, U.indices[1], itags=("left", "right"))
