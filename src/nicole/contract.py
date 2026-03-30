@@ -23,9 +23,8 @@ from __future__ import annotations
 This module provides functions for contracting pairs of tensors along specified
 index pairs while preserving charge conservation rules enforced by the symmetry
 groups associated with the indices. The `contract` function implements the
-general tensor contraction operation, while `trace` and `partial_trace`
-provide specialised variants for reducing tensors along entire axes or subsets
-of axes, respectively.
+general tensor contraction operation, while `trace` provides a specialised
+variant for reducing a tensor along pairs of its own indices.
 """
 
 from typing import Dict, Optional, Sequence, Tuple
@@ -465,11 +464,6 @@ def contract(
                 out_blocks[out_key] = res
                 if out_intw is not None and bridge_res is not None:
                     out_intw[out_key] = bridge_res
-    
-    # For 0D scalars, ensure the result is a proper tensor
-    # PyTorch maintains tensor type through operations, so this is less critical
-    if len(out_indices) == 0 and () in out_blocks:
-        out_blocks[()] = torch.as_tensor(out_blocks[()])
 
     # For scalar results or when all bridges are None, set intw to None
     if out_intw is not None:
