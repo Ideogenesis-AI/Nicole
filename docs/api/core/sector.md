@@ -25,6 +25,7 @@ Sectors are immutable frozen dataclasses.
 |-------|-------------|----------|
 | `U1Group` | `int` | `-2, -1, 0, 1, 2` |
 | `Z2Group` | `int` (0 or 1) | `0, 1` |
+| `SU2Group` | `int` ≥ 0 (2j convention) | `0, 1, 2, 3` (spins 0, 1&#x2F;2, 1, 3&#x2F;2) |
 | `ProductGroup` | `tuple` | `(2, 1), (0, 0)` |
 
 ## Validation
@@ -40,4 +41,5 @@ Sectors validate at construction:
 - [Direction](direction.md): Index orientation
 - [U1Group](../symmetry/u1-group.md): Integer charges
 - [Z2Group](../symmetry/z2-group.md): Binary charges
+- [SU2Group](../symmetry/su2-group.md): Spin charges (2j convention)
 - [Examples: First Tensor](../../examples/basic/first-tensor.md)

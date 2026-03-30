@@ -3,7 +3,7 @@
 This page provides quick examples to get you started with Nicole. After understanding the [Core Concepts](core-concepts.md), these examples will help you create and manipulate symmetry-aware tensors.
 
 ```python exec="1" session="quick" result=""
-from nicole import Tensor, Index, Sector, Direction, U1Group, Z2Group, ProductGroup
+from nicole import Tensor, Index, Sector, Direction, U1Group, Z2Group, SU2Group, ProductGroup
 from nicole import identity, contract, trace, permute, transpose, conj, decomp
 ```
 
@@ -37,14 +37,14 @@ When you print a tensor, Nicole displays:
   info:  2x { 3 x 1 }  having 'A'    Tensor,  { i*, j }
   data:  2-D float64 (48 B)    4 x 4 => 4 x 4  @ norm = 2.85035
 
-     1.  1x1     |  1x1     [ -1 ; -1 ] -1.30218.
+     1.  1x1     |  1x1     [ -1 ; -1 ]   -1.302
      2.  2x2     |  1x1     [  0 ;  0 ]    32 B
-     3.  1x1     |  1x1     [  1 ;  1 ] -1.95104.
+     3.  1x1     |  1x1     [  1 ;  1 ]   -1.951
 ```
 
 - **info**: Tensor shape, symmetry type, and index tags (* marks OUT direction)
 - **data**: Data type, total bytes, multiplets and states, Frobenius norm
-- **Blocks**: Each line shows block dimensions, multiplet info, charges, and value or memory
+- **blocks**: Each line shows block dimensions, multiplet info, charges, and value or memory
 
 ## Creating Different Tensors
 
@@ -145,7 +145,7 @@ T = Tensor.random([left, right], itags=["i", "j"], seed=99)
 
 # Trace over both indices
 scalar = trace(T, axes=(0, 1))
-print(f"Trace result: {scalar.norm()}")
+print(f"Trace result: {scalar.item()}")
 ```
 
 ### Permutation and Transpose
@@ -193,6 +193,33 @@ print(f"U = \n{U}\n")
 print(f"S = \n{S}\n")
 print(f"Vh = \n{Vh}")
 ```
+
+## SU(2) Tensor
+
+Nicole natively supports SU(2) non-Abelian symmetry via `SU2Group`. Charges are non-negative integers representing **twice the spin** (2j convention):
+
+```python exec="1" session="quick" result="console" idprefix="" source="material-block"
+# spin-1/2 ⊗ spin-1/2 fuses into singlet (j=0) or triplet (j=1)
+print(f"Fusion channels: {SU2Group().fuse_channels(1, 1)}")  # (0, 2) in 2j notation
+print(f"irrep_dim of 2j=2: {SU2Group().irrep_dim(2)}")       # 3 (triplet)
+```
+
+```python exec="1" session="quick" result="console" idprefix="" source="material-block"
+# Index with a spin-1/2 sector (one doublet) and a spin-1 sector (one triplet)
+su2_index = Index(
+    Direction.OUT,
+    SU2Group(),
+    sectors=(
+        Sector(charge=1, dim=1),  # spin-1/2: 1 doublet
+        Sector(charge=2, dim=1),  # spin-1:   1 triplet
+    )
+)
+
+T = Tensor.random([su2_index, su2_index.flip()], itags=["i", "j"], seed=42)
+print(T)
+```
+
+All standard operations — `contract`, `decomp`, `permute`, `conj`, and the rest — work identically for SU(2) tensors.
 
 ## Working with Multiple Symmetries
 

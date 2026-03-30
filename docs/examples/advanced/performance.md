@@ -33,10 +33,10 @@ from nicole import ProductGroup, U1Group, Z2Group
 from nicole import decomp
 
 # Truncate small singular values
-U, S, Vh = decomp(T, axes=0, mode="SVD", trunc=("thresh", 1e-12))
+U, S, Vh = decomp(T, axes=0, mode="SVD", trunc={"thresh": 1e-12})
 
 # Or keep fixed number
-U, S, Vh = decomp(T, axes=0, mode="SVD", trunc=("nkeep", 50))
+U, S, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 50})
 ```
 
 ## Computation Efficiency
@@ -117,16 +117,29 @@ T_gpu = T_cpu.to(device)
 ### Minimize Device Transfers
 
 ```python
-# BAD: Frequent transfers
+# BAD: Unnecessary CPU→GPU round-trip each iteration
 for i in range(100):
     T = Tensor.random([idx, idx.flip()], device='cpu')
-    T_gpu = T.cuda()  # Transfer each iteration
+    T_gpu = T.cuda()  # Redundant transfer — tensor was never needed on CPU
     result = contract(T_gpu, B_gpu)
 
-# GOOD: Transfer once, work on GPU
-tensors_gpu = [T.cuda() for T in tensors_cpu]  # Transfer once
+# GOOD: Create tensors directly on the target device
+for i in range(100):
+    T_gpu = Tensor.random([idx, idx.flip()], device='cuda')
+    result = contract(T_gpu, B_gpu)
+```
+
+If tensors must originate from CPU (e.g. loaded from disk), transfer them all before the compute loop to avoid interleaving transfers with GPU kernels:
+
+```python
+# BAD: Transfer interleaved with GPU compute
+for T in tensors_cpu:
+    result = contract(T.cuda(), B_gpu)
+
+# GOOD: Batch-transfer first, then compute
+tensors_gpu = [T.cuda() for T in tensors_cpu]
 for T_gpu in tensors_gpu:
-    result = contract(T_gpu, B_gpu)  # All work on GPU
+    result = contract(T_gpu, B_gpu)
 ```
 
 ## Profiling
@@ -180,11 +193,11 @@ if torch.cuda.is_available():
 ```python
 # BAD: Creates copies
 for i in range(100):
-    T_copy = tensor.copy()  # Expensive!
-    # ... use T_copy
+    T_clone = tensor.clone()  # Expensive!
+    # ... use T_clone
 
-# GOOD: Use original or copy once
-T_working = tensor.copy()
+# GOOD: Use original or clone once
+T_working = tensor.clone()
 for i in range(100):
     # ... modify T_working in place
 ```

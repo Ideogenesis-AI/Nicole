@@ -35,9 +35,9 @@ Decomposition mode: "SVD", "UR", "LV", or "QR" (default: "SVD")
 
 ### flow
 Arrow direction control for bond indices (default: "><"):
-- **"><"**: Both arrows incoming (default)
-- **">>"**: Both arrows outgoing
-- **"<<"**: Both arrows incoming
+- **"><"**: Both bond arrows incoming — arrows converge from U and Vh into S; S has `(IN, IN)` (default)
+- **">>"**: Arrow chain flows left to right — S has `(IN, OUT)`
+- **"<<"**: Arrow chain flows right to left — S has `(OUT, IN)`
 
 ### itag
 Index tag(s) for the bond dimension(s):

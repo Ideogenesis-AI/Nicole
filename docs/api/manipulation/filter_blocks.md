@@ -1,8 +1,8 @@
-# subsector
+# filter_blocks
 
 Extract subset of tensor blocks and prune unused sectors.
 
-::: nicole.subsector
+::: nicole.filter_blocks
     options:
       show_source: false
       heading_level: 2
@@ -12,10 +12,10 @@ Extract subset of tensor blocks and prune unused sectors.
 Returns a new tensor containing only specified blocks, with unused sectors automatically removed from the indices. Block indices are 1-based to match display output from `print(tensor)`.
 
 Useful for:
-- Extracting specific charge sectors
-- Filtering by quantum numbers
+- Extracting blocks by quantum numbers
+- Filtering to specific charge sectors
 - Debugging tensor structure
-- Creating tensors with reduced sector structure
+- Creating tensors with reduced block structure
 
 ## See Also
 

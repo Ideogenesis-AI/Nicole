@@ -45,7 +45,7 @@ print(f"Neutral element: {group.neutral}\n")
 
 # Fusion (addition for U1)
 charge1, charge2 = 2, 3
-fused = group.fuse(charge1, charge2)
+fused = group.fuse_unique(charge1, charge2)
 print(f"{charge1} + {charge2} = {fused}\n")
 
 # Dual (negation)
@@ -53,7 +53,7 @@ dual_charge = group.dual(5)
 print(f"Dual of 5: {dual_charge}\n")
 
 # Multiple fusion
-result = group.fuse(1, 2, -1, 3)
+result = group.fuse_unique(1, 2, -1, 3)
 print(f"1 + 2 + (-1) + 3 = {result}")
 ```
 

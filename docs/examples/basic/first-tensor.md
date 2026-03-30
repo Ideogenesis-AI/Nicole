@@ -4,7 +4,7 @@ Tensors are the fundamental objects in Nicole. Unlike standard numerical arrays,
 
 This page introduces the basic concepts:
 
-- **Indices**: Each tensor leg has an associated `Index` that defines its symmetry sectors, dimensions, and direction
+- **Indices**: Each tensor index is an `Index` object that defines its symmetry sectors, dimensions, and direction
 - **Sectors**: Subspaces labeled by quantum numbers (e.g., particle number, spin)
 - **Blocks**: Dense arrays corresponding to specific charge combinations
 - **Charge conservation**: Only blocks with compatible charges are non-zero
@@ -141,8 +141,8 @@ for key in tensor.data.keys():
 
 ```python exec="1" session="first-tensor" result="console" idprefix="" source="material-block"
 # Deep copy (independent data)
-T_copy = tensor.copy()
-T_copy.data[tensor.key(1)][0, 0] = 999.0
+T_clone = tensor.clone()
+T_clone.data[tensor.key(1)][0, 0] = 999.0
 
 # Original unchanged
 print(f"Original unchanged: {tensor.data[tensor.key(1)][0, 0] != 999.0}")
