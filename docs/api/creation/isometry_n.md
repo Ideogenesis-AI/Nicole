@@ -9,7 +9,7 @@ Create an n-to-1 fusion isometry tensor.
 
 ## Description
 
-Constructs an (n+1)-leg tensor that fuses n indices into a single fused leg. This generalizes the 2-to-1 `isometry` function to arbitrary n≥2.
+Constructs an (n+1)th-order tensor that fuses n indices into a single fused index. This generalizes the 2-to-1 `isometry` function to arbitrary n≥2.
 
 The function works by sequentially applying 2-to-1 isometries, fusing indices in order of increasing dimension to minimize intermediate tensor sizes and computational complexity.
 

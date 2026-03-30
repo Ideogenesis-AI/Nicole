@@ -1,6 +1,6 @@
 # isometry
 
-Create a 3-leg fusion tensor for combining indices.
+Create a 3-index fusion tensor for combining indices.
 
 ::: nicole.isometry
     options:
@@ -16,7 +16,7 @@ Returns a tensor that fuses two indices into a combined index. The fusion follow
 - **Indices 1 & 2**: Input indices to be fused
 - **Index 3**: Fused index with combined sectors
 
-Charges are fused: `q_fused = group.fuse(q₁, q₂)`
+Charges are fused: `q_fused = group.fuse_unique(q₁, q₂)`
 
 ## See Also
 
