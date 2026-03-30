@@ -112,7 +112,7 @@ print(f"Results match: {abs(result.norm() - manual_result.norm()) < 1e-10}")
 
 ```python exec="1" session="arithmetic" result="console" idprefix="" source="material-block"
 # Copy for in-place modification
-X = A.copy()
+X = A.clone()
 original_norm = X.norm()
 
 # In-place addition
