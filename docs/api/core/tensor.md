@@ -14,10 +14,10 @@ Block-sparse tensor with symmetry-aware indices.
         - is_scalar
         - item
         - norm
-        - copy
+        - clone
         - rand_fill
         - insert_index
-        - trim_zero_sectors
+        - trim_zero_blocks
         - sorted_keys
         - key
         - block
@@ -50,7 +50,7 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 
 ## See Also
 
-- [Index](index-class.md): Define tensor leg structure
+- [Index](index-class.md): Define tensor index structure
 - [zeros](../creation/zeros.md): Create zero tensor
 - [random](../creation/random.md): Create random tensor
 - [Examples: Creating Tensors](../../examples/basic/first-tensor.md)
@@ -58,6 +58,6 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 
 ## Notes
 
-Tensors are mutable objects. Use `copy()` when independence is needed. For functional (non-mutating) operations, see the [operators](../manipulation/conjugate.md) module.
+Tensors are mutable objects. Use `clone()` when independence is needed. For functional (non-mutating) operations, see the [operators](../manipulation/conjugate.md) module.
 
 Charge conservation is enforced: `∑(OUT charges) - ∑(IN charges) = neutral element`.
