@@ -91,8 +91,10 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
+    normalize_sectors()
+        In-place: Remove sectors from each index that do not appear in any block.
     trim_zero_blocks()
-        In-place: Remove blocks where all data is below double precision.
+        In-place: Remove blocks whose magnitude is negligible relative to the norm.
     device
         Property returning the device where tensor blocks are stored.
     to()
@@ -120,9 +122,9 @@ class Tensor:
     regularize()
         In-place: Canonicalize or regularize Bridge weights.
     conj()
-        In-place: Complex conjugate every dense block, and revert all index directions.
+        Complex conjugate every dense block, and revert all index directions.
     permute()
-        In-place: Permute tensor axes according to the provided reordering.
+        Permute tensor axes according to the provided reordering.
     transpose()
         In-place: Transpose tensor axes; defaults to reversing the index order.
     invert()
@@ -1306,7 +1308,7 @@ class Tensor:
         -----
         For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
         the outer multiplicity (OM) indices. The weights are updated by matrix
-        multiplication with the R-symbol: new_weights = R @ old_weights.
+        multiplication with the R-symbol: new_weights = old_weights @ R.
         
         Examples
         --------
@@ -1348,7 +1350,7 @@ class Tensor:
                 # Compute R-symbol for this permutation
                 r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
                 
-                # Update weights: new_weights = R @ old_weights
+                # Update weights: new_weights = old_weights @ R
                 # R has shape (om_original, om_permuted)
                 # weights has shape (num_components, om_original)
                 # Result: (num_components, om_permuted)
