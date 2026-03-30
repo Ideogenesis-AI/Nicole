@@ -73,4 +73,3 @@ iso = isometry_n(
 - The first n output indices have opposite directions to the input indices
 - The last output index is the fused index with specified direction
 - If `itags` is provided, length must be n+1 (n indices + 1 fused)
-- Only Abelian and ProductGroup symmetries are currently supported
