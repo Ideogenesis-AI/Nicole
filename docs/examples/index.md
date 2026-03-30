@@ -25,6 +25,7 @@ Learn to work with different symmetry groups:
 
 - **[U1 Examples](symmetries/u1-examples.md)**: Particle number conservation
 - **[Z2 Examples](symmetries/z2-examples.md)**: Parity and binary symmetries  
+- **[SU(2) Examples](symmetries/su2-examples.md)**: Full spin-rotation symmetry
 - **[Product Groups](symmetries/product-examples.md)**: Multiple simultaneous symmetries
 
 ## Operations
