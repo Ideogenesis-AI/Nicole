@@ -9,6 +9,7 @@ Symmetry-aware tensor index defining direction, group, and charge sectors.
       members:
         - __init__
         - dim
+        - num_states
         - flip
         - dual
         - charges
