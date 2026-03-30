@@ -145,7 +145,7 @@ T = Tensor.random([left, right], itags=["i", "j"], seed=99)
 
 # Trace over both indices
 scalar = trace(T, axes=(0, 1))
-print(f"Trace result: {scalar.norm()}")
+print(f"Trace result: {scalar.item()}")
 ```
 
 ### Permutation and Transpose
