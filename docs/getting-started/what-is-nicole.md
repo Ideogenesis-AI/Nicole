@@ -29,7 +29,7 @@ New to Nicole? Follow these steps:
 
 ## Documentation Structure
 
-This documentation is organized into four main sections:
+This documentation is organized into three main sections:
 
 - **[Getting Started](what-is-nicole.md)** (this section): Learn the basics and concepts of Nicole library
 - **[API Reference](../api/index.md)**: Comprehensive documentation for all classes and functions
