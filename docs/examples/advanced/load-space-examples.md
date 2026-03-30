@@ -4,9 +4,9 @@ Building physical spaces and operators from scratch requires careful attention t
 
 **Supported systems:**
 
-- **Spin systems** (`"Spin"`): Arbitrary spin-J system with spin operators following spherical Condon–Shortley phase convention
+- **Spin systems** (`"Spin"`): Arbitrary spin-J system with spin operators following spherical Condon–Shortley phase convention; supports U(1) and full SU(2) symmetry
 - **Spinless fermions** (`"Ferm"`): Fermionic creation/annihilation operators and Jordan-Wigner strings with U(1) or Z(2)
-- **Spinful fermions** (`"Band"`): Full electronic systems with both charge and spin degrees of freedom, with both fermionic and spin operators
+- **Spinful fermions** (`"Band"`): Full electronic systems with both charge and spin degrees of freedom; supports Abelian (U(1)×U(1), Z(2)×U(1)) and non-Abelian (U(1)×SU(2), Z(2)×SU(2)) symmetries
 
 Instead of manually defining sectors, charges, and operator matrix elements, `load_space` generates everything automatically based on the system type and desired symmetry. This is especially valuable for ensuring consistency in operator conventions across different parts of your code.
 
@@ -88,6 +88,15 @@ print(f"F operator:\n{Op_ferm_z2['F']}")
 
 Create spinful fermion systems with product group symmetries.
 
+!!! note "State Convention"
+    The local basis states are defined as:
+
+    \[
+    |\uparrow\rangle = c^\dagger_\uparrow |0\rangle, \quad
+    |\!\downarrow\rangle = c^\dagger_\downarrow |0\rangle, \quad
+    |\!\uparrow\downarrow\rangle = c^\dagger_\uparrow c^\dagger_\downarrow |0\rangle
+    \]
+
 !!! note "Spin Operators"
     The spin operators (Sz, Sp, Sm) follow the same [spherical tensor convention](#spin-systems) as in spin systems.
 
@@ -119,8 +128,77 @@ print(f"Spinful fermion space (Z2xU1) dimension: {Spc_band_z2u1.dim}")
 print(f"F_up operator:\n{Op_band_z2u1['F_up']}")
 ```
 
+## Spin SU(2)
+
+With `"SU2"` symmetry, spin-rotation invariance is fully exploited. Instead of three operators (`Sp`, `Sm`, `Sz`), a single rank-1 spherical tensor `S` encodes all components via the Wigner–Eckart theorem.
+
+```python exec="1" session="load-space" result="console" idprefix="" source="material-block"
+# Spin-1/2 with full SU(2) symmetry
+Spc_spin_su2, Op_spin_su2 = load_space("Spin", "SU2", {"J": 0.5})
+
+print(f"Spin-1/2 SU(2) space:")
+print(f"  dim (multiplets): {Spc_spin_su2.dim}")
+print(f"  num_states (physical): {Spc_spin_su2.num_states}")
+print(f"  Available operators: {list(Op_spin_su2.keys())}\n")
+
+# S is the rank-1 spherical tensor (stores reduced tensor element)
+print(f"S operator:\n{Op_spin_su2['S']}")
+```
+
+```python exec="1" session="load-space" result="console" idprefix="" source="material-block"
+# Spin-1 with full SU(2) symmetry
+Spc_spin1_su2, Op_spin1_su2 = load_space("Spin", "SU2", {"J": 1.0})
+
+print(f"Spin-1 SU(2) space:")
+print(f"  dim (multiplets): {Spc_spin1_su2.dim}")
+print(f"  num_states (physical): {Spc_spin1_su2.num_states}")
+print(f"S operator:\n{Op_spin1_su2['S']}")
+```
+
+## Band U(1) × SU(2)
+
+With `"U1,SU2"` symmetry, particle number (U(1)) and full spin rotation (SU(2)) are conserved simultaneously. The operator set reduces from six explicit operators to three: `F` (annihilation, rank-1/2 tensor), `Z` (Jordan-Wigner string), and `S` (spin, rank-1 tensor).
+
+!!! note "State Convention"
+    The U(1)×SU(2) preset uses a **different sign convention** from the Abelian preset, following the CG tensor convention adopted by Yuzuha:
+
+    \[
+    |\uparrow\rangle = c^\dagger_\uparrow |0\rangle, \quad
+    |\!\downarrow\rangle = -c^\dagger_\downarrow |0\rangle, \quad
+    |\!\uparrow\downarrow\rangle = -c^\dagger_\uparrow c^\dagger_\downarrow |0\rangle
+    \]
+
+    The minus signs arise from the phase convention of the standard CG basis in Yuzuha. This difference in convention does not affect physical computations — all expectation values and correlators remain identical.
+
+```python exec="1" session="load-space" result="console" idprefix="" source="material-block"
+# U(1) × SU(2) symmetry (particle number + full spin rotation)
+Spc_band_u1su2, Op_band_u1su2 = load_space("Band", "U1,SU2")
+
+print(f"Band U1×SU(2) space:")
+print(f"  dim (multiplets): {Spc_band_u1su2.dim}")
+print(f"  num_states (physical): {Spc_band_u1su2.num_states}")
+print(f"  Available operators: {list(Op_band_u1su2.keys())}\n")
+
+# F is the rank-1/2 fermionic annihilation tensor
+print(f"F operator:\n{Op_band_u1su2['F']}\n")
+
+# S is the rank-1 spin tensor
+print(f"S operator:\n{Op_band_u1su2['S']}")
+```
+
+```python exec="1" session="load-space" result="console" idprefix="" source="material-block"
+# Z2 × SU(2) symmetry (parity + full spin rotation)
+Spc_band_z2su2, Op_band_z2su2 = load_space("Band", "Z2,SU2")
+
+print(f"Band Z2×SU(2) space:")
+print(f"  dim (multiplets): {Spc_band_z2su2.dim}")
+print(f"  num_states (physical): {Spc_band_z2su2.num_states}")
+print(f"F operator:\n{Op_band_z2su2['F']}")
+```
+
 ## See Also
 
-- API Reference: [load_space](../../api/utilities/load-space.md)
+- API Reference: [load_space](../../api/utilities/load_space.md)
+- [SU(2) Examples](../symmetries/su2-examples.md): SU(2) group and tensor basics
 - Previous: [Build Operators](build-operators.md)
 - Next: [Performance Tips](performance.md)
