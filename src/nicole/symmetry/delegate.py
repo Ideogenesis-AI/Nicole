@@ -20,10 +20,14 @@ from __future__ import annotations
 
 """Bridge to delegate SU(2) Clebsch-Gordan tensor manipulation to yuzuha package.
 
-This module provides the Bridge class, which serves as a storage container for
+This module provides the `Bridge` class, which serves as a storage container for
 SU(2) Clebsch-Gordan tensor data using the yuzuha package's canonical bases.
 The canonical bases are defined with respect to the outer multiplicity (OM) space,
 which represents all valid fusion tree configurations.
+
+Also provides thin delegates to yuzuha's recoupling routines: `fs_phase` produces
+the Frobenius-Schur phase, `compute_xsymbol` computes the X-symbol for tensor
+contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
 """
 
 from dataclasses import dataclass
