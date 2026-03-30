@@ -142,7 +142,7 @@ print(f"Available operators: {list(Op.keys())}\n")
 print(f"S operator (reduced tensor element):\n{Op['S']}")
 ```
 
-With SU(2) symmetry, there is only one independent spin operator `S` (the spherical tensor), compared to three separate operators (`Sp`, `Sm`, `Sz`) needed for the explicit U(1) case. Nicole uses the Wigner–Eckart theorem to reconstruct full matrix elements on the fly.
+With SU(2) symmetry, there is only one independent spin operator `S` (the spherical tensor), compared to three separate operators (`Sp`, `Sm`, `Sz`) needed for the explicit U(1) case. Nicole uses the Wigner–Eckart theorem to reconstruct full tensor elements on the fly.
 
 ## See Also
 

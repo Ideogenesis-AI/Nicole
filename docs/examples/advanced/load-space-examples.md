@@ -1,6 +1,6 @@
 # Load Space
 
-Building physical spaces and operators from scratch requires careful attention to charge assignments, matrix elements, and symmetry conventions. The `load_space` function provides a **high-level interface** to quickly construct commonly used quantum many-body systems with correct symmetry implementation.
+Building physical spaces and operators from scratch requires careful attention to charge assignments, tensor elements, and symmetry conventions. The `load_space` function provides a **high-level interface** to quickly construct commonly used quantum many-body systems with correct symmetry implementation.
 
 **Supported systems:**
 
@@ -8,7 +8,7 @@ Building physical spaces and operators from scratch requires careful attention t
 - **Spinless fermions** (`"Ferm"`): Fermionic creation/annihilation operators and Jordan-Wigner strings with U(1) or Z(2)
 - **Spinful fermions** (`"Band"`): Full electronic systems with both charge and spin degrees of freedom; supports Abelian (U(1)×U(1), Z(2)×U(1)) and non-Abelian (U(1)×SU(2), Z(2)×SU(2)) symmetries
 
-Instead of manually defining sectors, charges, and operator matrix elements, `load_space` generates everything automatically based on the system type and desired symmetry. This is especially valuable for ensuring consistency in operator conventions across different parts of your code.
+Instead of manually defining sectors, charges, and operator tensor elements, `load_space` generates everything automatically based on the system type and desired symmetry. This is especially valuable for ensuring consistency in operator conventions across different parts of your code.
 
 The function returns:
 

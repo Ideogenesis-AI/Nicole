@@ -4,7 +4,7 @@ Before diving into code, let's understand the key concepts in Nicole and the fun
 
 ## What are Symmetry-Aware Tensors?
 
-In quantum many-body physics, many systems exhibit symmetries—conserved quantum numbers like particle number, spin, or parity. Traditional dense tensors store all possible matrix elements, including many zeros mandated by symmetry. **Symmetry-aware tensors** exploit these conservation laws to:
+In quantum many-body physics, many systems exhibit symmetries—conserved quantum numbers like particle number, spin, or parity. Traditional dense tensors store all possible tensor elements, including many zeros mandated by symmetry. **Symmetry-aware tensors** exploit these conservation laws to:
 
 - **Save memory**: Only store non-zero blocks that respect symmetry
 - **Accelerate computations**: Skip operations on zeros
