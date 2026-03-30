@@ -1,4 +1,4 @@
-# Yuzuha Protocol
+# SU(2) Protocol
 
 This page describes the internal structure of SU(2)-symmetric tensors in Nicole and the mathematical framework behind their implementation. Nicole follows the **Yuzuha Protocol** — a specification for non-Abelian tensor algebra — and uses the [Yuzuha](https://ideogenesis-ai.github.io/Yuzuha/) SU(2) recoupling engine as its computational backend.
 
