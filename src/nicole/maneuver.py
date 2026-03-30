@@ -74,7 +74,8 @@ def conj(tensor: Tensor) -> Tensor:
         A new tensor instance with:
         - Conjugated dense blocks (if dtype is complex)
         - All index directions flipped
-        - Intertwiners (if present) updated with flipped directions
+        - Intertwiners (if present) updated with flipped edge directions and
+          FS phase absorbed into weights (±1, SU(2) only)
         - All other attributes preserved
     
     Notes
@@ -134,7 +135,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     -----
     For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
     the outer multiplicity (OM) indices. The weights are updated by matrix
-    multiplication with the R-symbol: new_weights = R @ old_weights.
+    multiplication with the R-symbol: new_weights = old_weights @ R.
     
     Examples
     --------
@@ -170,7 +171,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
             # Compute R-symbol for this permutation
             r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
             
-            # Update weights: new_weights = R @ old_weights
+            # Update weights: new_weights = old_weights @ R
             # R has shape (om_original, om_permuted)
             # weights has shape (num_components, om_original)
             # Result: (num_components, om_permuted)
@@ -667,7 +668,7 @@ def diag(
     >>> import torch
     >>> # Perform SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
-    >>> U, S_blocks, Vh = decomp(T, axes=0, mode="UR")  # Get S as dict
+    >>> U, S_blocks, Vh = svd(T, axis=0)  # Get S as dict
     >>> 
     >>> # Convert S_blocks to diagonal matrix
     >>> from nicole import diag
