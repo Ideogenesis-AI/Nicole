@@ -33,12 +33,13 @@ qr(T, axis)
     QR decomposition returning Q (orthogonal) and R (upper triangular) tensors.
     Separates specified axis into Q, all other axes go to R. No truncation applied.
 
-eig(T, itag=None, order="ascend", trunc=None)
+eig(T, itag=None, order="ascend", trunc=None, is_hermitian=False)
     Eigenvalue decomposition of square matrix returning U tensor and eigenvalues dict.
     Returns eigenvalues as 1D arrays for memory efficiency. Supports sorting eigenvalues
-    in ascending or descending order (by value for real eigenvalues, by real part for complex).
+    in ascending or descending order (always by real part). When is_hermitian=True,
+    uses torch.linalg.eigh for real eigenvalues and orthonormal eigenvectors.
 
-decomp(T, axis, mode="SVD", flow="><", itag=None, trunc=None)
+decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
     High-level decomposition with four modes:
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
     - "UR": Returns (U, R) where R = S*Vh
@@ -316,10 +317,10 @@ def svd(
             U_intw[(q_left, q_left)].weights[0, 0] = \
                 torch.sqrt(torch.tensor(T.group.irrep_dim(q_left), dtype=T.dtype))
         
-        # Vd intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
-        # Vd's index order is [bond, right_indices_in_original_order], which equals T's
+        # Vh intertwiner: T's intertwiner permuted by perm = [left_axis] + right_axes.
+        # Vh's index order is [bond, right_indices_in_original_order], which equals T's
         # index order permuted by perm. Applying compute_rsymbol(bridge, perm) gives the
-        # correctly recoupled Bridge for Vd's edge ordering.
+        # correctly recoupled Bridge for Vh's edge ordering.
         # For left_axis = 0, perm is the identity and the R-symbol is the identity matrix,
         # so the weights are copied unchanged.
         # Note: skip entries whose left charge was eliminated by truncation.
