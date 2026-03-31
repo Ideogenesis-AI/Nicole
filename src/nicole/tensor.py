@@ -1408,6 +1408,12 @@ class Tensor:
         positions:
             Index position(s) to invert. Can be a single int or a sequence of ints.
             Positions are 0-indexed.
+
+        Warnings
+        --------
+        Use with extreme caution! This method is supposed to work in isolation.
+        For inverting a bond between two tensors, use `capcup` instead, which
+        applies the necessary Frobenius–Schur phase for SU(2).
         
         Notes
         -----
