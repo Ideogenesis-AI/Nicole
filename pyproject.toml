@@ -11,13 +11,14 @@ only-include = [
 
 [project]
 name = "nicole"
-version = "0.3.0"
+version = "0.3.1"
 description = "Nicole: a symmetry-aware tensor library"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Changkai Zhang", email = "changkai.zhang@lmu.de" }]
-keywords = ["tensor", "symmetry", "quantum", "numpy", "block-symmetric", "abelian"]
+keywords = ["tensor", "symmetry", "quantum", "pytorch", "block-sparse",
+  "abelian", "non-abelian"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
@@ -30,6 +31,7 @@ classifiers = [
 dependencies = [
   "numpy>=2.0",
   "torch>=2.5",
+  "yuzuha>=0.1.4",
 ]
 
 [project.urls]
