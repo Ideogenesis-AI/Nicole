@@ -64,8 +64,8 @@ class Bridge:
         num_components can be any positive integer (typically starts at 1).
         om_dimension is obtained from cgspec.om_dimension().
     
-    Properties
-    ----------
+    device : torch.device
+        Device where the weight matrix is stored.
     om_dimension : int
         Dimension of the outer multiplicity space (number of fusion tree configurations).
     num_components : int
