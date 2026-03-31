@@ -1160,14 +1160,14 @@ class Tensor:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
         For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
-        and the Bridge weight `W` satisfy::
+        and the Bridge weight `W` satisfy:
 
             physical block  ≈  R  ×  W
 
         The method absorbs the deviation of each block's weight from the
         canonical value `sqrt(irrep_dim(q))` into `R`, so that after the
         call the tensor uses the same Bridge-weight convention as
-        :func:`identity`::
+        `identity`:
 
             physical block  ≈  R_new  ×  sqrt(irrep_dim(q))
 
@@ -1178,16 +1178,16 @@ class Tensor:
           corresponding data component so that the canonical positive value
           `sqrt(irrep_dim(q))` is enforced:
 
-            factor[i] = W[i, 0] / sqrt(irrep_dim(q))
-            W_new[i, 0] = sqrt(irrep_dim(q))
-            R_new[..., i] = R[..., i] * factor[i]
+                factor[i] = W[i, 0] / sqrt(irrep_dim(q))
+                W_new[i, 0] = sqrt(irrep_dim(q))
+                R_new[..., i] = R[..., i] * factor[i]
 
         - **Higher-order**: each row is normalised to unit norm, with the
           norm absorbed into the data:
 
-            norms[i] = ‖W[i, :]‖
-            W_new[i, :] = W[i, :] / norms[i]
-            R_new[..., i] = R[..., i] * norms[i]
+                norms[i] = ‖W[i, :]‖
+                W_new[i, :] = W[i, :] / norms[i]
+                R_new[..., i] = R[..., i] * norms[i]
 
         Has no effect on Abelian tensors or tensors without an intertwiner.
         """
