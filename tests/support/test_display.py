@@ -100,7 +100,7 @@ def test_format_count_list_multiple():
 def test_format_count_list_padding():
     """Test _format_count_list with different widths."""
     result = _format_count_list([1, 10, 100])
-    # Should have right-aligned padding
+    # Three elements should be joined by two "x" separators
     assert result.count("x") == 2
 
 
