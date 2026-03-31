@@ -1072,10 +1072,10 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     """Invert both directions of a contraction pair (bond) between two tensors.
 
     A contraction pair is a bond where one tensor has an outgoing index and the
-    other has an incoming index carrying the same itag. ``capcup`` inverts both
+    other has an incoming index carrying the same itag. `capcup` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
-    ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
+    (-1)^{2j} determined by the spin at that block's bond position.  After
     this operation the bond direction is reversed but all tensor contractions
     that involve this bond yield the same numerical result.
 
@@ -1099,13 +1099,13 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     Notes
     -----
     The FS phase is absorbed into B's intertwiner weights, which are much
-    smaller than the data blocks (shape ``(num_components, om_dimension)``
-    vs. ``(d1, ..., dn, num_components)``). For Abelian groups no phase
+    smaller than the data blocks (shape `(num_components, om_dimension)`
+    vs. `(d1, ..., dn, num_components)`). For Abelian groups no phase
     is applied.
 
     In yuzuha's left-associative CG fusion tree the first (n−1) axes are
     *leading* axes and the last axis is the *terminal* axis (the total coupled
-    representation). The FS phase ``(-1)^{2j}`` is applied if and only if
+    representation). The FS phase (-1)^{2j} is applied if and only if
     both bonds are at the same axis type — both leading or both terminal —
     because only then does the combined X-symbol transformation require a
     non-trivial correction.

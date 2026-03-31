@@ -57,7 +57,7 @@ def identity(
     dtype:
         Data type for the identity matrices stored in each block.
     device:
-        Device for the tensor blocks. If None, defaults to ``torch.get_default_device()``.
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional tuple of tags for the two tensor indices. Defaults to `("_init_", "_init_")`.
 
@@ -126,7 +126,7 @@ def isometry(
     itags: Optional[Tuple[str, str, str]] = None,
     fused_direction: Optional[Direction] = None
 ) -> Tensor:
-    """Return a 3rd order tensor that fuses ``first ⊗ second`` into a fused index.
+    """Return a 3rd order tensor that fuses first ⊗ second into a fused index.
     
     For Abelian groups, creates a single block per charge combination.
     For generic groups (e.g., SU(2)), creates multiple blocks corresponding
@@ -140,7 +140,7 @@ def isometry(
     dtype:
         Data type for the emitted fusion blocks.
     device:
-        Device for the tensor blocks. If None, defaults to ``torch.get_default_device()``.
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional tuple of tags for the three tensor indices. Defaults to `("_init_", "_init_", "_init_")`.
     fused_direction:
@@ -296,7 +296,7 @@ def isometry_n(
     dtype:
         Data type for the emitted fusion blocks.
     device:
-        Device for the tensor blocks. If None, defaults to ``torch.get_default_device()``.
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional sequence of tags for all tensor indices (n unfused + 1 fused).
         Length must be `len(indices) + 1`. Defaults to all `"_init_"`.

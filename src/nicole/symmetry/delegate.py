@@ -221,7 +221,7 @@ class Bridge:
         
         Creates a new Bridge instance where all edge directions in the CGSpec are
         flipped (incoming <-> outgoing). The cumulated Frobenius-Schur phase
-        returned by ``yuzuha.compute_conjugate`` is multiplied into the weight
+        returned by `yuzuha.compute_conjugate` is multiplied into the weight
         matrix, so the resulting weights may differ from the original by a
         global factor of ±1.
         
@@ -269,7 +269,7 @@ class Bridge:
         """Return a new Bridge with edge directions inverted at the specified positions.
         
         Rebuilds the CGSpec with the selected edges' directions inverted, keeping
-        the weight matrix unchanged. This is the building block for ``Tensor.invert()``,
+        the weight matrix unchanged. This is the building block for `Tensor.invert()`,
         which must be its own inverse (double application restores the original state).
         
         Parameters
@@ -289,17 +289,17 @@ class Bridge:
     def insert_edge(self, position: int, direction: Direction) -> Bridge:
         """Return a new Bridge with a trivial neutral edge inserted at the given position.
         
-        Inserts a neutral (spin-0) edge into the CGSpec at ``position``. The
+        Inserts a neutral (spin-0) edge into the CGSpec at `position`. The
         insertion is performed in three steps:
 
         1. Insert the new edge at position 0 to obtain a well-defined CGSpec.
         2. Compute the R-symbol for the permutation that moves position 0 to
-           ``position`` while keeping all other edges in their original order.
-        3. Apply ``new_weights = old_weights @ R`` and return the permuted Bridge.
+           `position` while keeping all other edges in their original order.
+        3. Apply `new_weights = old_weights @ R` and return the permuted Bridge.
 
         Because the neutral representation does not participate in coupling,
         the OM dimension is preserved exactly.
-        This is the building block for ``Tensor.insert_index()`` on SU(2) tensors.
+        This is the building block for `Tensor.insert_index()` on SU(2) tensors.
 
         **Developer's note: Why insert at position 0 first, then permute?**
 
@@ -395,7 +395,7 @@ class Bridge:
             Defaults to torch.float64.
         device : torch.device or str, optional
             Device for the weight matrix. Only used if weights is None.
-            If None, defaults to ``torch.get_default_device()``.
+            If None, defaults to `torch.get_default_device()`.
         
         Returns
         -------

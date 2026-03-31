@@ -775,9 +775,9 @@ class Tensor:
         The symmetry group for the new index is taken from the existing indices.
         
         For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is updated
-        via ``Bridge.insert_edge``, which inserts the neutral-charge edge and
+        via `Bridge.insert_edge`, which inserts the neutral-charge edge and
         applies the appropriate R-symbol so that the result is consistent with
-        a direct permutation of the new index to ``position``. The OM dimension
+        a direct permutation of the new index to `position`. The OM dimension
         is preserved exactly since the neutral irrep does not participate in coupling.
         """
         # Validate position
@@ -850,8 +850,8 @@ class Tensor:
         ----------
         eps : float or None
             Relative tolerance. A block is considered zero when its maximum absolute
-            value is less than ``eps * self.norm()``. Defaults to
-            ``torch.finfo(torch.float64).eps`` (~2.2e-16) when ``None``.
+            value is less than `eps * self.norm()`. Defaults to
+            `torch.finfo(torch.float64).eps` (~2.2e-16) when None.
 
         Notes
         -----
@@ -1159,13 +1159,13 @@ class Tensor:
     def regularize(self) -> None:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
-        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data ``R``
-        and the Bridge weight ``W`` satisfy::
+        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
+        and the Bridge weight `W` satisfy::
 
             physical block  ≈  R  ×  W
 
         The method absorbs the deviation of each block's weight from the
-        canonical value ``sqrt(irrep_dim(q))`` into ``R``, so that after the
+        canonical value `sqrt(irrep_dim(q))` into `R`, so that after the
         call the tensor uses the same Bridge-weight convention as
         :func:`identity`::
 
@@ -1173,21 +1173,21 @@ class Tensor:
 
         Both branches use a row-normalisation strategy, differing only in target:
 
-        - **2nd-order**: By Schur's lemma ``om = 1``, so each weight row is a
-          single scalar ``W[i, 0]``. The factor is absorbed into the
+        - **2nd-order**: By Schur's lemma `om = 1`, so each weight row is a
+          single scalar `W[i, 0]`. The factor is absorbed into the
           corresponding data component so that the canonical positive value
-          ``sqrt(irrep_dim(q))`` is enforced:
+          `sqrt(irrep_dim(q))` is enforced:
 
-              factor[i] = W[i, 0] / sqrt(irrep_dim(q))
-              W_new[i, 0] = sqrt(irrep_dim(q))
-              R_new[..., i] = R[..., i] * factor[i]
+            factor[i] = W[i, 0] / sqrt(irrep_dim(q))
+            W_new[i, 0] = sqrt(irrep_dim(q))
+            R_new[..., i] = R[..., i] * factor[i]
 
         - **Higher-order**: each row is normalised to unit norm, with the
           norm absorbed into the data:
 
-              norms[i] = ‖W[i, :]‖
-              W_new[i, :] = W[i, :] / norms[i]
-              R_new[..., i] = R[..., i] * norms[i]
+            norms[i] = ‖W[i, :]‖
+            W_new[i, :] = W[i, :] / norms[i]
+            R_new[..., i] = R[..., i] * norms[i]
 
         Has no effect on Abelian tensors or tensors without an intertwiner.
         """

@@ -570,7 +570,7 @@ def eig(
           eigenvalues <= t.
         Both can be specified together: thresh is applied first, then nkeep.
     is_hermitian:
-        If True, asserts that T is Hermitian and uses ``torch.linalg.eigh`` for every
+        If True, asserts that T is Hermitian and uses `torch.linalg.eigh` for every
         block, guaranteeing real eigenvalues and orthonormal eigenvectors even in the
         presence of degeneracies. Works for both real symmetric and complex Hermitian
         blocks. Default is False.
