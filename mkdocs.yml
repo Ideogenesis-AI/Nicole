@@ -71,6 +71,7 @@ nav:
       - Index: api/core/index-class.md
       - Sector: api/core/sector.md
       - Direction: api/core/direction.md
+      - Bridge: api/symmetry/bridge.md
     - Creating Tensors:
       - zeros: api/creation/zeros.md
       - random: api/creation/random.md

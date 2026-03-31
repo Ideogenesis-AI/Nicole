@@ -15,7 +15,7 @@ These three terms all refer to "a index of a tensor" in colloquial usage, but th
 :   The concrete object that occupies an axis. An `Index` carries the full sector structure of the index: the symmetry group, the list of charge–dimension pairs, and the direction (incoming or outgoing). Two tensors can only be contracted along a pair of axes if the `Index` objects at those axes are compatible — same group, complementary sectors, opposite directions.
 
 **Edge**
-:   The dedicated term for an index of a CG (Clebsch–Gordan) tensor, as used in the [Yuzuha Protocol](yuzuha-protocol.md). An edge in the CG tensor network corresponds to an index labelled by irrep label \(j\). The term "edge" is reserved for this graph-theoretic context and is not used for ordinary tensor axes.
+:   The dedicated term for an index of a CG (Clebsch–Gordan) tensor, as used in the [Yuzuha Protocol](yuzuha-protocol.md). An edge in the CG tensor network corresponds to an index labelled by irrep label \(j\) and the primal/dual property. The term "edge" is reserved for this graph-theoretic context and is not used for ordinary tensor axes.
 
 ---
 

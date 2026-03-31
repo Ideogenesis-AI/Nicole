@@ -115,6 +115,7 @@ print(idx.num_states)  # 8  (total states: 1×1 + 2×2 + 1×3)
 ## See Also
 
 - [Overview](overview.md): Symmetry system introduction
+- [Bridge](bridge.md): CG intertwiner data attached to each SU(2) tensor block
 - [U1Group](u1-group.md): Abelian U(1) symmetry
 - [Z2Group](z2-group.md): Abelian Z(2) symmetry
 - [ProductGroup](product-group.md): Combine SU(2) with Abelian groups

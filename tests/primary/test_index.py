@@ -234,13 +234,13 @@ def test_combine_indices_simple():
     assert combined.direction == Direction.OUT
     assert combined.group == group
     # Expected fused charges and dimensions (with direction-aware fusion):
-    # idx1 OUT charges: 0, 1 (contribute as inverse since OUT)
+    # idx1 OUT charges: 0, 1 (contribute as dual since OUT)
     # idx2 IN charges: 0, -1 (contribute as-is since IN)
-    # Output direction is OUT, so qf = total_contrib (no inverse)
-    # (OUT:0, IN:0) -> total: inv(0)+0=0, qf=0, dim 2*3=6
-    # (OUT:0, IN:-1) -> total: inv(0)+(-1)=-1, qf=-1, dim 2*2=4
-    # (OUT:1, IN:0) -> total: inv(1)+0=-1, qf=-1, dim 1*3=3
-    # (OUT:1, IN:-1) -> total: inv(1)+(-1)=-2, qf=-2, dim 1*2=2
+    # Output direction is OUT, so qf = total_contrib (no dual)
+    # (OUT:0, IN:0) -> total: dual(0)+0=0, qf=0, dim 2*3=6
+    # (OUT:0, IN:-1) -> total: dual(0)+(-1)=-1, qf=-1, dim 2*2=4
+    # (OUT:1, IN:0) -> total: dual(1)+0=-1, qf=-1, dim 1*3=3
+    # (OUT:1, IN:-1) -> total: dual(1)+(-1)=-2, qf=-2, dim 1*2=2
     # So charge 0 has dim 6, charge -1 has dim 4+3=7, charge -2 has dim 2
     dim_map = combined.sector_dim_map()
     assert dim_map[0] == 6
@@ -255,10 +255,10 @@ def test_combine_indices_single():
     
     combined = combine_indices(Direction.IN, idx)
     
-    # Single OUT index contributes inverse (since OUT)
-    # Output dir=IN, so qf = inv(total_contrib)
-    # OUT:0 -> total=inv(0)=0, qf=inv(0)=0, dim 2
-    # OUT:1 -> total=inv(1)=-1, qf=inv(-1)=1, dim 3
+    # Single OUT index contributes dual (since OUT)
+    # Output dir=IN, so qf = dual(total_contrib)
+    # OUT:0 -> total=dual(0)=0, qf=dual(0)=0, dim 2
+    # OUT:1 -> total=dual(1)=-1, qf=dual(-1)=1, dim 3
     assert combined.direction == Direction.IN
     assert combined.sector_dim_map() == {0: 2, 1: 3}
 

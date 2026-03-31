@@ -272,15 +272,20 @@ def test_backward_raises_on_non_scalar():
 
 
 def test_backward_validates_numel():
-    """Test that backward() validates tensor has exactly 1 element.
-    
-    Note: The Tensor constructor already validates shapes, so this test
-    verifies the numel check exists but may not be reachable in practice.
+    """Test that backward() raises when the scalar block has numel != 1.
+
+    The constructor enforces shape () for data[()], but data[()] can be
+    replaced directly after construction.  The numel check inside backward()
+    guards against such cases.
     """
-    # This test is redundant with the constructor validation, but we keep it
-    # to document the numel check in backward(). In practice, a valid scalar
-    # tensor always has numel() == 1 due to constructor validation.
-    pass  # Test is covered by constructor validation
+    with torch.enable_grad():
+        scalar = Tensor.from_scalar(1.0)
+        # Replace the data block with a multi-element tensor, bypassing
+        # constructor validation.
+        scalar.data[()] = torch.tensor([1.0, 2.0], requires_grad=True)
+
+        with pytest.raises(ValueError, match="backward.*requires a scalar"):
+            scalar.backward()
 
 
 def test_backward_through_operations():

@@ -101,6 +101,7 @@ SU(2) tensors use the Wigner–Eckart decomposition internally; see the [Yuzuha 
 - [Z2Group](z2-group.md): Binary symmetry
 - [SU2Group](su2-group.md): Non-Abelian spin symmetry
 - [ProductGroup](product-group.md): Multiple symmetries
+- [Bridge](bridge.md): CG intertwiner storage for SU(2) tensor blocks
 - [Examples: U(1)](../../examples/symmetries/u1-examples.md)
 - [Examples: SU(2)](../../examples/symmetries/su2-examples.md)
 

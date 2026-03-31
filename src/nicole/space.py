@@ -106,7 +106,7 @@ def load_space(
     Raises
     ------
     ValueError
-        If stat or preserv are not supported, or if required options are missing
+        If `preset` or `preserv` are not supported, or if required options are missing
     
     Examples
     --------

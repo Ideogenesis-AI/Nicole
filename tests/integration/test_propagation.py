@@ -20,26 +20,26 @@
 
 Strategy
 --------
-CPU is set as the *ambient default device* for each test via an ``autouse``
-fixture, while every test call explicitly passes ``device=accel_device``
+CPU is set as the *ambient default device* for each test via an `autouse`
+fixture, while every test call explicitly passes `device=accel_device`
 (MPS or CUDA).  The expected result is therefore always on the accelerator.
 
-Any code path that silently falls through to ``torch.get_default_device()``
-instead of honouring the forwarded ``device`` argument will produce a tensor
+Any code path that silently falls through to `torch.get_default_device()`
+instead of honouring the forwarded `device` argument will produce a tensor
 on CPU rather than the accelerator, causing an immediate assertion failure.
 
 This approach avoids MPS float64 incompatibility: intermediate CPU-side
-computations (e.g. building data blocks in ``load_space``) legitimately use
-the default CPU device, and the final ``.to(device)`` call transfers them to
-the accelerator.  This tests that the explicit ``device=`` argument is
+computations (e.g. building data blocks in `load_space`) legitimately use
+the default CPU device, and the final `.to(device)` call transfers them to
+the accelerator.  This tests that the explicit `device=` argument is
 correctly propagated, not that all intermediate tensors land on the
 accelerator.
 
 Skip conditions
 ---------------
 - The entire module is skipped when no accelerator (MPS or CUDA) is available.
-- ``TestDecompDevice.test_qr_abelian`` is skipped on MPS because
-  ``torch.linalg.qr`` is not implemented for that backend.
+- `TestDecompDevice.test_qr_abelian` is skipped on MPS because
+  `torch.linalg.qr` is not implemented for that backend.
 """
 
 from typing import Dict, List
@@ -70,8 +70,8 @@ def accel_device() -> torch.device:
 def with_cpu_default(accel_device: torch.device):
     """Set the global default device to CPU for the duration of each test.
 
-    Every test explicitly passes ``device=accel_device``; any call that
-    silently uses ``torch.get_default_device()`` will therefore produce a
+    Every test explicitly passes `device=accel_device`; any call that
+    silently uses `torch.get_default_device()` will therefore produce a
     tensor on CPU rather than the accelerator, failing the assertion.
 
     The fixture always restores the original default device on teardown so
@@ -95,8 +95,8 @@ def assert_on_device(T: Tensor, device: torch.device, label: str = "") -> None:
     T:
         Tensor to inspect.
     device:
-        Expected device.  Comparison is made on ``device.type`` so that
-        ordinal suffixes (e.g. ``cuda:0``) are matched correctly.
+        Expected device.  Comparison is made on `device.type` so that
+        ordinal suffixes (e.g. `cuda:0`) are matched correctly.
     label:
         Optional prefix for assertion failure messages.
     """
@@ -414,10 +414,10 @@ _LOAD_SPACE_PRESETS = [
 
 
 class TestLoadSpaceDevice:
-    """load_space() must honour an explicit ``device`` in the option dict.
+    """load_space() must honour an explicit `device` in the option dict.
 
     Intermediate CPU-side data construction in each loader is intentional;
-    the device check targets the final ``.to(device)`` call that transfers
+    the device check targets the final `.to(device)` call that transfers
     every operator tensor to the accelerator.  On MPS, float64 tensors are
     automatically normalised to float32 during the transfer.
     """

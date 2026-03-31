@@ -49,6 +49,19 @@ test_integration.py
     - End-to-end tensor network algorithms
     - Cross-operation compatibility
 
+test_spectrum.py
+    Tests for physically correct eigenvalue spectra:
+    - Two-site Heisenberg model under U(1) and SU(2) symmetry
+    - Parameterized over spin-j to verify analytic eigenvalues
+    - Two-site free-fermion hopping under U(1) and Z2 symmetry
+
+test_propagation.py
+    Tests for device argument propagation (accelerator required):
+    - Explicit device= argument correctly forwarded in identity,
+      isometry, oplus, diag, merge_axes, decomp, contract, load_space
+    - CPU default vs. accelerator (MPS/CUDA) disambiguation strategy
+    - Skipped when no accelerator device is available
+
 Key Properties Tested
 ---------------------
 - Gauge invariance in SU(2) tensor contractions
@@ -56,4 +69,6 @@ Key Properties Tested
 - Charge conservation across operation sequences
 - Numerical stability in operation chains
 - Correctness of X-symbols and recoupling coefficients
+- Physical spectrum correctness against analytic models
+- Device argument propagation across all major operations
 """

@@ -74,7 +74,8 @@ def conj(tensor: Tensor) -> Tensor:
         A new tensor instance with:
         - Conjugated dense blocks (if dtype is complex)
         - All index directions flipped
-        - Intertwiners (if present) updated with flipped directions
+        - Intertwiners (if present) updated with flipped edge directions and
+          FS phase absorbed into weights (±1, SU(2) only)
         - All other attributes preserved
     
     Notes
@@ -134,7 +135,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     -----
     For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
     the outer multiplicity (OM) indices. The weights are updated by matrix
-    multiplication with the R-symbol: new_weights = R @ old_weights.
+    multiplication with the R-symbol: new_weights = old_weights @ R.
     
     Examples
     --------
@@ -170,7 +171,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
             # Compute R-symbol for this permutation
             r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
             
-            # Update weights: new_weights = R @ old_weights
+            # Update weights: new_weights = old_weights @ R
             # R has shape (om_original, om_permuted)
             # weights has shape (num_components, om_original)
             # Result: (num_components, om_permuted)
@@ -667,7 +668,7 @@ def diag(
     >>> import torch
     >>> # Perform SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
-    >>> U, S_blocks, Vh = decomp(T, axes=0, mode="UR")  # Get S as dict
+    >>> U, S_blocks, Vh = svd(T, axis=0)  # Get S as dict
     >>> 
     >>> # Convert S_blocks to diagonal matrix
     >>> from nicole import diag
@@ -1071,10 +1072,10 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     """Invert both directions of a contraction pair (bond) between two tensors.
 
     A contraction pair is a bond where one tensor has an outgoing index and the
-    other has an incoming index carrying the same itag. ``capcup`` inverts both
+    other has an incoming index carrying the same itag. `capcup` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
-    ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
+    (-1)^{2j} determined by the spin at that block's bond position.  After
     this operation the bond direction is reversed but all tensor contractions
     that involve this bond yield the same numerical result.
 
@@ -1098,13 +1099,13 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     Notes
     -----
     The FS phase is absorbed into B's intertwiner weights, which are much
-    smaller than the data blocks (shape ``(num_components, om_dimension)``
-    vs. ``(d1, ..., dn, num_components)``). For Abelian groups no phase
+    smaller than the data blocks (shape `(num_components, om_dimension)`
+    vs. `(d1, ..., dn, num_components)`). For Abelian groups no phase
     is applied.
 
     In yuzuha's left-associative CG fusion tree the first (n−1) axes are
     *leading* axes and the last axis is the *terminal* axis (the total coupled
-    representation). The FS phase ``(-1)^{2j}`` is applied if and only if
+    representation). The FS phase (-1)^{2j} is applied if and only if
     both bonds are at the same axis type — both leading or both terminal —
     because only then does the combined X-symbol transformation require a
     non-trivial correction.

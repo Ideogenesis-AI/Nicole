@@ -91,8 +91,10 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
+    normalize_sectors()
+        In-place: Remove sectors from each index that do not appear in any block.
     trim_zero_blocks()
-        In-place: Remove blocks where all data is below double precision.
+        In-place: Remove blocks whose magnitude is negligible relative to the norm.
     device
         Property returning the device where tensor blocks are stored.
     to()
@@ -120,9 +122,9 @@ class Tensor:
     regularize()
         In-place: Canonicalize or regularize Bridge weights.
     conj()
-        In-place: Complex conjugate every dense block, and revert all index directions.
+        Complex conjugate every dense block, and revert all index directions.
     permute()
-        In-place: Permute tensor axes according to the provided reordering.
+        Permute tensor axes according to the provided reordering.
     transpose()
         In-place: Transpose tensor axes; defaults to reversing the index order.
     invert()
@@ -773,9 +775,9 @@ class Tensor:
         The symmetry group for the new index is taken from the existing indices.
         
         For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is updated
-        via ``Bridge.insert_edge``, which inserts the neutral-charge edge and
+        via `Bridge.insert_edge`, which inserts the neutral-charge edge and
         applies the appropriate R-symbol so that the result is consistent with
-        a direct permutation of the new index to ``position``. The OM dimension
+        a direct permutation of the new index to `position`. The OM dimension
         is preserved exactly since the neutral irrep does not participate in coupling.
         """
         # Validate position
@@ -848,8 +850,8 @@ class Tensor:
         ----------
         eps : float or None
             Relative tolerance. A block is considered zero when its maximum absolute
-            value is less than ``eps * self.norm()``. Defaults to
-            ``torch.finfo(torch.float64).eps`` (~2.2e-16) when ``None``.
+            value is less than `eps * self.norm()`. Defaults to
+            `torch.finfo(torch.float64).eps` (~2.2e-16) when None.
 
         Notes
         -----
@@ -1157,35 +1159,35 @@ class Tensor:
     def regularize(self) -> None:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
-        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data ``R``
-        and the Bridge weight ``W`` satisfy::
+        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
+        and the Bridge weight `W` satisfy:
 
             physical block  ≈  R  ×  W
 
         The method absorbs the deviation of each block's weight from the
-        canonical value ``sqrt(irrep_dim(q))`` into ``R``, so that after the
+        canonical value `sqrt(irrep_dim(q))` into `R`, so that after the
         call the tensor uses the same Bridge-weight convention as
-        :func:`identity`::
+        `identity`:
 
             physical block  ≈  R_new  ×  sqrt(irrep_dim(q))
 
         Both branches use a row-normalisation strategy, differing only in target:
 
-        - **2nd-order**: By Schur's lemma ``om = 1``, so each weight row is a
-          single scalar ``W[i, 0]``. The factor is absorbed into the
+        - **2nd-order**: By Schur's lemma `om = 1`, so each weight row is a
+          single scalar `W[i, 0]`. The factor is absorbed into the
           corresponding data component so that the canonical positive value
-          ``sqrt(irrep_dim(q))`` is enforced:
+          `sqrt(irrep_dim(q))` is enforced:
 
-              factor[i] = W[i, 0] / sqrt(irrep_dim(q))
-              W_new[i, 0] = sqrt(irrep_dim(q))
-              R_new[..., i] = R[..., i] * factor[i]
+                factor[i] = W[i, 0] / sqrt(irrep_dim(q))
+                W_new[i, 0] = sqrt(irrep_dim(q))
+                R_new[..., i] = R[..., i] * factor[i]
 
         - **Higher-order**: each row is normalised to unit norm, with the
           norm absorbed into the data:
 
-              norms[i] = ‖W[i, :]‖
-              W_new[i, :] = W[i, :] / norms[i]
-              R_new[..., i] = R[..., i] * norms[i]
+                norms[i] = ‖W[i, :]‖
+                W_new[i, :] = W[i, :] / norms[i]
+                R_new[..., i] = R[..., i] * norms[i]
 
         Has no effect on Abelian tensors or tensors without an intertwiner.
         """
@@ -1306,7 +1308,7 @@ class Tensor:
         -----
         For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
         the outer multiplicity (OM) indices. The weights are updated by matrix
-        multiplication with the R-symbol: new_weights = R @ old_weights.
+        multiplication with the R-symbol: new_weights = old_weights @ R.
         
         Examples
         --------
@@ -1348,7 +1350,7 @@ class Tensor:
                 # Compute R-symbol for this permutation
                 r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
                 
-                # Update weights: new_weights = R @ old_weights
+                # Update weights: new_weights = old_weights @ R
                 # R has shape (om_original, om_permuted)
                 # weights has shape (num_components, om_original)
                 # Result: (num_components, om_permuted)
@@ -1406,6 +1408,12 @@ class Tensor:
         positions:
             Index position(s) to invert. Can be a single int or a sequence of ints.
             Positions are 0-indexed.
+
+        Warnings
+        --------
+        Use with extreme caution! This method is supposed to work in isolation.
+        For inverting a bond between two tensors, use `capcup` instead, which
+        applies the necessary Frobenius–Schur phase for SU(2).
         
         Notes
         -----

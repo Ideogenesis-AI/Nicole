@@ -1540,7 +1540,7 @@ def _assert_insert_terminal_equals_leading_permute(T: Tensor, inserted_dir: Dire
 
     Inserting at the terminal position demotes the previous terminal edge to a
     leading role, which can introduce a non-trivial recoupling phase. This test
-    verifies that ``Bridge.insert_edge`` accounts for that phase via the R-symbol,
+    verifies that `Bridge.insert_edge` accounts for that phase via the R-symbol,
     making terminal and leading-then-permute insertion physically equivalent.
     """
     N = len(T.indices)

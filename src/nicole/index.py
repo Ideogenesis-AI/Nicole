@@ -23,9 +23,9 @@ from __future__ import annotations
 The `Index` dataclass models a single tensor index annotated with symmetry
 information. Each instance records whether the index is incoming or outgoing,
 the associated symmetry group, and the available sectors (charge, dimension
-pairs) on that index. The helper functions `combine_indices` and `split_index`
-encapsulate a consistent way to fuse or validate indices while respecting the
-charge rules enforced by the symmetry group.
+pairs) on that index. The helper functions `combine_indices`, `split_index`,
+and `union_indices` encapsulate a consistent way to fuse, validate, or merge
+indices while respecting the charge rules enforced by the symmetry group.
 
 Key responsibilities
 --------------------

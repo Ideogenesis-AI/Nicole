@@ -35,12 +35,14 @@ primary/
 
 operations/
     Tensor operations and transformations:
-    - test_arithmetic.py: Addition, subtraction, multiplication, division
+    - test_arithmetic.py: Addition, subtraction, scalar multiplication
     - test_contract.py: Tensor contractions and traces
     - test_decomp.py: SVD, eigendecomposition, and other decompositions
+    - test_factorize.py: SVD- and QR-based tensor factorization
     - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
     - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
+    - test_capcup.py: Bond direction inversion (capcup)
 
 symmetry/
     Symmetry group operations:
@@ -51,7 +53,7 @@ symmetry/
 
 support/
     Utilities and secondary features:
-    - test_helpers.py: Tensor cloning and element access
+    - test_helpers.py: Tensor cloning, element access, filter_blocks, regularize
     - test_display.py: Tensor display and formatting
     - test_types.py: Type definitions and enumerations
     - test_autograd.py: Automatic differentiation support
@@ -62,6 +64,8 @@ integration/
     - test_consistency.py: Algebraic consistency (distributivity, linearity)
     - test_unitarity.py: Unitarity properties (isometries, conjugation)
     - test_integration.py: End-to-end workflow tests
+    - test_spectrum.py: Physically correct spectra for known models
+    - test_propagation.py: Device argument propagation (accelerator required)
 
 Root level:
     - utils.py: Shared test utilities and helpers

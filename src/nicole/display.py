@@ -66,8 +66,9 @@ def _charge_components(charge: Charge) -> Tuple:
 def _group_signature(indices: Sequence[Index], components_per_charge: int) -> str:
     """Return a symmetry signature string identifying the group type.
     
-    U1Group uses 'A', other Abelian groups use their name (e.g., 'Z2'), and
-    ProductGroup uses the full product name (e.g., 'U1×Z2').
+    U1Group uses 'A', other Abelian groups use their name (e.g., 'Z2'),
+    ProductGroup uses the full product name (e.g., 'U1×Z2'), and generic
+    groups (e.g., SU2Group) use their name repeated per component.
     """
     if not indices:
         return ""
@@ -86,7 +87,7 @@ def _group_signature(indices: Sequence[Index], components_per_charge: int) -> st
     else:
         # Generic groups
         gname = getattr(group, "name", "")
-        label = gname.upper() if gname else "?"
+        label = gname if gname else "?"
         count = max(components_per_charge, 1)
         return ",".join([label] * count)
 
@@ -105,7 +106,7 @@ def _format_bytes(size: int) -> str:
 
 
 def _format_single_value(arr: torch.Tensor) -> str:
-    """Return a formatted scalar read-out for a 1x1 block."""
+    """Return a formatted scalar read-out for a single-element tensor."""
     val = arr.reshape(-1)[0]
     is_complex = val.is_complex() if isinstance(val, torch.Tensor) else isinstance(val, complex)
     if is_complex:
@@ -169,7 +170,7 @@ def tensor_summary(
     -------
     str
         A formatted multi-line string describing tensor order, block statistics, and
-        up to nine individual blocks with aligned charges and sizes.
+        up to `max_lines` individual blocks with aligned charges and sizes.
     """
     # Basic tensor statistics
     num_blocks = len(data)
