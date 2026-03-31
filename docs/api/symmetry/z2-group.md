@@ -10,7 +10,7 @@ Z(2) symmetry group with binary charges.
         - name
         - neutral
         - dual
-        - fuse
+        - fuse_unique
         - equal
         - validate_charge
 

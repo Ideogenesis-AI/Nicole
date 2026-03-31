@@ -45,7 +45,7 @@ def test_tensor_zeros_basic():
 
 
 def test_tensor_zeros_2nd_order():
-    """Test Tensor.zeros with minimum two indices."""
+    """Test Tensor.zeros with two indices."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     

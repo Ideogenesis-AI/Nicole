@@ -4,15 +4,20 @@ Tensor manipulation operations rearrange indices, change directions, or modify d
 
 **Key operations:**
 
-- **Conjugation** (`conj`): Complex conjugate data and flip all index directions
-- **Permutation** (`permute`): Reorder indices to a specific layout
-- **Transpose** (`transpose`): Swap two indices
-- **In-place vs functional**: Many operations support both styles
+- **Conjugation** (`T.conj()`): Complex conjugate data and flip all index directions
+- **Permutation** (`T.permute()`): Reorder indices to a specific layout
+- **Transpose** (`T.transpose()`): Reorder indices, defaulting to full reversal
 
-All manipulation operations maintain the block structure and charge labels — only the organization or representation changes. This ensures that symmetry properties remain intact throughout your computation.
+All operations are available as **tensor methods** and support **chaining**. Each method can be called in three ways:
+
+- **`T.conj()`** (default, `in_place=False`): returns a new tensor that **shares** the underlying data storage with `T`. Memory-efficient and supports chaining.
+- **`T.conj(in_place=True)`**: modifies `T` in place and returns `T` itself. Useful when you do not need the original.
+- **Standalone functions** `conj(T)`, `permute(T, ...)`, `transpose(T, ...)`: return a fully independent tensor by **cloning all data blocks**, guaranteeing isolation from the original at the cost of extra memory. Prefer the method form unless a deep copy is explicitly needed.
+
+All manipulation operations maintain the block structure and charge labels — only the ordering or direction of indices changes.
 
 ```python exec="1" session="manipulation" result=""
-from nicole import conj, permute, transpose, Tensor, Index, Sector, Direction, U1Group
+from nicole import Tensor, Index, Sector, Direction, U1Group
 import torch
 ```
 
@@ -25,10 +30,10 @@ idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
 # Complex tensor
 T = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=torch.complex128, seed=42)
 
-# Conjugate (flips directions + conjugates data)
-T_conj = conj(T)
+# .conj() flips all index directions and conjugates data
+T_conj = T.conj()
 
-print(f"Original directions: {[i.direction for i in T.indices]}")
+print(f"Original directions:   {[i.direction for i in T.indices]}")
 print(f"Conjugated directions: {[i.direction for i in T_conj.indices]}")
 ```
 
@@ -37,67 +42,50 @@ print(f"Conjugated directions: {[i.direction for i in T_conj.indices]}")
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
 # 3-index tensor
 T3 = Tensor.random([idx, idx.flip(), idx], itags=["i", "j", "k"], seed=7)
-print(f"Original tags: {T3.itags}")
+print(f"Original: {T3.itags}")
 
-# Permute to (k, i, j)
-T_perm = permute(T3, [2, 0, 1])
-print(f"Permuted tags: {T_perm.itags}")
-
-# Original unchanged (functional operation)
-print(f"Original still: {T3.itags}")
+# .permute() returns a new tensor — original is unchanged
+T_perm = T3.permute([2, 0, 1])
+print(f"Permuted (k, i, j): {T_perm.itags}")
+print(f"Original unchanged:  {T3.itags}")
 ```
 
 ## Transpose
 
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
-# Default: reverse all axes
-T_trans = transpose(T3)
-print(f"Transposed tags: {T_trans.itags}")
+# Default: reverse all indices
+T_trans = T3.transpose()
+print(f"Reversed: {T_trans.itags}")
 
 # Custom order
-T_trans2 = transpose(T3, 1, 0, 2)
-print(f"Custom transpose: {T_trans2.itags}")
+T_trans2 = T3.transpose(1, 0, 2)
+print(f"Custom (j, i, k): {T_trans2.itags}")
 ```
 
-## In-Place vs Functional
+## Chaining
 
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
-# In-place modification
-T_inplace = T3.copy()
-T_inplace.permute([2, 0, 1])
-print(f"After in-place permute: {T_inplace.itags}\n")
-
-# Functional (returns new tensor)
-T_functional = permute(T3, [2, 0, 1])
-print(f"Original unchanged: {T3.itags}")
-print(f"New tensor: {T_functional.itags}")
-```
-
-## Hermitian Conjugate
-
-```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
-# For matrices: A† = (A*)ᵀ
 A = Tensor.random([idx, idx.flip()], itags=["i", "j"], dtype=torch.complex128, seed=11)
 
-# Method 1: conj then transpose
-A_dag1 = transpose(conj(A))
+# Hermitian conjugate: conjugate then transpose — written as a chain
+A_dag = A.conj().transpose()
 
-# Method 2: transpose then conj
-A_dag2 = conj(transpose(A))
-
-# Both give same result
-error = (A_dag1 - A_dag2).norm()
-print(f"Methods match: {error < 1e-10}")
+print(f"Original: {A.itags}  dirs={[d.direction for d in A.indices]}")
+print(f"A†:       {A_dag.itags}  dirs={[d.direction for d in A_dag.indices]}")
 ```
 
 ## Cyclic Permutation
 
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
-# Move first axis to last
+# Move first index to last via chained permute
 n = len(T3.indices)
-T_cycle = permute(T3, list(range(1, n)) + [0])
+T_cycle = T3.permute(list(range(1, n)) + [0])
 print(f"Original: {T3.itags}")
-print(f"Cycled: {T_cycle.itags}")
+print(f"Cycled:   {T_cycle.itags}")
+
+# Further chain: cycle twice
+T_cycle2 = T3.permute(list(range(1, n)) + [0]).permute(list(range(1, n)) + [0])
+print(f"Cycled twice: {T_cycle2.itags}")
 ```
 
 ## See Also

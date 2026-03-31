@@ -178,7 +178,7 @@ class ProductGroup(SymmetryGroup):
         if self._has_unitary:
             raise TypeError(
                 f"ProductGroup {self.name} contains a non-Abelian component. "
-                f"Use fuse_channels() for pairwise fusion instead."
+                f"Use fuse_channels() for multi-channel fusion instead."
             )
         
         if not qs:

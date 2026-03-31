@@ -6,14 +6,14 @@ Symmetry-aware tensors store data in multiple blocks, each labeled by quantum nu
 
 - **Block access**: Retrieve individual blocks by integer index or charge key
 - **Iteration**: Loop over all blocks in a tensor
-- **Subsector extraction**: Create new tensors containing only specific blocks
+- **Block filtering**: Create new tensors containing only specific blocks
 - **Index manipulation**: Inspect properties, modify tags, flip directions
 - **Trivial indices**: Insert auxiliary indices for tensor network operations
 
 Understanding block structure is essential for debugging, analyzing tensor properties, and performing advanced manipulations.
 
 ```python exec="1" session="indexing" result=""
-from nicole import Tensor, Index, Sector, Direction, U1Group, subsector
+from nicole import Tensor, Index, Sector, Direction, U1Group, filter_blocks
 import torch
 ```
 
@@ -68,15 +68,15 @@ for key, block in T.data.items():
 
 ```python exec="1" session="indexing" result="console" idprefix="" source="material-block"
 # Get a single block (using integer)
-T_single = subsector(T, 1)
+T_single = filter_blocks(T, 1)
 print(f"Single block: {len(T_single.data)}\n")
 
 # Get multiple blocks (using list)
-T_sub = subsector(T, [1, 2])
+T_sub = filter_blocks(T, [1, 2])
 print(f"Original blocks: {len(T.data)}")
 print(f"Subset blocks: {len(T_sub.data)}\n")
 
-# Note: subsector automatically removes unused sectors from indices
+# Note: filter_blocks automatically removes unused sectors from indices
 
 # Extract specific charge sectors
 # Find blocks with positive charges only
@@ -87,7 +87,7 @@ for i in range(1, len(T.data) + 1):
         positive_blocks.append(i)
 
 if positive_blocks:
-    T_positive = subsector(T, positive_blocks)
+    T_positive = filter_blocks(T, positive_blocks)
     print(f"Positive charge blocks: {len(T_positive.data)}")
 ```
 
@@ -212,6 +212,6 @@ print(f"\nTotal block memory: {total_bytes} B ({total_bytes/1024:.2f} KB)")
 
 - API Reference: [Tensor](../../api/core/tensor.md)
 - API Reference: [Index](../../api/core/index-class.md)
-- API Reference: [subsector](../../api/manipulation/subsector.md)
+- API Reference: [filter_blocks](../../api/manipulation/filter_blocks.md)
 - Previous: [Arithmetic](arithmetic.md)
 - Next: [Symmetry Examples](../symmetries/u1-examples.md)

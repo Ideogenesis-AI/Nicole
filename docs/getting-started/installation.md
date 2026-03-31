@@ -10,7 +10,7 @@ The recommended way to install Nicole is via pip:
 pip install nicole
 ```
 
-This will install Nicole and its required dependencies (PyTorch 2.5+).
+This will install Nicole and its required dependencies (PyTorch 2.5+, NumPy 2.0+, and Yuzuha 0.1.4+).
 
 ### Optional Dependencies
 
@@ -63,7 +63,6 @@ pip install -e ".[test,docs,lint]"
 pytest
 
 # Build documentation
-cd docs
 mkdocs serve
 
 # Run linter
@@ -112,8 +111,8 @@ Nicole supports GPU acceleration through PyTorch on NVIDIA GPUs (CUDA) and Apple
 
 **NVIDIA GPU (CUDA)**:
 ```bash
-# Install PyTorch with CUDA support (example for CUDA 11.8)
-pip install torch --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch with CUDA support (example for CUDA 12.4)
+pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # Verify CUDA availability
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"

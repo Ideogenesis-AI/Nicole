@@ -12,6 +12,7 @@ hooks:
 
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: images/nicole-font-awesome.png
   favicon: images/nicole.png
   palette:
@@ -20,16 +21,14 @@ theme:
         icon: material/link
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
+      scheme: nicole
       toggle:
         icon: material/toggle-switch
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: black
-      accent: indigo
+      accent: custom
       toggle:
         icon: material/toggle-switch-off
         name: Switch to system preference
@@ -55,9 +54,13 @@ theme:
 nav:
   - Getting Started:
     - What is Nicole?: getting-started/what-is-nicole.md
+    - Why Nicole?: getting-started/why-nicole.md
     - Installation: getting-started/installation.md
     - Core Concepts: getting-started/core-concepts.md
     - Quick Examples: getting-started/quick-examples.md
+    - Advanced:
+      - Terminology: getting-started/terminology.md
+      - SU(2) Protocol: getting-started/yuzuha-protocol.md
     - Development:
       - Contributing: getting-started/contributing.md
       - Changelog: getting-started/changelog.md
@@ -68,6 +71,7 @@ nav:
       - Index: api/core/index-class.md
       - Sector: api/core/sector.md
       - Direction: api/core/direction.md
+      - Bridge: api/symmetry/bridge.md
     - Creating Tensors:
       - zeros: api/creation/zeros.md
       - random: api/creation/random.md
@@ -78,8 +82,9 @@ nav:
       - conjugate: api/manipulation/conjugate.md
       - permute: api/manipulation/permute.md
       - transpose: api/manipulation/transpose.md
+      - capcup: api/manipulation/capcup.md
       - retag: api/manipulation/retag.md
-      - subsector: api/manipulation/subsector.md
+      - filter_blocks: api/manipulation/filter_blocks.md
       - merge_axes: api/manipulation/merge_axes.md
     - Arithmetic:
       - Basic Operations: api/arithmetic/addition.md
@@ -98,6 +103,7 @@ nav:
       - Overview: api/symmetry/overview.md
       - U1Group: api/symmetry/u1-group.md
       - Z2Group: api/symmetry/z2-group.md
+      - SU2Group: api/symmetry/su2-group.md
       - ProductGroup: api/symmetry/product-group.md
     - Utilities:
       - Display: api/utilities/display.md
@@ -112,6 +118,7 @@ nav:
     - Symmetries:
       - U(1) Examples: examples/symmetries/u1-examples.md
       - Z(2) Examples: examples/symmetries/z2-examples.md
+      - SU(2) Examples: examples/symmetries/su2-examples.md
       - Product Groups: examples/symmetries/product-examples.md
     - Operations:
       - Contraction: examples/operations/contraction-examples.md

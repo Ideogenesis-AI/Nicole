@@ -213,7 +213,10 @@ def test_su2_fuse_channels_many_bounds():
     """Test that multi-particle fusion satisfies correct bounds."""
     group = SU2Group()
     
-    # General property: max = sum_all, min = largest value ≤ min_unconstrained with matching integrality
+    # For N spins (in 2j notation), the maximum total spin is always the sum of all 2j values.
+    # The minimum total spin is max(0, largest_2j - sum_of_rest), i.e. the generalized
+    # triangular inequality: the largest spin cannot exceed the sum of all others.
+    # All channels between min and max are present in steps of 2 (same integrality as the total).
     spins = [3, 2, 1, 2]  # Random collection, sum=8 (even → integer spins)
     channels = group.fuse_channels(*spins)
     
@@ -222,7 +225,9 @@ def test_su2_fuse_channels_many_bounds():
     sum_others = sum(spins) - largest
     min_unconstrained = max(0, largest - sum_others)
     
-    # Count down from max by 2s gives the actual min (matching integrality automatically)
+    # Channels run from min_unconstrained to expected_max in steps of 2, so:
+    #   num_channels = (expected_max - min_unconstrained) // 2 + 1
+    #   expected_min = expected_max - 2 * (num_channels - 1)  [= min_unconstrained]
     num_channels = (expected_max - min_unconstrained) // 2 + 1
     expected_min = expected_max - 2 * (num_channels - 1)
     

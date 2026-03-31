@@ -9,11 +9,11 @@ Return tensor with permuted axes.
 
 ## Description
 
-Returns a new tensor with axes reordered according to the specified permutation. This is the functional (non-mutating) version. For in-place permutation, use `Tensor.permute()`.
+Returns a fully independent tensor with axes reordered according to the specified permutation. All data blocks are deep-copied, so the result is completely isolated from the original. For a memory-efficient version that shares storage with the original, use `Tensor.permute()` (default `in_place=False`). To modify the tensor in place, use `Tensor.permute(order, in_place=True)`.
 
 ## See Also
 
-- [Tensor.permute](../core/tensor.md): In-place version
+- [Tensor.permute](../core/tensor.md): Method form (shared-storage default, or in-place)
 - [transpose](transpose.md): Reverse axis order
 - [Examples: Manipulation](../../examples/operations/manipulation-examples.md)
 

@@ -18,7 +18,7 @@ The fundamental building blocks:
 | Class | Description |
 |-------|-------------|
 | [Tensor](core/tensor.md) | Block-sparse tensor with symmetry |
-| [Index](core/index-class.md) | Tensor leg with charge structure |
+| [Index](core/index-class.md) | Tensor index with charge structure |
 | [Sector](core/sector.md) | Charge-dimension pair |
 | [Direction](core/direction.md) | Index orientation (IN/OUT) |
 
@@ -30,7 +30,7 @@ Functions to create new tensors:
 |----------|-------------|
 | [zeros](creation/zeros.md) | Zero-filled tensor |
 | [random](creation/random.md) | Random-filled tensor |
-| [identity](creation/identity.md) | 2-leg identity tensor |
+| [identity](creation/identity.md) | 2-index identity tensor |
 | [isometry](creation/isometry.md) | 2-to-1 fusion isometry |
 | [isometry_n](creation/isometry_n.md) | N-to-1 fusion isometry |
 
@@ -43,8 +43,9 @@ Transform and rearrange tensors:
 | [conj](manipulation/conjugate.md) | Conjugate + flip directions |
 | [permute](manipulation/permute.md) | Permute axes |
 | [transpose](manipulation/transpose.md) | Transpose axes |
+| [capcup](manipulation/capcup.md) | Invert bond direction |
 | [retag](manipulation/retag.md) | Change index tags |
-| [subsector](manipulation/subsector.md) | Extract block subset |
+| [filter_blocks](manipulation/filter_blocks.md) | Extract block subset |
 | [merge_axes](manipulation/merge_axes.md) | Merge multiple axes into one |
 
 ## Arithmetic
@@ -87,6 +88,7 @@ Define and use symmetries:
 | [Overview](symmetry/overview.md) | Symmetry system introduction |
 | [U1Group](symmetry/u1-group.md) | Integer charge symmetry |
 | [Z2Group](symmetry/z2-group.md) | Binary symmetry |
+| [SU2Group](symmetry/su2-group.md) | SU(2) non-Abelian spin symmetry |
 | [ProductGroup](symmetry/product-group.md) | Multiple symmetries |
 
 ## Utilities

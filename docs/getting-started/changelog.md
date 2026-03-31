@@ -2,6 +2,158 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.1] - 2026-03-31
+
+**Documentation and GPU Enhancements**
+
+Patch release delivering comprehensive documentation for the SU(2) features introduced in v0.3.0, new Getting Started content, and end-to-end GPU device propagation across all Abelian and SU(2) tensor operations.
+
+### Documentation
+
+#### New Getting Started Pages
+
+- **Landing page** with hero section for the documentation site
+- **"Why Nicole?"** page comparing Nicole against TensorKit, ITensor, and QSpace; includes a "Why Python over Julia?" section on the PyTorch ecosystem and AI coding-agent compatibility
+- **"Terminology"** page defining Axis / Index / Edge, Sector / Block, and reverse / flip / invert / fuse / combine / merge
+
+#### New SU(2) API Reference Pages
+
+- `SU2Group` — full reference including Wigner-Eckart and R-W-C decomposition details
+- `Bridge` — complete reference for intertwiner manipulation methods
+- `capcup` — bond inversion documentation with warnings on the distinction from `Tensor.invert()`
+- `filter_blocks` — replaces the old `subsector` page
+- `ProductGroup` — extended with non-Abelian examples for `fuse_channels` and `irrep_dim`
+- `Tensor` members extended: `normalize_sectors`, `compress`, `regularize`
+- Symmetry overview split into Abelian and non-Abelian subsections
+- `load_space` examples extended with U(1)×SU(2) and Z2×SU(2) walkthroughs and state-convention admonitions
+
+#### Accuracy and Terminology Fixes (25+ pages)
+
+- "n-leg tensor" → "nth-order tensor"; "tensor leg" → "tensor index / tensor axis"
+- "matrix elements" → "tensor elements" in non-second-order contexts
+- `fuse()` → `fuse_unique()` across all Abelian examples and API pages
+- Manipulation examples rewritten to demonstrate the chainable method-based API (`T.conj()`, `T.permute()`, `T.transpose()`)
+
+### GPU Device Propagation
+
+Explicit `device=` arguments are now forwarded through every layer of the computation graph, so no intermediate tensor silently falls back to CPU:
+
+- **`Bridge` and CG symbols**: `Bridge.from_block`, `compute_xsymbol`, `compute_rsymbol`, and `Bridge.permute` all propagate device and dtype
+- **`identity`, `isometry`, `isometry_n`**: Accept and forward a `device` keyword argument
+- **`oplus`, `diag`, `merge_axes`**: Forward device to all internal tensor allocations
+- **`svd`, `qr`, `eig`, `decomp`**: Forward `device=T.device` to `Bridge.from_block`
+- **`trace`**: Forwards `device=T.device` to `torch.full`
+- **`Tensor.zeros`, `Tensor.random`, `regularize`**: Device forwarded to `Bridge.from_block` and scalar allocations
+- **`load_space`**: New `_get_device(option)` helper; all 8 operator construction functions call `.to(device)` on output tensors
+- **`BlockSchema`**: Collinearity check pins intermediate tensors to the correct device
+- **31 new integration tests** in `tests/integration/test_propagation.py` covering all operations and all 10 `load_space` presets for both Abelian and SU(2) groups; 27 pass unconditionally, 4 skipped without MPS
+
+### API Changes
+
+- **`filter_blocks`**: `subsector` renamed to `filter_blocks` in `maneuver.py` and removed from public exports; update call sites accordingly
+- **`Tensor.normalize_sectors()`**: New public method to prune unused sectors from tensor indices; `__str__` and `print` now use pruned indices for cleaner summaries
+- `load_space` fermionic operators migrated from internal `_prune_unused_sectors` to `normalize_sectors`
+
+### Display Improvements
+
+- SU(2) tensor blocks with a single-value weight matrix now display a sign indicator (`+`/`-`) in the block summary for quick inspection of Wigner-Eckart reduced matrix elements
+
+### Code Quality
+
+- `Tensor.to()`, `Tensor.cpu()`, `Tensor.cuda()`, and `Tensor._align_for_binary()` now use concrete `Tensor` return type annotations instead of forward-reference strings
+
+---
+
+## [0.3.0] - 2026-02-15
+
+**SU(2) Non-Abelian Symmetry Release**
+
+Major release introducing full SU(2) non-Abelian symmetry support through an intertwiner-based reduced tensor algebra, backed by the [yuzuha](https://github.com/Ideogenesis-AI/yuzuha) Clebsch–Gordan engine.
+
+### New: SU(2) Symmetry Group
+
+#### `SU2Group`
+- New `SU2Group` class in `nicole.symmetry` (and re-exported at top level)
+- Charges are non-negative integers using the **2j convention**: `0, 1, 2, 3, ...` for spins `0, 1/2, 1, 3/2, ...`
+- `irrep_dim(2j)` returns `2j + 1` (dimension of the spin-j multiplet)
+- `fuse_channels(*two_js)` returns all achievable total spin channels via the triangular inequality
+- All representations are self-dual: `dual(2j) = 2j`
+- `is_abelian` property: `False` for `SU2Group`
+
+#### `ProductGroup` extended
+- `ProductGroup` now accepts `SU2Group` as the **last** component, e.g. `ProductGroup([U1Group(), SU2Group()])`
+- `is_abelian` returns `False` for any `ProductGroup` containing `SU2Group`
+- Tuple charges: `(n, 2j)` for U(1) × SU(2); `(p, 2j)` for Z(2) × SU(2)
+
+### New: Intertwiner Engine
+
+#### `Bridge` class (yuzuha integration)
+- `Bridge` in `nicole.symmetry.delegate` stores Clebsch–Gordan tensors (intertwiners) for each data block in an SU(2) tensor
+- Handles outer-multiplicity dimensions, Frobenius–Schur phases, and direction conventions
+- `Bridge.conj()`, `Bridge.clone()`, `Bridge.to(device)`, `Bridge.insert_edge()`, `Bridge.invert_edges()`
+
+#### `Tensor.intw` field
+- Non-Abelian tensors carry a per-block intertwiner dictionary `{BlockKey: Bridge}`
+- Intertwiners are automatically managed by all operations; users rarely need to access them directly
+
+#### `capcup` function (new top-level export)
+- `capcup(A, axis_a, B, axis_b)` inverts a bond direction between two tensors, inserting Frobenius–Schur phase corrections required for SU(2)
+
+### SU(2) Support in All Operations
+
+All existing operations now handle SU(2) and SU(2)-containing `ProductGroup` transparently:
+
+| Operation | SU(2) behaviour |
+|-----------|----------------|
+| `contract` | Uses X/R symbols for intertwiner algebra |
+| `trace` | Enforces SU(2) selection rules for vanishing contributions |
+| `identity` | CG-weighted 2-index delta with Bridge intertwiners |
+| `isometry`, `isometry_n` | Fusion isometries with multi-channel Bridge |
+| `conj` | Flips intertwiner edge directions via `Bridge.conj()` |
+| `permute`, `transpose` | Updates intertwiners with R-symbol corrections |
+| `merge_axes` | Non-Abelian axis fusion via CG structure |
+| `svd`, `qr`, `eig`, `decomp` | Intertwiner-aware factorizations; OM trailing dimension |
+| `inv` | Preserves intertwiner field through block inversion |
+| `oplus`, `diag` | Non-Abelian direct sum and diagonal construction |
+| `filter_blocks` | Clones intertwiner weights for extracted blocks |
+
+### New Tensor Methods
+
+- **`Tensor.regularize()`**: Canonicalizes intertwiner weights to a standard form (identity-like bridges)
+- **`Tensor.compress()`**: Removes redundant components from SU(2) tensor blocks, reducing outer multiplicity
+- **`Tensor.trim_zero_blocks(epsilon=...)`**: Removes near-zero blocks; works for both Abelian and SU(2) tensors
+- **`Tensor.normalize_sectors()`**: Canonicalizes sector ordering across Abelian and non-Abelian tensors
+
+### `Index.num_states`
+
+- New `Index.num_states` property returns the total number of physical states, accounting for irrep dimensions: `sum(irrep_dim(q) × dim for each sector)`
+- For Abelian indices, `num_states == dim`; for SU(2) indices, `num_states > dim` whenever spin > 0
+
+### `load_space` SU(2) Presets
+
+New symmetry options for `load_space`:
+
+| `preset` | `preserv` | Operators |
+|----------|-----------|-----------|
+| `"Spin"` | `"SU2"` | `S`, `vac` — rank-1 spherical tensor (reduced tensor element) |
+| `"Band"` | `"U1,SU2"` | `F`, `Z`, `S`, `vac` — fermionic annihilation + spin tensor |
+| `"Band"` | `"Z2,SU2"` | `F`, `Z`, `S`, `vac` — same with Z2 parity instead of U1 |
+
+### API Changes
+
+- **`permute` default changed**: `in_place` parameter now defaults to `False` (functional style); pass `in_place=True` for in-place behaviour
+- **`eig` new parameter**: `is_hermitian` flag (default `False`); set to `True` to use the Hermitian eigensolver for improved numerical stability
+- **`is_abelian` property**: Added to all symmetry group classes (`U1Group`, `Z2Group`, `SU2Group`, `ProductGroup`)
+- **`irrep_dim` method**: Added to all symmetry group classes; returns 1 for Abelian groups, `2j+1` for SU(2)
+
+### Statistics
+
+- 150+ commits across the `feature/su2-group` and related branches
+- SU(2) test coverage added in `test_su2_*` modules, integration tests for Heisenberg, Hubbard, and band models
+- All existing Abelian tests continue to pass unchanged
+
+---
+
 ## [0.2.1] - 2026-02-08
 
 **QR Decomposition and Documentation Enhancement Release**
@@ -502,6 +654,8 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.1
+[0.3.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.0
 [0.2.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.2.0
 [0.1.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.1.1

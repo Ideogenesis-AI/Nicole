@@ -1,6 +1,6 @@
 # identity
 
-Create a 2-leg identity tensor.
+Create a 2-index identity tensor.
 
 ::: nicole.identity
     options:

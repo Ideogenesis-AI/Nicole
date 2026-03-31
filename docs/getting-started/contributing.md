@@ -37,13 +37,12 @@ pytest
 ruff check src/
 
 # Build documentation
-cd docs
 mkdocs serve
 ```
 
 ## Testing
 
-Nicole uses `pytest` for testing. The test suite is comprehensive with 662+ tests covering all functionality:
+Nicole uses `pytest` for testing. The test suite is comprehensive with 1400+ tests covering all functionality:
 
 ```bash
 # Run all tests

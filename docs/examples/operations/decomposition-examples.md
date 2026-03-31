@@ -104,7 +104,7 @@ idx4 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
 T4 = Tensor.random([idx4, idx4.flip(), idx4, idx4.flip()], itags=["a", "b", "c", "d"], seed=42)
 
 # Partition: (a, b) | (c, d)
-U4, S4, Vh4 = decomp(T4, axes=1, mode="SVD")
+U4, S4, Vh4 = decomp(T4, axes=[0, 1], mode="SVD")
 
 print(f"U:\n{U4}\n\nVh:\n{Vh4}")
 ```

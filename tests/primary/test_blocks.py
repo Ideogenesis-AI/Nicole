@@ -285,7 +285,7 @@ def test_charge_totals_neutral():
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
     
-    # Block (1, 1): OUT(1) + IN(1) = 1 + inverse(1) = 1 + (-1) = 0
+    # Block (1, 1): OUT(1) + IN(1) = 1 + dual(1) = 1 + (-1) = 0
     total = BlockSchema.charge_totals([idx1, idx2], (1, 1))
     
     assert total == 0
@@ -534,8 +534,8 @@ def test_bridge_collinear_antiparallel_vectors():
     assert math.isclose(scale, alpha, rel_tol=1e-9)
 
 
-def test_bridge_collinear_different_directions():
-    """Test bridge_collinear with non-parallel weight vectors."""
+def test_bridge_collinear_nonparallel_weights():
+    """Test bridge_collinear with non-parallel (orthogonal) weight vectors."""
     group = SU2Group()
     key = (1, 1, 1, 1)  # 4 indices for non-trivial OM
     directions = [Direction.IN, Direction.IN, Direction.IN, Direction.OUT]
@@ -751,7 +751,7 @@ def test_block_add_incompatible_weights():
         data_a, bridge_a, data_b, bridge_b
     )
     
-    # Should concatenate along OM axis
+    # Should concatenate along reduced multiplicity axis (last dimension)
     expected_data = torch.cat([data_a, data_b], dim=-1)
     assert torch.allclose(data_result, expected_data)
     

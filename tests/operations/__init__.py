@@ -20,67 +20,72 @@
 
 This module contains tests for all operations that can be performed on
 tensors, including arithmetic, contractions, decompositions, and
-manipulations. These operations form the core computational functionality
-of Nicole for tensor network algorithms.
+structural manipulations. These operations form the core computational
+functionality of Nicole for tensor network algorithms.
 
 Test Modules
 ------------
 test_arithmetic.py
-    Tests for basic arithmetic operations:
-    - Addition and subtraction of tensors
-    - Scalar multiplication and division
-    - Negation and sign operations
-    - Broadcasting and shape compatibility
-    - Charge-preserving arithmetic
+    Tests for tensor arithmetic:
+    - Addition and subtraction, including non-overlapping and partially
+      overlapping sector structures
+    - Scalar multiplication with integer, float, and complex scalars
+    - Norm computation and scaling properties
+    - SU(2) addition and subtraction with same or different weights,
+      including collinear weight detection and compression
+
+test_capcup.py
+    Tests for the capcup maneuver (bond direction inversion):
+    - Direction updates on both tensors
+    - Frobenius-Schur phase applied to B for SU(2) groups
+    - Absence of phase for Abelian groups
+    - Contraction invariance for U1, SU(2), and ProductGroup (U1×U1, Z2×SU2, U1×SU2)
 
 test_contract.py
-    Tests for tensor contraction operations:
-    - contract(): General tensor contractions
-    - trace(): Partial and full traces
-    - Multi-index contractions
-    - Charge conservation during contraction
-    - Einstein summation notation support
+    Tests for tensor contraction and trace:
+    - Pairwise and multi-index contractions
+    - Partial and full traces
+    - Charge conservation and index structure
+    - Abelian and non-Abelian (SU2, ProductGroup) variants
 
 test_decomp.py
-    Tests for tensor decomposition operations:
-    - decomp(): High-level decomposition interface
-    - svd(): Singular value decomposition
-    - eig(): Eigenvalue decomposition
-    - Truncation and bond dimension control
-    - Charge-preserving decompositions
+    Tests for the high-level decomp() interface:
+    - All decomposition modes (SVD, UR, LV, QR)
+    - Multi-axis decomposition and bond index flow control
+    - Truncation by singular value threshold and bond dimension
+    - SU(2) and ProductGroup compatibility
+
+test_factorize.py
+    Tests for low-level factorization routines:
+    - svd(): singular value decomposition, isometry checks, truncation
+    - qr(): QR factorization and orthogonality
+    - eig(): eigenvalue decomposition, sorting, and Hermitian variant
+    - SU(2) and ProductGroup compatibility
 
 test_diag_inv.py
-    Tests for diagonal matrix operations:
-    - diag(): Creating diagonal tensors from vectors
-    - inv(): Matrix inversion for diagonal tensors
-    - Iterative diagonal construction
-    - Charge structure preservation
-    - Numerical stability and error handling
+    Tests for diagonal tensor operations:
+    - diag(): creating diagonal tensors from reduced blocks
+    - inv(): inverting diagonal tensors block-wise
+    - Charge structure preservation and error handling
 
 test_maneuver.py
-    Tests for tensor maneuver operations:
-    - conj(): Complex conjugation with direction flip
-    - permute(): Axis permutation
-    - transpose(): Simple two-axis swap
-    - retag(): Changing index tags
-    - invert(): Index direction inversion
-    - insert_index(): Inserting a new index
-    - merge_axes(): Combining multiple axes
-    - trim_zero_blocks(): Removing zero-valued blocks
+    Tests for structural tensor maneuvers:
+    - conj(), permute(), transpose()
+    - retag(), invert(), insert_index()
+    - merge_axes(), trim_zero_blocks()
 
 test_oplus.py
     Tests for direct sum operations:
-    - oplus(): Direct sum of tensors
-    - Increasing bond dimensions
-    - Charge space expansion
-    - Compatibility with other operations
-    - Multi-tensor direct sums
+    - oplus(): direct sum expanding bond dimensions and charge spaces
+    - Compatibility with contractions and other operations
 
 Key Operations Tested
 ---------------------
 - Charge conservation throughout all operations
 - Numerical accuracy and stability
+- Abelian (U1, Z2) and non-Abelian (SU2) symmetry compatibility
+- ProductGroup combining Abelian and non-Abelian components
 - Edge cases and error handling
-- Performance with large bond dimensions
-- Compatibility with different symmetry groups
+- High-order (5th/6th order) stress tests across contraction
+  decomposition, and maneuver operations
 """

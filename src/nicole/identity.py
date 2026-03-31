@@ -21,8 +21,9 @@ from __future__ import annotations
 """Utilities for constructing canonical identity and fusion tensors.
 
 This module provides helpers that build symmetry-aware tensors commonly used in
-tensor network algorithms: a 2nd order identity and a 3rd order fusion isometry.
-Both routines respect the block structure defined by Nicole indices and ensure
+tensor network algorithms: a 2nd order identity, a 3rd order fusion isometry,
+and an n-to-1 isometry that fuses any number of indices sequentially.
+All routines respect the block structure defined by Nicole indices and ensure
 charge conservation across all generated blocks.
 """
 
@@ -36,7 +37,13 @@ from .typing import Charge, Direction
 from .symmetry import delegate as dg
 
 
-def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optional[Tuple[str, str]] = None) -> Tensor:
+def identity(
+    index: Index,
+    *, # keyword-only parameters
+    dtype: torch.dtype = torch.float64,
+    device: Optional[torch.device] = None,
+    itags: Optional[Tuple[str, str]] = None
+) -> Tensor:
     """Return a 2nd order identity tensor between `index` and its conjugate index.
     
     For Abelian groups, creates diagonal blocks with identity matrices.
@@ -49,6 +56,8 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         The index to be paired with its flipped counterpart.
     dtype:
         Data type for the identity matrices stored in each block.
+    device:
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional tuple of tags for the two tensor indices. Defaults to `("_init_", "_init_")`.
 
@@ -59,6 +68,9 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         identity matrices for each sector. For generic groups, includes
         intertwiner (intw) field with weights set to √(irrep_dim(q)).
     """
+    if device is None:
+        device = torch.get_default_device()
+    device = torch.device(device)
 
     # Prepare the left index and its flipped partner.
     left = index
@@ -75,7 +87,7 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
         for sector in left.sectors:
             q = sector.charge
             dim = sector.dim
-            blocks[(q, q)] = torch.eye(dim, dtype=dtype)
+            blocks[(q, q)] = torch.eye(dim, dtype=dtype, device=device)
         
         return Tensor(indices=(left, right), itags=itags, data=blocks, dtype=dtype)
     else:
@@ -87,11 +99,11 @@ def identity(index: Index, *, dtype: torch.dtype = torch.float64, itags: Optiona
             dim = sector.dim
             
             # Reduced tensor: identity matrix with trailing reduced multiplicity dimension
-            blocks[(q, q)] = torch.eye(dim, dtype=dtype).unsqueeze(-1)
+            blocks[(q, q)] = torch.eye(dim, dtype=dtype, device=device).unsqueeze(-1)
             
             # Create Bridge with actual index directions
             bridge = dg.Bridge.from_block(
-                group, (q, q), [left.direction, right.direction], dtype=dtype
+                group, (q, q), [left.direction, right.direction], dtype=dtype, device=device
             )
             
             # Apply normalization: weights = √(irrep_dim)
@@ -110,10 +122,11 @@ def isometry(
     second: Index,
     *, # keyword-only parameters
     dtype: torch.dtype = torch.float64,
+    device: Optional[torch.device] = None,
     itags: Optional[Tuple[str, str, str]] = None,
-    fused_direction: Optional[Direction] = None,
+    fused_direction: Optional[Direction] = None
 ) -> Tensor:
-    """Return a 3rd order tensor that fuses ``first ⊗ second`` into a fused index.
+    """Return a 3rd order tensor that fuses first ⊗ second into a fused index.
     
     For Abelian groups, creates a single block per charge combination.
     For generic groups (e.g., SU(2)), creates multiple blocks corresponding
@@ -126,6 +139,8 @@ def isometry(
         Input indices to be fused. They must share a symmetry group.
     dtype:
         Data type for the emitted fusion blocks.
+    device:
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional tuple of tags for the three tensor indices. Defaults to `("_init_", "_init_", "_init_")`.
     fused_direction:
@@ -148,6 +163,10 @@ def isometry(
     if first.group != second.group:
         raise ValueError("Both indices must share the same symmetry group")
     group = first.group
+
+    if device is None:
+        device = torch.get_default_device()
+    device = torch.device(device)
     
     # Determine orientation of the fused index; default to the dual of `first`.
     default_dir = first.direction.reverse()
@@ -180,12 +199,12 @@ def isometry(
                 
                 fused_dim = dim_fused_map[qf]
                 offset = offsets[qf]
-                arr = torch.zeros((da, db, fused_dim), dtype=dtype)
+                arr = torch.zeros((da, db, fused_dim), dtype=dtype, device=device)
                 # Fill a set of identity matrices at appropriate column offsets.
                 for i in range(da):
                     base = offset + i * db
                     cols = slice(base, base + db)
-                    arr[i, :, cols] = torch.eye(db, dtype=dtype)
+                    arr[i, :, cols] = torch.eye(db, dtype=dtype, device=device)
                 blocks[(qa, qb, qf)] = arr
                 offsets[qf] = offset + da * db
 
@@ -225,16 +244,16 @@ def isometry(
                     offset = offsets[qf]
                     
                     # Reduced tensor: identity-like structure with trailing dimension
-                    arr = torch.zeros((da, db, fused_dim, 1), dtype=dtype)
+                    arr = torch.zeros((da, db, fused_dim, 1), dtype=dtype, device=device)
                     for i in range(da):
                         base = offset + i * db
                         cols = slice(base, base + db)
-                        arr[i, :, cols, 0] = torch.eye(db, dtype=dtype)
+                        arr[i, :, cols, 0] = torch.eye(db, dtype=dtype, device=device)
                     blocks[(qa, qb, qf)] = arr
                     
                     # Create Bridge for CG fusion
                     directions = [first.direction, second.direction, direction]
-                    bridge = dg.Bridge.from_block(group, (qa, qb, qf), directions, dtype=dtype)
+                    bridge = dg.Bridge.from_block(group, (qa, qb, qf), directions, dtype=dtype, device=device)
                     
                     # Apply normalization: weights = √(irrep_dim) of fused charge
                     irrep_dimension = group.irrep_dim(qf)
@@ -253,10 +272,11 @@ def isometry(
 
 def isometry_n(
     indices: Sequence[Index],
-    *,
+    *, # keyword-only parameters
     dtype: torch.dtype = torch.float64,
+    device: Optional[torch.device] = None,
     itags: Optional[Sequence[str]] = None,
-    direction: Direction = Direction.OUT,
+    direction: Direction = Direction.OUT
 ) -> Tensor:
     """Return an (n+1)th order tensor that fuses n indices into a single fused index.
 
@@ -275,6 +295,8 @@ def isometry_n(
         indices must share the same symmetry group.
     dtype:
         Data type for the emitted fusion blocks.
+    device:
+        Device for the tensor blocks. If None, defaults to `torch.get_default_device()`.
     itags:
         Optional sequence of tags for all tensor indices (n unfused + 1 fused).
         Length must be `len(indices) + 1`. Defaults to all `"_init_"`.
@@ -348,6 +370,7 @@ def isometry_n(
         first_idx,
         second_idx,
         dtype=dtype,
+        device=device,
         itags=(f"_iso_n_0", f"_iso_n_1", f"_iso_n_fused_0"),
         fused_direction=first_fused_dir,
     )
@@ -374,6 +397,7 @@ def isometry_n(
             fused_idx_flipped,
             next_idx,
             dtype=dtype,
+            device=device,
             itags=(fused_tag, f"_iso_n_{i}", f"_iso_n_fused_{i}"),
             fused_direction=fused_dir,
         )

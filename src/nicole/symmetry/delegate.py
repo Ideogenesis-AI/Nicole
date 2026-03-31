@@ -20,10 +20,14 @@ from __future__ import annotations
 
 """Bridge to delegate SU(2) Clebsch-Gordan tensor manipulation to yuzuha package.
 
-This module provides the Bridge class, which serves as a storage container for
+This module provides the `Bridge` class, which serves as a storage container for
 SU(2) Clebsch-Gordan tensor data using the yuzuha package's canonical bases.
 The canonical bases are defined with respect to the outer multiplicity (OM) space,
 which represents all valid fusion tree configurations.
+
+Also provides thin delegates to yuzuha's recoupling routines: `fs_phase` produces
+the Frobenius-Schur phase, `compute_xsymbol` computes the X-symbol for tensor
+contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
 """
 
 from dataclasses import dataclass
@@ -60,8 +64,8 @@ class Bridge:
         num_components can be any positive integer (typically starts at 1).
         om_dimension is obtained from cgspec.om_dimension().
     
-    Properties
-    ----------
+    device : torch.device
+        Device where the weight matrix is stored.
     om_dimension : int
         Dimension of the outer multiplicity space (number of fusion tree configurations).
     num_components : int
@@ -217,7 +221,7 @@ class Bridge:
         
         Creates a new Bridge instance where all edge directions in the CGSpec are
         flipped (incoming <-> outgoing). The cumulated Frobenius-Schur phase
-        returned by ``yuzuha.compute_conjugate`` is multiplied into the weight
+        returned by `yuzuha.compute_conjugate` is multiplied into the weight
         matrix, so the resulting weights may differ from the original by a
         global factor of ±1.
         
@@ -265,7 +269,7 @@ class Bridge:
         """Return a new Bridge with edge directions inverted at the specified positions.
         
         Rebuilds the CGSpec with the selected edges' directions inverted, keeping
-        the weight matrix unchanged. This is the building block for ``Tensor.invert()``,
+        the weight matrix unchanged. This is the building block for `Tensor.invert()`,
         which must be its own inverse (double application restores the original state).
         
         Parameters
@@ -285,17 +289,17 @@ class Bridge:
     def insert_edge(self, position: int, direction: Direction) -> Bridge:
         """Return a new Bridge with a trivial neutral edge inserted at the given position.
         
-        Inserts a neutral (spin-0) edge into the CGSpec at ``position``. The
+        Inserts a neutral (spin-0) edge into the CGSpec at `position`. The
         insertion is performed in three steps:
 
         1. Insert the new edge at position 0 to obtain a well-defined CGSpec.
         2. Compute the R-symbol for the permutation that moves position 0 to
-           ``position`` while keeping all other edges in their original order.
-        3. Apply ``new_weights = old_weights @ R`` and return the permuted Bridge.
+           `position` while keeping all other edges in their original order.
+        3. Apply `new_weights = old_weights @ R` and return the permuted Bridge.
 
         Because the neutral representation does not participate in coupling,
         the OM dimension is preserved exactly.
-        This is the building block for ``Tensor.insert_index()`` on SU(2) tensors.
+        This is the building block for `Tensor.insert_index()` on SU(2) tensors.
 
         **Developer's note: Why insert at position 0 first, then permute?**
 
@@ -349,6 +353,7 @@ class Bridge:
         perm = list(range(1, position + 1)) + [0] + list(range(position + 1, N))
         r_array, cgspec_final = yuzuha.compute_rsymbol(cgspec_at_0, perm)
         r_symbol = torch.from_numpy(r_array)
+        r_symbol = r_symbol.to(device=self.weights.device, dtype=self.weights.dtype)
 
         # Step 3: apply R-symbol  (weights: num_components × om_dim)
         new_weights = self.weights @ r_symbol
@@ -361,6 +366,7 @@ class Bridge:
         directions: Sequence[Direction],
         weights: Optional[torch.Tensor] = None,
         dtype: torch.dtype = torch.float64,
+        device: Optional[torch.device] = None,
     ) -> Bridge:
         """Construct a Bridge from a BlockKey and corresponding directions.
         
@@ -387,6 +393,9 @@ class Bridge:
         dtype : torch.dtype, optional
             Data type for the weight matrix. Only used if weights is None.
             Defaults to torch.float64.
+        device : torch.device or str, optional
+            Device for the weight matrix. Only used if weights is None.
+            If None, defaults to `torch.get_default_device()`.
         
         Returns
         -------
@@ -464,8 +473,11 @@ class Bridge:
         
         # Initialize weight matrix if not provided
         if weights is None:
+            if device is None:
+                device = torch.get_default_device()
+            device = torch.device(device)
             # Default: 1 component with first element as 1, rest as 0
-            weights = torch.zeros(1, om_dim, dtype=dtype)
+            weights = torch.zeros(1, om_dim, dtype=dtype, device=device)
             weights[0, 0] = 1.0
         
         return Bridge(cgspec, weights)
@@ -565,6 +577,7 @@ def compute_xsymbol(
     x_array, spec_c = yuzuha.compute_xsymbol(bridge_a.cgspec, bridge_b.cgspec, contraction)
     
     x_symbol = torch.from_numpy(x_array)
+    x_symbol = x_symbol.to(device=bridge_a.weights.device, dtype=bridge_a.weights.dtype)
     return x_symbol, spec_c
 
 
@@ -618,4 +631,5 @@ def compute_rsymbol(
     r_array, spec_permuted = yuzuha.compute_rsymbol(bridge.cgspec, list(permutation))
     
     r_symbol = torch.from_numpy(r_array)
+    r_symbol = r_symbol.to(device=bridge.weights.device, dtype=bridge.weights.dtype)
     return r_symbol, spec_permuted

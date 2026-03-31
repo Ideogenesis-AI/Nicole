@@ -42,10 +42,10 @@ print(f"Group name: {group.name}")
 print(f"Neutral element: {group.neutral}\n")
 
 # Fusion (XOR for Z2)
-print(f"0 ⊕ 0 = {group.fuse(0, 0)}")  # 0 (even + even = even)
-print(f"0 ⊕ 1 = {group.fuse(0, 1)}")  # 1 (even + odd = odd)
-print(f"1 ⊕ 0 = {group.fuse(1, 0)}")  # 1 (odd + even = odd)
-print(f"1 ⊕ 1 = {group.fuse(1, 1)}\n")  # 0 (odd + odd = even)
+print(f"0 ⊕ 0 = {group.fuse_unique(0, 0)}")  # 0 (even + even = even)
+print(f"0 ⊕ 1 = {group.fuse_unique(0, 1)}")  # 1 (even + odd = odd)
+print(f"1 ⊕ 0 = {group.fuse_unique(1, 0)}")  # 1 (odd + even = odd)
+print(f"1 ⊕ 1 = {group.fuse_unique(1, 1)}\n")  # 0 (odd + odd = even)
 
 # Self-dual
 print(f"Dual of 0: {group.dual(0)}")  # 0
@@ -72,7 +72,7 @@ F = Tensor.random([idx_fermion, idx_fermion.flip()], itags=["out", "in"], seed=9
 print("Fermion operator blocks (all have even total parity):")
 for key in F.data.keys():
     parity_out, parity_in = key
-    total_parity = group.fuse(parity_out, parity_in)
+    total_parity = group.fuse_unique(parity_out, parity_in)
     print(f"  {key}: {parity_out} ⊕ {parity_in} = {total_parity} (conserved)")
 ```
 
@@ -110,11 +110,11 @@ print(P)
 ```python exec="1" session="z2-examples" result="console" idprefix="" source="material-block"
 # Multiple fusion
 parities = [1, 1, 1]  # Three odd objects
-total_parity = group.fuse(*parities)
+total_parity = group.fuse_unique(*parities)
 print(f"Three odd objects: {parities} → parity {total_parity}\n")
 
 parities2 = [1, 1, 1, 1]  # Four odd objects
-total_parity2 = group.fuse(*parities2)
+total_parity2 = group.fuse_unique(*parities2)
 print(f"Four odd objects: {parities2} → parity {total_parity2}")
 ```
 

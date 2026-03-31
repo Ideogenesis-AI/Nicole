@@ -19,7 +19,7 @@ For charge conservation, the output tensor has transposed index structure (swapp
 from nicole import decomp, diag, inv, contract
 
 # Create diagonal tensor from SVD
-U, S_blocks, Vh = decomp(T, axes=0, mode="UR")
+U, S_blocks, Vh = decomp(T, axes=0, mode="SVD")
 S_diag = diag(S_blocks, U.indices[1])
 
 # Invert the diagonal matrix

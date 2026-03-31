@@ -19,7 +19,7 @@
 """Primary tests for core data structures and tensor construction.
 
 This module contains tests for the fundamental building blocks of Nicole:
-the Index, Space, and Tensor classes, along with their construction methods.
+the Index and Tensor classes, along with their construction methods.
 These are the foundational concepts that all other operations depend on.
 
 Test Modules
@@ -27,45 +27,45 @@ Test Modules
 test_index.py
     Tests for Index class operations:
     - Index creation with sectors and directions
-    - Index fusion and charge conservation
+    - Index fusion, splitting, and union
     - Index validation and error handling
-    - Direction flipping and conjugation
+    - Direction flipping and charge conjugation
 
 test_space.py
-    Tests for Space (physical Hilbert space) operations:
-    - Space creation from sectors
-    - Space tensor product and direct sum
-    - Charge structure validation
-    - Space equality and compatibility checks
+    Tests for physical Hilbert space and operator construction:
+    - Spin systems with U(1) and SU(2) symmetry
+    - Spinless fermion systems with U(1) and Z2 symmetry
+    - Spinful fermion (Band) systems with product symmetries
+    - Correctness of operator matrix elements and charge assignments
 
 test_blocks.py
     Tests for block structure and charge conservation:
     - BlockSchema creation and validation
-    - Charge neutrality enforcement
+    - Charge neutrality enforcement and block shape computation
     - Block indexing and iteration
-    - Allowed block structure based on fusion rules
+    - Intertwiner collinearity and block addition for non-Abelian groups
 
 test_construction.py
     Tests for Tensor construction methods:
-    - zeros(): Creating zero-initialized tensors
-    - random(): Creating random tensors
-    - Tensor initialization from arrays
-    - Block-wise tensor construction
-    - Custom symmetry tensor creation
+    - Creating zero-filled, random, and scalar tensors
+    - In-place random fill and sector normalization
+    - Validation of charge conservation, index compatibility, and group consistency
+    - Sector pruning and ProductGroup integration
 
 test_identity.py
     Tests for identity and isometry tensor construction:
     - identity(): 2nd-order identity tensors
     - isometry(): 2-to-1 fusion isometries
     - isometry_n(): N-to-1 general isometries
-    - Symmetry-preserving properties
-    - Use in index merging operations
+    - Orthonormality, charge neutrality, and norm correctness
+    - Abelian and non-Abelian (SU2, ProductGroup) variants
 
 Key Concepts Tested
 -------------------
 - Charge conservation and fusion rules
-- Abelian symmetry implementation (U1, Z2, ProductGroup)
-- Block-sparse tensor structure
-- Index orientation (IN/OUT directions)
+- Abelian (U1, Z2) and non-Abelian (SU2) symmetry implementations
+- ProductGroup combining Abelian and non-Abelian components
+- Block-sparse tensor structure and intertwiner objects
+- Index orientation (IN/OUT directions) and duality
 - Tensor construction and initialization
 """

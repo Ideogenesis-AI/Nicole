@@ -9,6 +9,7 @@ Symmetry-aware tensor index defining direction, group, and charge sectors.
       members:
         - __init__
         - dim
+        - num_states
         - flip
         - dual
         - charges
@@ -16,7 +17,7 @@ Symmetry-aware tensor index defining direction, group, and charge sectors.
 
 ## Description
 
-An `Index` represents a single leg of a tensor, specifying:
+An `Index` represents a single index of a tensor, specifying:
 
 - **Direction**: `Direction.OUT` or `Direction.IN`
 - **Symmetry Group**: The group governing charge conservation

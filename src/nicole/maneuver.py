@@ -32,7 +32,7 @@ permute(tensor, order)
     Return a new tensor with permuted axes according to the provided order.
 transpose(tensor, *order)
     Return a new tensor with transposed axes; defaults to reversing axis order.
-subsector(tensor, block_indices)
+filter_blocks(tensor, block_indices)
     Return a new tensor containing only the specified blocks with pruned sectors.
 oplus(A, B, axes=None)
     Direct sum of two tensors with selective axis merging.
@@ -74,7 +74,8 @@ def conj(tensor: Tensor) -> Tensor:
         A new tensor instance with:
         - Conjugated dense blocks (if dtype is complex)
         - All index directions flipped
-        - Intertwiners (if present) updated with flipped directions
+        - Intertwiners (if present) updated with flipped edge directions and
+          FS phase absorbed into weights (±1, SU(2) only)
         - All other attributes preserved
     
     Notes
@@ -134,7 +135,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     -----
     For non-Abelian (SU2) tensors, permutation involves R-symbols that transform
     the outer multiplicity (OM) indices. The weights are updated by matrix
-    multiplication with the R-symbol: new_weights = R @ old_weights.
+    multiplication with the R-symbol: new_weights = old_weights @ R.
     
     Examples
     --------
@@ -170,7 +171,7 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
             # Compute R-symbol for this permutation
             r_symbol, spec_permuted = dg.compute_rsymbol(bridge, order)
             
-            # Update weights: new_weights = R @ old_weights
+            # Update weights: new_weights = old_weights @ R
             # R has shape (om_original, om_permuted)
             # weights has shape (num_components, om_original)
             # Result: (num_components, om_permuted)
@@ -214,7 +215,7 @@ def transpose(tensor: Tensor, *order: int) -> Tensor:
     return permute(tensor, order)
 
 
-def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tensor:
+def filter_blocks(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tensor:
     """Return a new tensor containing only the specified blocks with pruned sectors.
     
     Parameters
@@ -240,10 +241,10 @@ def subsector(tensor: Tensor, block_indices: Union[int, Sequence[int]]) -> Tenso
     
     Examples
     --------
-    >>> from nicole import subsector, Tensor
+    >>> from nicole import filter_blocks, Tensor
     >>> # Assuming t has 5 blocks numbered 1-5 in display
-    >>> t_sub = subsector(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
-    >>> t_single = subsector(t, 2)  # Extract just block 2
+    >>> t_sub = filter_blocks(t, [1, 3, 5])  # Extract blocks 1, 3, and 5
+    >>> t_single = filter_blocks(t, 2)  # Extract just block 2
     """
     # Convert single integer to sequence
     if isinstance(block_indices, int):
@@ -501,7 +502,7 @@ def oplus(
                     out_shape.append(dim_map_A[charge])
             
             # Initialize output block with zeros
-            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype))
+            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype), device=A.device)
             
             # Place block from A if it exists
             if charge_key in A.data:
@@ -563,7 +564,7 @@ def oplus(
                 om_A = block_A.shape[-1]
                 # Create padded block with OM dimension from A
                 padded_shape = out_shape + [om_A]
-                padded_A = torch.zeros(padded_shape, dtype=A.dtype)
+                padded_A = torch.zeros(padded_shape, dtype=A.dtype, device=A.device)
                 
                 # Build slices for placing block_A
                 slices_A = []
@@ -588,7 +589,7 @@ def oplus(
                 om_B = block_B.shape[-1]
                 # Create padded block with OM dimension from B
                 padded_shape = out_shape + [om_B]
-                padded_B = torch.zeros(padded_shape, dtype=B.dtype)
+                padded_B = torch.zeros(padded_shape, dtype=B.dtype, device=B.device)
                 
                 # Build slices for placing block_B
                 slices_B = []
@@ -621,7 +622,8 @@ def diag(
     S_blocks: Dict[BlockKey, torch.Tensor],
     bond_index: Index,
     itags: Optional[Tuple[str, str]] = None,
-    dtype: Optional[torch.dtype] = None
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
 ) -> Tensor:
     """Convert diagonal blocks (from SVD or eig) into a diagonal matrix tensor.
     
@@ -666,7 +668,7 @@ def diag(
     >>> import torch
     >>> # Perform SVD
     >>> T = Tensor.random([idx_i, idx_j], itags=["i", "j"])
-    >>> U, S_blocks, Vh = decomp(T, axes=0, mode="UR")  # Get S as dict
+    >>> U, S_blocks, Vh = svd(T, axis=0)  # Get S as dict
     >>> 
     >>> # Convert S_blocks to diagonal matrix
     >>> from nicole import diag
@@ -728,6 +730,11 @@ def diag(
             dtype = sample_arr.dtype
         else:
             dtype = torch.float64
+
+    # Determine device
+    if device is None:
+        device = torch.get_default_device()
+    device = torch.device(device)
     
     # Check if group is Abelian or generic (non-Abelian)
     group = bond_index.group
@@ -760,7 +767,7 @@ def diag(
             
             # Create Bridge with actual index directions
             intw[key] = dg.Bridge.from_block(
-                group, key, [left.direction, right.direction], dtype=dtype
+                group, key, [left.direction, right.direction], dtype=dtype, device=device
             )
             
             # Apply normalization: weights = √(irrep_dim)
@@ -1044,6 +1051,7 @@ def merge_axes(
         itags=tuple(tags_to_merge) + (merged_tag,),
         direction=direction,
         dtype=tensor.dtype,
+        device=tensor.device,
     )
 
     # Contract isometry with tensor to merge axes
@@ -1064,10 +1072,10 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     """Invert both directions of a contraction pair (bond) between two tensors.
 
     A contraction pair is a bond where one tensor has an outgoing index and the
-    other has an incoming index carrying the same itag. ``capcup`` inverts both
+    other has an incoming index carrying the same itag. `capcup` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
-    ``(-1)^{2j}`` determined by the spin at that block's bond position.  After
+    (-1)^{2j} determined by the spin at that block's bond position.  After
     this operation the bond direction is reversed but all tensor contractions
     that involve this bond yield the same numerical result.
 
@@ -1091,13 +1099,13 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     Notes
     -----
     The FS phase is absorbed into B's intertwiner weights, which are much
-    smaller than the data blocks (shape ``(num_components, om_dimension)``
-    vs. ``(d1, ..., dn, num_components)``). For Abelian groups no phase
+    smaller than the data blocks (shape `(num_components, om_dimension)`
+    vs. `(d1, ..., dn, num_components)`). For Abelian groups no phase
     is applied.
 
     In yuzuha's left-associative CG fusion tree the first (n−1) axes are
     *leading* axes and the last axis is the *terminal* axis (the total coupled
-    representation). The FS phase ``(-1)^{2j}`` is applied if and only if
+    representation). The FS phase (-1)^{2j} is applied if and only if
     both bonds are at the same axis type — both leading or both terminal —
     because only then does the combined X-symbol transformation require a
     non-trivial correction.

@@ -10,7 +10,7 @@ U(1) symmetry group with integer charges.
         - name
         - neutral
         - dual
-        - fuse
+        - fuse_unique
         - equal
         - validate_charge
 

@@ -27,8 +27,7 @@ from nicole.display import (
     _format_bytes,
     _format_count_list,
     _format_single_value,
-    _group_signature,
-    tensor_summary,
+    _group_signature
 )
 
 
@@ -101,7 +100,7 @@ def test_format_count_list_multiple():
 def test_format_count_list_padding():
     """Test _format_count_list with different widths."""
     result = _format_count_list([1, 10, 100])
-    # Should have right-aligned padding
+    # Three elements should be joined by two "x" separators
     assert result.count("x") == 2
 
 
@@ -452,4 +451,65 @@ def test_tensor_summary_su2_trims_reduced_multiplicity():
             import re
             # Look for pattern like "2x2xNxM" which would indicate 4 dimensions
             assert not re.search(r'2x2x\d+x\d+', line), f"Found 4-D shape in: {line}"
+
+
+# Sign suffix tests
+
+def test_tensor_summary_su2_sign_suffix_positive_scalar_block():
+    """Test that {+} is appended for a scalar SU(2) block with positive single weight.
+    
+    Sector(0, 1) gives a 1x1 state block so the value_repr path is exercised.
+    The default weight initialised by Bridge.from_block is [[1.0]], numel == 1.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+    summary = str(tensor)
+    
+    assert "{+}" in summary
+
+
+def test_tensor_summary_su2_sign_suffix_negative_scalar_block():
+    """Test that {-} is appended for a scalar SU(2) block with negative single weight.
+    
+    The weight tensor is mutated in-place to -1.0 (frozen dataclass allows
+    in-place tensor operations).
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+    # Flip the sign in-place; frozen dataclass allows tensor mutation
+    tensor.intw[(0, 0)].weights.fill_(-1.0)
+    summary = str(tensor)
+    
+    assert "{-}" in summary
+
+
+def test_tensor_summary_su2_sign_suffix_positive_large_block():
+    """Test that {+} is appended on the byte_repr path for a non-scalar block.
+    
+    Sector(2, 2) (spin-1, 2 multiplets) yields a 2x2 state block so the
+    byte_repr branch is taken rather than the value_repr branch.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(2, 2),))
+    
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+    summary = str(tensor)
+    
+    assert "{+}" in summary
+
+
+def test_tensor_summary_su2_sign_suffix_absent_for_abelian():
+    """Test that no sign suffix appears for Abelian (U1) tensors."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+    summary = str(tensor)
+    
+    assert "{+}" not in summary
+    assert "{-}" not in summary
 

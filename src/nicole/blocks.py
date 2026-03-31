@@ -170,7 +170,7 @@ class BlockSchema:
 
     @staticmethod
     def charge_totals(indices: Sequence[Index], key: BlockKey) -> Charge:
-        """Compute net charge for a given block key.
+        """Compute net charge for a given block key (Abelian groups only).
         
         All indices must share the same symmetry group. Returns the fused
         total charge with direction-aware contributions (OUT charges contribute
@@ -298,7 +298,8 @@ class BlockSchema:
             cos_theta_sq = (dot / (norm_a * norm_b)) ** 2
             
             # Check if parallel (|cos(θ)| ≈ 1)
-            if torch.allclose(cos_theta_sq, torch.tensor(1.0, dtype=cos_theta_sq.dtype), rtol=rtol, atol=atol):
+            one = torch.tensor(1.0, dtype=cos_theta_sq.dtype, device=cos_theta_sq.device)
+            if torch.allclose(cos_theta_sq, one, rtol=rtol, atol=atol):
                 scale = (dot / torch.dot(wa_flat, wa_flat)).item()
                 return (True, scale)
         
@@ -322,7 +323,7 @@ class BlockSchema:
         Parameters
         ----------
         data_a : torch.Tensor or None
-            First reduced block with shape (...sectors..., om_dim). None if absent.
+            First reduced block with shape (...sectors..., n_comp_a). None if absent.
         bridge_a : Bridge or None
             First Bridge with weights shape (n_comp_a, om_dim). None if absent.
         data_b : torch.Tensor or None
@@ -354,8 +355,8 @@ class BlockSchema:
             - Combined data: data_a + scale * data_b
             - Combined Bridge: clone of bridge_a
         - If both blocks are present and weights are incompatible:
-            - Combined data: concatenated [data_a, data_b] along OM axis (last dimension)
-            - Combined Bridge: concatenated weights along reduced multiplicity dimension
+            - Combined data: concatenated [data_a, data_b] along the n_comp axis
+            - Combined Bridge: concatenated weights along the n_comp axis
         
         Examples
         --------

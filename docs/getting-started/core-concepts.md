@@ -4,7 +4,7 @@ Before diving into code, let's understand the key concepts in Nicole and the fun
 
 ## What are Symmetry-Aware Tensors?
 
-In quantum many-body physics, many systems exhibit symmetries—conserved quantum numbers like particle number, spin, or parity. Traditional dense tensors store all possible matrix elements, including many zeros mandated by symmetry. **Symmetry-aware tensors** exploit these conservation laws to:
+In quantum many-body physics, many systems exhibit symmetries—conserved quantum numbers like particle number, spin, or parity. Traditional dense tensors store all possible tensor elements, including many zeros mandated by symmetry. **Symmetry-aware tensors** exploit these conservation laws to:
 
 - **Save memory**: Only store non-zero blocks that respect symmetry
 - **Accelerate computations**: Skip operations on zeros
@@ -14,32 +14,58 @@ Nicole implements this through a **block-sparse** representation where each bloc
 
 ## Symmetry Groups
 
-Nicole supports Abelian symmetry groups that represent conserved quantum numbers:
+Nicole supports both Abelian (U(1) or Z(2)) and non-Abelian (SU(2)) symmetry groups:
 
 - **U(1)**: Continuous symmetry with integer charges (e.g., particle number, magnetization)
 - **Z(2)**: Binary symmetry with charges 0 or 1 (e.g., parity, Z₂ topological order)
-- **ProductGroup**: Combines multiple symmetries (e.g., U(1) × Z(2) for particle number and parity)
+- **SU(2)**: Non-Abelian rotational symmetry with spin-based charges (e.g., total angular momentum)
+- **ProductGroup**: Combines multiple symmetries (e.g., U(1) × SU(2) for particle number and spin)
 
 ### Group Operations
 
 Each symmetry group defines:
-- **Fusion**: How charges combine (addition for U(1), XOR for Z(2))
-- **Inverse**: The opposite charge (negation for U(1), identity for Z(2))
-- **Neutral element**: The identity charge (0 for both)
+- **Fusion**: How charges combine (addition for U(1), XOR for Z(2), triangular constraint for SU(2))
+- **Dual**: The conjugate representation (negation for U(1), self for Z(2) and SU(2))
+- **Neutral element**: The identity charge (0 for all groups)
+- **`is_abelian`**: Whether the group is Abelian (`False` for SU(2))
+- **`irrep_dim`**: Dimension of the irreducible representation for a charge (always 1 for Abelian groups; `2j+1` for SU(2))
 
 ```python
-from nicole import U1Group, Z2Group
+from nicole import U1Group, Z2Group, SU2Group
 
 # U(1) example
 u1 = U1Group()
-print(u1.fuse(2, 3))      # 5 (addition)
-print(u1.dual(5))         # -5 (dual representation)
+print(u1.fuse_unique(2, 3))       # 5 (addition)
+print(u1.dual(5))          # -5 (dual representation)
+print(u1.irrep_dim(5))     # 1 (Abelian: always 1)
 
 # Z(2) example
 z2 = Z2Group()
-print(z2.fuse(1, 1))      # 0 (XOR: 1⊕1=0)
-print(z2.dual(1))         # 1 (self-dual)
+print(z2.fuse_unique(1, 1))       # 0 (XOR: 1⊕1=0)
+print(z2.dual(1))          # 1 (self-dual)
+
+# SU(2) example
+su2 = SU2Group()
+print(su2.fuse_channels(1, 1))  # (0, 2) — spin-1/2 ⊗ spin-1/2 → singlet or triplet
+print(su2.dual(2))              # 2 (self-dual)
+print(su2.irrep_dim(2))         # 3 (spin-1 triplet: 2j+1 = 3)
 ```
+
+### Non-Abelian Groups and Irrep Dimension
+
+For Abelian groups, each charge labels a one-dimensional sector. For non-Abelian groups like SU(2), each charge `2j` labels an entire **multiplet** of `2j+1` magnetic substates (irreducible representation). This is captured by `irrep_dim`:
+
+| Group  | `irrep_dim(q)` | Example             |
+|--------|----------------|---------------------|
+| U(1)   | 1              | Any charge          |
+| Z(2)   | 1              | 0 or 1              |
+| SU(2)  | 2j + 1         | spin-1: `irrep_dim(2)` = 3 |
+
+Nicole works with **reduced tensor elements** for SU(2): each data block stores reduced elements per multiplet combination (not `2j+1` entries per index), and full elements are reconstructed via Clebsch–Gordan coefficients stored in the tensor's intertwiners. This is the key source of exponential compression in SU(2) tensor networks.
+
+SU(2) also differs in fusion: two charges can fuse into **multiple** channels (all spins from `|j1−j2|` to `j1+j2`), whereas Abelian fusion always gives a unique result.
+
+For the full mathematical structure of how Nicole stores SU(2) tensors internally — including the Wigner–Eckart decomposition and the R-W-C representation — see the [Yuzuha Protocol](yuzuha-protocol.md) page.
 
 ## Charges
 
@@ -59,15 +85,17 @@ A **Sector** pairs a charge with a dimension, representing a subspace of the ten
 from nicole import Sector
 
 # A sector with charge 1 and dimension 3
-# Means: 3 orthogonal states all having charge +1
+# For U(1): 3 orthogonal states all having charge +1
 sector = Sector(charge=1, dim=3)
 ```
 
 Multiple sectors with different charges combine to form the full structure of an index.
 
+For **SU(2)**, `dim` counts the number of independent **multiplets** (not individual states). A sector `Sector(charge=2j, dim=n)` represents `n` independent spin-j multiplets, each containing `2j+1` physical states. The total number of physical states in that sector is `n × (2j+1)`.
+
 ## Indices
 
-An **Index** defines a tensor leg (axis) with:
+An **Index** defines a tensor index with:
 
 - **Direction**: `Direction.OUT` or `Direction.IN`
 - **Symmetry Group**: The group governing the charge structure
@@ -87,6 +115,8 @@ index = Index(
     )
 )
 ```
+
+For SU(2) indices, `index.dim` counts the total number of multiplets across all sectors, while `index.num_states` counts the total physical states (summing `irrep_dim × dim` per sector). For Abelian groups, `dim` and `num_states` are always equal since `irrep_dim = 1`.
 
 ### Index Direction
 

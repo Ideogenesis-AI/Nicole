@@ -19,67 +19,50 @@
 """Tests for utilities and secondary features.
 
 This module contains tests for supporting functionality that enhances
-usability and developer experience, including cloning behavior, display
-formatting, and type definitions. While not central to tensor algebra,
-these features are important for practical use of the library.
+usability and developer experience, including autograd control, cloning
+behavior, device management, display formatting, and type definitions.
 
 Test Modules
 ------------
 test_autograd.py
-    Tests for automatic differentiation:
-    - Gradient computation through tensor operations
-    - Backpropagation compatibility
-    - Integration with PyTorch autograd
-    - Gradient flow through contractions
-    - Differentiable decompositions
-    - Gradient checking and validation
+    Tests for autograd control and gradient computation:
+    - Autograd disabled globally by default
+    - torch.enable_grad() context manager integration
+    - requires_grad property getter and setter
+    - Gradient computation and backward() through scalar operations
+    - Autograd interaction with device management
 
 test_helpers.py
-    Tests for tensor cloning and element access:
-    - Deep clone vs. shallow copy behavior
-    - Clone semantics for tensors and indices
-    - Element-wise access to tensor blocks
-    - Data sharing and mutation safety
-    - Memory management and ownership
-    - Indexing into block structure
+    Tests for tensor helper operations:
+    - clone(): deep copy semantics, data independence, intw cloning
+    - sorted_keys, key(i), block(i): deterministic block access
+    - filter_blocks(): block subsetting, metadata and intw preservation
+    - regularize(): Bridge weight normalization for SU(2) tensors
 
 test_device.py
     Tests for device management:
-    - CPU and GPU device placement
-    - Device transfer operations
-    - Mixed device computations
-    - CUDA availability and compatibility
-    - Memory management across devices
-    - Device-specific optimizations
+    - Default device placement and override
+    - Device transfer (cpu(), cuda(), to())
+    - CUDA availability checks and cross-device behavior
 
 test_display.py
     Tests for tensor display and formatting:
-    - Pretty-printing tensor information
-    - Displaying index structure and charges
-    - Block structure visualization
-    - Summary statistics (shape, charge, blocks)
-    - Formatting for different output contexts
-    - Readable representation of symmetry info
-    - Debug output and diagnostics
+    - Internal helper functions (_format_bytes, _format_count_list,
+      _charge_components, _group_signature, _format_single_value)
+    - tensor_summary output: norm, dtype, block structure, label
 
 test_types.py
-    Tests for type definitions and enumerations:
-    - Direction enum (IN, OUT)
-    - Type annotations and validation
-    - Custom type definitions
-    - Type checking and inference
-    - Compatibility with type checkers
-    - Runtime type validation
+    Tests for core type definitions:
+    - Direction enum (IN/OUT values and reverse())
+    - Sector construction, immutability, equality, and hashability
 
 Key Features Tested
 -------------------
-- Automatic differentiation and gradient flow
-- Clone semantics and data safety
-- Device management and GPU acceleration
-- User-friendly tensor inspection
-- Clear error messages and diagnostics
-- Type safety and validation
-- API consistency and ergonomics
+- Autograd control and gradient flow through tensor operations
+- Clone semantics and data independence
+- Device management and CPU/GPU compatibility
+- Tensor display and human-readable formatting
+- Core type correctness (Direction, Sector)
 
 Developer Experience
 --------------------

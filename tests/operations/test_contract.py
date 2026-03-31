@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor contraction operations: contract, trace, partial_trace."""
+"""Tests for tensor contraction operations: contract and trace."""
 
 import math
 import torch
