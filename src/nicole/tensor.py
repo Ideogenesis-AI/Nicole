@@ -1375,7 +1375,7 @@ class Tensor:
                 dtype=self.dtype, label=self.label
             )
 
-    def transpose(self, *, in_place: bool = False) -> Tensor:
+    def transpose(self, in_place: bool = False) -> Tensor:
         """Transpose tensor axes by reversing the index order.
         
         Parameters
