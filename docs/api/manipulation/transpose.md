@@ -9,16 +9,16 @@ Return tensor with transposed axes.
 
 ## Description
 
-Returns a fully independent tensor with axes transposed. By default, reverses all axes. Optionally specify a custom permutation order. All data blocks are deep-copied, so the result is completely isolated from the original.
+Returns a fully independent tensor with all axes reversed. All data blocks are deep-copied, so the result is completely isolated from the original.
 
-Note: `Tensor.transpose()` defaults to `in_place=True` (it modifies the tensor in place and returns `self`). To obtain a new tensor without modifying the original, call `Tensor.transpose(in_place=False)` or use this standalone function.
+Note: `Tensor.transpose()` defaults to `in_place=False` — it returns a new tensor and leaves the original unchanged. To modify the tensor in place instead, call `Tensor.transpose(in_place=True)`. For arbitrary axis reordering, use [`permute`](permute.md).
 
 ## See Also
 
-- [Tensor.transpose](../core/tensor.md): Method form (in-place by default)
+- [Tensor.transpose](../core/tensor.md): Method form (out-of-place by default)
 - [permute](permute.md): General axis permutation
 - [Examples: Manipulation](../../examples/operations/manipulation-examples.md)
 
 ## Notes
 
-Without arguments, reverses axis order. With arguments, equivalent to `permute()` with specified order.
+Always reverses axis order. For arbitrary reordering, use [`permute`](permute.md).
