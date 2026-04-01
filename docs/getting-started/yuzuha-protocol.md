@@ -195,3 +195,13 @@ The compression gain of SU(2)-symmetric tensors over explicit Abelian (U(1)-reso
 - [Core Concepts](core-concepts.md) — symmetry groups, sectors, and irrep dimension
 - [SU2Group API](../api/symmetry/su2-group.md) — charge conventions and fusion rules
 - [SU(2) Examples](../examples/symmetries/su2-examples.md) — working with SU(2) tensors in practice
+
+## References
+
+[1] A. Weichselbaum, Non-abelian symmetries in tensor networks: A quantum symmetry space approach, [Ann. Phys.](https://doi.org/10.1016/j.aop.2012.07.009) **327**, 2972 (2012).
+
+[2] A. Weichselbaum, X-symbols for non-Abelian symmetries in tensor networks, [Phys. Rev. Res.](https://doi.org/10.1103/PhysRevResearch.2.023385) **2**, 023385 (2020).
+
+[3] S. Singh and G. Vidal, Tensor network states and algorithms in the presence of a global SU(2) symmetry, [Phys. Rev. B](https://doi.org/10.1103/PhysRevB.86.195114) **86**, 195114 (2012).
+
+[4] P. Schmoll, S. Singh, M. Rizzi, and R. Orús, A programming guide for tensor networks with global SU(2) symmetry, [Annals of Physics](https://doi.org/10.1016/j.aop.2020.168232) **419**, 168232 (2020).
