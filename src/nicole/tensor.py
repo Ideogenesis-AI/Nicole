@@ -126,7 +126,7 @@ class Tensor:
     permute()
         Permute tensor axes according to the provided reordering.
     transpose()
-        In-place: Transpose tensor axes; defaults to reversing the index order.
+        Transpose by reversing all tensor axes.
     invert()
         In-place: Invert the direction of specified index/indices.
     retag()
@@ -134,8 +134,8 @@ class Tensor:
     
     Notes
     -----
-    For functional (non-mutating) versions of conj, permute, and transpose that return
-    new tensor instances, use the standalone functions from `nicole.maneuver`.
+    Standalone functions in `nicole.maneuver` deep-clone all data blocks for full
+    isolation. Method forms default to `in_place=False` and share storage (torch views).
     """
 
     indices: Tuple[Index, ...]
@@ -1375,26 +1375,21 @@ class Tensor:
                 dtype=self.dtype, label=self.label
             )
 
-    def transpose(self, *order: int, in_place: bool = True) -> Tensor:
-        """Transpose tensor axes; defaults to reversing the index order.
+    def transpose(self, *, in_place: bool = False) -> Tensor:
+        """Transpose tensor axes by reversing the index order.
         
         Parameters
         ----------
-        *order : int
-            Optional integer axes specifying the new ordering. If not provided,
-            reverses the index order.
         in_place : bool, optional
-            If True (default), modifies this tensor in-place and returns self.
-            If False, returns a new Tensor instance with transposed axes.
+            If False (default), returns a new Tensor instance with reversed axes.
+            If True, modifies this tensor in-place and returns self.
         
         Returns
         -------
         Tensor
-            Self if in_place=True, new Tensor instance if in_place=False.
+            New Tensor instance if in_place=False, self if in_place=True.
         """
-        if not order:
-            order = tuple(reversed(range(len(self.indices))))
-        return self.permute(order, in_place=in_place)
+        return self.permute(tuple(reversed(range(len(self.indices)))), in_place=in_place)
 
     def invert(self, positions: Union[int, Sequence[int]]) -> None:
         """Invert the direction of specified index/indices while maintaining charge conservation.
