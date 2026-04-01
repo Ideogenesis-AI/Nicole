@@ -187,31 +187,26 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     )
 
 
-def transpose(tensor: Tensor, *order: int) -> Tensor:
-    """Return a new tensor with transposed axes; defaults to reversing axis order.
+def transpose(tensor: Tensor) -> Tensor:
+    """Return a new tensor with all axes reversed.
     
     Parameters
     ----------
     tensor:
         The input tensor to transpose.
-    *order:
-        Optional integer axes specifying the new ordering. If not provided,
-        defaults to reversing the axis order.
     
     Returns
     -------
     Tensor
-        A new tensor instance with transposed axes.
+        A new tensor instance with reversed axis order.
     
     Examples
     --------
     >>> from nicole import transpose, Tensor
     >>> # Assuming t is a 3-index tensor with itags [a, b, c]
     >>> t_T = transpose(t)  # Reverse order to [c, b, a]
-    >>> t_T2 = transpose(t, 1, 0, 2)  # Swap first two to [b, a, c]
     """
-    if not order:
-        order = tuple(reversed(range(len(tensor.indices))))
+    order = tuple(reversed(range(len(tensor.indices))))
     return permute(tensor, order)
 
 
