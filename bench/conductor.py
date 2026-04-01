@@ -99,7 +99,7 @@ def exact_halffilling_energy_band(N: int, t: float = 1.0) -> float:
 def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
     """Compute the one-body hopping contribution for a single fermionic species.
 
-    ``ZFprev`` must be the accumulated (Z × F) operator on the left-block edge,
+    `ZFprev` must be the accumulated (Z × F) operator on the left-block edge,
     NOT the bare F operator. This encodes the Jordan-Wigner string
 
         c†_{σ,i} c_{σ,i+1}  =  F†_{σ,i}  Z_{total,i}  F_{σ,i+1}
