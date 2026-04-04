@@ -44,6 +44,8 @@ For experienced users:
 - **[Build Operators](advanced/build-operators.md)**: Build physical operators with symmetries
 - **[Load Space](advanced/load-space-examples.md)**: Use `load_space` for quantum systems
 - **[Performance Tips](advanced/performance.md)**: Optimize your code
+- **[Autograd](advanced/autograd.md)**: Gradient tracking with symmetry-aware tensors
+- **[GPU Acceleration](advanced/gpu-acceleration.md)**: Run computations on GPU
 
 ## Example Format
 
