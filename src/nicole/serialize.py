@@ -68,10 +68,10 @@ from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Direction, Sector
-from .symmetry.base import SymmetryGroup
-from .symmetry.abelian import U1Group, Z2Group
-from .symmetry.unitary import SU2Group
-from .symmetry.product import ProductGroup
+from .symmetry import SymmetryGroup
+from .symmetry import U1Group, Z2Group
+from .symmetry import SU2Group
+from .symmetry import ProductGroup
 
 
 # --- Group helpers ---
@@ -126,36 +126,6 @@ def _deserialize_index(d: dict) -> Index:
     return Index(direction=direction, group=group, sectors=sectors)
 
 
-# --- Bridge helpers (yuzuha imported lazily to keep Abelian usage dependency-free) ---
-
-def _serialize_bridge(bridge) -> dict:
-    """Serialize a Bridge to `{"edges": tuple of (2j, dir), "weights": Tensor}`."""
-    spins = bridge.cgspec.get_spins()       # list[int] of 2j per edge
-    dirs = bridge.cgspec.get_directions()   # list[int] of ±1 per edge
-    return {
-        "edges": tuple((int(s), int(d)) for s, d in zip(spins, dirs)),
-        "weights": bridge.weights,
-    }
-
-
-def _deserialize_bridge(d: dict, device: torch.device, dtype: torch.dtype):
-    """Reconstruct a Bridge from a serialized dict entry."""
-    import yuzuha
-    from .symmetry.delegate import Bridge
-
-    yuzuha_edges = []
-    for two_j, dir_sign in d["edges"]:
-        spin = yuzuha.Spin(two_j)
-        if dir_sign == 1:
-            yuzuha_edges.append(yuzuha.Edge.incoming(spin))
-        else:
-            yuzuha_edges.append(yuzuha.Edge.outgoing(spin))
-
-    cgspec = yuzuha.CGSpec.from_edges(yuzuha_edges)
-    weights = d["weights"].to(device=device, dtype=dtype)
-    return Bridge(cgspec=cgspec, weights=weights)
-
-
 # --- serialize / deserialize ---
 
 def serialize(tensor: Tensor) -> dict:
@@ -184,9 +154,10 @@ def serialize(tensor: Tensor) -> dict:
 
     intw_list: Optional[list] = None
     if tensor.intw is not None:
+        from .symmetry import delegate as dg
         intw_list = []
         for k, bridge in tensor.intw.items():
-            entry = _serialize_bridge(bridge)
+            entry = dg.serialize(bridge)
             entry["key"] = k
             intw_list.append(entry)
 
@@ -240,8 +211,9 @@ def deserialize(data: dict, device: Union[str, torch.device] = "cpu") -> Tensor:
 
     intw = None
     if data["intw"] is not None:
+        from .symmetry import delegate as dg
         intw = {
-            entry["key"]: _deserialize_bridge(entry, device, dtype)
+            entry["key"]: dg.deserialize(entry, device=device, dtype=dtype)
             for entry in data["intw"]
         }
 
