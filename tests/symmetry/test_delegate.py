@@ -24,6 +24,7 @@ import yuzuha
 
 from nicole import Direction, ProductGroup, SU2Group, U1Group, Z2Group
 from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol, fs_phase
+from nicole.symmetry import delegate as dg
 
 
 def test_bridge_basic_instantiation():
@@ -908,3 +909,75 @@ def test_fs_phase_u1_su2_product():
         assert fs_phase(group, (u1, 1)) == -1.0
         assert fs_phase(group, (u1, 2)) == +1.0
         assert fs_phase(group, (u1, 3)) == -1.0
+
+
+# ── serialize / deserialize tests ───────────────────────────────────────────────
+
+def _make_bridge(two_js, dir_signs, num_components=1):
+    """Helper: build a Bridge from raw spin and direction lists."""
+    edges = []
+    for two_j, sign in zip(two_js, dir_signs):
+        spin = yuzuha.Spin(two_j)
+        edges.append(yuzuha.Edge.incoming(spin) if sign == 1 else yuzuha.Edge.outgoing(spin))
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    weights = torch.randn(num_components, cgspec.om_dimension(), dtype=torch.float64)
+    return Bridge(cgspec=cgspec, weights=weights)
+
+
+def test_delegate_serialize_keys():
+    """serialize returns a dict with exactly 'edges' and 'weights'."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1])
+    d = dg.serialize(bridge)
+    assert set(d.keys()) == {"edges", "weights"}
+
+
+def test_delegate_serialize_edges_format():
+    """serialize encodes edges as a tuple of (two_j, dir_sign) integer pairs."""
+    bridge = _make_bridge([1, 2, 3], [1, -1, 1])
+    d = dg.serialize(bridge)
+    assert isinstance(d["edges"], tuple)
+    assert d["edges"] == ((1, 1), (2, -1), (3, 1))
+
+
+def test_delegate_serialize_weights_tensor():
+    """serialize stores weights as the original torch.Tensor."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1])
+    d = dg.serialize(bridge)
+    assert isinstance(d["weights"], torch.Tensor)
+    assert torch.equal(d["weights"], bridge.weights)
+
+
+def test_delegate_deserialize_roundtrip():
+    """deserialize reconstructs an identical Bridge from a serialized dict."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1], num_components=3)
+    d = dg.serialize(bridge)
+    rt = dg.deserialize(d)
+
+    assert torch.allclose(rt.weights, bridge.weights)
+    assert rt.cgspec.get_spins() == bridge.cgspec.get_spins()
+    assert rt.cgspec.get_directions() == bridge.cgspec.get_directions()
+
+
+def test_delegate_deserialize_extra_keys_ignored():
+    """deserialize ignores extra keys in the input dict (e.g. 'key' added by Tensor serialization)."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1])
+    d = dg.serialize(bridge)
+    d["key"] = (1, 1, 2)   # extra field added by nicole.serialize
+    rt = dg.deserialize(d)  # must not raise
+    assert torch.allclose(rt.weights, bridge.weights)
+
+
+def test_delegate_deserialize_device():
+    """deserialize places weights on the requested device."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1])
+    d = dg.serialize(bridge)
+    rt = dg.deserialize(d, device="cpu")
+    assert rt.weights.device.type == "cpu"
+
+
+def test_delegate_deserialize_dtype():
+    """deserialize casts weights to the requested dtype."""
+    bridge = _make_bridge([1, 1, 2], [1, 1, -1])
+    d = dg.serialize(bridge)
+    rt = dg.deserialize(d, dtype=torch.float32)
+    assert rt.weights.dtype == torch.float32
