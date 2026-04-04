@@ -16,12 +16,15 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor helper operations: clone, sorted_keys, blocks, filter_blocks, regularize."""
+"""Tests for tensor helper operations: clone, keys & blocks, regularize, serialize."""
 
 import torch
 import pytest
 
-from nicole import Direction, Tensor, U1Group, SU2Group, filter_blocks, Index, Sector
+from nicole import Tensor, U1Group, Z2Group, SU2Group, ProductGroup
+from nicole import Direction, Index, Sector
+from nicole import filter_blocks
+from nicole.serialize import serialize, deserialize
 
 
 # Clone tests
@@ -740,4 +743,167 @@ def test_regularize_higher_order_small_weight_normalised():
     )
     # R must carry the absorbed factor
     assert torch.allclose(tensor.data[target_key], r_before * small_w)
+
+
+# Serialize / deserialize tests
+
+def _assert_tensors_equal(a: Tensor, b: Tensor) -> None:
+    """Assert that two tensors have identical metadata, block data, and intertwiners."""
+    assert a.label == b.label
+    assert a.dtype == b.dtype
+    assert a.itags == b.itags
+    assert len(a.indices) == len(b.indices)
+    for ia, ib in zip(a.indices, b.indices):
+        assert ia.direction == ib.direction
+        assert ia.group == ib.group
+        assert ia.sectors == ib.sectors
+    assert set(a.data.keys()) == set(b.data.keys())
+    for key in a.data:
+        assert torch.equal(a.data[key], b.data[key])
+    assert (a.intw is None) == (b.intw is None)
+    if a.intw is not None:
+        assert set(a.intw.keys()) == set(b.intw.keys())
+        for key in a.intw:
+            assert torch.allclose(a.intw[key].weights, b.intw[key].weights)
+            assert a.intw[key].cgspec.get_spins() == b.intw[key].cgspec.get_spins()
+            assert a.intw[key].cgspec.get_directions() == b.intw[key].cgspec.get_directions()
+
+
+def test_serialize_roundtrip_u1():
+    """Test serialize/deserialize round-trip for a U1 tensor."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    t = Tensor.random([idx_a, idx_b], seed=1, itags=["a", "b"])
+    t.label = "MyU1Tensor"
+
+    _assert_tensors_equal(deserialize(serialize(t)), t)
+
+
+def test_serialize_roundtrip_z2():
+    """Test serialize/deserialize round-trip for a Z2 tensor."""
+    group = Z2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 3), Sector(1, 2)))
+    t = Tensor.random([idx_a, idx_b], seed=2, itags=["p", "q"])
+
+    _assert_tensors_equal(deserialize(serialize(t)), t)
+
+
+def test_serialize_roundtrip_product_abelian():
+    """Test serialize/deserialize round-trip for a U1×Z2 (all-Abelian) tensor."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx_a = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 2)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector((0, 0), 2), Sector((-1, 1), 2)))
+    t = Tensor.random([idx_a, idx_b], seed=3, itags=["x", "y"])
+
+    _assert_tensors_equal(deserialize(serialize(t)), t)
+
+
+def test_serialize_roundtrip_su2():
+    """Test serialize/deserialize round-trip for an SU2 tensor (with intw)."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    t = Tensor.random([idx1, idx2, idx3], seed=4, itags=["a", "b", "c"])
+
+    _assert_tensors_equal(deserialize(serialize(t)), t)
+
+
+def test_serialize_roundtrip_product_su2():
+    """Test serialize/deserialize round-trip for a U1×SU2 tensor."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx_a = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector((0, 0), 2), Sector((-1, 1), 3)))
+    t = Tensor.random([idx_a, idx_b], seed=5, itags=["u", "v"])
+
+    _assert_tensors_equal(deserialize(serialize(t)), t)
+
+
+def test_serialize_roundtrip_complex_dtype():
+    """Test serialize/deserialize round-trip for complex128 dtype."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    t = Tensor.random([idx_a, idx_b], seed=6, dtype=torch.complex128, itags=["a", "b"])
+
+    rt = deserialize(serialize(t))
+
+    assert rt.dtype == torch.complex128
+    _assert_tensors_equal(rt, t)
+
+
+def test_serialize_roundtrip_scalar():
+    """Test serialize/deserialize round-trip for a scalar tensor."""
+    t = Tensor.from_scalar(3.14, label="pi")
+
+    rt = deserialize(serialize(t))
+
+    assert rt.label == "pi"
+    assert rt.is_scalar()
+    assert torch.equal(rt.data[()], t.data[()])
+
+
+def test_serialize_payload_primitive_types():
+    """Test that the serialized dict contains only primitives and torch.Tensor."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    t = Tensor.random([idx_a, idx_b], seed=7, itags=["a", "b"])
+
+    payload = serialize(t)
+
+    def _check(obj):
+        if isinstance(obj, torch.Tensor):
+            return
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                assert isinstance(k, str), f"dict key {k!r} is not str"
+                _check(v)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                _check(item)
+        else:
+            assert isinstance(obj, (int, float, str, bool, type(None))), (
+                f"unexpected type {type(obj).__name__}: {obj!r}"
+            )
+
+    _check(payload)
+
+
+def test_serialize_torch_save_load(tmp_path):
+    """Test that serialize output survives torch.save / torch.load with weights_only=True."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(-1, 3)))
+    t = Tensor.random([idx_a, idx_b], seed=8, itags=["a", "b"])
+
+    path = tmp_path / "tensor.pt"
+    torch.save(serialize(t), str(path))
+    payload = torch.load(str(path), weights_only=True)
+    rt = deserialize(payload)
+
+    _assert_tensors_equal(rt, t)
+
+
+def test_deserialize_device_arg():
+    """Test that deserialize places tensors on the requested device."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b = Index(Direction.IN,  group, sectors=(Sector(0, 2),))
+    t = Tensor.random([idx_a, idx_b], seed=9, itags=["a", "b"])
+
+    rt = deserialize(serialize(t), device="cpu")
+
+    for block in rt.data.values():
+        assert block.device.type == "cpu"
+
+
+def test_deserialize_unknown_version_raises():
+    """Test that deserialize raises on an unsupported version number."""
+    payload = {"version": 99, "label": "x", "dtype": "float64",
+               "itags": (), "indices": [], "data": [], "intw": None}
+    with pytest.raises(ValueError, match="Unsupported serialization version"):
+        deserialize(payload)
 
