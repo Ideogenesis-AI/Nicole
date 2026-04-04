@@ -35,6 +35,7 @@ Master tensor operations:
 - **[Contraction](operations/contraction-examples.md)**: Contract, trace, and multiply tensors
 - **[Decomposition](operations/decomposition-examples.md)**: SVD and tensor decomposition
 - **[Manipulation](operations/manipulation-examples.md)**: Permute, transpose, conjugate
+- **[Serialization](advanced/serialization-examples.md)**: Save and load tensors to disk
 
 ## Advanced
 
