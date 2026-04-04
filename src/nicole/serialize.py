@@ -156,7 +156,7 @@ def _deserialize_bridge(d: dict, device: torch.device, dtype: torch.dtype):
     return Bridge(cgspec=cgspec, weights=weights)
 
 
-# --- Public API ---
+# --- serialize / deserialize ---
 
 def serialize(tensor: Tensor) -> dict:
     """Convert a Tensor to a plain dict of Python primitives and torch.Tensor.
@@ -178,7 +178,7 @@ def serialize(tensor: Tensor) -> dict:
     Examples
     --------
     >>> payload = serialize(t)
-    >>> torch.save(payload, "tensor.pt")
+    >>> torch.save(payload, "tensor.tnsr")
     """
     data_list = [{"key": k, "value": v} for k, v in tensor.data.items()]
 
@@ -219,7 +219,7 @@ def deserialize(data: dict, device: Union[str, torch.device] = "cpu") -> Tensor:
 
     Examples
     --------
-    >>> payload = torch.load("tensor.pt", weights_only=True)
+    >>> payload = torch.load("tensor.tnsr", weights_only=True)
     >>> t = deserialize(payload, device="cpu")
     """
     version = data.get("version", 1)
