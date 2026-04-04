@@ -109,6 +109,8 @@ nav:
       - Display: api/utilities/display.md
       - Blocks: api/utilities/blocks.md
       - load_space: api/utilities/load_space.md
+      - serialize: api/utilities/serialize.md
+      - deserialize: api/utilities/deserialize.md
   - Examples:
     - examples/index.md
     - Basic Usage:
@@ -124,6 +126,7 @@ nav:
       - Contraction: examples/operations/contraction-examples.md
       - Decomposition: examples/operations/decomposition-examples.md
       - Manipulation: examples/operations/manipulation-examples.md
+      - Serialization: examples/advanced/serialization-examples.md
     - Advanced:
       - Build Operators: examples/advanced/build-operators.md
       - Load Space: examples/advanced/load-space-examples.md
