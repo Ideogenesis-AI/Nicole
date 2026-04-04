@@ -25,6 +25,9 @@ SU(2) Clebsch-Gordan tensor data using the yuzuha package's canonical bases.
 The canonical bases are defined with respect to the outer multiplicity (OM) space,
 which represents all valid fusion tree configurations.
 
+Module-level `serialize` and `deserialize` convert `Bridge` instances to and from
+plain dicts compatible with `torch.save` / `torch.load(..., weights_only=True)`.
+
 Also provides thin delegates to yuzuha's recoupling routines: `fs_phase` produces
 the Frobenius-Schur phase, `compute_xsymbol` computes the X-symbol for tensor
 contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
@@ -482,6 +485,73 @@ class Bridge:
         
         return Bridge(cgspec, weights)
 
+
+# --- Serialization ---
+
+def serialize(bridge: Bridge) -> dict:
+    """Serialize a Bridge to a plain dict of primitives and a `torch.Tensor`.
+
+    The returned dict is safe to pass to `torch.save` /
+    `torch.load(..., weights_only=True)`.
+
+    Parameters
+    ----------
+    bridge : Bridge
+        The Bridge to serialize.
+
+    Returns
+    -------
+    dict
+        ``{"edges": tuple of (two_j: int, dir_sign: int), "weights": torch.Tensor}``
+        where each ``(two_j, dir_sign)`` pair encodes the doubled SU(2) spin
+        and the edge direction (+1 incoming, -1 outgoing).
+    """
+    spins = bridge.cgspec.get_spins()
+    dirs = bridge.cgspec.get_directions()
+    return {
+        "edges": tuple((int(s), int(d)) for s, d in zip(spins, dirs)),
+        "weights": bridge.weights,
+    }
+
+
+def deserialize(
+    d: dict,
+    device: Union[str, torch.device] = "cpu",
+    dtype: Optional[torch.dtype] = None,
+) -> Bridge:
+    """Reconstruct a Bridge from a dict produced by `serialize`.
+
+    Parameters
+    ----------
+    d : dict
+        Dict that includes the entries produced by `serialize` (i.e. must
+        contain at least `"edges"` and `"weights"`).
+    device : str or torch.device, optional
+        Device to place the weight tensor on. Defaults to ``"cpu"``.
+    dtype : torch.dtype, optional
+        Dtype to cast the weight tensor to. If `None`, the tensor's
+        existing dtype is preserved.
+
+    Returns
+    -------
+    Bridge
+        Reconstructed Bridge with weights on `device`.
+    """
+    edges = []
+    for two_j, dir_sign in d["edges"]:
+        spin = yuzuha.Spin(two_j)
+        if dir_sign == 1:
+            edges.append(yuzuha.Edge.incoming(spin))
+        else:
+            edges.append(yuzuha.Edge.outgoing(spin))
+
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    weights = d["weights"].to(device=device, dtype=dtype) if dtype is not None \
+        else d["weights"].to(device=device)
+    return Bridge(cgspec=cgspec, weights=weights)
+
+
+# --- Backend Relays ---
 
 def fs_phase(group: SymmetryGroup, charge: Charge) -> float:
     """Return the Frobenius-Schur phase (-1)^{2j} for the SU(2) part of a charge.
