@@ -100,6 +100,8 @@ Supporting functionality:
 | [Display](utilities/display.md) | Pretty-printing tensors |
 | [Blocks](utilities/blocks.md) | Block structure utilities |
 | [load_space](utilities/load_space.md) | Load physical spaces and operators |
+| [serialize](utilities/serialize.md) | Convert a Tensor to a serializable dict |
+| [deserialize](utilities/deserialize.md) | Reconstruct a Tensor from a serialized dict |
 
 ## Usage Patterns
 
@@ -131,6 +133,9 @@ For practical examples and complete working code, see:
 
 **Build quantum operators**
 → [load_space](utilities/load_space.md)
+
+**Save and load tensors**
+→ [serialize](utilities/serialize.md), [deserialize](utilities/deserialize.md)
 
 **See working examples**
 → [Examples](../examples/index.md)
