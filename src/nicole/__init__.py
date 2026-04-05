@@ -25,6 +25,7 @@ from .index import Index, Sector
 from .maneuver import conj, permute, transpose
 from .maneuver import oplus, diag, inv, capcup
 from .maneuver import filter_blocks, merge_axes
+from .serialize import serialize, deserialize
 from .space import load_space
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.unitary import SU2Group
@@ -58,6 +59,8 @@ __all__ = [
     "filter_blocks",
     "merge_axes",
     "load_space",
+    "serialize",
+    "deserialize",
 ]
 
 
