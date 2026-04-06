@@ -149,7 +149,60 @@ ABC = contract(AB, C_multi)
 print(f"After A-B-C: {ABC.itags}")
 ```
 
+## Einstein Summation
+
+`einsum` provides a compact subscript-string interface that dispatches to
+`contract`, `trace`, and `permute` automatically.  The `->` separator is
+required; the left-hand side is a comma-separated list of subscripts (one per
+tensor) and the right-hand side is the output subscript.
+
+> **Note:** Contractions are performed strictly left to right with no
+> optimisation of the contraction order.
+
+```python exec="1" session="contraction" result=""
+from nicole import einsum
+```
+
+**Permutation** — reorder axes of a single tensor:
+
+```python exec="1" session="contraction" result="console" idprefix="" source="material-block"
+T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=30)
+T_T = einsum('ij->ji', T)
+print(f"Original indices: {T.itags}")
+print(f"Transposed indices: {T_T.itags}")
+```
+
+**Trace to scalar** — contract a repeated subscript letter within one tensor:
+
+```python exec="1" session="contraction" result="console" idprefix="" source="material-block"
+T_sq = Tensor.random([idx_out, idx_in], itags=["i", "i"], seed=31)
+scalar = einsum('ii->', T_sq)
+print(f"Trace result is scalar: {scalar.is_scalar()}")
+print(f"Value: {scalar.norm():.4f}")
+```
+
+**Matrix multiply** — contract the shared index between two tensors:
+
+```python exec="1" session="contraction" result="console" idprefix="" source="material-block"
+A_e = Tensor.random([idx_out, idx_out], itags=["i", "j"], seed=32)
+B_e = Tensor.random([idx_in, idx_out], itags=["j", "k"], seed=33)
+C_e = einsum('ij,jk->ik', A_e, B_e)
+print(f"Result indices: {C_e.itags}")
+```
+
+**Chain contraction** — three tensors contracted left to right:
+
+```python exec="1" session="contraction" result="console" idprefix="" source="material-block"
+idx_mid = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+X = Tensor.random([idx_out, idx_mid], itags=["i", "j"], seed=40)
+Y = Tensor.random([idx_mid.flip(), idx_mid], itags=["j", "k"], seed=41)
+Z = Tensor.random([idx_mid.flip(), idx_in], itags=["k", "l"], seed=42)
+result = einsum('ij,jk,kl->il', X, Y, Z)
+print(f"Chain result indices: {result.itags}")
+```
+
 ## See Also
 
 - API Reference: [contract](../../api/contraction/contract.md)
 - API Reference: [trace](../../api/contraction/trace.md)
+- API Reference: [einsum](../../api/contraction/einsum.md)
