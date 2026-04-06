@@ -4,7 +4,7 @@ Pretty-printing for symmetry-aware tensors.
 
 ## Description
 
-Nicole tensors have built-in display functionality accessed via `print(tensor)` or `tensor.show()`.
+Nicole tensors have built-in display functionality accessed via `print(tensor)` or `tensor.show(block_ids)`.
 
 ### Display Format
 
@@ -19,13 +19,23 @@ Nicole tensors have built-in display functionality accessed via `print(tensor)` 
 
 ### Components
 
-- **info**: 
-  - `2x` - tensor order (2 indices)
-  - `{ 3 x 1 }` - 3 blocks with 1 charge component each
-  - `'A'` - Abelian symmetry group (e.g., U(1), Z(2))
-  - `{ i*, j }` - index tags (* marks OUT direction)
-- **data**: Dimensionality, dtype, memory, multiplets and states, norm
-- **blocks**: Per-block dimensions, multiplet info, charges, value or memory
+- **info**: `2x { 3 x 1 }  having 'A'    Tensor,  { i*, j }`
+    - `2x` — tensor order (number of indices)
+    - `{ 3 x 1 }` — 3 blocks; 1 charge component per index (increases for product groups)
+    - `'A'` — symmetry group label (e.g. `'SU2'`, `'U1×Z2'`)
+    - `Tensor` — label identifying the tensor kind; defaults to `Tensor`
+    - `{ i*, j }` — index tags; `*` marks OUT direction
+- **data**: `2-D float64 (48 B)    4 x 4 => 4 x 4  @ norm = 2.85035`
+    - `2-D float64` — order of underlying dense arrays (torch.Tensor) and data type
+    - `(48 B)` — total memory across all blocks
+    - `4 x 4 => 4 x 4` — multiplets per index (reduced space) → physical states per index (full space); equal for Abelian, diverge for non-Abelian
+    - `@ norm = 2.85035` — Frobenius norm
+- **blocks**: `1.  1x1     |  1x1     [ -1 ; -1 ]  -1.30218`
+    - `1.` — block id (1-indexed, matching the argument to `show()`)
+    - `1x1` — shape of the stored reduced tensor (multiplet counts per index)
+    - `| 1x1` — irrep dimension per index (always `1×1` for Abelian; equals `2j+1` for SU(2))
+    - `[ -1 ; -1 ]` — charges per index; semicolons separate indices, spaces separate tuple components
+    - `-1.30218` or `32 B` — scalar value if the block has a single element, otherwise memory footprint
 
 ### SU(2) Tensor Example
 
@@ -46,9 +56,9 @@ Key differences from Abelian:
 - **blocks** show two dimensions per entry: `1x1` (shape of the stored reduced tensor R per block, i.e. multiplet count per index) and `| 2x2` or `| 3x3` (irrep dimension `2j+1` per index — magnetic substates per multiplet); the full physical block size is their elementwise product
 - `{+}` or `{-}` is the sign of the Bridge weight entry `W`; shown only when the weight matrix has a single element (`num_components = om_dimension = 1`)
 
-### ProductGroup Tensor Examples
+### Product Group Examples
 
-The second number in `{ N x K }` increases to K=2 (or more) when charges are tuples.
+The second number in `{ N x K }` increases to `K=2` (or more) when charges are tuples.
 
 **Abelian: U(1) × Z(2)** — 3 blocks, each charge is a 2-component tuple:
 
@@ -87,7 +97,7 @@ The second number in `{ N x K }` increases to K=2 (or more) when charges are tup
 
 Standard print with line limit (default 10 blocks).
 
-### tensor.show(block_indices=None)
+### tensor.show(block_ids)
 
 Show specific blocks or all blocks without limit.
 
@@ -98,6 +108,7 @@ Show specific blocks or all blocks without limit.
 
 ## Notes
 
-- Block indices are 1-based in display
+- Block ids are 1-based in display
 - Memory usage shown per block and total
 - `*` marks outgoing (OUT) directions
+- The tensor label is set automatically by construction routines: `Diagonal` for diagonal tensors, `Operator` for space operators; generic tensors default to `Tensor`
