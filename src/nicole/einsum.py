@@ -29,9 +29,9 @@ Three equation types are supported:
 1. **Permutation** — a single input tensor whose output subscript is a
    reordering of the input subscript, e.g. `'ij->ji'`.
 2. **Trace** — a single input tensor with one repeated subscript letter,
-   e.g. `'ii->'`.  A permutation of the surviving axes follows if needed.
+   e.g. `'ii->'`. A permutation of the surviving axes follows if needed.
 3. **Sequential contraction** — two or more input tensors contracted from left
-   to right, e.g. `'ij,jk->ik'`.  Tensors are contracted pairwise in the
+   to right, e.g. `'ij,jk->ik'`. Tensors are contracted pairwise in the
    order they appear; no contraction-order optimisation is performed.
 
 Functions
@@ -110,8 +110,8 @@ def _apply_within_trace(
     """Trace any repeated subscript letters within a single tensor.
 
     Scans `sub` for letters that appear exactly twice and collects them as
-    trace pairs by axis position.  Letters appearing three or more times are
-    rejected immediately.  A single call to `trace` with all collected pairs
+    trace pairs by axis position. Letters appearing three or more times are
+    rejected immediately. A single call to `trace` with all collected pairs
     is made; errors from that call (e.g. axes with the same direction)
     propagate unchanged.
 
@@ -156,9 +156,9 @@ def _apply_within_trace(
         return tensor, sub
 
     # trace accepts a list of (a, b) pairs referring to original axis positions
-    result = trace(tensor, axes=pairs)
+    traced = trace(tensor, axes=pairs)
     remaining_sub = [sub[i] for i in range(len(sub)) if i not in traced_positions]
-    return result, remaining_sub
+    return traced, remaining_sub
 
 
 def _apply_output_permutation(
@@ -199,71 +199,76 @@ def einsum(equation: str, *tensors: Tensor) -> Tensor:
     Three equation types are supported:
 
     1. **Permutation** — single tensor, output is a reordering of the input
-       subscript::
+       subscript:
 
-           einsum('ij->ji', A)
+            einsum('ij->ji', A)
 
-    2. **Trace** — single tensor with a repeated subscript letter.  The output
-       subscript lists the surviving axes in the desired order::
+    2. **Trace** — single tensor with a repeated subscript letter. The output
+       subscript lists the surviving axes in the desired order:
 
-           einsum('ii->', A)       # full trace → scalar
-           einsum('iijk->jk', A)   # partial trace
+            einsum('ii->', A)       # full trace → scalar
+            einsum('iijk->jk', A)   # partial trace
 
     3. **Sequential contraction** — two or more tensors contracted from left to
-       right.  At each step the letters that are shared between the accumulated
-       result and the next tensor *and* do not appear in the output subscript
-       are contracted::
+       right. At each step, letters present in both the current result and the
+       next tensor are contracted, unless they appear in the output subscript:
 
-           einsum('ij,jk->ik', A, B)       # matrix multiply
-           einsum('ij,jk,kl->il', A, B, C) # chain contraction
+            einsum('ij,jk->ik', A, B)       # matrix multiply
+            einsum('ij,jk,kl->il', A, B, C) # chain contraction
 
     Parameters
     ----------
     equation:
-        Subscript equation of the form `'<lhs>-><rhs>'`.  `<lhs>` is a
+        Subscript equation of the form `'<lhs>-><rhs>'`. `<lhs>` is a
         comma-separated list of subscript strings, one per input tensor.
-        `<rhs>` is the output subscript.  The `->` separator is **required**;
+        `<rhs>` is the output subscript. The `->` separator is **required**;
         implicit output subscripts are not supported.
 
-        Each subscript character must be a single ASCII letter.  A letter may
-        appear at most twice within a single input subscript (forming one trace
-        pair).
+        Each subscript character must be a single ASCII letter. A letter may
+        appear at most twice within a single input subscript (forming one
+        evaluation pair).
 
     *tensors:
-        Input `Tensor` objects.  The number of tensors must match the number
+        Input `Tensor` objects. The number of tensors must match the number
         of comma-separated subscript strings in `equation`, and the order of
         each tensor must equal the length of its subscript.
 
     Returns
     -------
     Tensor
-        Result tensor.  For a full trace this is a scalar (order 0).  For a
+        Result tensor. For a full trace this is a scalar (order 0). For a
         partial trace or contraction the result has the axes listed in the
         output subscript in that order.
 
     Raises
     ------
     ValueError
-        If `equation` does not contain `'->'`, if the number of subscripts
-        does not match the number of tensors, if a subscript length does not
-        match the corresponding tensor order, if a letter appears three or more
-        times within a single input subscript, or if errors are propagated from
-        `trace` (e.g. trace pair with same direction) or `contract` (e.g.
-        mismatched itags or same direction on contracted axes).
+        Raised in any of the following situations:
+
+        - `equation` does not contain `'->'`.
+        - The number of comma-separated input subscripts does not match the
+          number of tensors supplied.
+        - A subscript length does not match the order of the corresponding
+          tensor.
+        - A letter appears three or more times within a single input subscript.
+        - An error is propagated from `trace`, e.g. a trace pair whose two
+          axes share the same direction.
+        - An error is propagated from `contract`, e.g. contracted axes have
+          mismatched itags or the same direction.
 
     Notes
     -----
     **No contraction-order optimisation.** For multi-tensor equations the
-    tensors are contracted strictly from left to right.  This may be
+    tensors are contracted strictly from left to right. This may be
     suboptimal for networks where a different pairing would reduce intermediate
     tensor sizes.
 
-    **Order-1 tensors are not supported** by this library.  Any equation whose
-    intermediate or final result would have exactly one index will raise an
-    error from the underlying `contract` or `trace` call.
+    **Vectors (1st order tensors) are not supported** by this library. Any
+    equation whose intermediate or final result would have exactly one index
+    will raise an error from the underlying `contract` or `trace` call.
 
     **Hadamard (batch) indices** — a letter that appears in two or more input
-    subscripts and also in the output subscript — are not supported.  Such a
+    subscripts and also in the output subscript — are not supported. Such a
     letter would need to survive as a free axis in both tensors without being
     summed over, which requires element-wise multiplication semantics that
     `contract` does not provide.
@@ -299,8 +304,8 @@ def einsum(equation: str, *tensors: Tensor) -> Tensor:
 
     # --- Single-tensor path ---
     if len(processed) == 1:
-        result, result_sub = processed[0]
-        return _apply_output_permutation(result, result_sub, output_sub)
+        current, current_sub = processed[0]
+        return _apply_output_permutation(current, current_sub, output_sub)
 
     # --- Multi-tensor path: contract left to right ---
     current, current_sub = processed[0]
