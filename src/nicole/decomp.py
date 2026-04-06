@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Decomposition utilities for symmetry-aware Nicole tensors.
 
 This module provides functions for decomposing tensors into their singular
@@ -47,6 +45,8 @@ decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
     - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
     The flow parameter controls arrow directions. The itag parameter customizes bond tags.
 """
+
+from __future__ import annotations
 
 from typing import Dict, List, Literal, MutableMapping, Optional, Sequence, Tuple, Union
 import math

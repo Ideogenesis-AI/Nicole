@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Bridge to delegate SU(2) Clebsch-Gordan tensor manipulation to yuzuha package.
 
 This module provides the `Bridge` class, which serves as a storage container for
@@ -32,6 +30,8 @@ Also provides thin delegates to yuzuha's recoupling routines: `fs_phase` produce
 the Frobenius-Schur phase, `compute_xsymbol` computes the X-symbol for tensor
 contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, Union

@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Tensor container for block-symmetric data structures.
 
 This module defines the `Tensor` dataclass, which stores symmetry-aware tensor
@@ -25,6 +23,8 @@ indices alongside a dictionary of dense PyTorch tensor blocks. Helper constructo
 zero-filled or random tensors, while arithmetic and structural operations respect
 charge conservation dictated by the index metadata.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional

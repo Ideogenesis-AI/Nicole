@@ -16,9 +16,9 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Product group for multiple independent symmetries."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Sequence, Tuple

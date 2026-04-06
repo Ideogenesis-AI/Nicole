@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Pretty-print helpers for block-symmetric tensors.
 
 This module encapsulates the logic required to present Nicole tensors in a compact,
@@ -42,6 +40,8 @@ The output follow symmetry-aware tensor conventions (e.g. listing multiplet coun
 state counts, showing charge conservation per block) to ease adoption for users migrating
 from traditional workflows.
 """
+
+from __future__ import annotations
 
 from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
 

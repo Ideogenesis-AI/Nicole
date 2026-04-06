@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Block schema utilities for symmetry-aware tensors.
 
 This module collects helper routines that describe and validate the block
@@ -26,6 +24,8 @@ structure induced by a set of symmetry-labelled indices. The central
 combinations, deriving dense shapes, allocating zero blocks, and checking
 charge conservation for a given block key.
 """
+
+from __future__ import annotations
 
 from itertools import product
 from typing import Iterable, List, Mapping, Optional, Sequence, Tuple

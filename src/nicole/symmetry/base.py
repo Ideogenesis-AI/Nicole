@@ -16,9 +16,9 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Abstract base classes for symmetry groups used by Nicole library."""
+
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Tuple

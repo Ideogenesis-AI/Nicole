@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Index utilities for symmetry-aware tensor networks.
 
 The `Index` dataclass models a single tensor index annotated with symmetry
@@ -35,6 +33,8 @@ Key responsibilities
 - Combine multiple indices into a single fused index, accumulating sector
   dimensions, and perform the inverse consistency check when splitting.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import product

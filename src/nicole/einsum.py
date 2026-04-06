@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Einstein summation notation for symmetry-aware tensors.
 
 This module provides `einsum`, which parses a subscript equation string and
@@ -39,6 +37,8 @@ Functions
 einsum(equation, *tensors)
     Evaluate an Einstein summation equation on symmetry-aware tensors.
 """
+
+from __future__ import annotations
 
 from collections import Counter
 from typing import List, Tuple

@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Standalone tensor maneuvers for structural and/or algebraic operations.
 
 This module provides functional tensor maneuvers covering conjugation, axis
@@ -47,6 +45,8 @@ capcup(A, axis_a, B, axis_b)
     Invert both directions of a contraction pair (bond) between two tensors,
     applying Frobenius-Schur phase corrections to B for SU(2) tensors.
 """
+
+from __future__ import annotations
 
 import math
 from typing import Dict, Sequence, Tuple, Union, Optional

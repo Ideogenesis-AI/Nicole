@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Serialize and deserialize Tensor instances to/from plain dicts.
 
 The serialized format uses only Python primitives (str, int, tuple, dict,
@@ -59,6 +57,8 @@ Serialized dict schema (version 1)::
         ]
     }
 """
+
+from __future__ import annotations
 
 from typing import Dict, Optional, Union
 

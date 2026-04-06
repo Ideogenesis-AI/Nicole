@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Tensor contraction helpers for symmetry-aware tensors.
 
 This module provides functions for contracting pairs of tensors along specified
@@ -26,6 +24,8 @@ groups associated with the indices. The `contract` function implements the
 general tensor contraction operation, while `trace` provides a specialised
 variant for reducing a tensor along pairs of its own indices.
 """
+
+from __future__ import annotations
 
 from typing import Dict, Optional, Sequence, Tuple
 
