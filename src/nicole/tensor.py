@@ -487,24 +487,24 @@ class Tensor:
         from .display import tensor_summary
         indices = Tensor._prune_unused_sectors(self.indices, self.data)
         return tensor_summary(indices, self.itags, self.data, self.intw,
-                              self.dtype, self.label, self.norm(), self.sorted_keys)
+            self.dtype, self.label, self.norm(), self.sorted_keys)
 
     __repr__ = __str__
 
-    def show(self, block_indices: Sequence[int]) -> None:
+    def show(self, block_ids: Sequence[int]) -> None:
         """Display selected blocks without max_line limits."""
         from .display import tensor_summary
         
         # Convert single integer to list
-        if isinstance(block_indices, int):
-            block_indices = [block_indices]
-        # Convert block indices to their corresponding keys
-        selected_keys = [self.key(i) for i in block_indices]
+        if isinstance(block_ids, int):
+            block_ids = [block_ids]
+        # Convert block ids to their corresponding keys
+        selected_keys = [self.key(i) for i in block_ids]
         
         indices = Tensor._prune_unused_sectors(self.indices, self.data)
-        # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
+        # Call tensor_summary with selected keys, original block ids, and no max_lines limit
         print(tensor_summary(indices, self.itags, self.data, self.intw, self.dtype, self.label, self.norm(),
-                             sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
+            sorted_keys=selected_keys, max_lines=None, block_ids=list(block_ids)))
     
     # ------------------------------------------------------------
     #   Device management: cpu, cuda, mps
