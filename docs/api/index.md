@@ -67,6 +67,7 @@ Contract and trace tensors:
 |----------|-------------|
 | [contract](contraction/contract.md) | General tensor contraction |
 | [trace](contraction/trace.md) | Trace over index pairs |
+| [einsum](contraction/einsum.md) | Einstein summation notation |
 
 ## Decomposition
 
@@ -120,7 +121,7 @@ For practical examples and complete working code, see:
 → [zeros](creation/zeros.md), [random](creation/random.md), [identity](creation/identity.md)
 
 **Contract tensors**
-→ [contract](contraction/contract.md), [trace](contraction/trace.md)
+→ [contract](contraction/contract.md), [trace](contraction/trace.md), [einsum](contraction/einsum.md)
 
 **Decompose a tensor**
 → [decomp](decomposition/decomp.md), [svd](decomposition/svd.md), [qr](decomposition/qr.md), [eig](decomposition/eig.md)

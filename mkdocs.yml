@@ -94,6 +94,7 @@ nav:
     - Contraction:
       - contract: api/contraction/contract.md
       - trace: api/contraction/trace.md
+      - einsum: api/contraction/einsum.md
     - Decomposition:
       - decomp: api/decomposition/decomp.md
       - svd (linalg): api/decomposition/svd.md

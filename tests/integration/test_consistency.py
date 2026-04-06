@@ -33,7 +33,8 @@ from nicole import Direction, Tensor, Index, Sector
 from nicole import contract, identity, permute, conj
 from nicole import SU2Group, U1Group, ProductGroup
 from ..utils import (
-    assert_charge_neutral, 
+    assert_charge_neutral,
+    assert_blocks_equal,
     populate_random_weights,
     assert_data_weights_equal,
     assert_physical_tensors_equal,
@@ -1615,3 +1616,213 @@ def test_insert_index_terminal_vs_permute_su2_6th_order_last_in():
     T = _make_insert_test_tensor(order=6, last_dir=Direction.IN, seed=7070)
     for d in (Direction.OUT, Direction.IN):
         _assert_insert_terminal_equals_leading_permute(T, d)
+
+
+# ============================================================================
+#  Outer product consistency: contract(axes=([],[])) vs insert_index
+# ============================================================================
+
+def _assert_outer_product_u1(A: Tensor, B: Tensor, msg: str = "") -> None:
+    """Assert that outer product via empty axes agrees with insert_index + contract.
+
+    Two paths to the outer product A⊗B:
+
+    Path 1 – direct: ``contract(A, B, axes=([], []))``
+        No indices are contracted; the result carries all indices of A followed
+        by all indices of B.
+
+    Path 2 – mediated: insert a trivial (neutral-charge, dim-1) OUT index "x"
+        at the end of A, insert a trivial IN index "x" at the start of B, then
+        contract the two trivial indices.  Because the trivial sector is the
+        identity channel of U(1), this contraction squeezes the singleton
+        dimension and reproduces the outer product exactly.
+    """
+    na = len(A.indices)
+
+    # Path 1: outer product with no contractions
+    result1 = contract(A, B, axes=([], []))
+
+    # Path 2: insert trivial indices, then contract on them
+    A_mod = A.clone()
+    A_mod.insert_index(na, Direction.OUT, itag="x")
+    B_mod = B.clone()
+    B_mod.insert_index(0, Direction.IN, itag="x")
+    result2 = contract(A_mod, B_mod, axes=(na, 0))
+
+    assert list(result1.itags) == list(result2.itags), \
+        f"{msg}: itags mismatch: {list(result1.itags)} vs {list(result2.itags)}"
+    assert_charge_neutral(result1)
+    assert_charge_neutral(result2)
+    assert_blocks_equal(result1, result2)
+
+
+def _assert_outer_product_su2(A: Tensor, B: Tensor, msg: str = "") -> None:
+    """Assert that outer product via empty axes agrees with insert_index + contract for SU(2).
+
+    Same two-path strategy as ``_assert_outer_product_u1``, but uses
+    ``assert_physical_tensors_equal`` to tolerate the gauge freedom in the
+    non-Abelian intertwiner weights.
+    """
+    na = len(A.indices)
+
+    # Path 1: outer product with no contractions
+    result1 = contract(A, B, axes=([], []))
+
+    # Path 2: insert trivial j=0 indices, then contract on them
+    A_mod = A.clone()
+    A_mod.insert_index(na, Direction.OUT, itag="x")
+    B_mod = B.clone()
+    B_mod.insert_index(0, Direction.IN, itag="x")
+    result2 = contract(A_mod, B_mod, axes=(na, 0))
+
+    assert list(result1.itags) == list(result2.itags), \
+        f"{msg}: itags mismatch: {list(result1.itags)} vs {list(result2.itags)}"
+    assert_charge_neutral(result1)
+    assert_charge_neutral(result2)
+    assert_physical_tensors_equal(result1, result2, msg=msg)
+
+
+# U(1) outer product tests (many sectors → many blocks)
+
+def test_outer_product_consistency_u1_2nd_x_2nd():
+    """U(1) outer product: 2nd-order × 2nd-order, 6 sectors per index (36 product blocks)."""
+    u1 = U1Group()
+    # Six sectors spanning charges −3…2; each factor tensor has one block per charge value.
+    sectors = (
+        Sector(-3, 2), Sector(-2, 2), Sector(-1, 3),
+        Sector(0, 3), Sector(1, 2), Sector(2, 2),
+    )
+    idx_a = Index(Direction.OUT, u1, sectors=sectors)
+    idx_b = Index(Direction.IN, u1, sectors=sectors)
+    idx_c = Index(Direction.OUT, u1, sectors=sectors)
+    idx_d = Index(Direction.IN, u1, sectors=sectors)
+
+    A = Tensor.random([idx_a, idx_b], seed=8000, itags=["a", "b"])
+    B = Tensor.random([idx_c, idx_d], seed=8001, itags=["c", "d"])
+
+    _assert_outer_product_u1(A, B, msg="u1 2x2")
+
+
+def test_outer_product_consistency_u1_2nd_x_3rd():
+    """U(1) outer product: 2nd-order × 3rd-order, 5 sectors per index."""
+    u1 = U1Group()
+    sectors5 = (Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 2))
+
+    idx_a = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_b = Index(Direction.IN, u1, sectors=sectors5)
+    idx_c = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_d = Index(Direction.IN, u1, sectors=sectors5)
+    idx_e = Index(Direction.OUT, u1, sectors=sectors5)
+
+    A = Tensor.random([idx_a, idx_b], seed=8010, itags=["a", "b"])
+    # 3rd-order tensor: blocks at (q_c, q_d, q_e) with q_c − q_d + q_e = 0 → ~19 blocks
+    B = Tensor.random([idx_c, idx_d, idx_e], seed=8011, itags=["c", "d", "e"])
+
+    _assert_outer_product_u1(A, B, msg="u1 2x3")
+
+
+def test_outer_product_consistency_u1_3rd_x_2nd():
+    """U(1) outer product: 3rd-order × 2nd-order, 5 sectors per index."""
+    u1 = U1Group()
+    sectors5 = (Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 2))
+
+    idx_a = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_b = Index(Direction.IN, u1, sectors=sectors5)
+    idx_c = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_d = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_e = Index(Direction.IN, u1, sectors=sectors5)
+
+    # 3rd-order tensor: ~19 blocks
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=8020, itags=["a", "b", "c"])
+    B = Tensor.random([idx_d, idx_e], seed=8021, itags=["d", "e"])
+
+    _assert_outer_product_u1(A, B, msg="u1 3x2")
+
+
+def test_outer_product_consistency_u1_3rd_x_3rd():
+    """U(1) outer product: 3rd-order × 3rd-order, 5 sectors per index (~19×19 product blocks)."""
+    u1 = U1Group()
+    sectors5 = (Sector(-2, 2), Sector(-1, 2), Sector(0, 3), Sector(1, 2), Sector(2, 2))
+
+    idx_a = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_b = Index(Direction.IN, u1, sectors=sectors5)
+    idx_c = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_d = Index(Direction.OUT, u1, sectors=sectors5)
+    idx_e = Index(Direction.IN, u1, sectors=sectors5)
+    idx_f = Index(Direction.OUT, u1, sectors=sectors5)
+
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=8030, itags=["a", "b", "c"])
+    B = Tensor.random([idx_d, idx_e, idx_f], seed=8031, itags=["d", "e", "f"])
+
+    _assert_outer_product_u1(A, B, msg="u1 3x3")
+
+
+# SU(2) outer product tests (moderate sector count)
+
+def test_outer_product_consistency_su2_2nd_x_2nd():
+    """SU(2) outer product: 2nd-order × 2nd-order, 3 spin sectors each."""
+    group = SU2Group()
+    # Three sectors: j = 0, 1, 2 with multiplicity 2, 3, 4.
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    A = Tensor.random([idx_a, idx_b], seed=8100, itags=["a", "b"])
+    B = Tensor.random([idx_c, idx_d], seed=8101, itags=["c", "d"])
+    populate_random_weights(A, seed=8102)
+    populate_random_weights(B, seed=8103)
+
+    _assert_outer_product_su2(A, B, msg="su2 2x2")
+
+
+def test_outer_product_consistency_su2_2nd_x_3rd():
+    """SU(2) outer product: 2nd-order × 3rd-order."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    A = Tensor.random([idx_a, idx_b], seed=8110, itags=["a", "b"])
+    B = Tensor.random([idx_c, idx_d, idx_e], seed=8111, itags=["c", "d", "e"])
+    populate_random_weights(A, seed=8112)
+    populate_random_weights(B, seed=8113)
+
+    _assert_outer_product_su2(A, B, msg="su2 2x3")
+
+
+def test_outer_product_consistency_su2_3rd_x_2nd():
+    """SU(2) outer product: 3rd-order × 2nd-order."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=8120, itags=["a", "b", "c"])
+    B = Tensor.random([idx_d, idx_e], seed=8121, itags=["d", "e"])
+    populate_random_weights(A, seed=8122)
+    populate_random_weights(B, seed=8123)
+
+    _assert_outer_product_su2(A, B, msg="su2 3x2")
+
+
+def test_outer_product_consistency_su2_3rd_x_3rd():
+    """SU(2) outer product: 3rd-order × 3rd-order."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx_d = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_e = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(2, 4)))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    A = Tensor.random([idx_a, idx_b, idx_c], seed=8130, itags=["a", "b", "c"])
+    B = Tensor.random([idx_d, idx_e, idx_f], seed=8131, itags=["d", "e", "f"])
+    populate_random_weights(A, seed=8132)
+    populate_random_weights(B, seed=8133)
+
+    _assert_outer_product_su2(A, B, msg="su2 3x3")
