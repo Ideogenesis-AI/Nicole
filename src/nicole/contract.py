@@ -481,16 +481,25 @@ def contract(
     # prevent weights from decaying across successive contractions.
     out_tensor.regularize()
 
-    # When order drops, OM typically drops, making accumulated components from
-    # block_add likely to exceed OM. Compress to remove genuine rank deficiency.
-    # The order-reduction condition is a heuristic to balance the performance
-    # gain from compression against the SVD cost: order-preserving or
-    # order-increasing contractions tend to have growing OM, so components are
-    # unlikely to be redundant and SVD overhead is not justified.
+    # Compress intertwiner weights to remove linearly dependent components.
+    # [Memo] An earlier version guarded this with the condition
+    #   len(out_indices) < max(len(A.indices), len(B.indices))
+    # The reasoning was: when order drops, OM typically drops, making
+    # accumulated components from block_add likely to exceed OM and compress
+    # worthwhile; whereas order-preserving or order-increasing contractions
+    # tend to have growing OM, so components are unlikely to be redundant and
+    # the SVD overhead is not justified. The guard may be worth reinstating as
+    # a performance optimisation if profiling shows compress dominates runtime
+    # in order-preserving hot paths.
+
+    # block_add's collinearity check only fires when both bridges have
+    # num_components == 1, so after the first non-collinear pair the check is
+    # permanently bypassed and every subsequent term in the loop concatenates
+    # unconditionally. compress reclaims the resulting rank deficiency.
     # Regularize first so that the SVD cutoff operates on well-scaled rows;
     # after compress the new weights (Vh rows) are already orthonormal, so no
     # second regularize is needed.
-    if out_intw is not None and len(out_indices) < max(len(A.indices), len(B.indices)):
+    if out_intw is not None:
         out_tensor.compress()
 
     # Apply permutation if requested.
