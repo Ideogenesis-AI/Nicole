@@ -2,7 +2,7 @@
 
 Create a 2-index identity tensor.
 
-::: nicole.identity
+::: nicole.identity.identity
     options:
       show_source: false
       heading_level: 2
@@ -22,7 +22,3 @@ For each sector with charge `q` and dimension `d`:
 - [isometry](isometry.md): Create fusion tensor
 - [Tensor](../core/tensor.md): Main tensor class
 - [Examples: Build Operators](../../examples/advanced/build-operators.md)
-
-## Notes
-
-The second index is automatically flipped (opposite direction) to enable contraction. Use for resolution of identity: ∑ᵢ |i⟩⟨i| = I.

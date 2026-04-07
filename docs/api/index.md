@@ -67,6 +67,7 @@ Contract and trace tensors:
 |----------|-------------|
 | [contract](contraction/contract.md) | General tensor contraction |
 | [trace](contraction/trace.md) | Trace over index pairs |
+| [einsum](contraction/einsum.md) | Einstein summation notation |
 
 ## Decomposition
 
@@ -100,6 +101,8 @@ Supporting functionality:
 | [Display](utilities/display.md) | Pretty-printing tensors |
 | [Blocks](utilities/blocks.md) | Block structure utilities |
 | [load_space](utilities/load_space.md) | Load physical spaces and operators |
+| [serialize](utilities/serialize.md) | Convert a Tensor to a serializable dict |
+| [deserialize](utilities/deserialize.md) | Reconstruct a Tensor from a serialized dict |
 
 ## Usage Patterns
 
@@ -118,7 +121,7 @@ For practical examples and complete working code, see:
 → [zeros](creation/zeros.md), [random](creation/random.md), [identity](creation/identity.md)
 
 **Contract tensors**
-→ [contract](contraction/contract.md), [trace](contraction/trace.md)
+→ [contract](contraction/contract.md), [trace](contraction/trace.md), [einsum](contraction/einsum.md)
 
 **Decompose a tensor**
 → [decomp](decomposition/decomp.md), [svd](decomposition/svd.md), [qr](decomposition/qr.md), [eig](decomposition/eig.md)
@@ -131,6 +134,9 @@ For practical examples and complete working code, see:
 
 **Build quantum operators**
 → [load_space](utilities/load_space.md)
+
+**Save and load tensors**
+→ [serialize](utilities/serialize.md), [deserialize](utilities/deserialize.md)
 
 **See working examples**
 → [Examples](../examples/index.md)

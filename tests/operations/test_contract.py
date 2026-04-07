@@ -1126,7 +1126,7 @@ def test_contract_su2_associativity_2nd_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert_data_weights_equal(ABC_left, ABC_right)
+    assert_physical_tensors_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_associativity_3rd_order():
@@ -1160,7 +1160,7 @@ def test_contract_su2_associativity_3rd_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert_data_weights_equal(ABC_left, ABC_right)
+    assert_physical_tensors_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_associativity_5th_order():
@@ -1197,7 +1197,7 @@ def test_contract_su2_associativity_5th_order():
     assert_charge_neutral(ABC_left)
     assert_charge_neutral(ABC_right)
     
-    assert_data_weights_equal(ABC_left, ABC_right)
+    assert_physical_tensors_equal(ABC_left, ABC_right)
 
 
 def test_contract_su2_identity_preserves_norm_2nd_order():

@@ -16,9 +16,9 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Shared typing utilities for Nicole symmetry-aware tensor machinery."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum

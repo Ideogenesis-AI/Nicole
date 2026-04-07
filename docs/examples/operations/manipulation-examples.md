@@ -6,13 +6,13 @@ Tensor manipulation operations rearrange indices, change directions, or modify d
 
 - **Conjugation** (`T.conj()`): Complex conjugate data and flip all index directions
 - **Permutation** (`T.permute()`): Reorder indices to a specific layout
-- **Transpose** (`T.transpose()`): Reorder indices, defaulting to full reversal
+- **Transpose** (`T.transpose()`): Reverse all index order
 
 All operations are available as **tensor methods** and support **chaining**. Each method can be called in three ways:
 
-- **`T.conj()`** (default, `in_place=False`): returns a new tensor that **shares** the underlying data storage with `T`. Memory-efficient and supports chaining.
-- **`T.conj(in_place=True)`**: modifies `T` in place and returns `T` itself. Useful when you do not need the original.
-- **Standalone functions** `conj(T)`, `permute(T, ...)`, `transpose(T, ...)`: return a fully independent tensor by **cloning all data blocks**, guaranteeing isolation from the original at the cost of extra memory. Prefer the method form unless a deep copy is explicitly needed.
+- **`T.conj()`** / **`T.transpose()`** (default, `in_place=False`): returns a new tensor that **shares** the underlying data storage with `T`. Memory-efficient and supports chaining.
+- **`T.conj(in_place=True)`** / **`T.transpose(in_place=True)`**: modifies `T` in place and returns `T` itself. Useful when you do not need the original.
+- **Standalone functions** `conj(T)`, `permute(T, ...)`, `transpose(T)`: return a fully independent tensor by **cloning all data blocks**, guaranteeing isolation from the original at the cost of extra memory. Prefer the method form unless a deep copy is explicitly needed.
 
 All manipulation operations maintain the block structure and charge labels — only the ordering or direction of indices changes.
 
@@ -53,13 +53,10 @@ print(f"Original unchanged:  {T3.itags}")
 ## Transpose
 
 ```python exec="1" session="manipulation" result="console" idprefix="" source="material-block"
-# Default: reverse all indices
+# Default: reverse all indices — returns a new tensor, T3 unchanged
 T_trans = T3.transpose()
 print(f"Reversed: {T_trans.itags}")
-
-# Custom order
-T_trans2 = T3.transpose(1, 0, 2)
-print(f"Custom (j, i, k): {T_trans2.itags}")
+print(f"Original unchanged: {T3.itags}")
 ```
 
 ## Chaining

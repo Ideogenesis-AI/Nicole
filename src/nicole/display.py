@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Pretty-print helpers for block-symmetric tensors.
 
 This module encapsulates the logic required to present Nicole tensors in a compact,
@@ -42,6 +40,8 @@ The output follow symmetry-aware tensor conventions (e.g. listing multiplet coun
 state counts, showing charge conservation per block) to ease adoption for users migrating
 from traditional workflows.
 """
+
+from __future__ import annotations
 
 from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -134,7 +134,7 @@ def tensor_summary(
     norm: float = 0.0,
     sorted_keys: Sequence[Tuple[Charge, ...]] = None,
     max_lines: Optional[int] = 9,
-    block_numbers: Optional[Sequence[int]] = None,
+    block_ids: Optional[Sequence[int]] = None,
 ) -> str:
     """Create a multi-line summary for a tensor.
 
@@ -161,10 +161,10 @@ def tensor_summary(
     max_lines:
         Maximum number of blocks to display. If None, displays all blocks.
         Defaults to 9.
-    block_numbers:
-        Optional sequence of block numbers (1-indexed) to use for display.
+    block_ids:
+        Optional sequence of block ids (1-indexed) to use for display.
         If provided, must match the length of sorted_keys. Used to preserve
-        original block numbering when displaying a subset of blocks.
+        original block ids when displaying a subset of blocks.
 
     Returns
     -------
@@ -258,10 +258,10 @@ def tensor_summary(
         sorted_blocks = [(k, data[k]) for k in sorted_keys]
         blocks_to_show = sorted_blocks if max_lines is None else sorted_blocks[:max_lines]
         
-        # Determine block numbers for display
-        if block_numbers is not None:
-            # Use provided block numbers (preserves original indices)
-            display_numbers = list(block_numbers) if max_lines is None else list(block_numbers[:max_lines])
+        # Determine block ids for display
+        if block_ids is not None:
+            # Use provided block ids (preserves original ids)
+            display_numbers = list(block_ids) if max_lines is None else list(block_ids[:max_lines])
         else:
             # Default: sequential numbering starting from 1
             display_numbers = list(range(1, len(blocks_to_show) + 1))

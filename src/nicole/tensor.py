@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Tensor container for block-symmetric data structures.
 
 This module defines the `Tensor` dataclass, which stores symmetry-aware tensor
@@ -25,6 +23,8 @@ indices alongside a dictionary of dense PyTorch tensor blocks. Helper constructo
 zero-filled or random tensors, while arithmetic and structural operations respect
 charge conservation dictated by the index metadata.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional
@@ -117,16 +117,14 @@ class Tensor:
         Access the i-th block by integer index (1-indexed, matching display).
     show()
         Display selected blocks without max_line limits.
-    compress()
-        In-place: Reduce redundant intertwiner components via SVD truncation.
     regularize()
-        In-place: Canonicalize or regularize Bridge weights.
+        In-place: Canonicalize or regularize Bridge weights, and compress components.
     conj()
         Complex conjugate every dense block, and revert all index directions.
     permute()
         Permute tensor axes according to the provided reordering.
     transpose()
-        In-place: Transpose tensor axes; defaults to reversing the index order.
+        Transpose by reversing all tensor axes.
     invert()
         In-place: Invert the direction of specified index/indices.
     retag()
@@ -134,8 +132,8 @@ class Tensor:
     
     Notes
     -----
-    For functional (non-mutating) versions of conj, permute, and transpose that return
-    new tensor instances, use the standalone functions from `nicole.maneuver`.
+    Standalone functions in `nicole.maneuver` deep-clone all data blocks for full
+    isolation. Method forms default to `in_place=False` and share storage (torch views).
     """
 
     indices: Tuple[Index, ...]
@@ -487,24 +485,24 @@ class Tensor:
         from .display import tensor_summary
         indices = Tensor._prune_unused_sectors(self.indices, self.data)
         return tensor_summary(indices, self.itags, self.data, self.intw,
-                              self.dtype, self.label, self.norm(), self.sorted_keys)
+            self.dtype, self.label, self.norm(), self.sorted_keys)
 
     __repr__ = __str__
 
-    def show(self, block_indices: Sequence[int]) -> None:
+    def show(self, block_ids: Sequence[int]) -> None:
         """Display selected blocks without max_line limits."""
         from .display import tensor_summary
         
         # Convert single integer to list
-        if isinstance(block_indices, int):
-            block_indices = [block_indices]
-        # Convert block indices to their corresponding keys
-        selected_keys = [self.key(i) for i in block_indices]
+        if isinstance(block_ids, int):
+            block_ids = [block_ids]
+        # Convert block ids to their corresponding keys
+        selected_keys = [self.key(i) for i in block_ids]
         
         indices = Tensor._prune_unused_sectors(self.indices, self.data)
-        # Call tensor_summary with selected keys, original block numbers, and no max_lines limit
+        # Call tensor_summary with selected keys, original block ids, and no max_lines limit
         print(tensor_summary(indices, self.itags, self.data, self.intw, self.dtype, self.label, self.norm(),
-                             sorted_keys=selected_keys, max_lines=None, block_numbers=list(block_indices)))
+            sorted_keys=selected_keys, max_lines=None, block_ids=list(block_ids)))
     
     # ------------------------------------------------------------
     #   Device management: cpu, cuda, mps
@@ -940,6 +938,7 @@ class Tensor:
         For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: adds reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
+                             compresses out any resulting linear dependence
         """
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
@@ -983,8 +982,13 @@ class Tensor:
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
+                # block_add concatenates components when weights are non-collinear;
+                # compress any resulting linear dependence (e.g. identical tensors).
                 new_data[k], new_intw[k] = BlockSchema.block_add(
                     a, bridge_a, b, bridge_b, rtol=1e-12, atol=1e-15
+                )
+                new_data[k], new_intw[k] = BlockSchema.block_compress(
+                    new_data[k], new_intw[k]
                 )
         
         return Tensor(
@@ -998,6 +1002,7 @@ class Tensor:
         For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: subtracts reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
+                             compresses out any resulting linear dependence
         """
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
@@ -1041,9 +1046,14 @@ class Tensor:
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
+                # block_add concatenates components when weights are non-collinear;
+                # compress any resulting linear dependence (e.g. identical tensors).
                 new_data[k], new_intw[k] = BlockSchema.block_add(
                     a, bridge_a, -b if b is not None else None, bridge_b,
                     rtol=1e-12, atol=1e-15
+                )
+                new_data[k], new_intw[k] = BlockSchema.block_compress(
+                    new_data[k], new_intw[k]
                 )
         
         return Tensor(
@@ -1088,90 +1098,26 @@ class Tensor:
     #   Compression: reduce redundant components
     # ------------------------------------------------------------
 
-    def compress(
-        self, 
-        keys: Optional[Sequence[BlockKey]] = None, 
-        cutoff: float = 1e-14
-    ) -> None:
-        """Compress intertwiner weights by removing linearly dependent components (in-place).
-        
-        For generic groups, performs SVD on weight matrices and truncates
-        singular values below the cutoff threshold. This reduces the reduced
-        multiplicity dimension when weight rows are linearly dependent.
-        
-        The compression preserves the physical tensor: T = R @ W is decomposed as
-        R @ (U @ S @ Vh) ≈ (R @ U @ S) @ Vh, where small singular values are removed.
-        
-        This operation modifies the tensor in place.
-        
-        Parameters
-        ----------
-        keys : Sequence[BlockKey], optional
-            Block keys to compress. If None, compresses all blocks with num_components >= 2.
-        cutoff : float, optional
-            Singular value threshold for truncation. Default: 1e-14.
-        
-        Examples
-        --------
-        >>> # After adding tensors with different weights, compress redundancy
-        >>> C = A + B  # May have redundant components
-        >>> C.compress(cutoff=1e-12)  # Modifies C in place
-        """
-        # Abelian groups: no compression needed
-        if not self.indices or self.indices[0].group.is_abelian:
-            return
-        
-        # Determine which keys to compress
-        if keys is None:
-            # Compress all blocks with num_components >= 2
-            keys_to_compress = [k for k, bridge in self.intw.items() if bridge.num_components >= 2]
-        else:
-            keys_to_compress = list(keys)
-        
-        # If no blocks to compress, nothing to do
-        if not keys_to_compress:
-            return
-        
-        # Perform compression on specified keys
-        for key in keys_to_compress:
-            block = self.data[key]
-            bridge = self.intw[key]
-            
-            # Perform SVD compression
-            U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
-            
-            # Truncate small singular values (keep at least 1)
-            k = max(1, (S >= cutoff).sum().item())
-            
-            if k < bridge.num_components:
-                # Compression: absorb U[:, :k] @ diag(S[:k]) into data, keep Vh[:k, :]
-                r_flat = block.flatten(0, -2)
-                r_new = (r_flat @ (U[:, :k] * S[:k])).reshape(block.shape[:-1] + (k,))
-                
-                # Update in place
-                self.data[key] = r_new
-                self.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=Vh[:k, :])
-
     # ------------------------------------------------------------
     #   Weights canonicalisation or regularisation
     # ------------------------------------------------------------
 
-    def regularize(self) -> None:
+    def regularize(self, cutoff: float = 1e-14) -> None:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
-        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
+        For a 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
         and the Bridge weight `W` satisfy:
 
-            physical block  ≈  R  ×  W
+            physical block  =  R  ×  W
 
         The method absorbs the deviation of each block's weight from the
         canonical value `sqrt(irrep_dim(q))` into `R`, so that after the
         call the tensor uses the same Bridge-weight convention as
         `identity`:
 
-            physical block  ≈  R_new  ×  sqrt(irrep_dim(q))
+            physical block  =  R_new  ×  sqrt(irrep_dim(q))
 
-        Both branches use a row-normalisation strategy, differing only in target:
+        Both branches use a row-normalization strategy, differing only in target:
 
         - **2nd-order**: By Schur's lemma `om = 1`, so each weight row is a
           single scalar `W[i, 0]`. The factor is absorbed into the
@@ -1182,14 +1128,27 @@ class Tensor:
                 W_new[i, 0] = sqrt(irrep_dim(q))
                 R_new[..., i] = R[..., i] * factor[i]
 
-        - **Higher-order**: each row is normalised to unit norm, with the
+        - **Higher-order**: each row is normalized to unit norm, with the
           norm absorbed into the data:
 
                 norms[i] = ‖W[i, :]‖
                 W_new[i, :] = W[i, :] / norms[i]
                 R_new[..., i] = R[..., i] * norms[i]
 
+        After normalization, linearly dependent components are removed via
+        `BlockSchema.block_compress`: an SVD is applied to the (now well-scaled)
+        weight matrix and rows whose singular values fall below `cutoff` are
+        discarded. For 2nd-order tensors this step is always a no-op because
+        Schur's lemma forces `om = 1` and therefore `num_components == 1`
+        should always hold per block.
+
         Has no effect on Abelian tensors or tensors without an intertwiner.
+
+        Parameters
+        ----------
+        cutoff : float, optional
+            Singular value threshold forwarded to `BlockSchema.block_compress`.
+            Default: 1e-14.
         """
         if self.intw is None:
             return
@@ -1198,7 +1157,7 @@ class Tensor:
         _sp_eps = torch.finfo(torch.float32).eps
 
         if len(self.indices) == 2:
-            # 2nd order (matrix): normalise each weight to sqrt(irrep_dim(q))
+            # 2nd order (matrix): normalize each weight to sqrt(irrep_dim(q))
             for key, arr in self.data.items():
                 bridge = self.intw.get(key)
                 if bridge is None:
@@ -1212,7 +1171,7 @@ class Tensor:
                 bridge.weights[:] = target                      # all rows → +target
                 self.data[key] = arr * factors                  # (..., k) * (k,)
         else:
-            # Higher-order: row-normalise Bridge weight matrix.
+            # Higher-order: row-normalize Bridge weight matrix.
             # norms[i] = ‖W[i,:]‖; absorbed into the trailing component axis of R.
             for key, arr in self.data.items():
                 bridge = self.intw.get(key)
@@ -1223,6 +1182,13 @@ class Tensor:
                 safe_norms = norms.clamp(min=1e-12)
                 bridge.weights[:] = bridge.weights / safe_norms[:, None]
                 self.data[key] = arr * norms                # (..., k) * (k,)
+
+        # Remove linearly dependent components after normalization so the SVD
+        # cutoff operates on well-scaled rows.
+        for key in list(self.intw.keys()):
+            self.data[key], self.intw[key] = BlockSchema.block_compress(
+                self.data[key], self.intw[key], cutoff=cutoff
+            )
 
     # ------------------------------------------------------------
     #   Tensor operations: conj, permute, transpose
@@ -1375,26 +1341,21 @@ class Tensor:
                 dtype=self.dtype, label=self.label
             )
 
-    def transpose(self, *order: int, in_place: bool = True) -> Tensor:
-        """Transpose tensor axes; defaults to reversing the index order.
+    def transpose(self, in_place: bool = False) -> Tensor:
+        """Transpose tensor axes by reversing the index order.
         
         Parameters
         ----------
-        *order : int
-            Optional integer axes specifying the new ordering. If not provided,
-            reverses the index order.
         in_place : bool, optional
-            If True (default), modifies this tensor in-place and returns self.
-            If False, returns a new Tensor instance with transposed axes.
+            If False (default), returns a new Tensor instance with reversed axes.
+            If True, modifies this tensor in-place and returns self.
         
         Returns
         -------
         Tensor
-            Self if in_place=True, new Tensor instance if in_place=False.
+            New Tensor instance if in_place=False, self if in_place=True.
         """
-        if not order:
-            order = tuple(reversed(range(len(self.indices))))
-        return self.permute(order, in_place=in_place)
+        return self.permute(tuple(reversed(range(len(self.indices)))), in_place=in_place)
 
     def invert(self, positions: Union[int, Sequence[int]]) -> None:
         """Invert the direction of specified index/indices while maintaining charge conservation.

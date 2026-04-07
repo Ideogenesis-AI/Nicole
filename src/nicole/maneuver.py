@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Standalone tensor maneuvers for structural and/or algebraic operations.
 
 This module provides functional tensor maneuvers covering conjugation, axis
@@ -47,6 +45,8 @@ capcup(A, axis_a, B, axis_b)
     Invert both directions of a contraction pair (bond) between two tensors,
     applying Frobenius-Schur phase corrections to B for SU(2) tensors.
 """
+
+from __future__ import annotations
 
 import math
 from typing import Dict, Sequence, Tuple, Union, Optional
@@ -187,31 +187,26 @@ def permute(tensor: Tensor, order: Sequence[int]) -> Tensor:
     )
 
 
-def transpose(tensor: Tensor, *order: int) -> Tensor:
-    """Return a new tensor with transposed axes; defaults to reversing axis order.
+def transpose(tensor: Tensor) -> Tensor:
+    """Return a new tensor with all axes reversed.
     
     Parameters
     ----------
     tensor:
         The input tensor to transpose.
-    *order:
-        Optional integer axes specifying the new ordering. If not provided,
-        defaults to reversing the axis order.
     
     Returns
     -------
     Tensor
-        A new tensor instance with transposed axes.
+        A new tensor instance with reversed axis order.
     
     Examples
     --------
     >>> from nicole import transpose, Tensor
     >>> # Assuming t is a 3-index tensor with itags [a, b, c]
     >>> t_T = transpose(t)  # Reverse order to [c, b, a]
-    >>> t_T2 = transpose(t, 1, 0, 2)  # Swap first two to [b, a, c]
     """
-    if not order:
-        order = tuple(reversed(range(len(tensor.indices))))
+    order = tuple(reversed(range(len(tensor.indices))))
     return permute(tensor, order)
 
 
@@ -282,9 +277,10 @@ def oplus(
     axes and arranging blocks in a block-diagonal fashion. Axes not specified
     must match exactly (same sectors, same dimensions).
     
-    For generic tensors, blocks are padded with zeros and combined using
-    block_add, which properly handles intertwiner weights by concatenating
-    them along the reduced multiplicity dimension.
+    For non-Abelian tensors, blocks are padded with zeros and combined using
+    `block_add`, which merges intertwiner weights (collinear weights combine
+    directly; non-collinear weights are concatenated). `block_compress` is
+    then applied to remove any resulting linear dependence among components.
     
     Parameters
     ----------
@@ -606,9 +602,13 @@ def oplus(
                 padded_B[tuple(slices_B)] = block_B
                 bridge_B = B.intw[charge_key]
             
-            # Combine using block_add
+            # Combine using block_add; compress any resulting linear dependence
+            # (e.g. when both inputs carry the same block).
             out_data[charge_key], out_intw[charge_key] = BlockSchema.block_add(
                 padded_A, bridge_A, padded_B, bridge_B
+            )
+            out_data[charge_key], out_intw[charge_key] = BlockSchema.block_compress(
+                out_data[charge_key], out_intw[charge_key]
             )
     
     # Step 6: Create and return output tensor
@@ -1075,7 +1075,7 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     other has an incoming index carrying the same itag. `capcup` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
-    (-1)^{2j} determined by the spin at that block's bond position.  After
+    (-1)^{2j} determined by the spin at that block's bond position. After
     this operation the bond direction is reversed but all tensor contractions
     that involve this bond yield the same numerical result.
 

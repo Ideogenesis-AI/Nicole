@@ -16,9 +16,9 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Special unitary symmetry groups (N>1) with multi-channel fusion."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Tuple

@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Block schema utilities for symmetry-aware tensors.
 
 This module collects helper routines that describe and validate the block
@@ -27,17 +25,16 @@ combinations, deriving dense shapes, allocating zero blocks, and checking
 charge conservation for a given block key.
 """
 
+from __future__ import annotations
+
 from itertools import product
 from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
-from typing import TYPE_CHECKING
 
 import torch
 
 from .index import Index
+from .symmetry.delegate import Bridge
 from .typing import Charge, Direction
-
-if TYPE_CHECKING:
-    from .symmetry.delegate import Bridge
 
 BlockKey = Tuple[Charge, ...]
 
@@ -66,6 +63,10 @@ class BlockSchema:
         Compute all achievable total charges for a block key (non-Abelian only).
     charges_conserved()
         Check whether a block key respects charge conservation (both types).
+    block_add()
+        Accumulate a pair of reduced blocks, merging or concatenating Bridge components.
+    block_compress()
+        Remove linearly dependent components from a block via SVD truncation.
     """
 
     @staticmethod
@@ -395,4 +396,59 @@ class BlockSchema:
         
         return data_added, bridge_added
 
+    @staticmethod
+    def block_compress(
+        data: torch.Tensor,
+        bridge: "Bridge",
+        cutoff: float = 1e-14,
+    ) -> Tuple[torch.Tensor, "Bridge"]:
+        """Remove linearly dependent components from a single generic tensor block.
+
+        Performs a thin SVD on the Bridge weight matrix and discards singular
+        vectors whose singular values fall below `cutoff`. The physical content
+        of the block is preserved:
+
+            physical block = R @ W  →  (R @ U[:, :k] @ diag(S[:k])) @ Vh[:k, :]
+
+        where `k` is the number of singular values ≥ `cutoff` (at least 1).
+
+        Parameters
+        ----------
+        data : torch.Tensor
+            Reduced block with shape `(...sectors..., n_comp)`.
+        bridge : Bridge
+            Intertwiner with weight matrix of shape `(n_comp, om_dim)`.
+        cutoff : float, optional
+            Singular value threshold for truncation. Default: 1e-14.
+
+        Returns
+        -------
+        new_data : torch.Tensor
+            Compressed reduced block, shape `(...sectors..., k)`.
+            Returns the original object unchanged when `n_comp < 2`.
+        new_bridge : Bridge
+            Compressed Bridge with weight matrix of shape `(k, om_dim)`.
+            Returns the original object unchanged when `n_comp < 2`.
+
+        Notes
+        -----
+        Returns the original objects unchanged when `n_comp < 2` (skipping
+        the SVD) or when no singular value falls below `cutoff` (no truncation).
+        """
+        if bridge.num_components < 2:
+            return data, bridge
+
+        U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+
+        # Keep at least one component even if all singular values are small.
+        k = max(1, int((S >= cutoff).sum().item()))
+
+        if not k < bridge.num_components:
+            return data, bridge
+
+        # Absorb U[:, :k] @ diag(S[:k]) into the trailing component axis.
+        r_flat = data.flatten(0, -2)
+        new_data = (r_flat @ (U[:, :k] * S[:k])).reshape(data.shape[:-1] + (k,))
+        new_bridge = Bridge(cgspec=bridge.cgspec, weights=Vh[:k, :])
+        return new_data, new_bridge
 

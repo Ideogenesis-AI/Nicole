@@ -20,11 +20,13 @@
 
 from .contract import contract, trace
 from .decomp import decomp
+from .einsum import einsum
 from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
 from .maneuver import conj, permute, transpose
 from .maneuver import oplus, diag, inv, capcup
 from .maneuver import filter_blocks, merge_axes
+from .serialize import serialize, deserialize
 from .space import load_space
 from .symmetry.abelian import U1Group, Z2Group
 from .symmetry.unitary import SU2Group
@@ -43,6 +45,7 @@ __all__ = [
     "SU2Group",
     "ProductGroup",
     "contract",
+    "einsum",
     "trace",
     "permute",
     "transpose",
@@ -58,6 +61,8 @@ __all__ = [
     "filter_blocks",
     "merge_axes",
     "load_space",
+    "serialize",
+    "deserialize",
 ]
 
 

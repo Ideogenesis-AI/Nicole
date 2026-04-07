@@ -1030,15 +1030,37 @@ def test_permute_su2_multiple_sectors_per_index():
 # Transpose tests
 # ============================================================================
 # Three modes of transpose:
-# 1. tensor.transpose(*order, in_place=True) - Method, default, modifies in-place
-# 2. tensor.transpose(*order, in_place=False) - Method, shares data efficiently
-# 3. transpose(tensor, *order) - Functional, clones all data for full isolation
+# 1. tensor.transpose() - Method, default (in_place=False), returns new tensor
+# 2. tensor.transpose(in_place=True) - Method, modifies in-place, returns self
+# 3. transpose(tensor) - Functional, clones all data for full isolation
 # ============================================================================
 
-# --- Method: tensor.transpose(*order, in_place=True) - Default, in-place ---
+# --- Method: tensor.transpose(in_place=False) - Default, returns new tensor ---
 
-def test_transpose_method_inplace_default_reverses():
-    """Test method transpose(in_place=True) with default reverses order."""
+def test_transpose_method_default_returns_new():
+    """Test method transpose() default (in_place=False) returns new tensor."""
+    group = U1Group()
+    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(2)]
+    tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
+    
+    original_itags = list(tensor.itags)
+    
+    tensor_T = tensor.transpose()
+    
+    # Returns new instance
+    assert tensor_T is not tensor
+    
+    # Original unchanged
+    assert list(tensor.itags) == original_itags
+    
+    # New tensor has reversed itags
+    assert list(tensor_T.itags) == list(reversed(original_itags))
+
+
+# --- Method: tensor.transpose(in_place=True) - Explicit in-place ---
+
+def test_transpose_method_inplace_reverses():
+    """Test method transpose(in_place=True) reverses order."""
     group = U1Group()
     indices = [
         Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 1))),
@@ -1050,7 +1072,7 @@ def test_transpose_method_inplace_default_reverses():
     
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
-    result = tensor.transpose()
+    result = tensor.transpose(in_place=True)
     
     # Returns self
     assert result is tensor
@@ -1064,21 +1086,6 @@ def test_transpose_method_inplace_default_reverses():
         assert torch.allclose(tensor.data[new_key], torch.permute(block, (2, 1, 0)))
 
 
-def test_transpose_method_inplace_explicit_order():
-    """Test method transpose(in_place=True) with explicit order."""
-    group = U1Group()
-    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
-    tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
-    
-    result = tensor.transpose(1, 0, 2)
-    
-    # Returns self
-    assert result is tensor
-    
-    # itags reordered
-    assert list(tensor.itags) == ["b", "a", "c"]
-
-
 def test_transpose_method_inplace_allows_chaining():
     """Test that method transpose(in_place=True) enables chaining."""
     group = U1Group()
@@ -1088,7 +1095,7 @@ def test_transpose_method_inplace_allows_chaining():
     original_data = {k: v.clone() for k, v in tensor.data.items()}
     
     # Chain double transpose (should restore)
-    result = tensor.transpose().transpose()
+    result = tensor.transpose(in_place=True).transpose(in_place=True)
     
     # Returns self
     assert result is tensor
@@ -1099,29 +1106,7 @@ def test_transpose_method_inplace_allows_chaining():
         assert torch.allclose(tensor.data[key], original_data[key])
 
 
-# --- Method: tensor.transpose(*order, in_place=False) - Efficient sharing ---
-
-def test_transpose_method_not_inplace_basic():
-    """Test method transpose(in_place=False) basic behavior."""
-    group = U1Group()
-    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(2)]
-    tensor = Tensor.random(indices, seed=1, itags=["a", "b"])
-    
-    original_itags = list(tensor.itags)
-    
-    tensor_T = tensor.transpose(in_place=False)
-    
-    # Returns new instance
-    assert tensor_T is not tensor
-    
-    # Original unchanged
-    assert list(tensor.itags) == original_itags
-    
-    # New tensor has reversed itags
-    assert list(tensor_T.itags) == list(reversed(original_itags))
-
-
-# --- Functional: transpose(tensor, *order) - Full cloning for isolation ---
+# --- Functional: transpose(tensor) - Full cloning for isolation ---
 
 def test_transpose_functional_default_reverses():
     """Test functional transpose() with default reverses order."""
@@ -1148,21 +1133,6 @@ def test_transpose_functional_default_reverses():
     for key, block in original_data.items():
         new_key = tuple(reversed(key))
         assert torch.allclose(transposed.data[new_key], torch.permute(block, (2, 1, 0)))
-
-
-def test_transpose_functional_explicit_order():
-    """Test functional transpose() with explicit order."""
-    group = U1Group()
-    indices = [Index(Direction.OUT, group, sectors=(Sector(0, 1),)) for _ in range(3)]
-    tensor = Tensor.random(indices, seed=1, itags=["a", "b", "c"])
-    
-    transposed = transpose(tensor, 1, 0, 2)
-    
-    # Returns new instance
-    assert transposed is not tensor
-    
-    # itags reordered
-    assert list(transposed.itags) == ["b", "a", "c"]
 
 
 def test_transpose_functional_clones_data():
@@ -1222,28 +1192,6 @@ def test_transpose_su2_default_reverses():
     for key in T.intw:
         reversed_key = tuple(reversed(key))
         assert reversed_key in T_t.intw
-
-
-def test_transpose_su2_explicit_order():
-    """Test transpose with an explicit non-trivial axis order on SU(2)."""
-    group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 3), Sector(3, 2)))
-    idx3 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 3)))
-
-    T = Tensor.random([idx1, idx2, idx3], seed=11, itags=['a', 'b', 'c'])
-    populate_random_weights(T, seed=11)
-
-    order = [1, 2, 0]
-    T_t = transpose(T, *order)
-
-    assert list(T_t.itags) == ['b', 'c', 'a']
-
-    # intw keys match the permuted order
-    assert T_t.intw is not None
-    for key in T.intw:
-        new_key = tuple(key[i] for i in order)
-        assert new_key in T_t.intw
 
 
 def test_transpose_su2_preserves_norm():

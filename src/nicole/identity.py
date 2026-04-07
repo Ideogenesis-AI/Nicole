@@ -16,8 +16,6 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-from __future__ import annotations
-
 """Utilities for constructing canonical identity and fusion tensors.
 
 This module provides helpers that build symmetry-aware tensors commonly used in
@@ -26,6 +24,8 @@ and an n-to-1 isometry that fuses any number of indices sequentially.
 All routines respect the block structure defined by Nicole indices and ensure
 charge conservation across all generated blocks.
 """
+
+from __future__ import annotations
 
 from typing import Dict, Optional, Sequence, Tuple
 

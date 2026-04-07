@@ -34,31 +34,31 @@ def _make_zero_mid(op_idx: Index, zero4: Tensor) -> Tensor:
     have bond indices that are *structurally compatible* with the non-zero
     operator block in the same row. When the operator has no charge-0 sector
     (e.g. SU(2) spin operator, or fermionic annihilation/creation), the naïve
-    ``op * 0`` tensor carries the wrong bond sector set, causing ``oplus`` to
+    `op * 0` tensor carries the wrong bond sector set, causing `oplus` to
     fail. This helper builds the correct zero tensor for those positions.
 
-    The block key ``(lc, lc, bc, bc)`` (diagonal in both the bond charge and
+    The block key `(lc, lc, bc, bc)` (diagonal in both the bond charge and
     the physical charge) satisfies charge conservation for any Abelian or
     non-Abelian symmetry group. For non-Abelian groups the corresponding
-    ``Bridge`` intertwiner is computed via ``Bridge.from_block``.
+    `Bridge` intertwiner is computed via `Bridge.from_block`.
 
     Parameters
     ----------
     op_idx : Index
-        The *op* axis (axis 2) of the operator tensor, e.g. ``S.indices[2]``
-        or ``G.indices[2]``. Its charge sectors determine the bond sectors of
+        The *op* axis (axis 2) of the operator tensor, e.g. `S.indices[2]`
+        or `G.indices[2]`. Its charge sectors determine the bond sectors of
         the output tensor.
     zero4 : Tensor
-        A zero tensor with shape ``(left, right, bra, ket)`` built from the
-        physical identity. Its ``bra`` (axis 2) and ``ket`` (axis 3) indices
-        provide the physical charge sectors, and its ``intw`` field indicates
-        whether the symmetry group is Abelian (``intw is None``) or not.
+        A zero tensor with shape `(left, right, bra, ket)` built from the
+        physical identity. Its `bra` (axis 2) and `ket` (axis 3) indices
+        provide the physical charge sectors, and its `intw` field indicates
+        whether the symmetry group is Abelian (`intw is None`) or not.
 
     Returns
     -------
     Tensor
         A zero tensor with indices
-        ``(op_idx.flip(), op_idx, zero4.indices[2], zero4.indices[3])``.
+        `(op_idx.flip(), op_idx, zero4.indices[2], zero4.indices[3])`.
     """
     _op_sdm  = op_idx.sector_dim_map()
     _bra_sdm = zero4.indices[2].sector_dim_map()
@@ -104,8 +104,8 @@ def build_heisenberg(
     spin : float, optional
         Total spin quantum number for each site (default: 0.5 for spin-1/2)
     symmetry : str, optional
-        Symmetry to exploit: ``"U1"`` (Sz conservation) or ``"SU2"`` (full
-        spin rotation). Default: ``"U1"``.
+        Symmetry to exploit: `"U1"` (Sz conservation) or `"SU2"` (full
+        spin rotation). Default: `"U1"`.
 
     Returns
     -------
@@ -266,15 +266,15 @@ def build_freefermion(
     t : float, optional
         Nearest-neighbor hopping amplitude (default: 1.0).
     symmetry : str, optional
-        Symmetry to exploit: ``"U1"`` (particle number) or ``"Z2"`` (fermion
-        parity). Default: ``"U1"``.
+        Symmetry to exploit: `"U1"` (particle number) or `"Z2"` (fermion
+        parity). Default: `"U1"`.
 
     Returns
     -------
     list of Tensor
         MPO tensors, each with shape (left, right, phys_out, phys_in)
         with directions (IN, OUT, IN, OUT) and itags
-        ``["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]``.
+        `["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]`.
 
     Notes
     -----
@@ -290,16 +290,16 @@ def build_freefermion(
         Fd   — h.c. of F  (op=IN)
         Cd   — h.c. of C  (op=OUT, same data as F for real operators)
 
-    ``capcup`` flips the op-axis direction of C (IN→OUT) and Cd (OUT→IN)
+    `capcup` flips the op-axis direction of C (IN→OUT) and Cd (OUT→IN)
     without changing numerical contractions. All four operators are then
-    normalised to the full physical index ``Spc`` so that ``oplus`` can
+    normalised to the full physical index `Spc` so that `oplus` can
     merge the op axis regardless of which individual bra/ket sectors each
     operator occupies. After the flip and normalisation:
 
         G    = oplus(F, C, axes=2)      (op=OUT, dim-2 within charge-1 sector)
         Gdag = oplus(Fd, Cd, axes=2)*(-t)  (op=IN,  the scaled Hermitian conjugate)
 
-    Using ``oplus`` on the op axis (rather than plain ``+``) keeps the
+    Using `oplus` on the op axis (rather than plain `+`) keeps the
     annihilation channel (F, position 0) and creation channel (C, position 1)
     in separate op-index slots.  This prevents the MPO bond from generating
     spurious c†c† / cc cross-terms, which would otherwise appear under Z2
@@ -484,17 +484,17 @@ def build_conductor(
     symmetry : str, optional
         Symmetry to exploit. Accepted values (Band preset):
 
-        * ``"U1,U1"``  — spin-up and spin-down particle numbers separately
-        * ``"Z2,U1"``  — fermion parity × spin-z particle number
-        * ``"U1,SU2"`` — particle number × full spin-rotation (default)
-        * ``"Z2,SU2"`` — fermion parity × full spin-rotation
+        * `"U1,U1"`  — spin-up and spin-down particle numbers separately
+        * `"Z2,U1"`  — fermion parity × spin-z particle number
+        * `"U1,SU2"` — particle number × full spin-rotation (default)
+        * `"Z2,SU2"` — fermion parity × full spin-rotation
 
     Returns
     -------
     list of Tensor
         MPO tensors, each with shape (left, right, phys_out, phys_in)
         with directions (IN, OUT, IN, OUT) and itags
-        ``["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]``.
+        `["W{i:02d}", "W{i:02d}", "s{i:02d}", "s{i:02d}"]`.
 
     Notes
     -----
@@ -515,11 +515,11 @@ def build_conductor(
         Gdag = oplus(Fd, F, axes=2) * (-t)  — bare operators at the RIGHT site
 
     where ZF = Z × F, Z = (-1)^N is the total-parity operator.
-    ``oplus`` along the op axis keeps the annihilator and creator channels
+    `oplus` along the op axis keeps the annihilator and creator channels
     block-diagonally separate even when they collide in the same op charge
     sector (which happens for Z2-based symmetries, since Z2 is self-dual).
-    All four operators are first normalised to the full physical index ``Spc``
-    so that ``oplus`` succeeds regardless of which individual bra/ket sectors
+    All four operators are first normalised to the full physical index `Spc`
+    so that `oplus` succeeds regardless of which individual bra/ket sectors
     each operator occupies.
 
     Examples
