@@ -502,8 +502,8 @@ def serialize(bridge: Bridge) -> dict:
     Returns
     -------
     dict
-        ``{"edges": tuple of (two_j: int, dir_sign: int), "weights": torch.Tensor}``
-        where each ``(two_j, dir_sign)`` pair encodes the doubled SU(2) spin
+        `{"edges": tuple of (two_j: int, dir_sign: int), "weights": torch.Tensor}`
+        where each `(two_j, dir_sign)` pair encodes the doubled SU(2) spin
         and the edge direction (+1 incoming, -1 outgoing).
     """
     spins = bridge.cgspec.get_spins()
@@ -527,7 +527,7 @@ def deserialize(
         Dict that includes the entries produced by `serialize` (i.e. must
         contain at least `"edges"` and `"weights"`).
     device : str or torch.device, optional
-        Device to place the weight tensor on. Defaults to ``"cpu"``.
+        Device to place the weight tensor on. Defaults to `"cpu"`.
     dtype : torch.dtype, optional
         Dtype to cast the weight tensor to. If `None`, the tensor's
         existing dtype is preserved.
