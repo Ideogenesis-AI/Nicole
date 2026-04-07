@@ -277,9 +277,10 @@ def oplus(
     axes and arranging blocks in a block-diagonal fashion. Axes not specified
     must match exactly (same sectors, same dimensions).
     
-    For generic tensors, blocks are padded with zeros and combined using
-    block_add, which properly handles intertwiner weights by concatenating
-    them along the reduced multiplicity dimension.
+    For non-Abelian tensors, blocks are padded with zeros and combined using
+    `block_add`, which merges intertwiner weights (collinear weights combine
+    directly; non-collinear weights are concatenated). `block_compress` is
+    then applied to remove any resulting linear dependence among components.
     
     Parameters
     ----------
@@ -601,9 +602,13 @@ def oplus(
                 padded_B[tuple(slices_B)] = block_B
                 bridge_B = B.intw[charge_key]
             
-            # Combine using block_add
+            # Combine using block_add; compress any resulting linear dependence
+            # (e.g. when both inputs carry the same block).
             out_data[charge_key], out_intw[charge_key] = BlockSchema.block_add(
                 padded_A, bridge_A, padded_B, bridge_B
+            )
+            out_data[charge_key], out_intw[charge_key] = BlockSchema.block_compress(
+                out_data[charge_key], out_intw[charge_key]
             )
     
     # Step 6: Create and return output tensor
