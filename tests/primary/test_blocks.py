@@ -822,3 +822,119 @@ def test_block_add_clones_bridge():
     assert bridge_result is not bridge_b
     assert torch.allclose(bridge_result.weights, bridge_a.weights)
 
+
+# ---------------------------------------------------------------------------
+# block_compress tests
+# ---------------------------------------------------------------------------
+
+def _make_cgspec_and_bridge(n_comp: int, om_dim: int, seed: int = 0) -> tuple:
+    """Helper: build a CGSpec with the given om_dimension and a Bridge with n_comp rows."""
+    # Four spin-1/2 edges give om_dim = 2 for the coupled spin-0 channel.
+    edges = [
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+        yuzuha.Edge.outgoing(yuzuha.Spin(1)),
+    ]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    assert cgspec.om_dimension() == om_dim, (
+        f"Expected om_dim={om_dim}, got {cgspec.om_dimension()}"
+    )
+    gen = torch.Generator()
+    gen.manual_seed(seed)
+    weights = torch.randn(n_comp, om_dim, dtype=torch.float64, generator=gen)
+    bridge = dg.Bridge(cgspec=cgspec, weights=weights)
+    return cgspec, bridge
+
+
+def test_block_compress_single_component_no_op():
+    """block_compress must return the original objects unchanged when num_components == 1."""
+    cgspec, bridge = _make_cgspec_and_bridge(n_comp=1, om_dim=2, seed=0)
+    data = torch.randn(3, 4, 1, dtype=torch.float64)
+
+    data_out, bridge_out = BlockSchema.block_compress(data, bridge)
+
+    # Must be the same objects — no copy, no SVD.
+    assert data_out is data
+    assert bridge_out is bridge
+
+
+def test_block_compress_independent_rows_unchanged():
+    """block_compress must not reduce num_components when rows are linearly independent."""
+    cgspec, bridge = _make_cgspec_and_bridge(n_comp=2, om_dim=2, seed=7)
+    data = torch.randn(3, 2, dtype=torch.float64)
+
+    original_weights = bridge.weights.clone()
+    data_out, bridge_out = BlockSchema.block_compress(data, bridge)
+
+    assert bridge_out.num_components == 2
+    # Physical content preserved: R_out @ W_out ≈ data @ original_weights
+    assert torch.allclose(
+        data_out.flatten(0, -2) @ bridge_out.weights,
+        data.flatten(0, -2) @ original_weights,
+        atol=1e-10,
+    )
+
+
+def test_block_compress_dependent_rows_reduced():
+    """block_compress must reduce num_components when rows span a lower-dimensional subspace."""
+    cgspec, bridge = _make_cgspec_and_bridge(n_comp=1, om_dim=2, seed=3)
+    W = bridge.weights  # (1, 2) independent base row
+
+    # Append two rows that are multiples of the base.
+    dep = torch.cat([W * 2.0, W * 0.5], dim=0)
+    weights_red = torch.cat([W, dep], dim=0)  # (3, 2), rank 1
+    bridge_red = dg.Bridge(cgspec=cgspec, weights=weights_red)
+    data = torch.randn(4, 3, dtype=torch.float64)
+
+    original_physical = data.flatten(0, -2) @ weights_red
+
+    data_out, bridge_out = BlockSchema.block_compress(data, bridge_red, cutoff=1e-12)
+
+    assert bridge_out.num_components < 3
+    assert bridge_out.num_components >= 1
+    # Physical tensor content must be preserved.
+    assert torch.allclose(
+        data_out.flatten(0, -2) @ bridge_out.weights,
+        original_physical,
+        atol=1e-10,
+    )
+
+
+def test_block_compress_cutoff_sensitivity():
+    """block_compress cutoff controls which singular values are retained."""
+    # Use a CGSpec whose om_dim == 2 so we can have a genuine 2×2 weight matrix.
+    cgspec, _ = _make_cgspec_and_bridge(n_comp=1, om_dim=2, seed=5)
+
+    # Construct a 2×2 weight matrix with known singular values [1, 1e-16].
+    # Both rows are independent, so num_components cannot be reduced by rank-deficiency
+    # detection alone — only the cutoff decides which singular values survive.
+    weights2 = torch.tensor([[1.0, 0.0], [0.0, 1e-16]], dtype=torch.float64)
+    bridge2 = dg.Bridge(cgspec=cgspec, weights=weights2)
+    data = torch.randn(3, 2, dtype=torch.float64)
+
+    # Tight cutoff (1e-14): singular value 1e-16 is below threshold → removed.
+    _, bridge_tight = BlockSchema.block_compress(data, bridge2, cutoff=1e-14)
+    assert bridge_tight.num_components == 1
+
+    # Loose cutoff (1e-20): singular value 1e-16 exceeds threshold → kept.
+    _, bridge_loose = BlockSchema.block_compress(data, bridge2, cutoff=1e-20)
+    assert bridge_loose.num_components == 2
+
+
+def test_block_compress_does_not_mutate_inputs():
+    """block_compress must not modify the original data or bridge objects."""
+    cgspec, bridge = _make_cgspec_and_bridge(n_comp=1, om_dim=2, seed=9)
+    W = bridge.weights  # (1, 2)
+    dep = torch.cat([W * 3.0], dim=0)
+    weights_red = torch.cat([W, dep], dim=0)
+    bridge_red = dg.Bridge(cgspec=cgspec, weights=weights_red)
+    weights_copy = weights_red.clone()
+    data = torch.randn(4, 2, dtype=torch.float64)
+    data_copy = data.clone()
+
+    BlockSchema.block_compress(data, bridge_red, cutoff=1e-12)
+
+    assert torch.allclose(data, data_copy)
+    assert torch.allclose(bridge_red.weights, weights_copy)
+
