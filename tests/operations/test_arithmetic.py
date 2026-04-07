@@ -709,13 +709,13 @@ def test_addition_su2_same_weights():
     # Should use non-Abelian addition
     assert C.intw is not None
     
-    # Verify weights are unchanged (same as inputs)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
-        # Block shape should be unchanged (direct addition)
-        assert C.data[key].shape == A.data[key].shape
-        # Data should be sum of inputs
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_different_weights():
@@ -733,17 +733,16 @@ def test_addition_su2_different_weights():
     key = (1, 1)
     C = A + B
     
-    # Should concatenate along reduced multiplicity dimension
+    # Should use non-Abelian addition
     assert C.intw is not None
     
-    # Weights should be concatenated
-    expected_weights = torch.cat([A.intw[key].weights, B.intw[key].weights], dim=0)
-    assert torch.allclose(C.intw[key].weights, expected_weights)
-    
-    # Data trailing dimension should be concatenated
-    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B.data[key].shape[-1]
-    expected_data = torch.cat([A.data[key], B.data[key]], dim=-1)
-    assert torch.allclose(C.data[key], expected_data)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
+    for k in C.data.keys():
+        phys_c = C.data[k].flatten(0, -2) @ C.intw[k].weights
+        phys_a = A.data[k].flatten(0, -2) @ A.intw[k].weights
+        phys_b = B.data[k].flatten(0, -2) @ B.intw[k].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_same_weights():
@@ -769,13 +768,13 @@ def test_subtraction_su2_same_weights():
     # Should use non-Abelian subtraction
     assert C.intw is not None
     
-    # Verify weights are unchanged (same as inputs)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
     for key in C.data.keys():
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
-        # Block shape should be unchanged (direct subtraction)
-        assert C.data[key].shape == A.data[key].shape
-        # Data should be difference of inputs
-        assert torch.allclose(C.data[key], A.data[key] - B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_different_weights():
@@ -793,17 +792,16 @@ def test_subtraction_su2_different_weights():
     key = (1, 1)
     C = A - B
     
-    # Should concatenate along reduced multiplicity dimension
+    # Should use non-Abelian subtraction
     assert C.intw is not None
     
-    # Weights should be concatenated
-    expected_weights = torch.cat([A.intw[key].weights, B.intw[key].weights], dim=0)
-    assert torch.allclose(C.intw[key].weights, expected_weights)
-    
-    # Data trailing dimension should be concatenated, B's part negated
-    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B.data[key].shape[-1]
-    expected_data = torch.cat([A.data[key], -B.data[key]], dim=-1)
-    assert torch.allclose(C.data[key], expected_data)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
+    for k in C.data.keys():
+        phys_c = C.data[k].flatten(0, -2) @ C.intw[k].weights
+        phys_a = A.data[k].flatten(0, -2) @ A.intw[k].weights
+        phys_b = B.data[k].flatten(0, -2) @ B.intw[k].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_self_doubles():
@@ -816,10 +814,12 @@ def test_addition_su2_self_doubles():
     populate_random_weights(A, seed=42)
     C = A + A
     
-    # With same weights, should add directly
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = 2 * physical(A).
     for key in C.data.keys():
-        assert torch.allclose(C.data[key], 2 * A.data[key])
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        assert torch.allclose(phys_c, 2 * phys_a, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_self_gives_zero():
@@ -973,11 +973,16 @@ def test_addition_su2_4th_order_nontrivial_om():
     
     C = A + B
     
-    # Verify structure preserved: same weights → direct addition
+    # Verify non-Abelian addition
     assert C.intw is not None
+    
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert C.intw[key].num_components == A.intw[key].num_components
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_multiple_sectors():
@@ -1004,10 +1009,13 @@ def test_addition_su2_multiple_sectors():
     
     C = A + B
     
-    # All blocks should be summed correctly (same weights → direct addition)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert C.intw[key].num_components == A.intw[key].num_components
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_3rd_order_collinear_weights():
@@ -1122,8 +1130,12 @@ def test_subtraction_su2_4th_order_different_weights():
 
     C = A - B
     
-    # Should concatenate weights for every block
-    for key in C.intw:
-        assert C.intw[key].num_components == A.intw[key].num_components + B.intw[key].num_components
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
+    for key in C.data.keys():
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
