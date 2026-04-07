@@ -117,10 +117,8 @@ class Tensor:
         Access the i-th block by integer index (1-indexed, matching display).
     show()
         Display selected blocks without max_line limits.
-    compress()
-        In-place: Reduce redundant intertwiner components via SVD truncation.
     regularize()
-        In-place: Canonicalize or regularize Bridge weights.
+        In-place: Canonicalize or regularize Bridge weights, and compress components.
     conj()
         Complex conjugate every dense block, and revert all index directions.
     permute()
