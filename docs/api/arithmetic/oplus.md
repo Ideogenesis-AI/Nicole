@@ -25,4 +25,4 @@ When charges collide, blocks are placed on the block diagonal.
 
 ## Notes
 
-Resulting tensor has combined sectors from all input tensors. For colliding charges, blocks are arranged diagonally (not summed).
+Resulting tensor has combined sectors from all input tensors. For colliding charges, blocks are arranged diagonally (not summed). For non-Abelian groups, linearly dependent components are automatically compressed away after the merge.
