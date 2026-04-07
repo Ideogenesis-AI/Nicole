@@ -838,16 +838,12 @@ def _build_ss_band_from_fierz(preserv: str):
     # Fierz combination: S₁·S₂ = (1/4)(2·exchange − N₁N₂)
     SS_fierz = (exchange * 2 - N1N2) * 0.25
 
-    # Merge physical indices and normalise.
+    # Merge physical indices and normalize.
     SS_fierz, _ = merge_axes(SS_fierz, (0, 2), merged_tag="ss", direction=Direction.IN)
     SS_fierz, _ = merge_axes(SS_fierz, (1, 2), merged_tag="ss")
     # The sum 2·exchange − N₁N₂ inflates num_components (each summand contributes
-    # its own weight row).  compress() performs SVD on the Bridge weight matrix
-    # and retains only the linearly independent components.  It must run BEFORE
-    # regularize() because regularize() for 2-index tensors reads bridge.weights[0,0]
-    # alone; with num_components > 1 that first element may differ from the true
-    # effective weight, leading to incorrect data scaling.
-    SS_fierz.compress()
+    # its own weight row). regularize() normalizes each row then calls block_compress
+    # internally to remove linearly dependent components in one step.
     SS_fierz.regularize()
     # exchange and N₁N₂ each populate sectors where spin is zero (e.g. empty or
     # doubly-occupied sites); after cancellation those blocks are numerically tiny

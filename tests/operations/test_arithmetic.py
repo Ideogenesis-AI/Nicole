@@ -709,13 +709,13 @@ def test_addition_su2_same_weights():
     # Should use non-Abelian addition
     assert C.intw is not None
     
-    # Verify weights are unchanged (same as inputs)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
-        # Block shape should be unchanged (direct addition)
-        assert C.data[key].shape == A.data[key].shape
-        # Data should be sum of inputs
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_different_weights():
@@ -733,17 +733,16 @@ def test_addition_su2_different_weights():
     key = (1, 1)
     C = A + B
     
-    # Should concatenate along reduced multiplicity dimension
+    # Should use non-Abelian addition
     assert C.intw is not None
     
-    # Weights should be concatenated
-    expected_weights = torch.cat([A.intw[key].weights, B.intw[key].weights], dim=0)
-    assert torch.allclose(C.intw[key].weights, expected_weights)
-    
-    # Data trailing dimension should be concatenated
-    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B.data[key].shape[-1]
-    expected_data = torch.cat([A.data[key], B.data[key]], dim=-1)
-    assert torch.allclose(C.data[key], expected_data)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
+    for k in C.data.keys():
+        phys_c = C.data[k].flatten(0, -2) @ C.intw[k].weights
+        phys_a = A.data[k].flatten(0, -2) @ A.intw[k].weights
+        phys_b = B.data[k].flatten(0, -2) @ B.intw[k].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_same_weights():
@@ -769,13 +768,13 @@ def test_subtraction_su2_same_weights():
     # Should use non-Abelian subtraction
     assert C.intw is not None
     
-    # Verify weights are unchanged (same as inputs)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
     for key in C.data.keys():
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
-        # Block shape should be unchanged (direct subtraction)
-        assert C.data[key].shape == A.data[key].shape
-        # Data should be difference of inputs
-        assert torch.allclose(C.data[key], A.data[key] - B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_different_weights():
@@ -793,17 +792,16 @@ def test_subtraction_su2_different_weights():
     key = (1, 1)
     C = A - B
     
-    # Should concatenate along reduced multiplicity dimension
+    # Should use non-Abelian subtraction
     assert C.intw is not None
     
-    # Weights should be concatenated
-    expected_weights = torch.cat([A.intw[key].weights, B.intw[key].weights], dim=0)
-    assert torch.allclose(C.intw[key].weights, expected_weights)
-    
-    # Data trailing dimension should be concatenated, B's part negated
-    assert C.data[key].shape[-1] == A.data[key].shape[-1] + B.data[key].shape[-1]
-    expected_data = torch.cat([A.data[key], -B.data[key]], dim=-1)
-    assert torch.allclose(C.data[key], expected_data)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
+    for k in C.data.keys():
+        phys_c = C.data[k].flatten(0, -2) @ C.intw[k].weights
+        phys_a = A.data[k].flatten(0, -2) @ A.intw[k].weights
+        phys_b = B.data[k].flatten(0, -2) @ B.intw[k].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_self_doubles():
@@ -816,10 +814,12 @@ def test_addition_su2_self_doubles():
     populate_random_weights(A, seed=42)
     C = A + A
     
-    # With same weights, should add directly
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = 2 * physical(A).
     for key in C.data.keys():
-        assert torch.allclose(C.data[key], 2 * A.data[key])
-        assert torch.allclose(C.intw[key].weights, A.intw[key].weights, rtol=1e-12, atol=1e-15)
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        assert torch.allclose(phys_c, 2 * phys_a, rtol=1e-10, atol=1e-12)
 
 
 def test_subtraction_su2_self_gives_zero():
@@ -914,178 +914,6 @@ def test_addition_su2_norm_conservation():
     assert norm_c >= abs(norm_a - norm_b)
 
 
-# Compression tests
-
-def test_compress_su2_no_redundancy():
-    """Test compression when weights have no redundancy (random multi-component weights)."""
-    group = SU2Group()
-    # Use 4 indices to get non-trivial OM (om_dim > 1) so multiple components
-    # can be genuinely linearly independent
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
-    # om_dim = 2 for the (1,1,1,1) block; use at most 2 components so they can be independent
-    populate_random_weights(A, seed=42, min_components=2, max_components=3)
-    
-    # Store original state
-    original_norm = A.norm()
-    original_num_components = {key: bridge.num_components for key, bridge in A.intw.items()}
-    
-    # Random weights within the OM dimension are generically linearly independent
-    A.compress()
-    
-    # Should be unchanged
-    assert math.isclose(A.norm(), original_norm)
-    for key in A.data.keys():
-        assert A.intw[key].num_components == original_num_components[key]
-
-
-def test_compress_su2_linearly_dependent():
-    """Test compression with linearly dependent weight rows."""
-    group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    key = (1, 1)
-    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    populate_random_weights(A, seed=42)
-    
-    bridge_a = A.intw[key]
-    W = bridge_a.weights  # (n, om_dim) — random independent base
-    n = bridge_a.num_components
-
-    # Append rows that are linear combinations of the base rows
-    dep_rows = torch.cat([W[0:1, :] * 2.0, W[0:1, :] * 0.5], dim=0)
-    weights_redundant = torch.cat([W, dep_rows], dim=0)  # (n + 2) rows, rank = rank(W)
-
-    new_data = {key: torch.randn(*A.data[key].shape[:-1], n + 2, dtype=torch.float64)}
-    new_intw = {key: dg.Bridge(cgspec=bridge_a.cgspec, weights=weights_redundant)}
-    
-    A_redundant = Tensor(
-        indices=(idx1, idx2),
-        itags=("a", "b"),
-        data=new_data,
-        intw=new_intw,
-        dtype=torch.float64
-    )
-    
-    # Store original norm
-    original_norm = A_redundant.norm()
-    
-    # Compress
-    A_redundant.compress(cutoff=1e-12)
-    
-    # Should reduce: dependent rows removed
-    assert A_redundant.intw[key].num_components < (n + 2)
-    assert A_redundant.intw[key].num_components >= 1
-    
-    assert math.isclose(A_redundant.norm(), original_norm, rel_tol=1e-10)
-
-
-def test_compress_su2_after_addition_different_weights():
-    """Test compression after adding tensors with different weights."""
-    group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
-    populate_random_weights(A, seed=42)
-    populate_random_weights(B, seed=99)
-
-    key = (1, 1)
-    C = A + B
-    assert C.intw[key].num_components == A.intw[key].num_components + B.intw[key].num_components
-    
-    original_norm = C.norm()
-    original_num_components = C.intw[key].num_components
-    
-    C.compress(cutoff=1e-13)
-    
-    # Norm should be preserved
-    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
-    
-    # Components should be <= original
-    assert C.intw[key].num_components <= original_num_components
-
-
-def test_compress_su2_specific_keys():
-    """Test compression on specific block keys only."""
-    group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
-    populate_random_weights(A, seed=42)
-    populate_random_weights(B, seed=99)
-    
-    C = A + B
-    
-    # Store original state for all keys
-    original_num_components = {key: bridge.num_components for key, bridge in C.intw.items()}
-    
-    key1 = (1, 1)
-    # Compress only the specified key
-    if key1 in C.data:
-        C.compress(keys=[key1])
-        
-        # Other keys should remain unchanged
-        for key in C.data.keys():
-            if key != key1:
-                assert C.intw[key].num_components == original_num_components[key]
-
-
-def test_compress_abelian_no_op():
-    """Test that compression on Abelian tensors is a no-op."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    
-    A = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
-    original_norm = A.norm()
-    
-    # Should be a no-op
-    A.compress()
-    
-    # Should be unchanged
-    assert math.isclose(A.norm(), original_norm)
-    assert A.intw is None
-
-
-def test_compress_su2_preserves_tensor_value():
-    """Test that compression preserves the physical tensor value."""
-    group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    key = (1, 1)
-    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
-    populate_random_weights(A, seed=42)
-    
-    bridge_a = A.intw[key]
-    W = bridge_a.weights  # (n, om_dim)
-    n = bridge_a.num_components
-
-    # Build B with weights = 2*W (collinear with A's) and fresh random data
-    gen_b = torch.Generator()
-    gen_b.manual_seed(99)
-    B_data = {key: torch.randn(*A.data[key].shape[:-1], n, generator=gen_b, dtype=torch.float64)}
-    B_intw = {key: dg.Bridge(cgspec=bridge_a.cgspec, weights=W * 2.0)}
-    B = Tensor(indices=(idx1, idx2), itags=("a", "b"), data=B_data, intw=B_intw, dtype=torch.float64)
-
-    C = A + B
-    original_norm = C.norm()
-    
-    # Compress: collinear weights should reduce back to n components
-    C.compress(cutoff=1e-13)
-    
-    # Physical tensor must be unchanged after compression
-    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
-
-
 # Multi-index and multi-sector tests (non-trivial CG and OM)
 
 def test_addition_su2_3rd_order_nontrivial_cg():
@@ -1145,11 +973,16 @@ def test_addition_su2_4th_order_nontrivial_om():
     
     C = A + B
     
-    # Verify structure preserved: same weights → direct addition
+    # Verify non-Abelian addition
     assert C.intw is not None
+    
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert C.intw[key].num_components == A.intw[key].num_components
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_multiple_sectors():
@@ -1176,10 +1009,13 @@ def test_addition_su2_multiple_sectors():
     
     C = A + B
     
-    # All blocks should be summed correctly (same weights → direct addition)
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) + physical(B).
     for key in C.data.keys():
-        assert C.intw[key].num_components == A.intw[key].num_components
-        assert torch.allclose(C.data[key], A.data[key] + B.data[key])
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a + phys_b, rtol=1e-10, atol=1e-12)
 
 
 def test_addition_su2_3rd_order_collinear_weights():
@@ -1294,128 +1130,12 @@ def test_subtraction_su2_4th_order_different_weights():
 
     C = A - B
     
-    # Should concatenate weights for every block
-    for key in C.intw:
-        assert C.intw[key].num_components == A.intw[key].num_components + B.intw[key].num_components
+    # block_compress may change the (data, weights) representation; verify
+    # physical content R @ W is preserved: physical(C) = physical(A) - physical(B).
+    for key in C.data.keys():
+        phys_c = C.data[key].flatten(0, -2) @ C.intw[key].weights
+        phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
+        phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
+        assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
-
-def test_compress_su2_3rd_order_multiple_sectors():
-    """Test compression with 3 indices and multiple sectors."""
-    group = SU2Group()
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
-    
-    A = Tensor.random([idx1, idx2, idx3], seed=42, itags=["a", "b", "c"])
-    B = Tensor.random([idx1, idx2, idx3], seed=99, itags=["a", "b", "c"])
-    populate_random_weights(A, seed=42)
-
-    # For each block give B linearly dependent extra rows derived from A's weights
-    gen_b = torch.Generator()
-    gen_b.manual_seed(99)
-    for key in B.intw.keys():
-        W = A.intw[key].weights  # (n, om_dim) random base
-        dep_rows = torch.cat([W[0:1, :] * 2.0, W[0:1, :] * 0.5], dim=0)
-        new_weights = torch.cat([W, dep_rows], dim=0)
-        total = new_weights.shape[0]
-        B.intw[key] = dg.Bridge(cgspec=A.intw[key].cgspec, weights=new_weights)
-        B.data[key] = torch.randn(*B.data[key].shape[:-1], total, generator=gen_b, dtype=torch.float64)
-    
-    C = A + B
-    
-    assert len(C.data) > 1
-    original_norm = C.norm()
-    original_components = {key: bridge.num_components for key, bridge in C.intw.items()}
-    
-    C.compress(cutoff=1e-12)
-    
-    # Norm should be preserved
-    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
-    
-    # At least one block should have fewer components after removing dependent rows
-    compressed_components = {key: bridge.num_components for key, bridge in C.intw.items()}
-    assert any(
-        compressed_components[key] < original_components[key] for key in original_components
-    ), "Expected at least one block to be compressed"
-
-
-def test_compress_su2_4th_order_nontrivial_om():
-    """Test compression with 4 indices and non-trivial OM."""
-    group = SU2Group()
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    A = Tensor.random([idx1, idx2, idx3, idx4], seed=42, itags=["a", "b", "c", "d"])
-    B = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
-    # om_dim = 2 for the (1,1,1,1) block; use exactly 2 independent components
-    populate_random_weights(A, seed=42, min_components=2, max_components=3)
-    
-    key = (1, 1, 1, 1)
-    if key in A.intw:
-        assert A.intw[key].om_dimension > 1
-    
-    # Build B's key block with redundant weights derived from A's 2-component random base
-    if key in B.intw:
-        W = A.intw[key].weights  # (2, om_dim), full rank (generically)
-        dep_rows = torch.cat([
-            W[0:1, :] * 0.5 + W[1:2, :] * 0.3,
-            W[0:1, :] * 0.2 + W[1:2, :] * 0.7,
-        ], dim=0)
-        redundant_weights = torch.cat([W, dep_rows], dim=0)  # 4 rows, rank 2
-        total = redundant_weights.shape[0]
-        B.intw[key] = dg.Bridge(cgspec=B.intw[key].cgspec, weights=redundant_weights)
-        B.data[key] = torch.randn(*B.data[key].shape[:-1], total, dtype=torch.float64)
-    
-    C = A + B
-    
-    original_norm = C.norm()
-    if key in C.intw:
-        original_components = C.intw[key].num_components
-    
-    C.compress(cutoff=1e-12)
-    
-    assert math.isclose(C.norm(), original_norm, rel_tol=1e-10)
-    
-    # Should reduce: redundant rows removed, 2 independent rows survive
-    if key in C.intw:
-        assert C.intw[key].num_components < original_components
-        assert C.intw[key].num_components >= 2
-
-
-def test_addition_subtraction_compress_workflow():
-    """Test realistic workflow: multiple additions/subtractions followed by compression."""
-    group = SU2Group()
-    # Three indices with multiple sectors
-    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
-    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
-    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 3)))
-    
-    # Create several tensors with random multi-component weights
-    seeds = [10, 20, 30, 40]
-    tensors = [Tensor.random([idx1, idx2, idx3], seed=s, itags=["a", "b", "c"]) for s in seeds]
-    for t, s in zip(tensors, seeds):
-        populate_random_weights(t, seed=s)
-    
-    # Combine: (A + B) - (C + D)
-    AB = tensors[0] + tensors[1]
-    CD = tensors[2] + tensors[3]
-    result = AB - CD
-    
-    # Should have accumulated many components
-    max_components_before = max(bridge.num_components for bridge in result.intw.values())
-    assert max_components_before >= 2
-    
-    original_norm = result.norm()
-    
-    # Compress to remove redundancy
-    result.compress(cutoff=1e-13)
-    
-    # Norm preserved
-    assert math.isclose(result.norm(), original_norm, rel_tol=1e-10)
-    
-    # Components may be reduced
-    max_components_after = max(bridge.num_components for bridge in result.intw.values())
-    assert max_components_after <= max_components_before
 

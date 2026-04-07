@@ -45,3 +45,4 @@ Arithmetic operations are performed block-wise. Each operation processes only th
 - Operations preserve block structure
 - Results have same dtype unless promotion occurs
 - Blocks must have matching shapes for addition/subtraction
+- For non-Abelian groups, linearly dependent components introduced by the operation are automatically compressed away

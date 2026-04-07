@@ -620,8 +620,9 @@ def test_contract_su2_permutation_commutativity_basic():
     # Results should match
     assert list(C1_perm.itags) == list(C2.itags) == ["c", "a", "d"]
     
-    # Verify data and weights match exactly
-    assert_data_weights_equal(C1_perm, C2, msg="permutation commutativity")
+    # compress() may produce different (but equivalent) orthonormal bases for the
+    # weight subspace across computation paths, so compare physical tensors R@W.
+    assert_physical_tensors_equal(C1_perm, C2, msg="permutation commutativity")
     
     # Norms should definitely match
     assert math.isclose(C1_perm.norm(), C2.norm(), rel_tol=1e-10, abs_tol=1e-12)

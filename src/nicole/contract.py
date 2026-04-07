@@ -477,30 +477,24 @@ def contract(
         dtype=torch.promote_types(A.dtype, B.dtype)
     )
 
-    # Row-normalize intertwiner weights and redistribute norms into data to
-    # prevent weights from decaying across successive contractions.
-    out_tensor.regularize()
+    # Normalize intertwiner weights (prevents decay across successive
+    # contractions) and remove linearly dependent components via SVD.
+    # block_add's collinearity check only fires when both bridges have
+    # num_components == 1; once a block's component count exceeds 1 the check
+    # is skipped for that block and further additions concatenate unconditionally,
+    # so regularize is needed to reclaim any resulting rank deficiency.
 
-    # Compress intertwiner weights to remove linearly dependent components.
-    # [Memo] An earlier version guarded this with the condition
+    # [Memo] An earlier version guarded the compression with the condition
     #   len(out_indices) < max(len(A.indices), len(B.indices))
     # The reasoning was: when order drops, OM typically drops, making
     # accumulated components from block_add likely to exceed OM and compress
     # worthwhile; whereas order-preserving or order-increasing contractions
     # tend to have growing OM, so components are unlikely to be redundant and
     # the SVD overhead is not justified. The guard may be worth reinstating as
-    # a performance optimisation if profiling shows compress dominates runtime
+    # a performance optimization if profiling shows regularize dominates runtime
     # in order-preserving hot paths.
-
-    # block_add's collinearity check only fires when both bridges have
-    # num_components == 1, so after the first non-collinear pair the check is
-    # permanently bypassed and every subsequent term in the loop concatenates
-    # unconditionally. compress reclaims the resulting rank deficiency.
-    # Regularize first so that the SVD cutoff operates on well-scaled rows;
-    # after compress the new weights (Vh rows) are already orthonormal, so no
-    # second regularize is needed.
     if out_intw is not None:
-        out_tensor.compress()
+        out_tensor.regularize()
 
     # Apply permutation if requested.
     if perm is not None:
@@ -829,12 +823,10 @@ def trace(
         intw=out_intw, dtype=T.dtype
     )
 
-    # Trace always reduces order by 2, so OM always drops. Regularize first so
-    # that the SVD cutoff in compress operates on well-scaled rows; the condition
-    # is unconditional here (unlike contract) because order reduction is guaranteed.
+    # Trace always reduces order by 2, so OM always drops; regularize to
+    # normalize weights and compress any resulting rank deficiency in one step.
     if out_intw is not None:
         out_tensor.regularize()
-        out_tensor.compress()
 
     return out_tensor
 
