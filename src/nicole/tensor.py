@@ -1088,90 +1088,26 @@ class Tensor:
     #   Compression: reduce redundant components
     # ------------------------------------------------------------
 
-    def compress(
-        self, 
-        keys: Optional[Sequence[BlockKey]] = None, 
-        cutoff: float = 1e-14
-    ) -> None:
-        """Compress intertwiner weights by removing linearly dependent components (in-place).
-        
-        For generic groups, performs SVD on weight matrices and truncates
-        singular values below the cutoff threshold. This reduces the reduced
-        multiplicity dimension when weight rows are linearly dependent.
-        
-        The compression preserves the physical tensor: T = R @ W is decomposed as
-        R @ (U @ S @ Vh) ≈ (R @ U @ S) @ Vh, where small singular values are removed.
-        
-        This operation modifies the tensor in place.
-        
-        Parameters
-        ----------
-        keys : Sequence[BlockKey], optional
-            Block keys to compress. If None, compresses all blocks with num_components >= 2.
-        cutoff : float, optional
-            Singular value threshold for truncation. Default: 1e-14.
-        
-        Examples
-        --------
-        >>> # After adding tensors with different weights, compress redundancy
-        >>> C = A + B  # May have redundant components
-        >>> C.compress(cutoff=1e-12)  # Modifies C in place
-        """
-        # Abelian groups: no compression needed
-        if not self.indices or self.indices[0].group.is_abelian:
-            return
-        
-        # Determine which keys to compress
-        if keys is None:
-            # Compress all blocks with num_components >= 2
-            keys_to_compress = [k for k, bridge in self.intw.items() if bridge.num_components >= 2]
-        else:
-            keys_to_compress = list(keys)
-        
-        # If no blocks to compress, nothing to do
-        if not keys_to_compress:
-            return
-        
-        # Perform compression on specified keys
-        for key in keys_to_compress:
-            block = self.data[key]
-            bridge = self.intw[key]
-            
-            # Perform SVD compression
-            U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
-            
-            # Truncate small singular values (keep at least 1)
-            k = max(1, (S >= cutoff).sum().item())
-            
-            if k < bridge.num_components:
-                # Compression: absorb U[:, :k] @ diag(S[:k]) into data, keep Vh[:k, :]
-                r_flat = block.flatten(0, -2)
-                r_new = (r_flat @ (U[:, :k] * S[:k])).reshape(block.shape[:-1] + (k,))
-                
-                # Update in place
-                self.data[key] = r_new
-                self.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=Vh[:k, :])
-
     # ------------------------------------------------------------
     #   Weights canonicalisation or regularisation
     # ------------------------------------------------------------
 
-    def regularize(self) -> None:
+    def regularize(self, cutoff: float = 1e-14) -> None:
         """Canonicalize (2nd order) or regularize (higher order) Bridge weights.
 
-        For an 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
+        For a 2nd order non-Abelian tensor (SU(2) matrix), the reduced data `R`
         and the Bridge weight `W` satisfy:
 
-            physical block  ≈  R  ×  W
+            physical block  =  R  ×  W
 
         The method absorbs the deviation of each block's weight from the
         canonical value `sqrt(irrep_dim(q))` into `R`, so that after the
         call the tensor uses the same Bridge-weight convention as
         `identity`:
 
-            physical block  ≈  R_new  ×  sqrt(irrep_dim(q))
+            physical block  =  R_new  ×  sqrt(irrep_dim(q))
 
-        Both branches use a row-normalisation strategy, differing only in target:
+        Both branches use a row-normalization strategy, differing only in target:
 
         - **2nd-order**: By Schur's lemma `om = 1`, so each weight row is a
           single scalar `W[i, 0]`. The factor is absorbed into the
@@ -1182,14 +1118,27 @@ class Tensor:
                 W_new[i, 0] = sqrt(irrep_dim(q))
                 R_new[..., i] = R[..., i] * factor[i]
 
-        - **Higher-order**: each row is normalised to unit norm, with the
+        - **Higher-order**: each row is normalized to unit norm, with the
           norm absorbed into the data:
 
                 norms[i] = ‖W[i, :]‖
                 W_new[i, :] = W[i, :] / norms[i]
                 R_new[..., i] = R[..., i] * norms[i]
 
+        After normalization, linearly dependent components are removed via
+        `BlockSchema.block_compress`: an SVD is applied to the (now well-scaled)
+        weight matrix and rows whose singular values fall below `cutoff` are
+        discarded. For 2nd-order tensors this step is always a no-op because
+        Schur's lemma forces `om = 1` and therefore `num_components == 1`
+        should always hold per block.
+
         Has no effect on Abelian tensors or tensors without an intertwiner.
+
+        Parameters
+        ----------
+        cutoff : float, optional
+            Singular value threshold forwarded to `BlockSchema.block_compress`.
+            Default: 1e-14.
         """
         if self.intw is None:
             return
@@ -1198,7 +1147,7 @@ class Tensor:
         _sp_eps = torch.finfo(torch.float32).eps
 
         if len(self.indices) == 2:
-            # 2nd order (matrix): normalise each weight to sqrt(irrep_dim(q))
+            # 2nd order (matrix): normalize each weight to sqrt(irrep_dim(q))
             for key, arr in self.data.items():
                 bridge = self.intw.get(key)
                 if bridge is None:
@@ -1212,7 +1161,7 @@ class Tensor:
                 bridge.weights[:] = target                      # all rows → +target
                 self.data[key] = arr * factors                  # (..., k) * (k,)
         else:
-            # Higher-order: row-normalise Bridge weight matrix.
+            # Higher-order: row-normalize Bridge weight matrix.
             # norms[i] = ‖W[i,:]‖; absorbed into the trailing component axis of R.
             for key, arr in self.data.items():
                 bridge = self.intw.get(key)
@@ -1223,6 +1172,13 @@ class Tensor:
                 safe_norms = norms.clamp(min=1e-12)
                 bridge.weights[:] = bridge.weights / safe_norms[:, None]
                 self.data[key] = arr * norms                # (..., k) * (k,)
+
+        # Remove linearly dependent components after normalization so the SVD
+        # cutoff operates on well-scaled rows.
+        for key in list(self.intw.keys()):
+            self.data[key], self.intw[key] = BlockSchema.block_compress(
+                self.data[key], self.intw[key], cutoff=cutoff
+            )
 
     # ------------------------------------------------------------
     #   Tensor operations: conj, permute, transpose
