@@ -19,7 +19,6 @@ Block-sparse tensor with symmetry-aware indices.
         - insert_index
         - trim_zero_blocks
         - normalize_sectors
-        - compress
         - regularize
         - sorted_keys
         - key
