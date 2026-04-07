@@ -795,28 +795,39 @@ def test_oplus_su2_single_axis():
 
 def test_oplus_su2_concatenates_weights():
     """Test that oplus concatenates Bridge weights for incompatible cases."""
+
+    # Uses a 4-index spin-1 tensor where om_dim = 3. Weights are set to
+    # orthonormal basis vectors so block_compress keeps all n_A + n_B = 3
+    # components.
     group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
+    idx = Index(Direction.IN, group, sectors=(Sector(2, 3),))
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(2, 3),))
+
     # Create A with 1 component
-    A = Tensor.random([idx1, idx2], seed=42, itags=['i', 'j'])
-    
-    # Create B with different weights (2 components)
-    B_data = {(1, 1): torch.randn(2, 2, 2, dtype=torch.float64)}
-    cgspec = A.intw[(1, 1)].cgspec
-    weights_b = torch.randn(2, 1, dtype=torch.float64)
-    B_intw = {(1, 1): dg.Bridge(cgspec=cgspec, weights=weights_b)}
-    B = Tensor(indices=(idx1, idx2), itags=('i', 'j'), data=B_data, intw=B_intw, dtype=torch.float64)
-    
-    # Merge all axes
-    C = oplus(A, B)
-    
-    # Weights should be concatenated: 1 + 2 = 3 components
-    assert C.intw[(1, 1)].num_components == 3
-    
-    # OM dimension should be concatenated: 1 + 2 = 3
-    assert C.data[(1, 1)].shape[-1] == 3
+    A = Tensor.random([idx, idx, idx, idx_out], seed=42, itags=['a', 'b', 'c', 'd'])
+
+    key = (2, 2, 2, 2)
+    om_dim = A.intw[key].om_dimension
+    assert om_dim == 3, 'Expected om_dim = 3 for spin-1 quadruplet'
+
+    w_a = torch.zeros(1, om_dim, dtype=torch.float64)
+    w_a[0, 0] = 1.0
+    A.intw[key] = dg.Bridge(cgspec=A.intw[key].cgspec, weights=w_a)
+
+    # Create B with 2 components using weights orthogonal to A's and each other
+    B_data = {key: torch.randn(*A.data[key].shape[:-1], 2, dtype=torch.float64)}
+    w_b = torch.zeros(2, om_dim, dtype=torch.float64)
+    w_b[0, 1] = 1.0
+    w_b[1, 2] = 1.0
+    B_intw = {key: dg.Bridge(cgspec=A.intw[key].cgspec, weights=w_b)}
+    B = Tensor(indices=(idx, idx, idx, idx_out), itags=('a', 'b', 'c', 'd'),
+               data=B_data, intw=B_intw, dtype=torch.float64)
+
+    C = oplus(A, B, axes=0)
+
+    # Orthonormal weight matrix (3 × 3) has rank 3 = om_dim → block_compress keeps all.
+    assert C.intw[key].num_components == 3
+    assert C.data[key].shape[-1] == 3
 
 
 def test_oplus_su2_preserves_norm():
@@ -997,28 +1008,40 @@ def test_oplus_su2_mixed_sectors():
 
 def test_oplus_su2_incompatible_weights():
     """Test SU(2) oplus with different number of components."""
+
+    # Uses a 4-index spin-1 tensor where om_dim = 3. A has 1 component (default)
+    # and B has 2 components (incompatible counts). Weights are orthonormal basis
+    # vectors so block_compress keeps all n_A + n_B = 3 components.
     group = SU2Group()
-    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
+    idx = Index(Direction.IN, group, sectors=(Sector(2, 3),))
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(2, 3),))
+
     # Create A with 1 component (default)
-    A = Tensor.random([idx1, idx2], seed=42, itags=['i', 'j'])
-    assert A.intw[(1, 1)].num_components == 1
-    
-    # Create B with 2 components
-    key = (1, 1)
-    B_data = {key: torch.randn(2, 2, 2, dtype=torch.float64)}
-    cgspec = A.intw[key].cgspec
-    weights_b = torch.randn(2, 1, dtype=torch.float64)
-    B_intw = {key: dg.Bridge(cgspec=cgspec, weights=weights_b)}
-    B = Tensor(indices=(idx1, idx2), itags=('i', 'j'), data=B_data, intw=B_intw, dtype=torch.float64)
-    
-    # Merge all axes
-    C = oplus(A, B)
-    
-    # Incompatible weights should be concatenated: 1 + 2 = 3
-    assert C.intw[(1, 1)].num_components == 3
-    assert C.data[(1, 1)].shape[-1] == 3
+    A = Tensor.random([idx, idx, idx, idx_out], seed=42, itags=['a', 'b', 'c', 'd'])
+
+    key = (2, 2, 2, 2)
+    om_dim = A.intw[key].om_dimension
+    assert om_dim == 3, 'Expected om_dim = 3 for spin-1 quadruplet'
+
+    w_a = torch.zeros(1, om_dim, dtype=torch.float64)
+    w_a[0, 0] = 1.0
+    A.intw[key] = dg.Bridge(cgspec=A.intw[key].cgspec, weights=w_a)
+    assert A.intw[key].num_components == 1
+
+    # Create B with 2 components using weights orthogonal to A's and each other
+    B_data = {key: torch.randn(*A.data[key].shape[:-1], 2, dtype=torch.float64)}
+    w_b = torch.zeros(2, om_dim, dtype=torch.float64)
+    w_b[0, 1] = 1.0
+    w_b[1, 2] = 1.0
+    B_intw = {key: dg.Bridge(cgspec=A.intw[key].cgspec, weights=w_b)}
+    B = Tensor(indices=(idx, idx, idx, idx_out), itags=('a', 'b', 'c', 'd'),
+               data=B_data, intw=B_intw, dtype=torch.float64)
+
+    C = oplus(A, B, axes=0)
+
+    # Orthonormal weight matrix (3 × 3) has rank 3 = om_dim → block_compress keeps all.
+    assert C.intw[key].num_components == 3
+    assert C.data[key].shape[-1] == 3
 
 
 def test_oplus_su2_single_tensor():
