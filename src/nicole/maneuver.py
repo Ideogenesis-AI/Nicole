@@ -1075,7 +1075,7 @@ def capcup(A: Tensor, axis_a: int, B: Tensor, axis_b: int) -> None:
     other has an incoming index carrying the same itag. `capcup` inverts both
     directions (equivalent to inserting a cap-cup metric on the bond) and, for
     SU(2) tensors, multiplies each block of B by the Frobenius-Schur (FS) phase
-    (-1)^{2j} determined by the spin at that block's bond position.  After
+    (-1)^{2j} determined by the spin at that block's bond position. After
     this operation the bond direction is reversed but all tensor contractions
     that involve this bond yield the same numerical result.
 
