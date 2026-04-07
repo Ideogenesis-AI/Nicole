@@ -1837,6 +1837,8 @@
       
         
       
+        
+      
     
     
     
@@ -1930,6 +1932,34 @@
     
   
     trace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contraction/einsum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    einsum
   
 
     
@@ -2372,6 +2402,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2532,10 +2566,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#productgroup-tensor-examples" class="md-nav__link">
+  <a href="#product-group-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ProductGroup Tensor Examples
+        Product Group Examples
       
     </span>
   </a>
@@ -2571,10 +2605,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#tensorshowblock_indicesnone" class="md-nav__link">
+  <a href="#tensorshowblock_ids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        tensor.show(block_indices=None)
+        tensor.show(block_ids)
       
     </span>
   </a>
@@ -2660,6 +2694,62 @@
     
   
     load_space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serialize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    serialize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deserialize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    deserialize
   
 
     
@@ -3118,6 +3208,8 @@
       
         
       
+        
+      
     
     
     
@@ -3236,6 +3328,34 @@
     
   
     Manipulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/advanced/serialization-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
   
 
     
@@ -3550,10 +3670,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#productgroup-tensor-examples" class="md-nav__link">
+  <a href="#product-group-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ProductGroup Tensor Examples
+        Product Group Examples
       
     </span>
   </a>
@@ -3589,10 +3709,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#tensorshowblock_indicesnone" class="md-nav__link">
+  <a href="#tensorshowblock_ids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        tensor.show(block_indices=None)
+        tensor.show(block_ids)
       
     </span>
   </a>
@@ -3662,7 +3782,7 @@
 <h1 id="display-utilities">Display Utilities<a class="headerlink" href="#display-utilities" title="Permanent link">&para;</a></h1>
 <p>Pretty-printing for symmetry-aware tensors.</p>
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Nicole tensors have built-in display functionality accessed via <code>print(tensor)</code> or <code>tensor.show()</code>.</p>
+<p>Nicole tensors have built-in display functionality accessed via <code>print(tensor)</code> or <code>tensor.show(block_ids)</code>.</p>
 <h3 id="display-format">Display Format<a class="headerlink" href="#display-format" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  info:  2x { 3 x 1 }  having &#39;A&#39;    Tensor,  { i*, j }
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  data:  2-D float64 (48 B)    4 x 4 =&gt; 4 x 4  @ norm = 2.85035
@@ -3673,13 +3793,29 @@
 </span></code></pre></div>
 <h3 id="components">Components<a class="headerlink" href="#components" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>info</strong>: </li>
-<li><code>2x</code> - tensor order (2 indices)</li>
-<li><code>{ 3 x 1 }</code> - 3 blocks with 1 charge component each</li>
-<li><code>'A'</code> - Abelian symmetry group (e.g., U(1), Z(2))</li>
-<li><code>{ i*, j }</code> - index tags (* marks OUT direction)</li>
-<li><strong>data</strong>: Dimensionality, dtype, memory, multiplets and states, norm</li>
-<li><strong>blocks</strong>: Per-block dimensions, multiplet info, charges, value or memory</li>
+<li><strong>info</strong>: <code>2x { 3 x 1 }  having 'A'    Tensor,  { i*, j }</code><ul>
+<li><code>2x</code> — tensor order (number of indices)</li>
+<li><code>{ 3 x 1 }</code> — 3 blocks; 1 charge component per index (increases for product groups)</li>
+<li><code>'A'</code> — symmetry group label (e.g. <code>'SU2'</code>, <code>'U1×Z2'</code>)</li>
+<li><code>Tensor</code> — label identifying the tensor kind; defaults to <code>Tensor</code></li>
+<li><code>{ i*, j }</code> — index tags; <code>*</code> marks OUT direction</li>
+</ul>
+</li>
+<li><strong>data</strong>: <code>2-D float64 (48 B)    4 x 4 =&gt; 4 x 4  @ norm = 2.85035</code><ul>
+<li><code>2-D float64</code> — order of underlying dense arrays (torch.Tensor) and data type</li>
+<li><code>(48 B)</code> — total memory across all blocks</li>
+<li><code>4 x 4 =&gt; 4 x 4</code> — multiplets per index (reduced space) → physical states per index (full space); equal for Abelian, diverge for non-Abelian</li>
+<li><code>@ norm = 2.85035</code> — Frobenius norm</li>
+</ul>
+</li>
+<li><strong>blocks</strong>: <code>1.  1x1     |  1x1     [ -1 ; -1 ]  -1.30218</code><ul>
+<li><code>1.</code> — block id (1-indexed, matching the argument to <code>show()</code>)</li>
+<li><code>1x1</code> — shape of the stored reduced tensor (multiplet counts per index)</li>
+<li><code>| 1x1</code> — irrep dimension per index (always <code>1×1</code> for Abelian; equals <code>2j+1</code> for SU(2))</li>
+<li><code>[ -1 ; -1 ]</code> — charges per index; semicolons separate indices, spaces separate tuple components</li>
+<li><code>-1.30218</code> or <code>32 B</code> — scalar value if the block has a single element, otherwise memory footprint</li>
+</ul>
+</li>
 </ul>
 <h3 id="su2-tensor-example">SU(2) Tensor Example<a class="headerlink" href="#su2-tensor-example" title="Permanent link">&para;</a></h3>
 <p>For an SU(2) tensor with a spin-½ sector (2j=1) and a spin-1 sector (2j=2):</p>
@@ -3696,8 +3832,8 @@
 <li><strong>blocks</strong> show two dimensions per entry: <code>1x1</code> (shape of the stored reduced tensor R per block, i.e. multiplet count per index) and <code>| 2x2</code> or <code>| 3x3</code> (irrep dimension <code>2j+1</code> per index — magnetic substates per multiplet); the full physical block size is their elementwise product</li>
 <li><code>{+}</code> or <code>{-}</code> is the sign of the Bridge weight entry <code>W</code>; shown only when the weight matrix has a single element (<code>num_components = om_dimension = 1</code>)</li>
 </ul>
-<h3 id="productgroup-tensor-examples">ProductGroup Tensor Examples<a class="headerlink" href="#productgroup-tensor-examples" title="Permanent link">&para;</a></h3>
-<p>The second number in <code>{ N x K }</code> increases to K=2 (or more) when charges are tuples.</p>
+<h3 id="product-group-examples">Product Group Examples<a class="headerlink" href="#product-group-examples" title="Permanent link">&para;</a></h3>
+<p>The second number in <code>{ N x K }</code> increases to <code>K=2</code> (or more) when charges are tuples.</p>
 <p><strong>Abelian: U(1) × Z(2)</strong> — 3 blocks, each charge is a 2-component tuple:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>  info:  2x { 3 x 2 }  having &#39;U1×Z2&#39;,   Tensor,  { i*, j }
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  data:  2-D float64 (48 B)    4 x 4 =&gt; 4 x 4  @ norm = 1.23835
@@ -3728,7 +3864,7 @@
 <h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
 <h3 id="printtensor">print(tensor)<a class="headerlink" href="#printtensor" title="Permanent link">&para;</a></h3>
 <p>Standard print with line limit (default 10 blocks).</p>
-<h3 id="tensorshowblock_indicesnone">tensor.show(block_indices=None)<a class="headerlink" href="#tensorshowblock_indicesnone" title="Permanent link">&para;</a></h3>
+<h3 id="tensorshowblock_ids">tensor.show(block_ids)<a class="headerlink" href="#tensorshowblock_ids" title="Permanent link">&para;</a></h3>
 <p>Show specific blocks or all blocks without limit.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3737,9 +3873,10 @@
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Block indices are 1-based in display</li>
+<li>Block ids are 1-based in display</li>
 <li>Memory usage shown per block and total</li>
 <li><code>*</code> marks outgoing (OUT) directions</li>
+<li>The tensor label is set automatically by construction routines: <code>Diagonal</code> for diagonal tensors, <code>Operator</code> for space operators; generic tensors default to <code>Tensor</code></li>
 </ul>
 
 
@@ -3763,7 +3900,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 22:16:59 UTC"><span class="timeago" datetime="2026-03-30T22:16:59+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 22:16:59 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 6, 2026 12:04:28 UTC"><span class="timeago" datetime="2026-04-06T12:04:28+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 6, 2026 12:04:28 UTC">2026-04-06</span>
   </span>
 
     

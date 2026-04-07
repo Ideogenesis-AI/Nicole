@@ -18,7 +18,7 @@
         <link rel="prev" href="../decomposition-examples/">
       
       
-        <link rel="next" href="../../advanced/build-operators/">
+        <link rel="next" href="../../advanced/serialization-examples/">
       
       
         
@@ -1822,6 +1822,8 @@
       
         
       
+        
+      
     
     
     
@@ -1912,6 +1914,34 @@
     
   
     trace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/contraction/einsum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    einsum
   
 
     
@@ -2346,6 +2376,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2464,6 +2498,62 @@
     
   
     load_space
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/utilities/serialize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    serialize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/utilities/deserialize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    deserialize
   
 
     
@@ -2933,6 +3023,8 @@
       
         
       
+        
+      
     
     
     
@@ -3173,6 +3265,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/serialization-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -3541,13 +3661,13 @@
 <ul>
 <li><strong>Conjugation</strong> (<code>T.conj()</code>): Complex conjugate data and flip all index directions</li>
 <li><strong>Permutation</strong> (<code>T.permute()</code>): Reorder indices to a specific layout</li>
-<li><strong>Transpose</strong> (<code>T.transpose()</code>): Reorder indices, defaulting to full reversal</li>
+<li><strong>Transpose</strong> (<code>T.transpose()</code>): Reverse all index order</li>
 </ul>
 <p>All operations are available as <strong>tensor methods</strong> and support <strong>chaining</strong>. Each method can be called in three ways:</p>
 <ul>
-<li><strong><code>T.conj()</code></strong> (default, <code>in_place=False</code>): returns a new tensor that <strong>shares</strong> the underlying data storage with <code>T</code>. Memory-efficient and supports chaining.</li>
-<li><strong><code>T.conj(in_place=True)</code></strong>: modifies <code>T</code> in place and returns <code>T</code> itself. Useful when you do not need the original.</li>
-<li><strong>Standalone functions</strong> <code>conj(T)</code>, <code>permute(T, ...)</code>, <code>transpose(T, ...)</code>: return a fully independent tensor by <strong>cloning all data blocks</strong>, guaranteeing isolation from the original at the cost of extra memory. Prefer the method form unless a deep copy is explicitly needed.</li>
+<li><strong><code>T.conj()</code></strong> / <strong><code>T.transpose()</code></strong> (default, <code>in_place=False</code>): returns a new tensor that <strong>shares</strong> the underlying data storage with <code>T</code>. Memory-efficient and supports chaining.</li>
+<li><strong><code>T.conj(in_place=True)</code></strong> / <strong><code>T.transpose(in_place=True)</code></strong>: modifies <code>T</code> in place and returns <code>T</code> itself. Useful when you do not need the original.</li>
+<li><strong>Standalone functions</strong> <code>conj(T)</code>, <code>permute(T, ...)</code>, <code>transpose(T)</code>: return a fully independent tensor by <strong>cloning all data blocks</strong>, guaranteeing isolation from the original at the cost of extra memory. Prefer the method form unless a deep copy is explicitly needed.</li>
 </ul>
 <p>All manipulation operations maintain the block structure and charge labels — only the ordering or direction of indices changes.</p>
 <p></p>
@@ -3586,17 +3706,14 @@
 </span></code></pre></div>
 </div>
 <h2 id="transpose">Transpose<a class="headerlink" href="#transpose" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Default: reverse all indices</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Default: reverse all indices — returns a new tensor, T3 unchanged</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">T_trans</span> <span class="o">=</span> <span class="n">T3</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Reversed: </span><span class="si">{</span><span class="n">T_trans</span><span class="o">.</span><span class="n">itags</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Custom order</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">T_trans2</span> <span class="o">=</span> <span class="n">T3</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Custom (j, i, k): </span><span class="si">{</span><span class="n">T_trans2</span><span class="o">.</span><span class="n">itags</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original unchanged: </span><span class="si">{</span><span class="n">T3</span><span class="o">.</span><span class="n">itags</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="result">
 <div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Reversed: (&#39;k&#39;, &#39;j&#39;, &#39;i&#39;)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Custom (j, i, k): (&#39;j&#39;, &#39;k&#39;, &#39;i&#39;)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Original unchanged: (&#39;i&#39;, &#39;j&#39;, &#39;k&#39;)</span>
 </span></code></pre></div>
 </div>
 <h2 id="chaining">Chaining<a class="headerlink" href="#chaining" title="Permanent link">&para;</a></h2>
@@ -3625,9 +3742,9 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cycled twice: </span><span class="si">{</span><span class="n">T_cycle2</span><span class="o">.</span><span class="n">itags</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="result">
-<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Original: (&#39;j&#39;, &#39;k&#39;, &#39;i&#39;)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Cycled:   (&#39;k&#39;, &#39;i&#39;, &#39;j&#39;)</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">Cycled twice: (&#39;i&#39;, &#39;j&#39;, &#39;k&#39;)</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">Original: (&#39;i&#39;, &#39;j&#39;, &#39;k&#39;)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Cycled:   (&#39;j&#39;, &#39;k&#39;, &#39;i&#39;)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">Cycled twice: (&#39;k&#39;, &#39;i&#39;, &#39;j&#39;)</span>
 </span></code></pre></div>
 </div>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
@@ -3658,7 +3775,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 13:00:06 UTC"><span class="timeago" datetime="2026-03-30T13:00:06+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 13:00:06 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 1, 2026 21:05:29 UTC"><span class="timeago" datetime="2026-04-01T21:05:29+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 1, 2026 21:05:29 UTC">2026-04-01</span>
   </span>
 
     
