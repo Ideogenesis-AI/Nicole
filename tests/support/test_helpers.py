@@ -18,9 +18,12 @@
 
 """Tests for tensor helper operations: clone, keys & blocks, regularize, serialize."""
 
+import math
+
 import torch
 import pytest
 
+from nicole.symmetry import delegate as dg
 from nicole import Tensor, U1Group, Z2Group, SU2Group, ProductGroup
 from nicole import Direction, Index, Sector
 from nicole import filter_blocks
@@ -607,7 +610,6 @@ def test_regularize_no_op_for_abelian():
 
 def test_regularize_2nd_order_sets_weight_to_sqrt_irrep_dim():
     """Test that Bridge weights equal sqrt(irrep_dim(q)) after regularize."""
-    import math
     group = SU2Group()
     # Tensor.random initialises Bridge weights to 1.0 via from_block
     idx = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
@@ -713,8 +715,8 @@ def test_regularize_higher_order_large_weight_unchanged():
         )
 
 
-def test_regularize_higher_order_small_weight_normalised():
-    """Test that a small (< float32 eps) single-scalar weight is normalised to 1."""
+def test_regularize_higher_order_small_weight_normalized():
+    """Test that a small (< float32 eps) single-scalar weight is normalized to 1."""
     group = SU2Group()
     idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
     idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
@@ -744,6 +746,132 @@ def test_regularize_higher_order_small_weight_normalised():
     )
     # R must carry the absorbed factor
     assert torch.allclose(tensor.data[target_key], r_before * small_w)
+
+
+# Compression-aspect tests for regularize
+
+def test_regularize_compresses_dependent_components():
+    """regularize must remove linearly dependent components in higher-order tensors."""
+    group = SU2Group()
+    # Four spin-1/2 indices give om_dim = 2 for the (1,1,1,1) block.
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=77, itags=["a", "b", "c", "d"])
+    assert tensor.intw is not None
+
+    # Inject a redundant extra component (multiple of the existing row) into each block.
+    for key, bridge in list(tensor.intw.items()):
+        W = bridge.weights                          # (k, om_dim)
+        dep = W[0:1, :] * 2.5                      # rank-1 addition — linearly dependent
+        new_weights = torch.cat([W, dep], dim=0)   # (k+1, om_dim)
+        tensor.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=new_weights)
+        tensor.data[key] = torch.cat(
+            [tensor.data[key], tensor.data[key][..., 0:1] * 2.5], dim=-1
+        )
+
+    original_norm = tensor.norm()
+    # Every block now has an extra dependent component.
+    max_before = max(b.num_components for b in tensor.intw.values())
+
+    tensor.regularize()
+
+    # At least one block should have been compressed.
+    max_after = max(b.num_components for b in tensor.intw.values())
+    assert max_after < max_before, "Expected at least one block to be compressed"
+    # Physical content must be preserved.
+    assert math.isclose(tensor.norm(), original_norm, rel_tol=1e-8)
+
+
+def test_regularize_does_not_compress_independent_components():
+    """regularize must retain all components when they are linearly independent."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=88, itags=["a", "b", "c", "d"])
+    assert tensor.intw is not None
+
+    # Replace weights with two orthogonal rows — guaranteed independent.
+    key = next(iter(tensor.intw))
+    bridge = tensor.intw[key]
+    ind_weights = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)
+    tensor.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=ind_weights)
+    tensor.data[key] = torch.randn(*tensor.data[key].shape[:-1], 2, dtype=torch.float64)
+
+    n_before = tensor.intw[key].num_components
+
+    tensor.regularize()
+
+    assert tensor.intw[key].num_components == n_before, (
+        "regularize should not compress linearly independent components"
+    )
+
+
+def test_regularize_2nd_order_compress_is_noop():
+    """regularize on a 2nd-order SU(2) tensor must not change num_components (om=1 by Schur)."""
+    group = SU2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+
+    tensor = Tensor.random([idx1, idx2], seed=11, itags=["a", "b"])
+    assert tensor.intw is not None
+
+    components_before = {k: b.num_components for k, b in tensor.intw.items()}
+    tensor.regularize()
+    components_after  = {k: b.num_components for k, b in tensor.intw.items()}
+
+    assert components_before == components_after
+
+
+def test_regularize_cutoff_forwarded():
+    """A non-default cutoff passed to regularize must control what gets truncated.
+
+    After regularize normalizes all weight rows to unit norm the singular values
+    of the normalized weight matrix are O(1).  A cutoff larger than any of those
+    singular values forces block_compress to retain only 1 component (the minimum
+    guaranteed by the ``max(1, ...)`` guard); a cutoff of 1e-20 retains all
+    components because every singular value exceeds it.
+    """
+
+    group = SU2Group()
+    # Four spin-1/2 indices → om_dim = 2 for the single block.
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=55, itags=["a", "b", "c", "d"])
+    assert tensor.intw is not None
+
+    key = next(iter(tensor.intw))
+    bridge = tensor.intw[key]
+    W = bridge.weights                      # (k, om_dim)
+
+    # Give the block two genuinely independent rows so that both singular
+    # values of the normalized weight matrix are O(1) — well above 1e-20 but
+    # well below 2.0 (which exceeds sqrt(2), the maximum possible SV for a
+    # 2×2 matrix of unit-norm rows).
+    ind_weights = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)
+    tensor.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=ind_weights)
+    tensor.data[key] = torch.randn(
+        *tensor.data[key].shape[:-1], 2, dtype=torch.float64
+    )
+    n_before = 2  # two genuinely independent components
+
+    # cutoff=2.0 — above all SVs of a unit-norm 2×2 matrix → compress forces 1 component.
+    t_high = tensor.clone()
+    t_high.regularize(cutoff=2.0)
+    assert t_high.intw[key].num_components == 1
+
+    # cutoff=1e-20 — below all SVs → both components retained.
+    t_low = tensor.clone()
+    t_low.regularize(cutoff=1e-20)
+    assert t_low.intw[key].num_components == n_before
 
 
 # Serialize / deserialize tests
