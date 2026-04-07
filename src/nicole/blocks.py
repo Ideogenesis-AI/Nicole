@@ -63,6 +63,10 @@ class BlockSchema:
         Compute all achievable total charges for a block key (non-Abelian only).
     charges_conserved()
         Check whether a block key respects charge conservation (both types).
+    block_add()
+        Accumulate a pair of reduced blocks, merging or concatenating Bridge components.
+    block_compress()
+        Remove linearly dependent components from a block via SVD truncation.
     """
 
     @staticmethod
