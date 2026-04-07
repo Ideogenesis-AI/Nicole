@@ -28,6 +28,8 @@ Static utility class for block operations:
 - `shape_for_key()`: Get block shape from key
 - `validate_blocks()`: Validate block data
 - `charges_conserved()`: Check conservation for a key
+- `block_add()`: Merging or concatenating weights from a pair of blocks
+- `block_compress()`: Remove linearly dependent components from a block
 
 ## Usage
 
