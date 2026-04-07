@@ -2,6 +2,112 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.2] - 2026-04-07
+
+**Einstein Summation and Tensor Serialization**
+
+Version 0.3.2 introduces two significant new capabilities: `einsum` brings Einstein summation notation to symmetry-aware tensors, and `serialize`/`deserialize` enable portable, `torch.save`-compatible persistence of Tensor instances including their SU(2) intertwiner weights. The release also cleans up several API inconsistencies — most notably the simplification of `transpose`, the standardization of block-identifier terminology, the refactoring of compression logic into `BlockSchema.block_compress`, and the removal of the now-redundant `Tensor.compress`.
+
+### New Features
+
+#### `einsum` — Einstein Summation Notation
+
+A new `einsum(equation, *tensors)` function parses a subscript equation string and dispatches to `contract`, `trace`, and `permute` to carry out the requested operation.
+
+Three equation forms are supported:
+
+- **Permutation** — single input tensor with a reordered output subscript, e.g. `'ij->ji'`
+- **Trace** — single input tensor with one repeated subscript letter, e.g. `'ii->'`; surviving axes are permuted as needed
+- **Sequential contraction** — two or more tensors contracted left-to-right, e.g. `'ij,jk->ik'`; tensors are contracted pairwise in order (no contraction-order optimization)
+
+`einsum` supports both Abelian and SU(2) symmetry groups and is exposed as a top-level public API function.
+
+#### `serialize` / `deserialize` — Tensor Persistence
+
+A new `serialize.py` module provides `serialize(tensor)` and `deserialize(payload, device=None)` for lossless round-trip conversion of Tensor instances to and from plain Python dicts.
+
+The serialized payload:
+
+- Uses only Python primitives (`str`, `int`, `tuple`, `dict`, `None`) and `torch.Tensor` values
+- Is directly compatible with `torch.save` / `torch.load(..., weights_only=True)`
+- Encodes the full block-sparse data structure, index metadata (direction, symmetry group, sectors), and SU(2) intertwiner weights
+- Carries a `"version"` key for forward-compatibility
+
+`Bridge` serialization is also supported internally. Both `serialize` and `deserialize` are exposed as top-level public API functions.
+
+#### `BlockSchema.block_compress` — Automatic Component Compression
+
+A new static method `BlockSchema.block_compress(data, bridge, cutoff=1e-14)` removes linearly dependent components from a single non-Abelian tensor block via thin SVD on the Bridge weight matrix. Singular vectors whose singular values fall below `cutoff` are discarded; the retained factors are absorbed back into the reduced data so that the physical block `R @ W` is exactly preserved.
+
+`block_compress` is now called automatically by:
+
+- `Tensor.regularize` — after the normalization pass (cutoff forwarded via a new `cutoff` kwarg)
+- `Tensor.__add__` and `Tensor.__sub__` — per block after `block_add`, to reclaim rank deficiencies that arise when operands carry identical or collinear components
+- `oplus` — same treatment as addition and subtraction
+- `contract` and `trace` — via the now unconditional `regularize()` call that replaces the previous conditional `compress()`
+
+### API Changes
+
+- **`transpose` simplified**: `transpose` no longer accepts a positional `*order` argument; it now unconditionally reverses all tensor axes. Callers that previously passed an explicit axis ordering should use `permute` instead. Applies to both `maneuver.transpose(tensor)` and `Tensor.transpose(in_place=False)`.
+- **`Tensor.compress` removed**: `Tensor.compress()` has been removed from the public API. Its logic now lives in `BlockSchema.block_compress` and is invoked automatically through `regularize`. Callers should use `Tensor.regularize()` instead, which now covers both normalization and compression.
+- **`block_ids` terminology**: Block-identifier parameter names standardized across the display layer — `tensor_summary`: `block_numbers` renamed to `block_ids`; `Tensor.show`: `block_indices` renamed to `block_ids`.
+
+### Documentation
+
+#### New API Pages
+
+- **`einsum`**: Full reference with equation syntax, supported forms, and worked examples for Abelian and SU(2) tensors
+- **`serialize`**: Reference documentation with the full serialized dict schema and `torch.save` / `torch.load` usage examples
+- **`deserialize`**: Reference documentation including the `device` argument and version-error behavior
+
+#### New and Extended Examples
+
+- **Serialization examples**: New advanced examples page demonstrating round-trip persistence with `torch.save` and `torch.load`
+- **Contraction examples**: Extended with `einsum` equation examples covering permutation, trace, and multi-tensor contractions
+- **Examples index**: New entries for Autograd, GPU Acceleration, and Serialization
+
+#### Other Updates
+
+- **`transpose` documentation**: Updated to reflect the removed `order` argument and the new always-reverse semantics
+- **`identity` documentation**: Corrected namespace reference and removed outdated notes
+- **Display documentation**: Enhanced with additional details on Nicole's tensor summary format
+- **SU(2) Protocol page**: Added a references section
+
+### Test Suite (1521 tests)
+
+- **1521 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- New test module: `tests/operations/test_einsum.py` (39 tests) covering permutation, trace, and sequential contraction for Abelian and SU(2) tensors, including higher-order multi-tensor equations
+- Serialization tests added to `tests/support/test_helpers.py` (11 new tests): round-trip for U(1), Z2, product-Abelian, SU(2), and product-SU(2) tensors; complex dtype; scalar tensors; `torch.save` / `torch.load` integration; `device` forwarding; unknown-version error
+- Bridge serialization tests added to `tests/symmetry/test_delegate.py` (7 new tests)
+- Outer product consistency tests added to `tests/integration/test_consistency.py` (8 new tests) for U(1) and SU(2) groups
+- `tests/operations/test_maneuver.py`: transpose tests rewritten to reflect the simplified signature
+- `tests/primary/test_blocks.py`: five new tests for `block_compress` covering single-component no-op, independent rows unchanged, dependent rows reduced, cutoff sensitivity, and input immutability
+- `tests/support/test_helpers.py`: four new tests for the compression aspect of `Tensor.regularize`; existing tests updated to use physical-tensor comparison where SVD sign ambiguity would break strict weight equality
+- `tests/operations/test_arithmetic.py` and `test_oplus.py`: assertions updated to compare physical content `R @ W` rather than raw component counts; oplus weight tests upgraded to 4-index spin-1 tensors where component count assertions remain meaningful
+
+### Statistics
+
+- **65 commits** since v0.3.1
+- **46 files changed**: 3,187 insertions, 705 deletions
+- New source modules: `src/nicole/einsum.py`, `src/nicole/serialize.py`
+- Source modules touched: `tensor.py`, `blocks.py`, `contract.py`, `display.py`, `maneuver.py`, `symmetry/delegate.py`, `__init__.py`
+- New test module: `tests/operations/test_einsum.py`
+
+### Compatibility
+
+**Breaking Changes:**
+
+- `transpose(tensor, *order)` / `Tensor.transpose(*order, in_place)` — the `order` argument is removed; use `permute` for custom axis orderings
+- `tensor_summary(..., block_numbers=...)` → `tensor_summary(..., block_ids=...)`
+- `Tensor.show(block_indices=...)` → `Tensor.show(block_ids=...)`
+- `Tensor.compress()` — removed; use `Tensor.regularize()` instead
+
+All other changes are backward compatible with v0.3.1.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.1] - 2026-03-31
 
 **Documentation and GPU Enhancements**
@@ -654,6 +760,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.0
 [0.2.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.2.1
