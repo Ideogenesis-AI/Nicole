@@ -405,8 +405,8 @@ class BlockSchema:
         """Remove linearly dependent components from a single generic tensor block.
 
         Performs a thin SVD on the Bridge weight matrix and discards singular
-        vectors whose singular values fall below `cutoff`.  The physical
-        content of the block is preserved:
+        vectors whose singular values fall below `cutoff`. The physical content
+        of the block is preserved:
 
             physical block = R @ W  →  (R @ U[:, :k] @ diag(S[:k])) @ Vh[:k, :]
 
