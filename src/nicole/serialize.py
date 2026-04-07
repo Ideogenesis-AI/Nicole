@@ -22,7 +22,7 @@ The serialized format uses only Python primitives (str, int, tuple, dict,
 None) and torch.Tensor values, making it directly compatible with
 `torch.save` / `torch.load(..., weights_only=True)`.
 
-Serialized dict schema (version 1)::
+Serialized dict schema (version 1):
 
     {
         "version": 1,
