@@ -938,6 +938,7 @@ class Tensor:
         For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: adds reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
+                             compresses out any resulting linear dependence
         """
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
@@ -981,8 +982,13 @@ class Tensor:
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
+                # block_add concatenates components when weights are non-collinear;
+                # compress any resulting linear dependence (e.g. identical tensors).
                 new_data[k], new_intw[k] = BlockSchema.block_add(
                     a, bridge_a, b, bridge_b, rtol=1e-12, atol=1e-15
+                )
+                new_data[k], new_intw[k] = BlockSchema.block_compress(
+                    new_data[k], new_intw[k]
                 )
         
         return Tensor(
@@ -996,6 +1002,7 @@ class Tensor:
         For generic groups (SU(2)), handles intertwiner weights:
         - If weights match: subtracts reduced tensors directly
         - If weights differ: concatenates along reduced multiplicity dimension
+                             compresses out any resulting linear dependence
         """
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
@@ -1039,9 +1046,14 @@ class Tensor:
                 bridge_a = self.intw.get(k) if a is not None else None
                 bridge_b = other.intw.get(k) if b is not None else None
                 
+                # block_add concatenates components when weights are non-collinear;
+                # compress any resulting linear dependence (e.g. identical tensors).
                 new_data[k], new_intw[k] = BlockSchema.block_add(
                     a, bridge_a, -b if b is not None else None, bridge_b,
                     rtol=1e-12, atol=1e-15
+                )
+                new_data[k], new_intw[k] = BlockSchema.block_compress(
+                    new_data[k], new_intw[k]
                 )
         
         return Tensor(
