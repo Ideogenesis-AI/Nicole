@@ -180,8 +180,8 @@ def iter_diag_spin(
             Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
             
             # Spin-spin interaction: Sprev-Snow interaction sandwiched by Anow
-            # Snow: (bra, ket, op) → permute to (op, ket, bra) and conjugate → Sn[o,k,g]
-            Sn = Snow.permute([2, 1, 0]).conj()
+            # Snow: (bra, ket, op) → conjugate then permute to (op, ket, bra) → Sn[o,k,g]
+            Sn = Snow.conj().permute([2, 1, 0])
             
             # Sn[o,k,g], Anow[e,d,g], Sprev[q,e,o], Anow.conj()[q,b,k] → HSS[b,d]
             HSS = einsum('okg,edg,qeo,qbk->bd', Sn, Anow, Sprev, Anow.conj())

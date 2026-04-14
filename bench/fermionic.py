@@ -191,9 +191,9 @@ def iter_diag_ferm(
             Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
 
             # Hopping term: -t (F†_prev F_now + F†_now F_prev)
-            # Hopping term: F†_now = Fnow.permute([2,1,0]).conj() → Fn_dag[o,k,g]
+            # Hopping term: F†_now = Fnow.conj().permute([2,1,0]) → Fn_dag[o,k,g]
             #   encodes ⟨β|F†|β'⟩ (creation on new site); axes: (op, ket, bra)
-            Fn_dag = Fnow.permute([2, 1, 0]).conj()
+            Fn_dag = Fnow.conj().permute([2, 1, 0])
 
             # Fn_dag[o,k,g], Anow[e,d,g], Fprev[q,e,o], Anow.conj()[q,b,k] → HFF[b,d]
             HFF = einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, Fprev, Anow.conj())

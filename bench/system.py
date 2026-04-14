@@ -20,10 +20,9 @@
 
 import torch
 
-from nicole import Direction, Tensor
+from nicole import Direction, Index, Tensor
 from nicole import identity, oplus, capcup, contract
-from nicole.index import Index
-from nicole.space import load_space
+from nicole import load_space
 from nicole.symmetry.delegate import Bridge
 
 

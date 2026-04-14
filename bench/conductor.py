@@ -112,8 +112,8 @@ def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
     expressed in the current effective Hilbert space. The caller is responsible
     for adding the Hermitian conjugate and the scale -t.
     """
-    # Fn_dag[o,k,g] = (ZF)†_now: Fnow permuted to (op, ket, bra) then conjugated
-    Fn_dag = Fnow.permute([2, 1, 0]).conj()
+    # Fn_dag[o,k,g] = (ZF)†_now: Fnow conjugated then permuted to (op, ket, bra)
+    Fn_dag = Fnow.conj().permute([2, 1, 0])
     # Fn_dag[o,k,g], Anow[e,d,g], ZFprev[q,e,o], Anow.conj()[q,b,k] → (R*, R) = [b,d]
     return einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, ZFprev, Anow.conj())
 
