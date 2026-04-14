@@ -22,7 +22,7 @@ from typing import Optional
 
 import numpy as np
 
-from nicole import Tensor, einsum, conj, decomp, trace
+from nicole import Tensor, einsum, decomp, trace
 from nicole import Direction, identity, permute
 
 
@@ -158,17 +158,17 @@ def norm(mps: list[Tensor]) -> float:
         return 0.0
     
     # Site 0: bra and ket share the same trivial left bond 'a'; sum over a and g (physical).
-    # conj(mps[0]): (a=bra_left, b=bra_right, g=phys)
-    # mps[0]:       (a=ket_left, f=ket_right, g=phys)
-    gram = einsum('abg,afg->bf', conj(mps[0]), mps[0])
+    # mps[0].conj(): (a=bra_left, b=bra_right, g=phys)
+    # mps[0]:        (a=ket_left, f=ket_right, g=phys)
+    gram = einsum('abg,afg->bf', mps[0].conj(), mps[0])
     # gram: (b=bra_right, f=ket_right)
     
     # Process remaining sites
     for i in range(1, len(mps)):
-        # gram:         (a=bra_left, e=ket_left)
-        # conj(mps[i]): (a=bra_left, b=bra_right, g=phys)
-        # mps[i]:       (e=ket_left, f=ket_right, g=phys)
-        gram = einsum('abg,ae,efg->bf', conj(mps[i]), gram, mps[i])
+        # gram:          (a=bra_left, e=ket_left)
+        # mps[i].conj(): (a=bra_left, b=bra_right, g=phys)
+        # mps[i]:        (e=ket_left, f=ket_right, g=phys)
+        gram = einsum('abg,ae,efg->bf', mps[i].conj(), gram, mps[i])
         # gram: (b=bra_right, f=ket_right)
     
     # Trace the Gram matrix over the right bond to obtain ‖ψ‖²
@@ -244,8 +244,8 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
         # E: (a=bra_left, c=mpo_left, e=ket_left)
         # mps[i]: (e=ket_left, f=ket_right, h=phys_ket)
         # mpo[i]: (c=mpo_left, d=mpo_right, g=phys_bra, h=phys_ket)
-        # conj(mps[i]): (a=bra_left, b=bra_right, g=phys_bra)
-        E = einsum('ace,efh,cdgh,abg->bdf', E, mps[i], mpo[i], conj(mps[i]))
+        # mps[i].conj(): (a=bra_left, b=bra_right, g=phys_bra)
+        E = einsum('ace,efh,cdgh,abg->bdf', E, mps[i], mpo[i], mps[i].conj())
         # E: (b=bra_right, d=mpo_right, f=ket_right)
     
     # After all sites E has shape (b=bra_right, d=mpo_right, f=ket_right).
