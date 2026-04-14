@@ -43,8 +43,9 @@ from typing import Tuple
 
 import numpy as np
 
-from nicole import Direction, Tensor, load_space
-from nicole import einsum, identity, isometry, diag
+from nicole import Direction
+from nicole import identity, isometry, diag
+from nicole import einsum, load_space
 from nicole.decomp import eig
 
 
