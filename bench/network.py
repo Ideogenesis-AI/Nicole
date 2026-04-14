@@ -22,8 +22,8 @@ from typing import Optional
 
 import numpy as np
 
-from nicole import Tensor, einsum, decomp, trace
-from nicole import Direction, identity, permute
+from nicole import Direction, Tensor
+from nicole import identity, einsum, decomp, trace
 
 
 def canonical(
@@ -99,7 +99,7 @@ def canonical(
             U, R = decomp(mps_new[i], axes=[0, 2], flow='>>', mode='UR', trunc=trunc)
             
             # Permute U to restore (left, right, phys) ordering
-            mps_new[i] = permute(U, [0, 2, 1])
+            mps_new[i] = U.permute([0, 2, 1])
             mps_new[i].retag(1, mps[i].itags[1])
             
             # Absorb R into right neighbor: R(left', right) * MPS(right, next_right, phys)
