@@ -22,7 +22,7 @@ from typing import Optional
 
 import numpy as np
 
-from nicole import Tensor, contract, conj, decomp, trace
+from nicole import Tensor, einsum, conj, decomp, trace
 from nicole import Direction, identity, permute
 
 
@@ -85,9 +85,8 @@ def canonical(
             mps_new[i] = V
             mps_new[i].retag(0, mps[i].itags[0])
             
-            # Contract L into left neighbor
-            # AK[i-1](left, right, phys) * L(right, left')
-            mps_new[i-1] = contract(mps_new[i-1], L, axes=(1, 0), perm=(0, 2, 1))
+            # Absorb L into left neighbor: (left, right, phys) * L(right, left') → (left, left', phys)
+            mps_new[i-1] = einsum('lrp,rq->lqp', mps_new[i-1], L)
             mps_new[i-1].retag([0, 1], [mps[i-1].itags[0], mps[i-1].itags[1]])
     
     else:  # direction == "left"
@@ -103,10 +102,9 @@ def canonical(
             mps_new[i] = permute(U, [0, 2, 1])
             mps_new[i].retag(1, mps[i].itags[1])
             
-            # Contract R into right neighbor
-            # R(right', right) * MPS[i+1](right, next_right, phys)
-            # Result is already in (left, right, phys) form: (right', next_right, phys)
-            mps_new[i+1] = contract(R, mps_new[i+1], axes=(1, 0))
+            # Absorb R into right neighbor: R(left', right) * MPS(right, next_right, phys)
+            # Result is already in (left, right, phys) form: (left', next_right, phys)
+            mps_new[i+1] = einsum('ab,bcd->acd', R, mps_new[i+1])
             mps_new[i+1].retag([0, 1], [mps[i+1].itags[0], mps[i+1].itags[1]])
     
     return mps_new
@@ -130,10 +128,23 @@ def norm(mps: list[Tensor]) -> float:
     -----
     The norm is computed by contracting the MPS with its conjugate:
         ||ψ||² = <ψ|ψ> = Tr(A[0]† A[0] * A[1]† A[1] * ... * A[N-1]† A[N-1])
-    
-    This is evaluated by sequentially contracting each site's contribution
-    A[i]† A[i] along the chain, starting from the left boundary and ending
-    with a contraction over the right boundary.
+
+    This is evaluated by building a Gram matrix in right-bond space site by site.
+    At site 0 the left boundary is trivial so bra and ket share the same left bond a:
+
+        einsum('abg,afg->bf', conj_mps, mps)
+
+    For subsequent sites the update reads:
+
+        einsum('abg,ae,efg->bf', conj_mps, gram, mps)
+
+    where the index letters denote:
+
+    - a, b — bra (conj MPS) left and right bonds
+    - e, f — ket (MPS) left and right bonds
+    - g — physical index (shared between bra and ket)
+
+    ||ψ||² is recovered by tracing gram[b, f] over the right bond.
     
     Examples
     --------
@@ -146,26 +157,22 @@ def norm(mps: list[Tensor]) -> float:
     if len(mps) == 0:
         return 0.0
     
-    # Start with first site: contract A[0] with conj(A[0]) over left and physical indices
-    # A[0]: (left, right, phys), conj(A[0]): (left, right, phys)
-    # Result: (right_conj, right)
-    result = contract(conj(mps[0]), mps[0], axes=([0, 2], [0, 2]))
+    # Site 0: bra and ket share the same trivial left bond 'a'; sum over a and g (physical).
+    # conj(mps[0]): (a=bra_left, b=bra_right, g=phys)
+    # mps[0]:       (a=ket_left, f=ket_right, g=phys)
+    gram = einsum('abg,afg->bf', conj(mps[0]), mps[0])
+    # gram: (b=bra_right, f=ket_right)
     
     # Process remaining sites
     for i in range(1, len(mps)):
-        # Contract with A[i]
-        # result: (right_conj_{i-1}, right_{i-1})
-        # A[i]: (left_i, right_i, phys_i) where left_i connects to right_{i-1}
-        temp = contract(result, mps[i], axes=(1, 0))
-        # temp: (right_conj_{i-1}, right_i, phys_i)
-        
-        # Contract with conj(A[i])
-        # conj(A[i]): (left_i, right_i, phys_i) where left_i connects to right_conj_{i-1}
-        result = contract(conj(mps[i]), temp, axes=([0, 2], [0, 2]))
-        # result: (right_conj_{i-1}, right_i)
+        # gram:         (a=bra_left, e=ket_left)
+        # conj(mps[i]): (a=bra_left, b=bra_right, g=phys)
+        # mps[i]:       (e=ket_left, f=ket_right, g=phys)
+        gram = einsum('abg,ae,efg->bf', conj(mps[i]), gram, mps[i])
+        # gram: (b=bra_right, f=ket_right)
     
-    # Contract final bond indices (trace) - returns scalar tensor
-    norm_squared = trace(result, axes=(0, 1))
+    # Trace the Gram matrix over the right bond to obtain ‖ψ‖²
+    norm_squared = trace(gram, axes=(0, 1))
     
     return np.sqrt(norm_squared.item())
 
@@ -192,8 +199,20 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
     The expectation value is computed by contracting layer by layer:
         <ψ|O|ψ> = conj(MPS) - MPO - MPS
     
-    The contraction proceeds from left to right, building up a "transfer tensor"
-    that carries the contracted bonds to the next site.
+    The contraction proceeds from left to right, building up a transfer tensor E
+    with indices (bra_right, mpo_right, ket_right). At each site the update is:
+
+        einsum('ace,efh,cdgh,abg->bdf', E, mps, mpo, conj_mps)
+
+    where the index letters denote:
+
+    - a, b — bra (conj MPS) left and right bonds
+    - c, d — MPO left and right bonds
+    - e, f — ket (MPS) left and right bonds
+    - g — physical bra index (shared between bra axis 2 and MPO axis 2)
+    - h — physical ket index (shared between MPO axis 3 and ket axis 2)
+
+    a, c, e are contracted against E; b, d, f become the updated E.
     
     Examples
     --------
@@ -206,48 +225,31 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
     if len(mps) != len(mpo):
         raise ValueError(f"MPS and MPO must have same length, got {len(mps)} and {len(mpo)}")
     
-    # Contract from left to right, site by site
-    # Build transfer tensor E with indices (mps_right, mpo_right, conj_mps_right)
-    # Note: mps and conj_mps share the same itags on bonds
+    # Contract from left to right, site by site.
+    # Build transfer tensor E with indices (a, c, e) = (bra_left, mpo_left, ket_left).
+    # Note: mps and conj_mps share the same itags on bonds.
     
-    # Initialize: Create identity for left boundary connecting mps[0] and conj(mps[0])
-    # Then insert index for mpo[0]
-    
-    # Get the space for the left bond of mps[0]
-    # For site 0, left bond is trivial (dim 1)
-    # Create identity: (left_mps, left_mps)
-    mps_left_space = mps[0].indices[0]  # Get space of left index
+    # Initialise E as a rank-2 identity on the ket left bond connecting mps[0] and
+    # conj(mps[0]), then insert the MPO left bond. For site 0 the left boundary is
+    # trivial (dimension 1).
+    mps_left_space = mps[0].indices[0]
     E = identity(mps_left_space)
     E.retag([0, 1], [mps[0].itags[0], mps[0].itags[0]])
-    # E: (left_mps, left_mps) with matching itags
-    
-    # Insert index for MPO left bond
+    # E: (a=bra_left, e=ket_left)
     E.insert_index(1, direction=Direction.OUT, itag=mpo[0].itags[0])
-    # E: (left_mps, left_mpo, left_mps)
+    # E: (a=bra_left, c=mpo_left, e=ket_left)
     
     # Now contract site by site
     for i in range(len(mps)):
-        # E: (left_mps, left_mpo, left_mps) at site i
-        # mps[i]: (left_mps, right_mps, phys_ket)
-        # mpo[i]: (left_mpo, right_mpo, phys_bra, phys_ket)
-        # conj(mps[i]): (left_mps, right_mps, phys_bra)
-        
-        # Contract E with mps[i]: left_mps (index 2 of E) with left_mps (index 0 of mps)
-        temp = contract(E, mps[i], axes=(2, 0))
-        # temp: (left_mps_conj, left_mpo, right_mps, phys_ket)
-        
-        # Contract with mpo[i]: left_mpo (index 1) with left_mpo, phys_ket (index 3) with phys_ket
-        temp = contract(temp, mpo[i], axes=([1, 3], [0, 3]))
-        # temp: (left_mps_conj, right_mps, right_mpo, phys_bra)
-        
-        # Contract with conj(mps[i]): left_mps_conj (index 0) with left_mps, phys_bra (index 3) with phys_bra
-        E = contract(temp, conj(mps[i]), axes=([0, 3], [0, 2]), perm=[2, 1, 0])
-        # E: (right_mps_conj, right_mpo, right_mps)
-        
-        # Note: right_mps and right_mps_conj have the same itag
+        # E: (a=bra_left, c=mpo_left, e=ket_left)
+        # mps[i]: (e=ket_left, f=ket_right, h=phys_ket)
+        # mpo[i]: (c=mpo_left, d=mpo_right, g=phys_bra, h=phys_ket)
+        # conj(mps[i]): (a=bra_left, b=bra_right, g=phys_bra)
+        E = einsum('ace,efh,cdgh,abg->bdf', E, mps[i], mpo[i], conj(mps[i]))
+        # E: (b=bra_right, d=mpo_right, f=ket_right)
     
-    # After all sites, E has shape (right_mps_conj, right_mpo, right_mps)
-    # At the right boundary, all indices have dimension 1.
+    # After all sites E has shape (b=bra_right, d=mpo_right, f=ket_right).
+    # At the right boundary all indices have dimension 1.
     # Extract the scalar as data × Bridge weight. For Abelian symmetries intw is
     # None (implicit weight 1); for non-Abelian groups the Bridge encodes the
     # CG normalisation that must be included for the correct physical value.
