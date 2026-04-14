@@ -47,7 +47,7 @@ from typing import Tuple
 import numpy as np
 
 from nicole import Tensor, load_space
-from nicole import contract, identity, isometry, conj, permute, transpose, diag
+from nicole import einsum, identity, isometry, diag
 from nicole.decomp import eig
 
 
@@ -112,14 +112,10 @@ def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
     expressed in the current effective Hilbert space. The caller is responsible
     for adding the Hermitian conjugate and the scale -t.
     """
-    # (ZF)†_now = conj(permute(Fnow, [2, 1, 0]))   → (op*, ket*, bra*)
-    Fn_dag = conj(permute(Fnow, [2, 1, 0]))
-    # (op*, ket*, L, R)
-    Fn_dag_Anow = contract(Fn_dag, Anow, axes=(2, 2))
-    # (R*, ket*, R)
-    ZFprev_Fn_dag_Anow = contract(ZFprev, Fn_dag_Anow, axes=([1, 2], [2, 0]))
-    # (R*, R)
-    return contract(conj(Anow), ZFprev_Fn_dag_Anow, axes=([0, 2], [0, 1]))
+    # Fn_dag[o,k,g] = (ZF)†_now: Fnow permuted to (op, ket, bra) then conjugated
+    Fn_dag = Fnow.permute([2, 1, 0]).conj()
+    # Fn_dag[o,k,g], Anow[e,d,g], ZFprev[q,e,o], Anow.conj()[q,b,k] → (R*, R) = [b,d]
+    return einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, ZFprev, Anow.conj())
 
 
 def _zf_product(Z: Tensor, F: Tensor) -> Tensor:
@@ -133,7 +129,8 @@ def _zf_product(Z: Tensor, F: Tensor) -> Tensor:
     Contracts Z's ket (axis 1, OUT) with F's bra (axis 0, IN).
     Result has the same index structure as F.
     """
-    return contract(Z, F, axes=(1, 0))
+    # Z[a,b], F[b,c,d] → ZF[a,c,d]
+    return einsum('ab,bcd->acd', Z, F)
 
 
 def _push_zf(Z: Tensor, F: Tensor, AK: Tensor) -> Tensor:
@@ -144,8 +141,8 @@ def _push_zf(Z: Tensor, F: Tensor, AK: Tensor) -> Tensor:
     This accumulated operator is used to implement the inter-site JW string.
     """
     ZF = _zf_product(Z, F)
-    ZF_AK = contract(ZF, AK, axes=(1, 2))
-    return contract(conj(AK), ZF_AK, axes=([0, 2], [2, 0]), perm=[0, 2, 1])
+    # AK[q,d,k], ZF[g,k,o], AK.conj()[q,b,g] → (left_conj, right, op) = [b,d,o]
+    return einsum('qdk,gko,qbg->bdo', AK, ZF, AK.conj())
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +248,7 @@ def iter_diag_band(
     H0.retag(["s00", "s00"])
 
     # First isometry: vacuum ⊗ physical → (vacuum, bond, phys)
-    A0 = permute(isometry(Op["vac"], Spc), [0, 2, 1])
+    A0 = isometry(Op["vac"], Spc).permute([0, 2, 1])
     A0.retag(["L00", "R00", "s00"])
 
     Eg         = np.zeros(N)
@@ -268,27 +265,27 @@ def iter_diag_band(
         Fnow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
 
         if itN == 1:
+            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
             Anow = A0
-            Hnow = contract(H0, A0, axes=(1, 2))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [1, 0]))
+            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
 
         else:
-            Anow = permute(isometry(bond_index.flip(), Spc), [0, 2, 1])
+            Anow = isometry(bond_index.flip(), Spc).permute([0, 2, 1])
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
 
             # Sandwich previous Hamiltonian
-            Hnow = contract(Hprev, Anow, axes=(1, 0))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [0, 2]))
+            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
+            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
 
             # Hopping term with JW string: (Z×F)†_prev × F_now.
             # The aux-index contraction sums over all spin components automatically.
             HFF = _compute_hff(ZFprev, Fnow, Anow)
 
-            HFF = (HFF + transpose(conj(HFF))) * (-t)
+            HFF = (HFF + HFF.conj().transpose()) * (-t)
             Hnow = Hnow + HFF
 
         # Symmetrize and diagonalize
-        Hnow_sym = (Hnow + transpose(conj(Hnow))) * 0.5
+        Hnow_sym = (Hnow + Hnow.conj().transpose()) * 0.5
 
         if itN == 1:
             V, D = eig(Hnow_sym, is_hermitian=True)
@@ -302,7 +299,8 @@ def iter_diag_band(
         all_eigvals  = np.concatenate([v.numpy() for v in D.values()])
         Eg[itN - 1]  = float(np.min(all_eigvals))
 
-        AK = contract(Anow, V, axes=(1, 0), perm=[0, 2, 1])
+        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
+        AK = einsum('abg,bd->adg', Anow, V)
         mps.append(AK.clone())
 
         bond_index = V.indices[1]
