@@ -554,31 +554,31 @@ def build_conductor(
     #
     # This matches iter_diag_band, which accumulates ZF = Z×F from the left
     # block and pairs it with the bare F† at the new (right) site.
-    Z    = Op["Z"]
-    ZF   = contract(Z, F, axes=(1, 0))  # ZF = Z×F, annihilator with JW (op=OUT)
-    C_ZF = ZF.conj().permute([1, 0, 2])  # (ZF)†, JW creator (op=IN → flipped below)
+    Z  = Op["Z"]
+    ZF = contract(Z, F, axes=(1, 0))  # ZF = Z×F, annihilator with JW (op=OUT)
+    ZC = ZF.conj().permute([1, 0, 2])  # (ZF)†, JW creator (op=IN → flipped below)
 
-    # Gdag uses bare operators (no Z): creator Fd and annihilator F_copy
-    Fd     = F.conj().permute([1, 0, 2])  # bare creator  (op=IN)
-    F_copy = F.clone()                    # bare annihilator (op=OUT → flipped below)
+    # Gdag uses bare operators (no Z): creator Fd and annihilator Cd
+    Fd = F.conj().permute([1, 0, 2])  # bare creator  (op=IN)
+    Cd = F.clone()                    # bare annihilator (op=OUT → flipped below)
 
     # Normalise all four operators to the full physical index so that oplus can
     # merge the op axis (axis 2) regardless of which bra/ket sectors each
     # operator individually occupies.
-    for op in (ZF, C_ZF, Fd, F_copy):
+    for op in (ZF, ZC, Fd, Cd):
         op.indices = (Spc, Spc.flip()) + op.indices[2:]
 
-    # capcup: C_ZF IN  → OUT  (to match ZF's op=OUT for G    = oplus(ZF, C_ZF))
-    #         F_copy OUT → IN  (to match Fd's op=IN  for Gdag = oplus(Fd, F_copy))
+    # capcup: ZC  IN  → OUT  (to match ZF's op=OUT for G    = oplus(ZF, ZC))
+    #         Cd  OUT → IN   (to match Fd's op=IN  for Gdag = oplus(Fd, Cd))
     # This is needed to ensure that bond direction inversion works correctly.
     # CANNOT BE REPLACED BY TWO INDIVIDUAL INVERSIONS!
-    capcup(C_ZF, 2, F_copy, 2)
+    capcup(ZC, 2, Cd, 2)
 
     # oplus along the op axis keeps the annihilator and creator channels
     # block-diagonally separate even when they share the same op charge sector
     # (which happens for Z2-based symmetries).
-    G    = oplus(ZF, C_ZF, axes=2)
-    Gdag = oplus(Fd, F_copy, axes=2) * (-t)
+    G    = oplus(ZF, ZC, axes=2)
+    Gdag = oplus(Fd, Cd, axes=2) * (-t)
 
     # Identity operator: (bra, ket)
     I = identity(Spc)
