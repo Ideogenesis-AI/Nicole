@@ -2,6 +2,51 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.3] - 2026-04-21
+
+**Benchmark Modernization and oplus Extension**
+
+Modernizes the benchmark suite to use `einsum` and the chainable method API introduced in v0.3.2, replacing multi-step functional contraction chains with concise subscript notation. Also extends `oplus` to accept tensors whose non-merged axes carry partially overlapping charge sectors: only sectors shared by both tensors must agree in dimension; sectors exclusive to one tensor are included in the output via sector union.
+
+### Enhancements
+
+#### Benchmark Modernization
+
+The five benchmark modules (`bench/network.py`, `bench/conductor.py`, `bench/fermionic.py`, `bench/bosonic.py`, `bench/system.py`) are refactored to use `einsum` for contractions and the chainable method API (`tensor.permute(...)`, `tensor.conj().transpose()`) in place of functional-style chains, and functional-form imports are removed from module headers.
+
+#### `oplus` — Relaxed Non-Merged Axis Constraint
+
+Previously, non-merged axes required both tensors to carry identical charge sector sets; any mismatch raised a `ValueError`. The constraint is now relaxed:
+
+- Charge sectors present in **both** tensors must have the **same dimension** (unchanged).
+- Charge sectors present in **only one** tensor are accepted and included in the output index via sector union.
+
+Block data for exclusive sectors is taken from whichever tensor owns the sector; positions from the other tensor remain zero.
+
+### Test Suite (1536 tests)
+
+- **1526 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- Six new tests in `tests/operations/test_oplus.py` covering disjoint sector sets, dimension-mismatch errors, exclusive sectors in A, exclusive sectors in B, partial overlap, and numerical block-value preservation
+
+### Documentation
+
+- **`oplus` API page**: Description and Notes updated to describe the sector-union semantics for non-merged axes
+
+### Statistics
+
+- **13 commits** since v0.3.2
+- **8 files changed**: 426 insertions, 209 deletions
+- Source module touched: `src/nicole/maneuver.py`
+- Bench modules modernized: `bench/network.py`, `bench/conductor.py`, `bench/fermionic.py`, `bench/bosonic.py`, `bench/system.py`
+
+### Compatibility
+
+**Breaking Changes:** None — the `oplus` change relaxes a precondition; all previously valid calls continue to work unchanged.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.2] - 2026-04-07
 
 **Einstein Summation and Tensor Serialization**
@@ -760,6 +805,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.3]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.0
