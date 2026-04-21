@@ -345,21 +345,54 @@ def test_oplus_incompatible_directions():
         oplus(A, B)
 
 
-def test_oplus_non_merged_axes_mismatch():
-    """Test error if non-merged axes don't match exactly."""
+def test_oplus_non_merged_axes_disjoint_sectors():
+    """Test that non-merged axes with entirely disjoint charge sectors are allowed.
+
+    Non-merged axes only require that shared sectors agree in dimension; sectors
+    exclusive to one tensor are simply unioned into the output index.
+    """
     group = U1Group()
-    
+
+    # Axis 0 (merged): A has charge 0, B has charge 1 (disjoint, but merged so no constraint)
     idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
     idx_B0 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
-    
-    # Different sectors on axis 1 (non-merged)
+
+    # Axis 1 (non-merged): A has charge 0, B has charge 1 — disjoint, no shared sectors
     idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 5),))
-    idx_B1 = Index(Direction.IN, group, sectors=(Sector(1, 5),))  # Different charge!
-    
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(1, 5),))
+
     A = Tensor.random([idx_A0, idx_A1], seed=1, itags=['i', 'j'])
     B = Tensor.random([idx_B0, idx_B1], seed=2, itags=['i', 'j'])
-    
-    with pytest.raises(ValueError, match="identical charge sectors"):
+
+    # Should succeed: no shared sectors on axis 1 means no dimension constraint to violate
+    C = oplus(A, B, axes=[0])
+
+    # Output axis 1 should be the union: charges {0, 1}
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 5
+    assert dim_map_1[1] == 5
+    assert len(dim_map_1) == 2
+
+    # Charge conservation: A's blocks have c_0 == c_1; B's blocks have c_0 == c_1
+    # A block (0, 0), B block (1, 1)
+    assert_charge_neutral(C)
+
+
+def test_oplus_non_merged_axes_shared_dim_mismatch_still_errors():
+    """Test that shared sectors on non-merged axes with mismatched dimensions still raise."""
+    group = U1Group()
+
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+
+    # Both share charge 0 on axis 1 (non-merged) but with different dimensions
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 4)))  # dim for charge 0 differs
+
+    A = Tensor.random([idx_A0, idx_A1], seed=1, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_B1], seed=2, itags=['i', 'j'])
+
+    with pytest.raises(ValueError, match="identical dimensions"):
         oplus(A, B, axes=[0])
 
 
@@ -720,6 +753,192 @@ def test_oplus_empty_blocks():
     # Result should have charge (0, 0) block
     assert (0, 0) in C.data
     assert C.data[(0, 0)].shape == (3, 3)  # 2+1 x 2+1
+
+
+# ============================================================================
+# Relaxed non-merged axis tests
+# ============================================================================
+
+def test_oplus_non_merged_axis_exclusive_sector_in_A():
+    """Non-merged axis has a sector only in A; output includes it and only A contributes.
+
+    For a U1 OUT/IN tensor, block (c, c) exists when both axes carry charge c. B's merged
+    axis (axis 0) has only charge 0, so B's non-merged axis (axis 1) never develops a
+    charge-1 sector — that sector is exclusive to A.
+    """
+    group = U1Group()
+
+    # Axis 0 (merged): A has charges {0, 1}, B has charge {0} only
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+
+    # Axis 1 (non-merged): A has charges {0, 1}, B has charge {0} only
+    # Charge 1 is exclusive to A because B has no charge-1 block.
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 5)))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+
+    A = Tensor.random([idx_A0, idx_A1], seed=10, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_B1], seed=20, itags=['i', 'j'])
+
+    C = oplus(A, B, axes=[0])
+
+    # Output axis 1 should be the union: {0: 4, 1: 5}
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 4
+    assert dim_map_1[1] == 5
+    assert len(dim_map_1) == 2
+
+    # Output axis 0 (merged): charge 0 → 2+1=3; charge 1 → 3+0=3 (B has no charge 1)
+    dim_map_0 = C.indices[0].sector_dim_map()
+    assert dim_map_0[0] == 3   # 2 + 1
+    assert dim_map_0[1] == 3   # 3 + 0
+
+    # Block (0, 0): both A and B contribute — shape [3, 4]
+    assert (0, 0) in C.data
+    assert C.data[(0, 0)].shape == (3, 4)
+
+    # Block (1, 1): only A contributes — shape [3, 5]; A's block occupies [0:3, :]
+    assert (1, 1) in C.data
+    assert C.data[(1, 1)].shape == (3, 5)
+    block_11 = C.data[(1, 1)]
+    # B contributes nothing to (1,1); the block equals A's original (1,1) block exactly
+    a_block_11 = A.data[(1, 1)]
+    assert torch.allclose(block_11[0:3, :], a_block_11)
+
+    assert_charge_neutral(C)
+
+
+def test_oplus_non_merged_axis_exclusive_sector_in_B():
+    """Non-merged axis has a sector only in B; output includes it and only B contributes."""
+    group = U1Group()
+
+    # Axis 0 (merged): use charges 0 and 2 so B blocks with charge 2 exist
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 4)))
+
+    # Axis 1 (non-merged): A has charge {0, 1}, B has charges {0, 2}
+    # Shared charge 0 has dim 4; charge 1 exclusive to A, charge 2 exclusive to B.
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 5)))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(2, 6)))
+
+    A = Tensor.random([idx_A0, idx_A1], seed=30, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_B1], seed=40, itags=['i', 'j'])
+
+    C = oplus(A, B, axes=[0])
+
+    # Output axis 1: union {0: 4, 1: 5, 2: 6}
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 4
+    assert dim_map_1[1] == 5
+    assert dim_map_1[2] == 6
+
+    # Block (2, 2): only B contributes; A has no block here
+    assert (2, 2) in C.data
+    block_22 = C.data[(2, 2)]
+    # Merged axis 0: dim_total = 4 (all from B, since A has no charge 2 in axis 0)
+    # Non-merged axis 1: dim = 6 (B's exclusive sector)
+    assert block_22.shape == (4, 6)
+    # A contributes nothing, so only B's sub-block [0:4, :] is filled (B at slice(0, 4))
+    assert_charge_neutral(C)
+
+
+def test_oplus_non_merged_axis_partial_overlap():
+    """Non-merged axis has some shared sectors (dims match) and some exclusive ones.
+
+    A block (c, c) exists for a U1 OUT/IN tensor only when both axes carry charge c.
+    To create an A-exclusive charge 3 in the non-merged axis, A's merged axis must also
+    carry charge 3 (so block (3,3) is valid in A). Symmetrically, B-exclusive charge 2
+    requires charge 2 in B's merged axis.
+    """
+    group = U1Group()
+
+    # Axis 0 (merged): A has {0, 1, 3}, B has {0, 1, 2}
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(3, 2)))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2), Sector(2, 1)))
+
+    # Axis 1 (non-merged): A has {0, 1, 3}, B has {0, 1, 2}
+    # Shared: {0: 4, 1: 5} (dims agree); A-exclusive: {3: 7}; B-exclusive: {2: 6}
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 5), Sector(3, 7)))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 4), Sector(1, 5), Sector(2, 6)))
+
+    A = Tensor.random([idx_A0, idx_A1], seed=50, itags=['i', 'j'])
+    B = Tensor.random([idx_B0, idx_B1], seed=60, itags=['i', 'j'])
+
+    C = oplus(A, B, axes=[0])
+
+    # Output axis 1: union {0: 4, 1: 5, 2: 6, 3: 7}
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_1[0] == 4
+    assert dim_map_1[1] == 5
+    assert dim_map_1[2] == 6
+    assert dim_map_1[3] == 7
+
+    # Output axis 0: merged {0: 3, 1: 5, 2: 1, 3: 2}
+    dim_map_0 = C.indices[0].sector_dim_map()
+    assert dim_map_0[0] == 3   # 2 + 1
+    assert dim_map_0[1] == 5   # 3 + 2
+    assert dim_map_0[2] == 1   # 0 + 1
+    assert dim_map_0[3] == 2   # 2 + 0
+
+    # Block (2, 2): only B contributes — shape [1, 6]
+    assert (2, 2) in C.data
+    assert C.data[(2, 2)].shape == (1, 6)
+
+    # Block (3, 3): only A contributes — shape [2, 7]; A goes at [0:2, :] (B has no charge 3)
+    assert (3, 3) in C.data
+    block_33 = C.data[(3, 3)]
+    assert block_33.shape == (2, 7)
+    assert torch.allclose(block_33[0:2, :], A.data[(3, 3)])
+
+    assert_charge_neutral(C)
+
+
+def test_oplus_non_merged_axis_exclusive_sector_block_values():
+    """Verify exact block values when non-merged axis has exclusive sectors.
+
+    For B to contribute a charge-1 block in the non-merged axis (axis 1), B's merged
+    axis (axis 0) must also carry charge 1 so that block (1, 1) is charge-conserving.
+    A's merged axis carries only charge 0, so A never has a (1, 1) block — charge 1 in
+    the non-merged axis is exclusive to B.
+    """
+    group = U1Group()
+
+    # Axis 0 (merged): A has charge {0} only; B has charges {0, 1}
+    idx_A0 = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_B0 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 3)))
+
+    # Axis 1 (non-merged): A has charge {0}; B has charges {0, 1}
+    # Shared charge 0 has dim 3 in both; charge 1 (dim 2) is exclusive to B.
+    idx_A1 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+    idx_B1 = Index(Direction.IN, group, sectors=(Sector(0, 3), Sector(1, 2)))
+
+    A = Tensor.zeros([idx_A0, idx_A1], itags=['i', 'j'])
+    A.data[(0, 0)] = torch.ones(2, 3, dtype=torch.float64)
+
+    B = Tensor.zeros([idx_B0, idx_B1], itags=['i', 'j'])
+    B.data[(0, 0)] = 2 * torch.ones(1, 3, dtype=torch.float64)
+    B.data[(1, 1)] = 3 * torch.ones(3, 2, dtype=torch.float64)
+
+    C = oplus(A, B, axes=[0])
+
+    # Axis 0 merged: {0: 3, 1: 3}; axis 1: union {0: 3, 1: 2}
+    dim_map_0 = C.indices[0].sector_dim_map()
+    dim_map_1 = C.indices[1].sector_dim_map()
+    assert dim_map_0[0] == 3   # 2 + 1
+    assert dim_map_0[1] == 3   # 0 + 3
+    assert dim_map_1[0] == 3
+    assert dim_map_1[1] == 2
+
+    # Block (0, 0): A at [0:2, :], B at [2:3, :]
+    block_00 = C.data[(0, 0)]
+    assert block_00.shape == (3, 3)
+    assert torch.allclose(block_00[0:2, :], torch.ones(2, 3, dtype=torch.float64))
+    assert torch.allclose(block_00[2:3, :], 2 * torch.ones(1, 3, dtype=torch.float64))
+
+    # Block (1, 1): only B contributes — A has no block here; B goes at [0:3, :]
+    block_11 = C.data[(1, 1)]
+    assert block_11.shape == (3, 2)
+    assert torch.allclose(block_11[0:3, :], 3 * torch.ones(3, 2, dtype=torch.float64))
 
 
 # ============================================================================
