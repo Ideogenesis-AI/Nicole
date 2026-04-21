@@ -44,8 +44,8 @@ from typing import Tuple
 
 import numpy as np
 
-from nicole import Tensor, load_space
-from nicole import contract, identity, isometry, conj, permute, transpose, diag
+from nicole import identity, isometry, diag
+from nicole import einsum, load_space
 from nicole.decomp import eig
 
 
@@ -128,7 +128,7 @@ def iter_diag_ferm(
     where Fprev is the annihilation operator on site i accumulated in the
     truncated left-block basis. The second term is the Hermitian conjugate of
     the first, so only one is computed explicitly and the other added via
-    transpose(conj(...)).
+    `.conj().transpose()`.
 
     For the infinite chain at half-filling (N → ∞):
         E_exact / N = -2t/π ≈ -0.6366 t
@@ -162,7 +162,7 @@ def iter_diag_ferm(
     H0.retag(["s00", "s00"])
 
     # A0: isometry from vacuum ⊗ physical space → permute to (vacuum, fused, physical)
-    A0 = permute(isometry(Op["vac"], Spc), [0, 2, 1])
+    A0 = isometry(Op["vac"], Spc).permute([0, 2, 1])
     A0.retag(["L00", "R00", "s00"])
 
     Eg = np.zeros(N)
@@ -177,46 +177,34 @@ def iter_diag_ferm(
 
         if itN == 1:
             # First iteration: sandwich zero Hamiltonian with A0
+            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
             Anow = A0
-            Hnow = contract(H0, A0, axes=(1, 2))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [1, 0]))
+            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
 
         else:
             # Add new site: isometry (left, phys, right) → permute to (left, right, phys)
-            Anow = permute(isometry(bond_index.flip(), Spc), [0, 2, 1])
+            Anow = isometry(bond_index.flip(), Spc).permute([0, 2, 1])
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
 
             # Sandwich previous Hamiltonian with Anow
-            Hnow = contract(Hprev, Anow, axes=(1, 0))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [0, 2]))
+            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
+            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
 
             # Hopping term: -t (F†_prev F_now + F†_now F_prev)
-            #
-            # Step 1: form F†_now = conj(permute(Fnow, [2,1,0]))
-            #         → encodes ⟨β|F†|β'⟩  (creation on new site)
-            #         Axes: (op*, ket*, bra*)
-            Fn_dag = conj(permute(Fnow, [2, 1, 0]))
+            # Hopping term: F†_now = Fnow.conj().permute([2,1,0]) → Fn_dag[o,k,g]
+            #   encodes ⟨β|F†|β'⟩ (creation on new site); axes: (op, ket, bra)
+            Fn_dag = Fnow.conj().permute([2, 1, 0])
 
-            # Step 2: contract F†_now with Anow on the bra* axis
-            #         → (op*, ket*, L, R)
-            Fn_dag_Anow = contract(Fn_dag, Anow, axes=(2, 2))
-
-            # Step 3: contract Fprev[R*, R, op] with Fn_dag_Anow on (R, op)
-            #         gives F_prev ⊗ F†_now partially contracted
-            #         → (R*, ket*, R)
-            Fprev_Fn_dag_Anow = contract(Fprev, Fn_dag_Anow, axes=([1, 2], [2, 0]))
-
-            # Step 4: sandwich with conj(Anow) to get F_prev ⊗ F†_now in truncated basis
-            #         → (R*, R)
-            HFF = contract(conj(Anow), Fprev_Fn_dag_Anow, axes=([0, 2], [0, 1]))
+            # Fn_dag[o,k,g], Anow[e,d,g], Fprev[q,e,o], Anow.conj()[q,b,k] → HFF[b,d]
+            HFF = einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, Fprev, Anow.conj())
 
             # Add Hermitian conjugate (= F†_prev ⊗ F_now) and scale
-            HFF = (HFF + transpose(conj(HFF))) * (-t)
+            HFF = (HFF + HFF.conj().transpose()) * (-t)
 
             Hnow = Hnow + HFF
 
         # Symmetrize and diagonalize
-        Hnow_sym = (Hnow + transpose(conj(Hnow))) * 0.5
+        Hnow_sym = (Hnow + Hnow.conj().transpose()) * 0.5
 
         if itN == 1:
             V, D = eig(Hnow_sym, is_hermitian=True)
@@ -230,17 +218,16 @@ def iter_diag_ferm(
         all_eigvals = np.concatenate([eigvals for eigvals in D.values()])
         Eg[itN - 1] = np.min(all_eigvals)
 
-        AK = contract(Anow, V, axes=(1, 0), perm=[0, 2, 1])
+        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
+        AK = einsum('abg,bd->adg', Anow, V)
         mps.append(AK.clone())
 
         bond_index = V.indices[1]
         Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
 
         # Accumulate annihilation operator on the new right edge for the next step
-        # AK: (left, right, phys), Fnow: (bra, ket, op)
-        # Result: (left_conj, op, right) → permute to (left_conj, right, op)
-        Fnow_AK = contract(Fnow, AK, axes=(1, 2))
-        Fprev = contract(conj(AK), Fnow_AK, axes=([0, 2], [2, 0]), perm=[0, 2, 1])
+        # AK[q,d,k], Fnow[g,k,o], AK.conj()[q,b,g] → Fprev[b,d,o] = (right_conj, right, op)
+        Fprev = einsum('qdk,gko,qbg->bdo', AK, Fnow, AK.conj())
 
         if verbose:
             NK = AK.indices[0].dim

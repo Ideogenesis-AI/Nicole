@@ -275,7 +275,8 @@ def oplus(
     
     Combines two tensors by merging their sector structures along specified
     axes and arranging blocks in a block-diagonal fashion. Axes not specified
-    must match exactly (same sectors, same dimensions).
+    must have matching dimensions for any charge sectors shared by both tensors;
+    sectors exclusive to one tensor are included in the output via union.
     
     For non-Abelian tensors, blocks are padded with zeros and combined using
     `block_add`, which merges intertwiner weights (collinear weights combine
@@ -295,7 +296,9 @@ def oplus(
         - Sequence of integers: axis positions (e.g., [0, 2])
         - Single string: itag name (e.g., 'i')
         - Sequence of strings: itag names (e.g., ['i', 'k'])
-        Axes not specified must have identical Index structure in A and B.
+        Axes not specified must have matching dimensions for any charge sectors
+        shared by both A and B; sectors exclusive to one tensor are included in
+        the output via union.
     
     Returns
     -------
@@ -305,7 +308,8 @@ def oplus(
     Raises
     ------
     ValueError
-        If tensors have incompatible structure or if non-merged axes don't match exactly
+        If tensors have incompatible structure or if shared sectors on non-merged
+        axes have mismatched dimensions
     
     Examples
     --------
@@ -341,7 +345,8 @@ def oplus(
     -----
     - Blocks are arranged in a block-diagonal fashion along merged axes
     - For merged axes, dimensions add for sectors with the same charge
-    - Non-merged axes must have identical sectors and dimensions
+    - Non-merged axes: shared charge sectors must have identical dimensions; sectors exclusive
+      to one tensor are included in the output index via union
     - Charge conservation is maintained in the output tensor
     """
     # Step 1: Validate basic compatibility
@@ -409,23 +414,17 @@ def oplus(
                 f"got {idx_A.direction} and {idx_B.direction}"
             )
         
-        # Non-merged axes must match exactly
+        # Non-merged axes: only sectors present in both A and B must agree in dimension.
+        # Sectors exclusive to one tensor are independent contributions and impose no constraint.
         if i in non_merged_axes:
-            charges_A = set(idx_A.charges())
-            charges_B = set(idx_B.charges())
-            if charges_A != charges_B:
-                raise ValueError(
-                    f"Index {i} (non-merged): Must have identical charge sectors, "
-                    f"got {charges_A} and {charges_B}"
-                )
-            
             dim_map_A = idx_A.sector_dim_map()
             dim_map_B = idx_B.sector_dim_map()
-            for charge in charges_A:
+            shared_charges = set(idx_A.charges()) & set(idx_B.charges())
+            for charge in shared_charges:
                 if dim_map_A[charge] != dim_map_B[charge]:
                     raise ValueError(
-                        f"Index {i} (non-merged): Must have identical dimensions for charge {charge}, "
-                        f"got {dim_map_A[charge]} and {dim_map_B[charge]}"
+                        f"Index {i} (non-merged): Shared charge sector {charge} must have "
+                        f"identical dimensions, got {dim_map_A[charge]} and {dim_map_B[charge]}"
                     )
     
     # Step 4: Build output indices
@@ -467,8 +466,19 @@ def oplus(
             )
             out_indices.append(new_index)
         else:
-            # Copy index from A (same as B by validation)
-            out_indices.append(A.indices[i])
+            # Build output index from the union of sectors. Shared sectors use A's dimension
+            # (validated equal to B's above); sectors exclusive to one tensor use their own.
+            idx_A_i = A.indices[i]
+            idx_B_i = B.indices[i]
+            dim_map_A_i = idx_A_i.sector_dim_map()
+            dim_map_B_i = idx_B_i.sector_dim_map()
+            all_charges_i = set(idx_A_i.charges()) | set(idx_B_i.charges())
+            union_sectors = tuple(
+                Sector(c, dim_map_A_i[c] if c in dim_map_A_i else dim_map_B_i[c])
+                for c in sorted(all_charges_i)
+            )
+            out_indices.append(Index(direction=idx_A_i.direction, group=idx_A_i.group,
+                                     sectors=union_sectors))
     
     # Step 5: Build output blocks
     # We need to identify all valid charge combinations and place blocks
@@ -493,9 +503,12 @@ def oplus(
                     _, _, dim_total = merged_sector_info[i][charge]
                     out_shape.append(dim_total)
                 else:
-                    # Use exact dimension from A (same as B)
+                    # Use whichever tensor has this charge in its non-merged index; a charge
+                    # exclusive to one tensor cannot appear in the other's blocks, so either
+                    # dim_map is a valid source for the output dimension.
                     dim_map_A = A.indices[i].sector_dim_map()
-                    out_shape.append(dim_map_A[charge])
+                    dim_map_B = B.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge] if charge in dim_map_A else dim_map_B[charge])
             
             # Initialize output block with zeros
             out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype), device=A.device)
@@ -548,9 +561,10 @@ def oplus(
                     _, _, dim_total = merged_sector_info[i][charge]
                     out_shape.append(dim_total)
                 else:
-                    # Use exact dimension from A (same as B)
+                    # Use whichever tensor has this charge in its non-merged index.
                     dim_map_A = A.indices[i].sector_dim_map()
-                    out_shape.append(dim_map_A[charge])
+                    dim_map_B = B.indices[i].sector_dim_map()
+                    out_shape.append(dim_map_A[charge] if charge in dim_map_A else dim_map_B[charge])
             
             # Pad A's block if it exists
             padded_A = None

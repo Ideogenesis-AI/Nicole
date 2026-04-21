@@ -43,8 +43,9 @@ from typing import Tuple
 
 import numpy as np
 
-from nicole import Direction, Tensor, load_space
-from nicole import contract, identity, isometry, conj, permute, transpose, diag
+from nicole import Direction
+from nicole import identity, isometry, diag
+from nicole import einsum, load_space
 from nicole.decomp import eig
 
 
@@ -143,7 +144,7 @@ def iter_diag_spin(
     
     # A0: isometry from vacuum ⊗ physical space
     # Output: (vacuum, physical, fused) → permute to (vacuum, fused, physical)
-    A0 = permute(isometry(Op["vac"], Spc), [0, 2, 1])
+    A0 = isometry(Op["vac"], Spc).permute([0, 2, 1])
     A0.retag(["L00", "R00", "s00"])
     
     # Lowest energies at each iteration
@@ -165,35 +166,31 @@ def iter_diag_spin(
         
         if itN == 1:
             # First iteration: sandwich H0 with A0
-            # A0: (left, right, phys), H0: (bra, ket)
+            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
             Anow = A0
-            Hnow = contract(H0, A0, axes=(1, 2))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [1, 0]))
+            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
             
         else:
             # Add new site: create isometry (left, phys, right) → permute to (left, right, phys)
-            Anow = permute(isometry(bond_index.flip(), Spc), [0, 2, 1])
+            Anow = isometry(bond_index.flip(), Spc).permute([0, 2, 1])
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
             
             # Update Hamiltonian: sandwich Hprev with Anow
-            # Anow: (left, right, phys), Hprev: (bra, ket)
-            Hnow = contract(Hprev, Anow, axes=(1, 0))
-            Hnow = contract(conj(Anow), Hnow, axes=([0, 2], [0, 2]))
+            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
+            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
             
             # Spin-spin interaction: Sprev-Snow interaction sandwiched by Anow
-            # Snow: (bra, ket, op) → permute and conjugate
-            Sn = conj(permute(Snow, [2, 1, 0]))
+            # Snow: (bra, ket, op) → conjugate then permute to (op, ket, bra) → Sn[o,k,g]
+            Sn = Snow.conj().permute([2, 1, 0])
             
-            # Contract Sn with Anow, then with Sprev, then sandwich with conj(Anow)
-            Sn_Anow = contract(Sn, Anow, axes=(2, 2))
-            Sprev_Sn_Anow = contract(Sprev, Sn_Anow, axes=([1, 2], [2, 0]))
-            HSS = contract(conj(Anow), Sprev_Sn_Anow, axes=([0, 2], [0, 1]))
+            # Sn[o,k,g], Anow[e,d,g], Sprev[q,e,o], Anow.conj()[q,b,k] → HSS[b,d]
+            HSS = einsum('okg,edg,qeo,qbk->bd', Sn, Anow, Sprev, Anow.conj())
             HSS = HSS * J
             
             Hnow = Hnow + HSS
         
         # Symmetrize and diagonalize
-        Hnow_sym = (Hnow + transpose(conj(Hnow))) * 0.5
+        Hnow_sym = (Hnow + Hnow.conj().transpose()) * 0.5
         
         # Diagonalize
         if itN == 1:
@@ -212,9 +209,8 @@ def iter_diag_spin(
         Eg[itN - 1] = np.min(all_eigvals)
         
         # Contract Anow with V to get AK
-        # Anow: (left, right, phys), V: (right_old, right_new) 
-        #   → result: (left, phys, right_new) → permute to (left, right_new, phys)
-        AK = contract(Anow, V, axes=(1, 0), perm=[0, 2, 1])
+        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
+        AK = einsum('abg,bd->adg', Anow, V)
         
         # Store AK for this iteration
         mps.append(AK.clone())
@@ -224,10 +220,8 @@ def iter_diag_spin(
         Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
         
         # Spin operator at the current site: sandwich Snow with AK
-        # AK: (left, right, phys), Snow: (bra, ket, op)
-        # Result: (left_conj, op, right) → permute to (left_conj, right, op)
-        Snow_AK = contract(Snow, AK, axes=(1, 2))
-        Sprev = contract(conj(AK), Snow_AK, axes=([0, 2], [2, 0]), perm=[0, 2, 1])
+        # AK[q,d,k], Snow[g,k,o], AK.conj()[q,b,g] → Sprev[b,d,o] = (right_conj, right, op)
+        Sprev = einsum('qdk,gko,qbg->bdo', AK, Snow, AK.conj())
         
         # Display progress
         if verbose:

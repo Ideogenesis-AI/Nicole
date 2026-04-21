@@ -20,10 +20,9 @@
 
 import torch
 
-from nicole import Direction, Tensor
-from nicole import identity, conj, permute, oplus, capcup, contract
-from nicole.index import Index
-from nicole.space import load_space
+from nicole import Direction, Index, Tensor
+from nicole import identity, oplus, capcup, contract
+from nicole import load_space
 from nicole.symmetry.delegate import Bridge
 
 
@@ -141,7 +140,7 @@ def build_heisenberg(
         S = Op["Sp"] + Op["Sm"] + Op["Sz"]
     
     # Conjugate for the other side: Sdag has (bra, ket, op)
-    Sdag = permute(conj(S), [1, 0, 2]) * J
+    Sdag = S.conj().permute([1, 0, 2]) * J
     
     # Identity operator: (bra, ket)
     I = identity(Spc)
@@ -160,12 +159,12 @@ def build_heisenberg(
     # S with left bond: (bra, ket, op) -> (left, bra, ket, op) -> (left, op, bra, ket)
     S4 = S.clone()
     S4.insert_index(0, direction=Direction.IN, itag="L")
-    S4 = permute(S4, [0, 3, 1, 2])
+    S4 = S4.permute([0, 3, 1, 2])
     
     # S† with right bond: (bra, ket, op) -> (bra, ket, op, right) -> (op, right, bra, ket)
     S4dag = Sdag.clone()
     S4dag.insert_index(3, direction=Direction.OUT, itag="R")
-    S4dag = permute(S4dag, [2, 3, 0, 1])
+    S4dag = S4dag.permute([2, 3, 0, 1])
 
     zero_mid = _make_zero_mid(S.indices[2], zero4)
 
@@ -329,9 +328,9 @@ def build_freefermion(
     # Fd : h.c. of F, same data as C for real F but an independent object
     # Cd : h.c. of C, same data as F for real C but an independent object
     F  = Op["F"]
-    C  = conj(permute(F, [1, 0, 2]))
-    Fd = permute(conj(F), [1, 0, 2])
-    Cd = permute(conj(C), [1, 0, 2])
+    C  = F.conj().permute([1, 0, 2])
+    Fd = F.conj().permute([1, 0, 2])
+    Cd = C.conj().permute([1, 0, 2])
 
     # capcup(C, 2, Cd, 2) inverts the op-axis direction of both tensors:
     #   C  : op IN  → OUT   (now matches F, so oplus along op is valid)
@@ -377,12 +376,12 @@ def build_freefermion(
     # G with left bond: (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
     G4 = G.clone()
     G4.insert_index(0, direction=Direction.IN, itag="L")
-    G4 = permute(G4, [0, 3, 1, 2])
+    G4 = G4.permute([0, 3, 1, 2])
 
     # Gdag with right bond: (bra, ket, op) → (bra, ket, op, right) → (op, right, bra, ket)
     G4dag = Gdag.clone()
     G4dag.insert_index(3, direction=Direction.OUT, itag="R")
-    G4dag = permute(G4dag, [2, 3, 0, 1])
+    G4dag = G4dag.permute([2, 3, 0, 1])
 
     mpo = []
 
@@ -555,31 +554,31 @@ def build_conductor(
     #
     # This matches iter_diag_band, which accumulates ZF = Z×F from the left
     # block and pairs it with the bare F† at the new (right) site.
-    Z    = Op["Z"]
-    ZF   = contract(Z, F, axes=(1, 0))  # ZF = Z×F, annihilator with JW (op=OUT)
-    C_ZF = conj(permute(ZF, [1, 0, 2]))  # (ZF)†, JW creator (op=IN → flipped below)
+    Z  = Op["Z"]
+    ZF = contract(Z, F, axes=(1, 0))  # ZF = Z×F, annihilator with JW (op=OUT)
+    ZC = ZF.conj().permute([1, 0, 2])  # (ZF)†, JW creator (op=IN → flipped below)
 
-    # Gdag uses bare operators (no Z): creator Fd and annihilator F_copy
-    Fd     = permute(conj(F), [1, 0, 2])  # bare creator  (op=IN)
-    F_copy = F.clone()                    # bare annihilator (op=OUT → flipped below)
+    # Gdag uses bare operators (no Z): creator Fd and annihilator Cd
+    Fd = F.conj().permute([1, 0, 2])  # bare creator  (op=IN)
+    Cd = F.clone()                    # bare annihilator (op=OUT → flipped below)
 
     # Normalise all four operators to the full physical index so that oplus can
     # merge the op axis (axis 2) regardless of which bra/ket sectors each
     # operator individually occupies.
-    for op in (ZF, C_ZF, Fd, F_copy):
+    for op in (ZF, ZC, Fd, Cd):
         op.indices = (Spc, Spc.flip()) + op.indices[2:]
 
-    # capcup: C_ZF IN  → OUT  (to match ZF's op=OUT for G    = oplus(ZF, C_ZF))
-    #         F_copy OUT → IN  (to match Fd's op=IN  for Gdag = oplus(Fd, F_copy))
+    # capcup: ZC  IN  → OUT  (to match ZF's op=OUT for G    = oplus(ZF, ZC))
+    #         Cd  OUT → IN   (to match Fd's op=IN  for Gdag = oplus(Fd, Cd))
     # This is needed to ensure that bond direction inversion works correctly.
     # CANNOT BE REPLACED BY TWO INDIVIDUAL INVERSIONS!
-    capcup(C_ZF, 2, F_copy, 2)
+    capcup(ZC, 2, Cd, 2)
 
     # oplus along the op axis keeps the annihilator and creator channels
     # block-diagonally separate even when they share the same op charge sector
     # (which happens for Z2-based symmetries).
-    G    = oplus(ZF, C_ZF, axes=2)
-    Gdag = oplus(Fd, F_copy, axes=2) * (-t)
+    G    = oplus(ZF, ZC, axes=2)
+    Gdag = oplus(Fd, Cd, axes=2) * (-t)
 
     # Identity operator: (bra, ket)
     I = identity(Spc)
@@ -599,12 +598,12 @@ def build_conductor(
     # G with left bond:   (bra, ket, op) → (left, bra, ket, op) → (left, op, bra, ket)
     G4 = G.clone()
     G4.insert_index(0, direction=Direction.IN, itag="L")
-    G4 = permute(G4, [0, 3, 1, 2])
+    G4 = G4.permute([0, 3, 1, 2])
 
     # Gdag with right bond: (bra, ket, op) → (bra, ket, op, right) → (op, right, bra, ket)
     G4dag = Gdag.clone()
     G4dag.insert_index(3, direction=Direction.OUT, itag="R")
-    G4dag = permute(G4dag, [2, 3, 0, 1])
+    G4dag = G4dag.permute([2, 3, 0, 1])
 
     mpo = []
 
