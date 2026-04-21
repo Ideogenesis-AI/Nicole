@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../../images/nicole.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -3635,11 +3635,7 @@
 
 
 <a href="#nicole.oplus" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">oplus</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">A</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">B</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">oplus</span><span class="p">(</span><span class="n">A</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">B</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3647,7 +3643,8 @@
         <p>Direct sum of two tensors with selective axis merging.</p>
 <p>Combines two tensors by merging their sector structures along specified
 axes and arranging blocks in a block-diagonal fashion. Axes not specified
-must match exactly (same sectors, same dimensions).</p>
+must have matching dimensions for any charge sectors shared by both tensors;
+sectors exclusive to one tensor are included in the output via union.</p>
 <p>For non-Abelian tensors, blocks are padded with zeros and combined using
 <code>block_add</code>, which merges intertwiner weights (collinear weights combine
 directly; non-collinear weights are concatenated). <code>block_compress</code> is
@@ -3724,7 +3721,9 @@ then applied to remove any resulting linear dependence among components.</p>
 <li>Single string: itag name (e.g., 'i')</li>
 <li>Sequence of strings: itag names (e.g., ['i', 'k'])</li>
 </ul>
-Axes not specified must have identical Index structure in A and B.</p>
+Axes not specified must have matching dimensions for any charge sectors
+shared by both A and B; sectors exclusive to one tensor are included in
+the output via union.</p>
               </div>
             </td>
             <td>
@@ -3778,7 +3777,8 @@ Axes not specified must have identical Index structure in A and B.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If tensors have incompatible structure or if non-merged axes don't match exactly</p>
+                <p>If tensors have incompatible structure or if shared sectors on non-merged
+axes have mismatched dimensions</p>
               </div>
             </td>
           </tr>
@@ -3822,7 +3822,8 @@ Axes not specified must have identical Index structure in A and B.</p>
   <ul>
 <li>Blocks are arranged in a block-diagonal fashion along merged axes</li>
 <li>For merged axes, dimensions add for sectors with the same charge</li>
-<li>Non-merged axes must have identical sectors and dimensions</li>
+<li>Non-merged axes: shared charge sectors must have identical dimensions; sectors exclusive
+  to one tensor are included in the output index via union</li>
 <li>Charge conservation is maintained in the output tensor</li>
 </ul>
 </details>
@@ -3830,14 +3831,14 @@ Axes not specified must have identical Index structure in A and B.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Creates a direct sum (block diagonal concatenation) of multiple tensors. All tensors must have:
+<p>Creates a direct sum (block diagonal concatenation) of two tensors. The tensors must have:</p>
 <ul>
-<li>Same number of indices</li>
-<li>Matching directions for corresponding indices</li>
-<li>Same symmetry groups</li>
-<li>Matching tags</li>
-</ul></p>
-<p>When charges collide, blocks are placed on the block diagonal.</p>
+<li>The same number of indices</li>
+<li>Matching directions for every corresponding index</li>
+<li>The same symmetry group on every corresponding index</li>
+</ul>
+<p>The <code>axes</code> parameter controls which indices are <em>merged</em> (block-diagonal stacking) and which are <em>non-merged</em> (shared). For non-merged axes, only charge sectors that appear in <strong>both</strong> tensors must agree in dimension. Sectors exclusive to one tensor are included in the output via the union of sectors and contribute their blocks independently.</p>
+<p>When charges coincide on merged axes, blocks are placed on the block diagonal (not summed).</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../addition/">Arithmetic Operations</a>: Basic operations</li>
@@ -3845,7 +3846,11 @@ Axes not specified must have identical Index structure in A and B.</p>
 <li><a href="../../../examples/basic/arithmetic/">Examples: Arithmetic</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>Resulting tensor has combined sectors from all input tensors. For colliding charges, blocks are arranged diagonally (not summed). For non-Abelian groups, linearly dependent components are automatically compressed away after the merge.</p>
+<ul>
+<li>The output index for each merged axis is the union of sectors from both tensors, with dimensions added (<code>dim_A + dim_B</code> per shared charge, or <code>dim_A</code> / <code>dim_B</code> for exclusive charges).</li>
+<li>The output index for each non-merged axis is also the union of sectors, but dimensions of shared charges must be equal (they are not summed).</li>
+<li>For non-Abelian groups, linearly dependent multiplicity components are automatically compressed away after the merge.</li>
+</ul>
 
 
 
@@ -3868,7 +3873,7 @@ Axes not specified must have identical Index structure in A and B.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 7, 2026 01:23:50 UTC"><span class="timeago" datetime="2026-04-07T01:23:50+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 7, 2026 01:23:50 UTC">2026-04-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 21, 2026 00:48:46 UTC"><span class="timeago" datetime="2026-04-21T00:48:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 21, 2026 00:48:46 UTC">2026-04-21</span>
   </span>
 
     
