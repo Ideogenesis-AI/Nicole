@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/images/nicole-high.png" alt="Nicole Tensor Library" width="300">
+  <img src="docs/images/nicole-next.png" alt="Nicole Tensor Library" width="300">
 </h1>
 
 <!-- ## Nicole: A Symmetry-Aware Tensor Library -->
