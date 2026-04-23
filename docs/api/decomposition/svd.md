@@ -33,4 +33,6 @@ from nicole.decomp import svd
 
 ## Notes
 
-Use `decomp()` for most cases. Use `svd()` when you need per-block singular value access before tensor creation.
+- Use `decomp()` for most cases. Use `svd()` when you need per-block singular value access before tensor creation.
+- For Abelian tensors, `Vh` satisfies `Vh @ Vh† = I` directly from the standard block-wise matrix SVD.
+- For SU(2) tensors, the intertwiner weight matrix is canonicalized to a scaled unitary form before the SVD, ensuring `Vh` is a physical isometry (`Vh @ Vh† = I`).
