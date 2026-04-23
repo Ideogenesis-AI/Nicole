@@ -67,6 +67,66 @@ def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
     return [name_to_axis[n] for n in names]
 
 
+def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
+    """Return a working copy of T with canonicalized intertwiner weights.
+
+    The isometry condition Vh @ Vh† = I requires W W^T = irrep_dim(q_left) · I,
+    i.e. the weight matrix must be a scaled unitary with scale = sqrt(irrep_dim).
+    For each block, the weight matrix W is SVD-decomposed as W = U S Vhᵀ.
+    The working copy carries:
+
+        W_new  = sqrt(irrep_dim) · Vh[:k, :]   (orthonormal rows at canonical scale)
+        R_new  = R @ (U[:, :k] · S[:k]) / sqrt(irrep_dim)
+
+    so that R_new @ W_new = R @ W (physical tensor unchanged).
+
+    The coefficient matrix M = (U[:, :k] · S[:k]) / sqrt(irrep_dim) is treated as a
+    constant (derived from bridge.weights, not from T.data), so the operation
+    R_new = R @ M is a differentiable linear map.  Gradients therefore flow from
+    the returned working tensor back to the original T.data leaves unchanged.
+
+    The original T is never modified.
+    Returns T itself (no copy) for Abelian tensors or tensors without intw.
+    """
+    if T.intw is None or T.group.is_abelian:
+        return T
+
+    group = T.group
+    cutoff = 1e-14
+
+    new_data: Dict[BlockKey, torch.Tensor] = {}
+    new_intw: Dict[BlockKey, dg.Bridge] = {}
+
+    for key, bridge in T.intw.items():
+        q_left = key[left_axis]
+        target = math.sqrt(group.irrep_dim(q_left))
+
+        # SVD of the weight matrix W = U S Vhᵀ.  Components whose singular
+        # values fall below cutoff are linearly dependent and are dropped.
+        U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+        k = max(1, int((S >= cutoff).sum().item()))
+
+        # New data: R_new = R_flat @ (U[:,:k] · S[:k]) / target.
+        # bridge.weights has no requires_grad, so U/S/Vh are plain constants;
+        # the matmul is a differentiable linear map w.r.t. T.data[key].
+        data = T.data[key]
+        r_flat = data.flatten(0, -2)
+        new_data[key] = (r_flat @ (U[:, :k] * S[:k]) / target).reshape(data.shape[:-1] + (k,))
+
+        # New weights: W_new = target · Vh[:k, :].  Rows are orthonormal and
+        # scaled by target, so W_new @ W_new^T = target² · I, satisfying the
+        # isometry condition (see docstring).
+        new_intw[key] = dg.Bridge(
+            cgspec=bridge.cgspec,
+            weights=(target * Vh[:k, :]).to(dtype=bridge.weights.dtype),
+        )
+
+    return Tensor(
+        indices=T.indices, itags=T.itags, data=new_data, intw=new_intw,
+        dtype=T.dtype, label=T.label,
+    )
+
+
 def svd(
     T: Tensor, 
     axis: int | str,
@@ -162,7 +222,13 @@ def svd(
     # For non-Abelian tensors each data block has a trailing OM axis that must
     # be kept last. The array-level permutation appends that axis index.
     perm_with_om = perm + [len(T.indices)]  # only used when intw is not None
-    
+
+    # Canonicalize intertwiner weights so that the resulting Vh is physically
+    # isometric (Vh @ Vh† = identity).  No-op for Abelian tensors.
+    # T_work is a new tensor whose data blocks are derived from T.data via a
+    # differentiable linear map, so gradients flow back to the original T.data leaves.
+    T_work = _regularize_for_svd(T, left_axis)
+
     # Get indices
     left_index = T.indices[left_axis]
     right_indices = tuple(T.indices[i] for i in right_axes)
@@ -172,9 +238,9 @@ def svd(
     # Structure: q_left -> list of (key, arr_perm, dims_right, mat)
     blocks_by_left_charge: Dict[tuple, List[Tuple[BlockKey, torch.Tensor, Tuple[int, ...], torch.Tensor]]] = {}
     
-    for key, arr in T.data.items():
+    for key, arr in T_work.data.items():
         # Permute array to [left_axis] + right_axes (+ trailing OM axis for SU(2))
-        arr_perm = torch.permute(arr, perm) if T.intw is None \
+        arr_perm = torch.permute(arr, perm) if T_work.intw is None \
             else torch.permute(arr, perm_with_om)
         
         # Get left charge and right charges
@@ -325,7 +391,7 @@ def svd(
         # so the weights are copied unchanged.
         # Note: skip entries whose left charge was eliminated by truncation.
         Vh_intw: Dict[BlockKey, dg.Bridge] = {}
-        for key, bridge in T.intw.items():
+        for key, bridge in T_work.intw.items():
             q_left = key[left_axis]
             if q_left not in bond_charge_dims:
                 continue
