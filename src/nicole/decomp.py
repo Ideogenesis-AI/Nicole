@@ -60,13 +60,6 @@ from .typing import Direction, Sector
 from .symmetry import delegate as dg
 
 
-def _axes_from_names(itags: Sequence[str], names: Sequence[str]) -> List[int]:
-    """Translate itags into integer axes."""
-    # Build a lookup once to avoid repeated linear searches.
-    name_to_axis = {tag: i for i, tag in enumerate(itags)}
-    return [name_to_axis[n] for n in names]
-
-
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
 
