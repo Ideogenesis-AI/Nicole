@@ -28,9 +28,170 @@ import pytest
 import yuzuha
 
 from nicole import Direction, Index, Sector, Tensor
-from nicole import conj, permute, transpose, merge_axes, contract
+from nicole import allclose, conj, permute, transpose, merge_axes, contract
 from nicole import ProductGroup, U1Group, Z2Group, SU2Group
 from ..utils import populate_random_weights, assert_physical_tensors_equal
+
+
+# allclose tests
+
+def test_allclose_identical_tensors():
+    """Identical Abelian tensors are allclose."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert allclose(A, A)
+
+
+def test_allclose_same_content():
+    """Two independently constructed Abelian tensors with the same seed are allclose."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert allclose(A, B)
+
+
+def test_allclose_within_tolerance():
+    """Tensor perturbed by atol/2 is still allclose."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    atol = 1e-6
+    for k in B.data:
+        B.data[k] = B.data[k] + atol / 2
+    assert allclose(A, B, atol=atol)
+
+
+def test_allclose_outside_tolerance():
+    """Tensor perturbed beyond tolerance is not allclose."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
+    atol = 1e-8
+    for k in B.data:
+        B.data[k] = B.data[k] + atol * 100
+    assert not allclose(A, B, atol=atol)
+
+
+def test_allclose_different_index_structure():
+    """Tensors with different index structures raise ValueError."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    A = Tensor.random([idx_a, idx_a.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_b, idx_b.flip()], seed=1, itags=["A", "B"])
+    with pytest.raises(ValueError):
+        allclose(A, B)
+
+
+def test_allclose_different_block_keys():
+    """Tensors with same index structure but different block keys are not allclose."""
+    group = U1Group()
+    # Same index structure, but one tensor has an extra sector in its data
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    # Construct B with no charge-1 blocks by using a zero tensor and removing a key
+    B = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    key_to_drop = next(k for k in B.data if k != next(iter(B.data)))
+    del B.data[key_to_drop]
+    assert not allclose(A, B)
+
+
+def test_allclose_incompatible_structure_raises():
+    """Tensors with incompatible index structure raise ValueError."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip(), idx], seed=1, itags=["A", "B", "C"])
+    with pytest.raises(ValueError):
+        allclose(A, B)
+
+
+def test_allclose_scalar_tensor():
+    """Scalar tensors with the same value are allclose."""
+    s1 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0)}, dtype=torch.float64)
+    s2 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0 + 1e-9)}, dtype=torch.float64)
+    assert allclose(s1, s2)
+
+
+def test_allclose_su2_identical():
+    """Identical SU(2) tensors are allclose."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert allclose(A, A)
+
+
+def test_allclose_su2_same_physical_different_gauge():
+    """SU(2) tensors with the same physical tensor R@W but different gauges are allclose."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+
+    # Scale both R and W inversely — physical tensor R @ W is preserved
+    import nicole.symmetry.delegate as dg
+    B = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    for k in B.data:
+        B.data[k] = B.data[k] * 2.0
+        B.intw[k] = dg.Bridge(cgspec=B.intw[k].cgspec, weights=B.intw[k].weights / 2.0)
+
+    assert allclose(A, B)
+
+
+def test_allclose_su2_regularize():
+    """4th-order SU(2) tensor is allclose to its regularized clone."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx4 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    A = Tensor.random([idx1, idx2, idx3, idx4], seed=7, itags=["a", "b", "c", "d"])
+    populate_random_weights(A, seed=7)
+
+    B = A.clone()
+    B.regularize()
+
+    # regularize() changes the (R, W) gauge but preserves the physical tensor R @ W
+    assert allclose(A, B)
+
+
+def test_allclose_intw_present_vs_absent():
+    """Tensors that differ only in intw presence return False from allclose."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = A.clone()
+    B.intw = None
+    assert not allclose(A, B)
+
+
+def test_allclose_mixed_abelian_and_su2():
+    """An Abelian tensor and an SU(2) tensor with the same index order are not allclose."""
+    u1 = U1Group()
+    su2 = SU2Group()
+    idx_u1 = Index(Direction.IN, u1, sectors=(Sector(1, 2),))
+    idx_su2 = Index(Direction.IN, su2, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx_u1, idx_u1.flip()], seed=1, itags=["a", "b"])
+    B = Tensor.random([idx_su2, idx_su2.flip()], seed=1, itags=["a", "b"])
+    with pytest.raises(ValueError):
+        allclose(A, B)
+
+
+def test_allclose_su2_different_physical():
+    """SU(2) tensors with different physical content are not allclose."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
+    assert not allclose(A, B)
 
 
 # ============================================================================
