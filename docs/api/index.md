@@ -55,6 +55,7 @@ Mathematical operations:
 | Topic | Description |
 |-------|-------------|
 | [Basic Operations](arithmetic/addition.md) | +, -, *, /, negation |
+| [allclose](arithmetic/allclose.md) | Numerical equality within tolerance |
 | [oplus](arithmetic/oplus.md) | Direct sum |
 | [diag](arithmetic/diag.md) | Create diagonal tensor |
 | [inv](arithmetic/inv.md) | Matrix inversion |
