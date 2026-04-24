@@ -502,7 +502,7 @@ def build_conductor(
         H = -t Σ_{i,σ} (c†_{i,σ} c_{i+1,σ} + h.c.)
 
     The MPO uses bond dimension 3, structurally identical to
-    :func:`build_freefermion`. For Abelian symmetries the two spin-flavour
+    `build_freefermion`. For Abelian symmetries the two spin-flavour
     annihilation operators are merged first:
 
         F = F_up + F_dn   (Abelian: "U1,U1" or "Z2,U1")
