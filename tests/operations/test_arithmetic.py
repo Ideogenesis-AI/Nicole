@@ -346,6 +346,40 @@ def test_scalar_multiplication_su2_4th_order():
         assert torch.allclose(B.data[key], A.data[key] * scalar)
 
 
+# Negation tests
+
+def test_negation_abelian():
+    """Negation flips the sign of every block."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = -A
+    for key in A.data:
+        assert torch.allclose(B.data[key], -A.data[key])
+
+
+def test_negation_double():
+    """Double negation recovers the original tensor."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    assert_blocks_equal(-(-A), A)
+
+
+def test_negation_su2_preserves_intw():
+    """Negation of an SU(2) tensor preserves the intertwiner."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = -A
+    assert B.intw is not None
+    for key in A.intw:
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+    for key in A.data:
+        assert torch.allclose(B.data[key], -A.data[key])
+
+
 # Scalar division tests
 
 def test_scalar_division_int():
