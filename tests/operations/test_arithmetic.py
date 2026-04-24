@@ -346,6 +346,96 @@ def test_scalar_multiplication_su2_4th_order():
         assert torch.allclose(B.data[key], A.data[key] * scalar)
 
 
+# Scalar division tests
+
+def test_scalar_division_int():
+    """Test scalar division by an integer promotes dtype to float."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+
+    B = A / 4
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / 4)
+    # 1/int is float in Python, so dtype must be at least float64
+    assert B.dtype == torch.float64
+
+
+def test_scalar_division_float():
+    """Test scalar division by a float."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    A = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+
+    B = A / 2.5
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / 2.5)
+
+
+def test_scalar_division_complex():
+    """Test scalar division by a complex number."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    A = Tensor.random([idx_a, idx_b], seed=5, dtype=torch.complex128, itags=["A", "B"])
+
+    c = 2.0 + 1.0j
+    B = A / c
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / c)
+
+
+def test_scalar_division_consistent_with_multiplication():
+    """Test that A / c equals A * (1/c) for all scalar types."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=7, itags=["A", "B"])
+
+    for c in [2, 2.5, 1.0 + 0.5j]:
+        assert_blocks_equal(A / c, A * (1 / c))
+
+
+def test_scalar_division_scalar_tensor():
+    """Test division of a 0D scalar tensor."""
+    group = U1Group()
+    s = Tensor(indices=(), itags=(), data={(): torch.tensor(6.0)}, dtype=torch.float64)
+
+    t = s / 3.0
+    assert torch.allclose(t.data[()], torch.tensor(2.0))
+
+
+def test_scalar_division_su2_preserves_intw():
+    """Test that SU(2) tensor division preserves intertwiner weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    populate_random_weights(A, seed=42)
+
+    B = A / 2.0
+
+    assert B.intw is not None
+    assert set(B.intw.keys()) == set(A.intw.keys())
+    for key in A.intw.keys():
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+    for key in A.data.keys():
+        assert torch.allclose(B.data[key], A.data[key] / 2.0)
+
+
+def test_scalar_division_norm_scaling():
+    """Test that ||A / c|| == ||A|| / |c|."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
+    original_norm = A.norm()
+
+    assert math.isclose((A / 4.0).norm(), original_norm / 4.0, rel_tol=1e-10)
+    assert math.isclose((A / (2.0 + 1.0j)).norm(), original_norm / abs(2.0 + 1.0j), rel_tol=1e-10)
+
+
 # Norm tests
 
 def test_norm_positive():
