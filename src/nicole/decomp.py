@@ -48,7 +48,8 @@ decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Literal, Sequence, Tuple, MutableMapping
+from typing import Any, Optional, Union
 import math
 
 import torch
@@ -123,8 +124,11 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
 def svd(
     T: Tensor, 
     axis: int | str,
-    trunc: Optional[Dict[str, Union[int, float]]] = None
-) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor]:
+    trunc: Optional[Dict[str, Union[int, float]]] = None,
+    *, # keyword-only arguments
+    requires_info: bool = False,
+) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor] \
+   | Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor, Dict[str, Any]]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
 
     Parameters
@@ -139,14 +143,23 @@ def svd(
         - "nkeep": Keep at most n singular values globally (largest across all blocks)
         - "thresh": Keep singular values >= t per block
         Both can be specified together: thresh is applied first, then nkeep.
+    requires_info:
+        If True, return a 4-tuple `(U, S_blocks, Vh, info)` where `info` is a dict
+        containing auxiliary decomposition data. If False (default), return the usual
+        3-tuple `(U, S_blocks, Vh)` with no overhead.
 
     Returns
     -------
     tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor]
-        Triplet `(U, S_blocks, Vh)` where:
+        When `requires_info=False` (default): 3-tuple `(U, S_blocks, Vh)` where:
         - U has indices (left_index, bond_index)
         - S_blocks is a Dict mapping block keys to 1D arrays of singular values
         - Vh has indices (bond_index.flip(), *right_indices)
+    tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor, dict[str, Any]]
+        When `requires_info=True`: 4-tuple `(U, S_blocks, Vh, info)` where `info`
+        currently contains:
+        - "discarded_weight": float, sum of all singular values truncated away
+          across all charge sectors. Zero when `trunc` is None or nothing was cut.
     
     Raises
     ------
@@ -178,6 +191,10 @@ def svd(
     >>> 
     >>> # Apply both: first thresh, then nkeep
     >>> U, S_blocks, Vh = svd(T, axis=0, trunc={"thresh": 0.01, "nkeep": 10})
+    >>> 
+    >>> # Special case: inspect discarded weight
+    >>> U, S_blocks, Vh, info = svd(T, axis=0, trunc={"nkeep": 10}, requires_info=True)
+    >>> dw = info["discarded_weight"]
     """
     # Validate trunc parameter
     if trunc is not None:
@@ -253,6 +270,7 @@ def svd(
     # Perform SVD for each left charge sector by concatenating all blocks with same q_left
     svd_results: Dict[tuple, Tuple[torch.Tensor, torch.Tensor, Dict[BlockKey, torch.Tensor]]] = {}
     bond_charge_dims: Dict[tuple, int] = {}
+    _discarded_weight = 0.0  # accumulated as Python float
     
     for q_left, block_list in blocks_by_left_charge.items():
         # Concatenate all matrices with the same left charge horizontally
@@ -265,6 +283,10 @@ def svd(
         # Apply per-block truncation for thresh mode
         if trunc is not None and "thresh" in trunc:
             keep_mask = s >= trunc["thresh"]
+            # Accumulate discarded weight if info is requested
+            if requires_info:
+                _discarded_weight += float(s[~keep_mask].sum())
+            # Apply truncation to U, s, and Vh
             U = U[:, keep_mask]
             s = s[keep_mask]
             Vh = Vh[keep_mask, :]
@@ -300,6 +322,10 @@ def svd(
         # Keep top nkeep singular values
         all_singular_values.sort(key=lambda x: x[0], reverse=True)
         keep_set = set((q, idx) for _, q, idx in all_singular_values[:trunc["nkeep"]])
+        
+        # Accumulate discarded weight if info is requested
+        if requires_info:
+            _discarded_weight += sum(float(val) for val, _, _ in all_singular_values[trunc["nkeep"]:])
         
         # Apply truncation to each block
         new_svd_results = {}
@@ -406,6 +432,12 @@ def svd(
         data=Vh_blocks, intw=Vh_intw, dtype=T.dtype
     )
     
+    # Special pass: return U, S, and Vh tensors with info
+    if requires_info:
+        info: Dict[str, Any] = {"discarded_weight": _discarded_weight}
+        return U_tensor, S_blocks, Vh_tensor, info
+    
+    # Regular pass: return U, S, and Vh tensors without info
     return U_tensor, S_blocks, Vh_tensor
 
 
