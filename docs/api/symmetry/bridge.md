@@ -127,3 +127,4 @@ print(bridge.om_dimension)   # 2
 
 - `Bridge` is a `@dataclass`; all fields are set at construction time and validated by `__post_init__`.
 - `cgspec` is shared between `Bridge` instances produced by non-mutating operations such as `.clone()`. Only `weights` is copied.
+- `Bridge` supports value-based equality via `==`: two instances are equal when their `cgspec` and `weights` are exactly equal (`torch.equal`). This is used by `Tensor.__eq__` when comparing non-Abelian tensors.
