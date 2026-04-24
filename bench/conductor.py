@@ -112,10 +112,10 @@ def _compute_hff(ZFprev: Tensor, Fnow: Tensor, Anow: Tensor) -> Tensor:
     expressed in the current effective Hilbert space. The caller is responsible
     for adding the Hermitian conjugate and the scale -t.
     """
-    # Fn_dag[o,k,g] = (ZF)†_now: Fnow conjugated then permuted to (op, ket, bra)
+    # Fn_dag[o,s,r] = (ZF)†_now: Fnow conjugated then permuted to (op, ket, bra)
     Fn_dag = Fnow.conj().permute([2, 1, 0])
-    # Fn_dag[o,k,g], Anow[e,d,g], ZFprev[q,e,o], Anow.conj()[q,b,k] → (R*, R) = [b,d]
-    return einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, ZFprev, Anow.conj())
+    # Fn_dag[o,s,r], Anow[c,d,r], ZFprev[a,c,o], Anow.conj()[a,b,s] → (R*, R) = [b,d]
+    return einsum('osr,cdr,aco,abs->bd', Fn_dag, Anow, ZFprev, Anow.conj())
 
 
 def _zf_product(Z: Tensor, F: Tensor) -> Tensor:
@@ -129,8 +129,8 @@ def _zf_product(Z: Tensor, F: Tensor) -> Tensor:
     Contracts Z's ket (axis 1, OUT) with F's bra (axis 0, IN).
     Result has the same index structure as F.
     """
-    # Z[a,b], F[b,c,d] → ZF[a,c,d]
-    return einsum('ab,bcd->acd', Z, F)
+    # Z[r,s], F[s,u,o] → ZF[r,u,o]
+    return einsum('rs,suo->ruo', Z, F)
 
 
 def _push_zf(Z: Tensor, F: Tensor, AK: Tensor) -> Tensor:
@@ -141,8 +141,8 @@ def _push_zf(Z: Tensor, F: Tensor, AK: Tensor) -> Tensor:
     This accumulated operator is used to implement the inter-site JW string.
     """
     ZF = _zf_product(Z, F)
-    # AK[q,d,k], ZF[g,k,o], AK.conj()[q,b,g] → (left_conj, right, op) = [b,d,o]
-    return einsum('qdk,gko,qbg->bdo', AK, ZF, AK.conj())
+    # AK[a,c,u], ZF[r,u,o], AK.conj()[a,b,r] → (left_conj, right, op) = [b,c,o]
+    return einsum('acu,ruo,abr->bco', AK, ZF, AK.conj())
 
 
 # ---------------------------------------------------------------------------
@@ -265,17 +265,17 @@ def iter_diag_band(
         Fnow.retag([f"s{itN-1:02d}", f"s{itN-1:02d}", "op"])
 
         if itN == 1:
-            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
+            # Anow.conj()[a,b,r], H0[r,s], Anow[a,c,s] → Hnow[b,c]
             Anow = A0
-            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
+            Hnow = einsum('abr,rs,acs->bc', Anow.conj(), H0, Anow)
 
         else:
             Anow = isometry(bond_index.flip(), Spc).permute([0, 2, 1])
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
 
             # Sandwich previous Hamiltonian
-            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
-            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
+            # Hprev[a,c], Anow[c,d,r], Anow.conj()[a,b,r] → Hnow[b,d]
+            Hnow = einsum('ac,cdr,abr->bd', Hprev, Anow, Anow.conj())
 
             # Hopping term with JW string: (Z×F)†_prev × F_now.
             # The aux-index contraction sums over all spin components automatically.
@@ -299,8 +299,8 @@ def iter_diag_band(
         all_eigvals  = np.concatenate([v.numpy() for v in D.values()])
         Eg[itN - 1]  = float(np.min(all_eigvals))
 
-        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
-        AK = einsum('abg,bd->adg', Anow, V)
+        # Anow[a,b,r], V[b,c] → AK[a,c,r] = (left, right_new, phys)
+        AK = einsum('abr,bc->acr', Anow, V)
         mps.append(AK.clone())
 
         bond_index = V.indices[1]
