@@ -49,6 +49,10 @@ test_delegate.py
     - from_block constructor for SU2Group and ProductGroup
     - Device and dtype management (clone, to)
     - X-symbol and R-symbol computation correctness
+    - conj(), invert_edges(), and insert_edge() structural operations
+    - fs_phase() for Abelian and SU(2) groups
+    - Serialization and deserialization roundtrips
+    - Value-based equality comparison
 
 Key Concepts Tested
 -------------------
