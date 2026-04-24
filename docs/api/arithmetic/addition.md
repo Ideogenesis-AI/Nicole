@@ -36,6 +36,7 @@ Arithmetic operations are performed block-wise. Each operation processes only th
 
 ## See Also
 
+- [allclose](allclose.md): Numerical equality within tolerance
 - [oplus](oplus.md): Direct sum operation
 - [Tensor](../core/tensor.md): Main tensor class
 - [Examples: Arithmetic](../../examples/basic/arithmetic.md)
