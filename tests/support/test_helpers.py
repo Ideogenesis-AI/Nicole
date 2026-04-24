@@ -834,7 +834,7 @@ def test_regularize_cutoff_forwarded():
     After regularize normalizes all weight rows to unit norm the singular values
     of the normalized weight matrix are O(1).  A cutoff larger than any of those
     singular values forces block_compress to retain only 1 component (the minimum
-    guaranteed by the ``max(1, ...)`` guard); a cutoff of 1e-20 retains all
+    guaranteed by the `max(1, ...)` guard); a cutoff of 1e-20 retains all
     components because every singular value exceeds it.
     """
 
