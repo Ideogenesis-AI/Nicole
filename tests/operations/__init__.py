@@ -27,9 +27,11 @@ Test Modules
 ------------
 test_arithmetic.py
     Tests for tensor arithmetic:
+    - Exact structural and element-wise equality comparison
     - Addition and subtraction, including non-overlapping and partially
       overlapping sector structures
     - Scalar multiplication with integer, float, and complex scalars
+    - Scalar division and negation
     - Norm computation and scaling properties
     - SU(2) addition and subtraction with same or different weights,
       including collinear weight detection and compression
@@ -70,7 +72,7 @@ test_diag_inv.py
 
 test_maneuver.py
     Tests for structural tensor maneuvers:
-    - conj(), permute(), transpose()
+    - allclose(), conj(), permute(), transpose()
     - retag(), invert(), insert_index()
     - merge_axes(), trim_zero_blocks()
 
