@@ -17,7 +17,7 @@
 
 
 """Tests for typical tensor maneuvers:
-    - conj, permute, transpose
+    - allclose, conj, permute, transpose
     - retag, invert, insert_index
     - merge_axes, trim_zero_blocks
 """
@@ -90,11 +90,11 @@ def test_allclose_different_index_structure():
 def test_allclose_different_block_keys():
     """Tensors with same index structure but different block keys are not allclose."""
     group = U1Group()
-    # Same index structure, but one tensor has an extra sector in its data
+    # Same index structure, but one tensor has fewer blocks
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
-    # Construct B with no charge-1 blocks by using a zero tensor and removing a key
     B = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    # Drop a block from B so the two tensors have different block key sets
     key_to_drop = next(k for k in B.data if k != next(iter(B.data)))
     del B.data[key_to_drop]
     assert not allclose(A, B)
@@ -192,6 +192,17 @@ def test_allclose_su2_different_physical():
     A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
     B = Tensor.random([idx1, idx2], seed=99, itags=["a", "b"])
     assert not allclose(A, B)
+
+
+def test_allclose_non_tensor_raises():
+    """Passing a non-Tensor argument raises TypeError."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    with pytest.raises(TypeError):
+        allclose(A, 42)
+    with pytest.raises(TypeError):
+        allclose("hello", A)
 
 
 # ============================================================================
