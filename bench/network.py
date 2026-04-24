@@ -86,7 +86,7 @@ def canonical(
             mps_new[i].retag(0, mps[i].itags[0])
             
             # Absorb L into left neighbor: (left, right, phys) * L(right, left') → (left, left', phys)
-            mps_new[i-1] = einsum('lrp,rq->lqp', mps_new[i-1], L)
+            mps_new[i-1] = einsum('abr,bc->acr', mps_new[i-1], L)
             mps_new[i-1].retag([0, 1], [mps[i-1].itags[0], mps[i-1].itags[1]])
     
     else:  # direction == "left"
@@ -104,7 +104,7 @@ def canonical(
             
             # Absorb R into right neighbor: R(left', right) * MPS(right, next_right, phys)
             # Result is already in (left, right, phys) form: (left', next_right, phys)
-            mps_new[i+1] = einsum('ab,bcd->acd', R, mps_new[i+1])
+            mps_new[i+1] = einsum('ab,bcr->acr', R, mps_new[i+1])
             mps_new[i+1].retag([0, 1], [mps[i+1].itags[0], mps[i+1].itags[1]])
     
     return mps_new
@@ -132,19 +132,19 @@ def norm(mps: list[Tensor]) -> float:
     This is evaluated by building a Gram matrix in right-bond space site by site.
     At site 0 the left boundary is trivial so bra and ket share the same left bond a:
 
-        einsum('abg,afg->bf', conj_mps, mps)
+        einsum('abr,acr->bc', conj_mps, mps)
 
     For subsequent sites the update reads:
 
-        einsum('abg,ae,efg->bf', conj_mps, gram, mps)
+        einsum('abr,ac,cdr->bd', conj_mps, gram, mps)
 
     where the index letters denote:
 
     - a, b — bra (conj MPS) left and right bonds
-    - e, f — ket (MPS) left and right bonds
-    - g — physical index (shared between bra and ket)
+    - c, d — ket (MPS) left and right bonds
+    - r — physical index (shared between bra and ket)
 
-    ||ψ||² is recovered by tracing gram[b, f] over the right bond.
+    ||ψ||² is recovered by tracing gram[b, d] over the right bond.
     
     Examples
     --------
@@ -157,19 +157,19 @@ def norm(mps: list[Tensor]) -> float:
     if len(mps) == 0:
         return 0.0
     
-    # Site 0: bra and ket share the same trivial left bond 'a'; sum over a and g (physical).
-    # mps[0].conj(): (a=bra_left, b=bra_right, g=phys)
-    # mps[0]:        (a=ket_left, f=ket_right, g=phys)
-    gram = einsum('abg,afg->bf', mps[0].conj(), mps[0])
-    # gram: (b=bra_right, f=ket_right)
+    # Site 0: bra and ket share the same trivial left bond 'a'; sum over a and r (physical).
+    # mps[0].conj(): (a=bra_left, b=bra_right, r=phys)
+    # mps[0]:        (a=ket_left, c=ket_right, r=phys)
+    gram = einsum('abr,acr->bc', mps[0].conj(), mps[0])
+    # gram: (b=bra_right, c=ket_right)
     
     # Process remaining sites
     for i in range(1, len(mps)):
-        # gram:          (a=bra_left, e=ket_left)
-        # mps[i].conj(): (a=bra_left, b=bra_right, g=phys)
-        # mps[i]:        (e=ket_left, f=ket_right, g=phys)
-        gram = einsum('abg,ae,efg->bf', mps[i].conj(), gram, mps[i])
-        # gram: (b=bra_right, f=ket_right)
+        # gram:          (a=bra_left, c=ket_left)
+        # mps[i].conj(): (a=bra_left, b=bra_right, r=phys)
+        # mps[i]:        (c=ket_left, d=ket_right, r=phys)
+        gram = einsum('abr,ac,cdr->bd', mps[i].conj(), gram, mps[i])
+        # gram: (b=bra_right, d=ket_right)
     
     # Trace the Gram matrix over the right bond to obtain ‖ψ‖²
     norm_squared = trace(gram, axes=(0, 1))
@@ -202,17 +202,17 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
     The contraction proceeds from left to right, building up a transfer tensor E
     with indices (bra_right, mpo_right, ket_right). At each site the update is:
 
-        einsum('ace,efh,cdgh,abg->bdf', E, mps, mpo, conj_mps)
+        einsum('aoc,cds,oprs,abr->bpd', E, mps, mpo, conj_mps)
 
     where the index letters denote:
 
     - a, b — bra (conj MPS) left and right bonds
-    - c, d — MPO left and right bonds
-    - e, f — ket (MPS) left and right bonds
-    - g — physical bra index (shared between bra axis 2 and MPO axis 2)
-    - h — physical ket index (shared between MPO axis 3 and ket axis 2)
+    - o, p — MPO left and right bonds
+    - c, d — ket (MPS) left and right bonds
+    - r — physical bra index (shared between bra axis 2 and MPO axis 2)
+    - s — physical ket index (shared between MPO axis 3 and ket axis 2)
 
-    a, c, e are contracted against E; b, d, f become the updated E.
+    a, o, c are contracted against E; b, p, d become the updated E.
     
     Examples
     --------
@@ -235,20 +235,20 @@ def observe(mps: list[Tensor], mpo: list[Tensor]) -> float:
     mps_left_space = mps[0].indices[0]
     E = identity(mps_left_space)
     E.retag([0, 1], [mps[0].itags[0], mps[0].itags[0]])
-    # E: (a=bra_left, e=ket_left)
+    # E: (a=bra_left, c=ket_left)
     E.insert_index(1, direction=Direction.OUT, itag=mpo[0].itags[0])
-    # E: (a=bra_left, c=mpo_left, e=ket_left)
+    # E: (a=bra_left, o=mpo_left, c=ket_left)
     
     # Now contract site by site
     for i in range(len(mps)):
-        # E: (a=bra_left, c=mpo_left, e=ket_left)
-        # mps[i]: (e=ket_left, f=ket_right, h=phys_ket)
-        # mpo[i]: (c=mpo_left, d=mpo_right, g=phys_bra, h=phys_ket)
-        # mps[i].conj(): (a=bra_left, b=bra_right, g=phys_bra)
-        E = einsum('ace,efh,cdgh,abg->bdf', E, mps[i], mpo[i], mps[i].conj())
-        # E: (b=bra_right, d=mpo_right, f=ket_right)
+        # E: (a=bra_left, o=mpo_left, c=ket_left)
+        # mps[i]: (c=ket_left, d=ket_right, s=phys_ket)
+        # mpo[i]: (o=mpo_left, p=mpo_right, r=phys_bra, s=phys_ket)
+        # mps[i].conj(): (a=bra_left, b=bra_right, r=phys_bra)
+        E = einsum('aoc,cds,oprs,abr->bpd', E, mps[i], mpo[i], mps[i].conj())
+        # E: (b=bra_right, p=mpo_right, d=ket_right)
     
-    # After all sites E has shape (b=bra_right, d=mpo_right, f=ket_right).
+    # After all sites E has shape (b=bra_right, p=mpo_right, d=ket_right).
     # At the right boundary all indices have dimension 1.
     # Extract the scalar as data × Bridge weight. For Abelian symmetries intw is
     # None (implicit weight 1); for non-Abelian groups the Bridge encodes the
