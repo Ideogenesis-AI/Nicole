@@ -950,7 +950,7 @@ class Tensor:
         return all(self.intw[k] == other.intw[k] for k in self.intw)
 
     # ------------------------------------------------------------
-    #   Binary operations: add, sub, mul
+    #   Unary and binary operations: add, sub, mul, div, neg
     # ------------------------------------------------------------
 
     def _align_for_binary(self, other: Tensor) -> Tuple[Tensor, Tensor]:
@@ -1123,6 +1123,10 @@ class Tensor:
         )
 
     __rmul__ = __mul__
+
+    def __neg__(self) -> Tensor:
+        """Negate every dense block."""
+        return self * (-1)
 
     def __truediv__(self, scalar: Union[int, float, complex]) -> Tensor:
         """Divide every dense block by a scalar."""
