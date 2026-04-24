@@ -89,6 +89,8 @@ def allclose(A: Tensor, B: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> bo
 
     Raises
     ------
+    TypeError
+        If either argument is not a `Tensor`.
     ValueError
         If the tensors have incompatible index structures.
     """
