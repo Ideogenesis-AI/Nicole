@@ -1229,3 +1229,97 @@ def test_subtraction_su2_4th_order_different_weights():
         assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
 
 
+# Tensor equality tests
+
+def test_eq_identical_tensor():
+    """A tensor equals itself."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A == A
+
+
+def test_eq_same_content():
+    """Two tensors constructed identically are equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A == B
+
+
+def test_eq_different_values():
+    """Tensors with different block values are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    assert A != B
+
+
+def test_eq_different_index_structure():
+    """Tensors with different index structures are not equal."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    A = Tensor.random([idx_a, idx_a.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_b, idx_b.flip()], seed=1, itags=["A", "B"])
+    assert A != B
+
+
+def test_eq_scalar_tensor():
+    """Scalar tensors with the same value are equal."""
+    s1 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0)}, dtype=torch.float64)
+    s2 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0)}, dtype=torch.float64)
+    assert s1 == s2
+
+
+def test_eq_non_tensor_returns_not_implemented():
+    """Comparing Tensor with a non-Tensor returns NotImplemented."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A.__eq__(42) is NotImplemented
+    assert A.__eq__("hello") is NotImplemented
+
+
+def test_eq_after_scaling():
+    """A / 1.0 equals A exactly (no numerical drift)."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=5, itags=["A", "B"])
+    assert A == A / 1.0
+
+
+def test_eq_su2_identical():
+    """SU(2) tensor equals itself."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert A == A
+
+
+def test_eq_su2_same_content():
+    """Two identically constructed SU(2) tensors are equal."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert A == B
+
+
+def test_eq_su2_different_intw():
+    """SU(2) tensors with different intertwiner weights are not equal."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    # Perturb one intertwiner weight in B
+    key = next(iter(B.intw))
+    w = B.intw[key].weights.clone()
+    w[0, 0] += 1.0
+    B.intw[key] = dg.Bridge(cgspec=B.intw[key].cgspec, weights=w)
+    assert A != B
