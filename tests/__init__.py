@@ -40,6 +40,7 @@ operations/
     - test_decomp.py: SVD, eigendecomposition, and other decompositions
     - test_factorize.py: SVD- and QR-based tensor factorization
     - test_diag_inv.py: Diagonal matrix creation (diag) and inversion (inv)
+    - test_einsum.py: einsum-based contractions, permutations, and traces
     - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
     - test_capcup.py: Bond direction inversion (capcup)
