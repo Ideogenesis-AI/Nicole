@@ -399,9 +399,9 @@ class BlockSchema:
     @staticmethod
     def block_compress(
         data: torch.Tensor,
-        bridge: "Bridge",
+        bridge: Bridge,
         cutoff: float = 1e-14,
-    ) -> Tuple[torch.Tensor, "Bridge"]:
+    ) -> Tuple[torch.Tensor, Bridge]:
         """Remove linearly dependent components from a single generic tensor block.
 
         Performs a thin SVD on the Bridge weight matrix and discards singular

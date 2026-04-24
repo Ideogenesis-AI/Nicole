@@ -2,6 +2,57 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.4] - 2026-04-24
+
+**SVD Isometry for SU(2) Tensors**
+
+Fixes a bug where `Vh` (and `V` in LV mode) returned by `decomp` and `svd` was not a
+physical isometry for higher-order SU(2) tensors. The fix is transparent: all existing
+calls produce the same physical tensor up to a change of basis in the bond dimension;
+the isometry guarantee now holds universally.
+
+### Bug Fixes
+
+#### SVD — `Vh` Isometry for SU(2)
+
+For SU(2) tensors, the isometry condition `Vh @ Vh† = I` requires the intertwiner weight
+matrix `W` to satisfy `W W^T = irrep_dim(q) · I`. Prior operations (contractions,
+`regularize()`, etc.) may leave `W` in any state — row-normalized but not row-orthogonal,
+or with non-canonical scaling — so this condition was not generally guaranteed.
+
+The fix introduces an internal SVD-based canonicalization step that transforms `W` to a
+scaled unitary form (`W_new = √irrep_dim · Vhᵀ`) before the tensor SVD, while absorbing
+the change into the reduced data so the physical tensor is invariant. Gradient flow
+through `torch.autograd` is preserved: the canonicalization is a differentiable linear
+map from the original data blocks.
+
+The bug was latent because no existing test verified `Vh @ Vh† = I` via explicit
+contraction; reconstruction tests (`T ≈ U @ S @ Vh`) pass regardless of the weight basis.
+
+**Affected functions:** `svd` (low-level), `decomp` in SVD, UR, and LV modes.
+
+### Test Suite (1540 tests)
+
+- **1530 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- Five new tests in `tests/operations/test_factorize.py` verifying `Vh @ Vh† = I` via
+  `contract(Vh, Vh.conj())` for 2nd- through 6th-order SU(2) tensors
+
+### Statistics
+
+- **8 commits** since v0.3.3
+- **8 files changed**: 135 insertions, 25 deletions
+- Source modules touched: `src/nicole/decomp.py`, `src/nicole/blocks.py`, `src/nicole/tensor.py`
+- Test module touched: `tests/operations/test_factorize.py`
+
+### Compatibility
+
+**Breaking Changes:** None — all previously valid calls continue to work. The output
+tensors are physically identical; only the internal intertwiner representation changes.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.3] - 2026-04-21
 
 **Benchmark Modernization and oplus Extension**
@@ -805,6 +856,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.4]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.4
 [0.3.3]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.1

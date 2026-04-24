@@ -23,7 +23,7 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
-from nicole import contract, decomp, diag
+from nicole import contract, decomp, diag, identity
 from nicole.decomp import svd, qr, eig
 from ..utils import assert_charge_neutral, populate_random_weights
 from ..utils import assert_blocks_equal, assert_physical_tensors_equal
@@ -924,21 +924,69 @@ def test_svd_su2_vh_blocks_are_isometric():
         )
 
 
-def test_svd_su2_vd_intertwiner_matches_t_axis0():
-    """For left_axis=0 the R-symbol is identity: Vd.intw weights equal T.intw weights."""
-    T = _make_su2_3rd_order(seed=30)
+def test_svd_su2_vh_isometric_via_contract_2nd_order():
+    """Vh @ Vh† = I (via contract) for a 2nd-order SU(2) tensor, all axes."""
+    T = _make_su2_2nd_order(seed=25)
 
-    _U, _S, Vh = svd(T, axis=0)
+    for axis in range(len(T.indices)):
+        _, _, Vh = svd(T, axis=axis)
+        right_axes = list(range(1, len(Vh.indices)))
+        result = contract(Vh, Vh.conj(), axes=(right_axes, right_axes))
+        I_tensor = identity(Vh.indices[0], dtype=T.dtype)
+        assert_physical_tensors_equal(result, I_tensor, atol=1e-10,
+                                      msg=f"SU(2) 2nd-order Vh isometry axis={axis}")
 
-    assert Vh.intw is not None, "Vd must have intw for SU(2)"
-    assert T.intw is not None
 
-    for t_key, t_bridge in T.intw.items():
-        vh_key = t_key  # keys are identical when left_axis=0
-        assert vh_key in Vh.intw, f"Vd.intw missing key {vh_key}"
-        assert torch.allclose(Vh.intw[vh_key].weights, t_bridge.weights, atol=1e-14), (
-            f"Vd.intw[{vh_key}].weights differ from T.intw[{t_key}].weights"
-        )
+def test_svd_su2_vh_isometric_via_contract_3rd_order():
+    """Vh @ Vh† = I (via contract) for a 3rd-order SU(2) tensor, all axes."""
+    T = _make_su2_3rd_order(seed=26)
+
+    for axis in range(len(T.indices)):
+        _, _, Vh = svd(T, axis=axis)
+        right_axes = list(range(1, len(Vh.indices)))
+        result = contract(Vh, Vh.conj(), axes=(right_axes, right_axes))
+        I_tensor = identity(Vh.indices[0], dtype=T.dtype)
+        assert_physical_tensors_equal(result, I_tensor, atol=1e-10,
+                                      msg=f"SU(2) 3rd-order Vh isometry axis={axis}")
+
+
+def test_svd_su2_vh_isometric_via_contract_4th_order():
+    """Vh @ Vh† = I (via contract) for a 4th-order SU(2) tensor, all axes."""
+    T = _make_su2_4th_order(seed=27)
+
+    for axis in range(len(T.indices)):
+        _, _, Vh = svd(T, axis=axis)
+        right_axes = list(range(1, len(Vh.indices)))
+        result = contract(Vh, Vh.conj(), axes=(right_axes, right_axes))
+        I_tensor = identity(Vh.indices[0], dtype=T.dtype)
+        assert_physical_tensors_equal(result, I_tensor, atol=1e-10,
+                                      msg=f"SU(2) 4th-order Vh isometry axis={axis}")
+
+
+def test_svd_su2_vh_isometric_via_contract_5th_order():
+    """Vh @ Vh† = I (via contract) for a 5th-order SU(2) tensor, all axes."""
+    T = _make_su2_5th_order(seed=28)
+
+    for axis in range(len(T.indices)):
+        _, _, Vh = svd(T, axis=axis)
+        right_axes = list(range(1, len(Vh.indices)))
+        result = contract(Vh, Vh.conj(), axes=(right_axes, right_axes))
+        I_tensor = identity(Vh.indices[0], dtype=T.dtype)
+        assert_physical_tensors_equal(result, I_tensor, atol=1e-10,
+                                      msg=f"SU(2) 5th-order Vh isometry axis={axis}")
+
+
+def test_svd_su2_vh_isometric_via_contract_6th_order():
+    """Vh @ Vh† = I (via contract) for a 6th-order SU(2) tensor, all axes."""
+    T = _make_su2_6th_order(seed=29)
+
+    for axis in range(len(T.indices)):
+        _, _, Vh = svd(T, axis=axis)
+        right_axes = list(range(1, len(Vh.indices)))
+        result = contract(Vh, Vh.conj(), axes=(right_axes, right_axes))
+        I_tensor = identity(Vh.indices[0], dtype=T.dtype)
+        assert_physical_tensors_equal(result, I_tensor, atol=1e-10,
+                                      msg=f"SU(2) 6th-order Vh isometry axis={axis}")
 
 
 def test_svd_su2_vd_has_correct_intw_keys():
