@@ -620,7 +620,7 @@ def test_contract_su2_permutation_commutativity_basic():
     # Results should match
     assert list(C1_perm.itags) == list(C2.itags) == ["c", "a", "d"]
     
-    # compress() may produce different (but equivalent) orthonormal bases for the
+    # regularize() may produce different (but equivalent) orthonormal bases for the
     # weight subspace across computation paths, so compare physical tensors R@W.
     assert_physical_tensors_equal(C1_perm, C2, msg="permutation commutativity")
     
@@ -660,7 +660,7 @@ def test_contract_su2_permutation_commutativity_4th_order():
     # Results should match
     assert list(C1_perm.itags) == list(C2_perm.itags) == ["c", "e", "a"]
     
-    # compress() may produce different (but equivalent) orthonormal bases for the
+    # regularize() may produce different (but equivalent) orthonormal bases for the
     # weight subspace across computation paths, so compare physical tensors R@W.
     assert_physical_tensors_equal(C1_perm, C2_perm, msg="permutation commutativity")
     
@@ -701,7 +701,7 @@ def test_contract_su2_permutation_commutativity_5th_order():
     # Results should match
     assert list(C1_perm.itags) == list(C2_perm.itags) == ["e", "a", "f", "c"]
     
-    # compress() may produce different (but equivalent) orthonormal bases for the
+    # regularize() may produce different (but equivalent) orthonormal bases for the
     # weight subspace across computation paths, so compare physical tensors R@W.
     assert_physical_tensors_equal(C1_perm, C2_perm, msg="permutation commutativity")
     
