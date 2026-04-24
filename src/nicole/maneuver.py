@@ -18,12 +18,14 @@
 
 """Standalone tensor maneuvers for structural and/or algebraic operations.
 
-This module provides functional tensor maneuvers covering conjugation, axis
-reordering, block selection, direct sums, diagonal matrix construction, matrix
-inversion, and axis merging.
+This module provides functional tensor maneuvers covering numerical equality,
+conjugation, axis reordering, block selection, direct sums, diagonal matrix
+construction, matrix inversion, and axis merging.
 
 Functions
 ---------
+allclose(A, B, rtol=1e-5, atol=1e-8)
+    Return True if two tensors are numerically equal within the given tolerances.
 conj(tensor)
     Return a new tensor with conjugated data and flipped index directions.
 permute(tensor, order)
@@ -58,6 +60,67 @@ from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
 from .symmetry import delegate as dg
+
+
+def allclose(A: Tensor, B: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> bool:
+    """Return True if two tensors are numerically equal within the given tolerances.
+
+    For Abelian tensors, compares each dense block with `torch.allclose`.
+    For generic tensors, compares the physical tensors `R @ W` block-by-block,
+    which is gauge-invariant with respect to the reduced representation.
+
+    Parameters
+    ----------
+    A:
+        First tensor.
+    B:
+        Second tensor.
+    rtol:
+        Relative tolerance passed to `torch.allclose`. Default: 1e-5.
+    atol:
+        Absolute tolerance passed to `torch.allclose`. Default: 1e-8.
+
+    Returns
+    -------
+    bool
+        `True` if all blocks are numerically equal within the given tolerances
+        and the two tensors share the same index structure and block keys.
+        `False` otherwise.
+
+    Raises
+    ------
+    ValueError
+        If the tensors have incompatible index structures.
+    """
+    if not isinstance(A, Tensor) or not isinstance(B, Tensor):
+        raise TypeError(f"allclose requires two Tensor arguments, got {type(A)} and {type(B)}")
+    if len(A.indices) != len(B.indices):
+        raise ValueError(
+            f"Cannot compare tensors of different order: {len(A.indices)} vs {len(B.indices)}"
+        )
+    if any(a != b for a, b in zip(A.indices, B.indices)):
+        raise ValueError("Tensors have incompatible index structure")
+    if set(A.data.keys()) != set(B.data.keys()):
+        return False
+
+    # One tensor has intertwiners and the other does not — structurally incompatible
+    if (A.intw is None) != (B.intw is None):
+        return False
+
+    # Generic (non-Abelian): compare physical tensors R @ W to be gauge-invariant
+    if A.intw is not None:
+        for k in A.data:
+            phys_a = A.data[k].flatten(0, -2) @ A.intw[k].weights
+            phys_b = B.data[k].flatten(0, -2) @ B.intw[k].weights
+            if not torch.allclose(phys_a, phys_b, rtol=rtol, atol=atol):
+                return False
+        return True
+
+    # Abelian (and 0D scalar tensors): compare blocks directly
+    return all(
+        torch.allclose(A.data[k], B.data[k], rtol=rtol, atol=atol)
+        for k in A.data
+    )
 
 
 def conj(tensor: Tensor) -> Tensor:
