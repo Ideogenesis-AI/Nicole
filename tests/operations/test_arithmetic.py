@@ -1257,8 +1257,27 @@ def test_eq_different_values():
     assert A != B
 
 
+def test_eq_different_order():
+    """Tensors with different number of indices are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip(), idx], seed=1, itags=["A", "B", "C"])
+    assert A != B
+
+
+def test_eq_different_sectors():
+    """Tensors whose indices differ only in sectors are not equal."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    A = Tensor.random([idx_a, idx_a.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_b, idx_b.flip()], seed=1, itags=["A", "B"])
+    assert A != B
+
+
 def test_eq_different_index_structure():
-    """Tensors with different index structures are not equal."""
+    """Tensors with entirely different index structures are not equal."""
     group = U1Group()
     idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
     idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
