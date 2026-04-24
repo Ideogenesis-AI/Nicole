@@ -926,35 +926,21 @@ class Tensor:
     def __eq__(self, other: object) -> bool:
         """Return True if two tensors have identical structure and block data.
 
-        Checks index count, group and direction per axis, block keys, and
-        exact element-wise equality of every dense block. For non-Abelian
-        tensors, also checks exact equality of every intertwiner via
-        `Bridge.__eq__`.
-
-        Parameters
-        ----------
-        other:
-            Object to compare against.
-
-        Returns
-        -------
-        bool
-            `True` only when all structural and numerical checks pass.
+        Checks index count, full index structure per axis, block keys, and
+        exact element-wise equality of every dense block. For generic tensors,
+        also checks exact equality of every intertwiner via `Bridge.__eq__`.
         """
         if not isinstance(other, Tensor):
             return NotImplemented
         if len(self.indices) != len(other.indices):
             return False
-        if any(
-            (a.group != b.group) or (a.direction != b.direction)
-            for a, b in zip(self.indices, other.indices)
-        ):
+        if any(a != b for a, b in zip(self.indices, other.indices)):
             return False
         if set(self.data.keys()) != set(other.data.keys()):
             return False
         if not all(torch.equal(self.data[k], other.data[k]) for k in self.data):
             return False
-        # Check intertwiners for non-Abelian tensors
+        # Check intertwiners for generic tensors
         if self.intw is None and other.intw is None:
             return True
         if self.intw is None or other.intw is None:
