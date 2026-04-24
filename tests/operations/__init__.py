@@ -70,6 +70,13 @@ test_diag_inv.py
     - inv(): inverting diagonal tensors block-wise
     - Charge structure preservation and error handling
 
+test_einsum.py
+    Tests for the einsum() interface:
+    - Permutations, traces, and pairwise contractions
+    - Chain (sequential) contractions and outer products
+    - Higher-order and multi-index contractions
+    - Error handling
+
 test_maneuver.py
     Tests for structural tensor maneuvers:
     - allclose(), conj(), permute(), transpose()
