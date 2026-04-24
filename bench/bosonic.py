@@ -166,9 +166,9 @@ def iter_diag_spin(
         
         if itN == 1:
             # First iteration: sandwich H0 with A0
-            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
+            # Anow.conj()[a,b,r], H0[r,s], Anow[a,c,s] → Hnow[b,c]
             Anow = A0
-            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
+            Hnow = einsum('abr,rs,acs->bc', Anow.conj(), H0, Anow)
             
         else:
             # Add new site: create isometry (left, phys, right) → permute to (left, right, phys)
@@ -176,15 +176,15 @@ def iter_diag_spin(
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
             
             # Update Hamiltonian: sandwich Hprev with Anow
-            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
-            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
+            # Hprev[a,c], Anow[c,d,r], Anow.conj()[a,b,r] → Hnow[b,d]
+            Hnow = einsum('ac,cdr,abr->bd', Hprev, Anow, Anow.conj())
             
             # Spin-spin interaction: Sprev-Snow interaction sandwiched by Anow
-            # Snow: (bra, ket, op) → conjugate then permute to (op, ket, bra) → Sn[o,k,g]
+            # Snow: (bra, ket, op) → conjugate then permute to (op, ket, bra) → Sn[o,s,r]
             Sn = Snow.conj().permute([2, 1, 0])
             
-            # Sn[o,k,g], Anow[e,d,g], Sprev[q,e,o], Anow.conj()[q,b,k] → HSS[b,d]
-            HSS = einsum('okg,edg,qeo,qbk->bd', Sn, Anow, Sprev, Anow.conj())
+            # Sn[o,s,r], Anow[c,d,r], Sprev[a,c,o], Anow.conj()[a,b,s] → HSS[b,d]
+            HSS = einsum('osr,cdr,aco,abs->bd', Sn, Anow, Sprev, Anow.conj())
             HSS = HSS * J
             
             Hnow = Hnow + HSS
@@ -209,8 +209,8 @@ def iter_diag_spin(
         Eg[itN - 1] = np.min(all_eigvals)
         
         # Contract Anow with V to get AK
-        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
-        AK = einsum('abg,bd->adg', Anow, V)
+        # Anow[a,b,r], V[b,c] → AK[a,c,r] = (left, right_new, phys)
+        AK = einsum('abr,bc->acr', Anow, V)
         
         # Store AK for this iteration
         mps.append(AK.clone())
@@ -220,8 +220,8 @@ def iter_diag_spin(
         Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
         
         # Spin operator at the current site: sandwich Snow with AK
-        # AK[q,d,k], Snow[g,k,o], AK.conj()[q,b,g] → Sprev[b,d,o] = (right_conj, right, op)
-        Sprev = einsum('qdk,gko,qbg->bdo', AK, Snow, AK.conj())
+        # AK[a,c,s], Snow[r,s,o], AK.conj()[a,b,r] → Sprev[b,c,o] = (right_conj, right, op)
+        Sprev = einsum('acs,rso,abr->bco', AK, Snow, AK.conj())
         
         # Display progress
         if verbose:
