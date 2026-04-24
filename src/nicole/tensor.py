@@ -1094,6 +1094,10 @@ class Tensor:
 
     __rmul__ = __mul__
 
+    def __truediv__(self, scalar: Union[int, float, complex]) -> Tensor:
+        """Divide every dense block by a scalar."""
+        return self * (1 / scalar)
+
     # ------------------------------------------------------------
     #   Weights canonicalisation or regularisation
     # ------------------------------------------------------------
