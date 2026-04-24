@@ -981,3 +981,42 @@ def test_delegate_deserialize_dtype():
     d = dg.serialize(bridge)
     rt = dg.deserialize(d, dtype=torch.float32)
     assert rt.weights.dtype == torch.float32
+
+
+# Bridge.__eq__ tests
+
+def test_bridge_eq_identical():
+    """Bridge equals itself."""
+    b = _make_bridge([1, 1, 2], [1, 1, -1])
+    assert b == b
+
+
+def test_bridge_eq_same_content():
+    """Two Bridge instances with identical cgspec and weights are equal."""
+    b1 = _make_bridge([1, 1, 2], [1, 1, -1])
+    # Construct b2 with the same cgspec and a copy of b1's weights
+    b2 = Bridge(cgspec=b1.cgspec, weights=b1.weights.clone())
+    assert b1 == b2
+
+
+def test_bridge_eq_different_weights():
+    """Bridge instances with the same cgspec but different weights are not equal."""
+    b1 = _make_bridge([1, 1, 2], [1, 1, -1])
+    w2 = b1.weights.clone()
+    w2[0, 0] += 1.0
+    b2 = Bridge(cgspec=b1.cgspec, weights=w2)
+    assert b1 != b2
+
+
+def test_bridge_eq_different_cgspec():
+    """Bridge instances with different cgspecs are not equal."""
+    b1 = _make_bridge([1, 1, 2], [1, 1, -1])
+    b2 = _make_bridge([2, 2, 2], [1, 1, -1])
+    assert b1 != b2
+
+
+def test_bridge_eq_non_bridge_returns_not_implemented():
+    """Comparing Bridge with a non-Bridge returns NotImplemented."""
+    b = _make_bridge([1, 1, 2], [1, 1, -1])
+    assert b.__eq__(42) is NotImplemented
+    assert b.__eq__("hello") is NotImplemented
