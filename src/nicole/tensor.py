@@ -932,22 +932,21 @@ class Tensor:
         """
         if not isinstance(other, Tensor):
             return NotImplemented
+        # Cheap structural guards first
         if len(self.indices) != len(other.indices):
             return False
         if any(a != b for a, b in zip(self.indices, other.indices)):
             return False
         if set(self.data.keys()) != set(other.data.keys()):
             return False
-        if not all(torch.equal(self.data[k], other.data[k]) for k in self.data):
-            return False
         # Check intertwiners for generic tensors
-        if self.intw is None and other.intw is None:
-            return True
-        if self.intw is None or other.intw is None:
+        if (self.intw is None) != (other.intw is None):
             return False
-        if set(self.intw.keys()) != set(other.intw.keys()):
-            return False
-        return all(self.intw[k] == other.intw[k] for k in self.intw)
+        # Expensive element-wise comparisons last
+        return (
+            all(torch.equal(self.data[k], other.data[k]) for k in self.data)
+            and (self.intw is None or all(self.intw[k] == other.intw[k] for k in self.intw))
+        )
 
     # ------------------------------------------------------------
     #   Unary and binary operations: add, sub, mul, div, neg
