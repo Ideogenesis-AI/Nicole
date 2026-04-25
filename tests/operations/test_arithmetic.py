@@ -28,6 +28,145 @@ import nicole.symmetry.delegate as dg
 from ..utils import assert_blocks_equal, populate_random_weights
 
 
+# Equality tests
+
+def test_eq_identical_tensor():
+    """A tensor equals itself."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A == A
+
+
+def test_eq_same_content():
+    """Two tensors constructed identically are equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A == B
+
+
+def test_eq_different_values():
+    """Tensors with different block values are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    assert A != B
+
+
+def test_eq_different_order():
+    """Tensors with different number of indices are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx, idx.flip(), idx], seed=1, itags=["A", "B", "C"])
+    assert A != B
+
+
+def test_eq_different_sectors():
+    """Tensors whose indices differ only in sectors are not equal."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    A = Tensor.random([idx_a, idx_a.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_b, idx_b.flip()], seed=1, itags=["A", "B"])
+    assert A != B
+
+
+def test_eq_different_index_structure():
+    """Tensors with entirely different index structures are not equal."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    A = Tensor.random([idx_a, idx_a.flip()], seed=1, itags=["A", "B"])
+    B = Tensor.random([idx_b, idx_b.flip()], seed=1, itags=["A", "B"])
+    assert A != B
+
+
+def test_eq_scalar_tensor():
+    """Scalar tensors with the same value are equal."""
+    s1 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0)}, dtype=torch.float64)
+    s2 = Tensor(indices=(), itags=(), data={(): torch.tensor(3.0)}, dtype=torch.float64)
+    assert s1 == s2
+
+
+def test_eq_non_tensor_returns_not_implemented():
+    """Comparing Tensor with a non-Tensor returns NotImplemented."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    assert A.__eq__(42) is NotImplemented
+    assert A.__eq__("hello") is NotImplemented
+
+
+def test_eq_after_scaling():
+    """A / 1.0 equals A exactly (no numerical drift)."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=5, itags=["A", "B"])
+    assert A == A / 1.0
+
+
+def test_eq_su2_identical():
+    """SU(2) tensor equals itself."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert A == A
+
+
+def test_eq_su2_same_content():
+    """Two identically constructed SU(2) tensors are equal."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    assert A == B
+
+
+def test_eq_mixed_abelian_and_su2():
+    """An Abelian tensor and an SU(2) tensor with the same data keys are not equal."""
+    u1 = U1Group()
+    su2 = SU2Group()
+    idx_u1 = Index(Direction.IN, u1, sectors=(Sector(1, 2),))
+    idx_su2 = Index(Direction.IN, su2, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx_u1, idx_u1.flip()], seed=1, itags=["a", "b"])
+    B = Tensor.random([idx_su2, idx_su2.flip()], seed=1, itags=["a", "b"])
+    # Different groups, so the index structure check catches this
+    assert A != B
+
+
+def test_eq_intw_present_vs_absent():
+    """Tensors that differ only in intw presence (one None, one not) are not equal."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    # Manually strip the intertwiner from a clone to simulate the mismatch
+    B = A.clone()
+    B.intw = None
+    assert A != B
+
+
+def test_eq_su2_different_intw():
+    """SU(2) tensors with different intertwiner weights are not equal."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    # Perturb one intertwiner weight in B
+    key = next(iter(B.intw))
+    w = B.intw[key].weights.clone()
+    w[0, 0] += 1.0
+    B.intw[key] = dg.Bridge(cgspec=B.intw[key].cgspec, weights=w)
+    assert A != B
+
+
 # Addition tests
 
 def test_addition_simple():
@@ -344,6 +483,130 @@ def test_scalar_multiplication_su2_4th_order():
     for key in A.intw.keys():
         assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
         assert torch.allclose(B.data[key], A.data[key] * scalar)
+
+
+# Negation tests
+
+def test_negation_abelian():
+    """Negation flips the sign of every block."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = -A
+    for key in A.data:
+        assert torch.allclose(B.data[key], -A.data[key])
+
+
+def test_negation_double():
+    """Double negation recovers the original tensor."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+    assert_blocks_equal(-(-A), A)
+
+
+def test_negation_su2_preserves_intw():
+    """Negation of an SU(2) tensor preserves the intertwiner."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    B = -A
+    assert B.intw is not None
+    for key in A.intw:
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+    for key in A.data:
+        assert torch.allclose(B.data[key], -A.data[key])
+
+
+# Scalar division tests
+
+def test_scalar_division_int():
+    """Test scalar division by an integer promotes dtype to float."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+
+    B = A / 4
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / 4)
+    # 1/int is float in Python, so dtype must be at least float64
+    assert B.dtype == torch.float64
+
+
+def test_scalar_division_float():
+    """Test scalar division by a float."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+
+    A = Tensor.random([idx, idx.flip()], seed=2, itags=["A", "B"])
+
+    B = A / 2.5
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / 2.5)
+
+
+def test_scalar_division_complex():
+    """Test scalar division by a complex number."""
+    group = U1Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 1)))
+    A = Tensor.random([idx_a, idx_b], seed=5, dtype=torch.complex128, itags=["A", "B"])
+
+    c = 2.0 + 1.0j
+    B = A / c
+    for key in A.data:
+        assert torch.allclose(B.data[key], A.data[key] / c)
+
+
+def test_scalar_division_consistent_with_multiplication():
+    """Test that A / c equals A * (1/c) for all scalar types."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=7, itags=["A", "B"])
+
+    for c in [2, 2.5, 1.0 + 0.5j]:
+        assert_blocks_equal(A / c, A * (1 / c))
+
+
+def test_scalar_division_scalar_tensor():
+    """Test division of a 0D scalar tensor."""
+    group = U1Group()
+    s = Tensor(indices=(), itags=(), data={(): torch.tensor(6.0)}, dtype=torch.float64)
+
+    t = s / 3.0
+    assert torch.allclose(t.data[()], torch.tensor(2.0))
+
+
+def test_scalar_division_su2_preserves_intw():
+    """Test that SU(2) tensor division preserves intertwiner weights."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx2 = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+
+    A = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+    populate_random_weights(A, seed=42)
+
+    B = A / 2.0
+
+    assert B.intw is not None
+    assert set(B.intw.keys()) == set(A.intw.keys())
+    for key in A.intw.keys():
+        assert torch.allclose(B.intw[key].weights, A.intw[key].weights)
+    for key in A.data.keys():
+        assert torch.allclose(B.data[key], A.data[key] / 2.0)
+
+
+def test_scalar_division_norm_scaling():
+    """Test that ||A / c|| == ||A|| / |c|."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=3, itags=["A", "B"])
+    original_norm = A.norm()
+
+    assert math.isclose((A / 4.0).norm(), original_norm / 4.0, rel_tol=1e-10)
+    assert math.isclose((A / (2.0 + 1.0j)).norm(), original_norm / abs(2.0 + 1.0j), rel_tol=1e-10)
 
 
 # Norm tests
@@ -1137,5 +1400,3 @@ def test_subtraction_su2_4th_order_different_weights():
         phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
         phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
         assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
-
-

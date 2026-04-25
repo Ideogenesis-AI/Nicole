@@ -23,6 +23,7 @@ from .decomp import decomp
 from .einsum import einsum
 from .identity import identity, isometry, isometry_n
 from .index import Index, Sector
+from .maneuver import allclose
 from .maneuver import conj, permute, transpose
 from .maneuver import oplus, diag, inv, capcup
 from .maneuver import filter_blocks, merge_axes
@@ -44,6 +45,7 @@ __all__ = [
     "Z2Group",
     "SU2Group",
     "ProductGroup",
+    "allclose",
     "contract",
     "einsum",
     "trace",

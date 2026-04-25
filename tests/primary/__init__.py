@@ -44,6 +44,7 @@ test_blocks.py
     - Charge neutrality enforcement and block shape computation
     - Block indexing and iteration
     - Intertwiner collinearity and block addition for non-Abelian groups
+    - Block compression for collinear intertwiners
 
 test_construction.py
     Tests for Tensor construction methods:

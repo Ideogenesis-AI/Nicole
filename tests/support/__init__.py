@@ -38,6 +38,7 @@ test_helpers.py
     - sorted_keys, key(i), block(i): deterministic block access
     - filter_blocks(): block subsetting, metadata and intw preservation
     - regularize(): Bridge weight normalization for SU(2) tensors
+    - Tensor serialization and deserialization roundtrips
 
 test_device.py
     Tests for device management:

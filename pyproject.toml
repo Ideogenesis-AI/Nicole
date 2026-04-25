@@ -11,7 +11,7 @@ only-include = [
 
 [project]
 name = "nicole"
-version = "0.3.4"
+version = "0.3.5"
 description = "Nicole: a symmetry-aware tensor library"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"

@@ -177,9 +177,9 @@ def iter_diag_ferm(
 
         if itN == 1:
             # First iteration: sandwich zero Hamiltonian with A0
-            # Anow.conj()[a,b,g], H0[g,h], Anow[a,d,h] → Hnow[b,d]
+            # Anow.conj()[a,b,r], H0[r,s], Anow[a,c,s] → Hnow[b,c]
             Anow = A0
-            Hnow = einsum('abg,gh,adh->bd', Anow.conj(), H0, Anow)
+            Hnow = einsum('abr,rs,acs->bc', Anow.conj(), H0, Anow)
 
         else:
             # Add new site: isometry (left, phys, right) → permute to (left, right, phys)
@@ -187,16 +187,16 @@ def iter_diag_ferm(
             Anow.retag([f"R{itN-2:02d}", f"R{itN-1:02d}", f"s{itN-1:02d}"])
 
             # Sandwich previous Hamiltonian with Anow
-            # Hprev[a,e], Anow[e,h,g], Anow.conj()[a,b,g] → Hnow[b,h]
-            Hnow = einsum('ae,ehg,abg->bh', Hprev, Anow, Anow.conj())
+            # Hprev[a,c], Anow[c,d,r], Anow.conj()[a,b,r] → Hnow[b,d]
+            Hnow = einsum('ac,cdr,abr->bd', Hprev, Anow, Anow.conj())
 
             # Hopping term: -t (F†_prev F_now + F†_now F_prev)
-            # Hopping term: F†_now = Fnow.conj().permute([2,1,0]) → Fn_dag[o,k,g]
+            # Hopping term: F†_now = Fnow.conj().permute([2,1,0]) → Fn_dag[o,s,r]
             #   encodes ⟨β|F†|β'⟩ (creation on new site); axes: (op, ket, bra)
             Fn_dag = Fnow.conj().permute([2, 1, 0])
 
-            # Fn_dag[o,k,g], Anow[e,d,g], Fprev[q,e,o], Anow.conj()[q,b,k] → HFF[b,d]
-            HFF = einsum('okg,edg,qeo,qbk->bd', Fn_dag, Anow, Fprev, Anow.conj())
+            # Fn_dag[o,s,r], Anow[c,d,r], Fprev[a,c,o], Anow.conj()[a,b,s] → HFF[b,d]
+            HFF = einsum('osr,cdr,aco,abs->bd', Fn_dag, Anow, Fprev, Anow.conj())
 
             # Add Hermitian conjugate (= F†_prev ⊗ F_now) and scale
             HFF = (HFF + HFF.conj().transpose()) * (-t)
@@ -218,16 +218,16 @@ def iter_diag_ferm(
         all_eigvals = np.concatenate([eigvals for eigvals in D.values()])
         Eg[itN - 1] = np.min(all_eigvals)
 
-        # Anow[a,b,g], V[b,d] → AK[a,d,g] = (left, right_new, phys)
-        AK = einsum('abg,bd->adg', Anow, V)
+        # Anow[a,b,r], V[b,c] → AK[a,c,r] = (left, right_new, phys)
+        AK = einsum('abr,bc->acr', Anow, V)
         mps.append(AK.clone())
 
         bond_index = V.indices[1]
         Hprev = diag(D, bond_index, itags=(f"R{itN-1:02d}", f"R{itN-1:02d}"))
 
         # Accumulate annihilation operator on the new right edge for the next step
-        # AK[q,d,k], Fnow[g,k,o], AK.conj()[q,b,g] → Fprev[b,d,o] = (right_conj, right, op)
-        Fprev = einsum('qdk,gko,qbg->bdo', AK, Fnow, AK.conj())
+        # AK[a,c,s], Fnow[r,s,o], AK.conj()[a,b,r] → Fprev[b,c,o] = (right_conj, right, op)
+        Fprev = einsum('acs,rso,abr->bco', AK, Fnow, AK.conj())
 
         if verbose:
             NK = AK.indices[0].dim

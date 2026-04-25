@@ -615,6 +615,118 @@ def test_svd_truncation_combined_thresh_nkeep():
     assert total_sv == 3
 
 
+# SVD info dict tests
+
+def test_svd_info_no_truncation():
+    """info["discarded_weight"] is zero when no truncation is applied."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 4),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 4),))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=11)
+    _, _, _, info = svd(T, axis=0, requires_info=True)
+
+    assert "discarded_weight" in info
+    assert isinstance(info["discarded_weight"], float)
+    assert info["discarded_weight"] == 0.0
+
+
+def test_svd_info_nkeep():
+    """info["discarded_weight"] equals sum of singular values dropped by nkeep."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=22)
+
+    # Full SVD to get ground-truth singular values
+    _, S_full, _ = svd(T, axis=0)
+    full_sum = sum(float(s.sum()) for s in S_full.values())
+
+    # Truncated SVD with info
+    _, S_trunc, _, info = svd(T, axis=0, trunc={"nkeep": 4}, requires_info=True)
+    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+
+    expected_discarded = full_sum - kept_sum
+    assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
+
+
+def test_svd_info_thresh():
+    """info["discarded_weight"] equals sum of singular values below threshold."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=33)
+    threshold = 0.4
+
+    # Full SVD to get ground-truth singular values
+    _, S_full, _ = svd(T, axis=0)
+    full_sum = sum(float(s.sum()) for s in S_full.values())
+
+    # Truncated SVD with info
+    _, S_trunc, _, info = svd(T, axis=0, trunc={"thresh": threshold}, requires_info=True)
+    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+
+    expected_discarded = full_sum - kept_sum
+    assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
+
+
+def test_svd_info_combined():
+    """info["discarded_weight"] accounts for both thresh and nkeep truncation."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6), Sector(1, 5)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 4)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=44)
+
+    # Full SVD for reference
+    _, S_full, _ = svd(T, axis=0)
+    full_sum = sum(float(s.sum()) for s in S_full.values())
+
+    # Combined truncation with info
+    _, S_trunc, _, info = svd(T, axis=0, trunc={"thresh": 0.3, "nkeep": 4}, requires_info=True)
+    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+
+    expected_discarded = full_sum - kept_sum
+    assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
+
+
+def test_svd_info_multiblock():
+    """info["discarded_weight"] sums discarded values across all charge sectors."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 4), Sector(0, 5), Sector(1, 4)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=55)
+
+    # Full SVD for reference
+    _, S_full, _ = svd(T, axis=0)
+    full_sum = sum(float(s.sum()) for s in S_full.values())
+
+    # Truncate globally across multiple blocks
+    _, S_trunc, _, info = svd(T, axis=0, trunc={"nkeep": 5}, requires_info=True)
+    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+
+    expected_discarded = full_sum - kept_sum
+    assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
+    assert info["discarded_weight"] > 0.0
+
+
+def test_svd_info_nothing_truncated():
+    """info["discarded_weight"] is zero when nkeep exceeds total singular values."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 3),))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=66)
+
+    # nkeep larger than the actual number of singular values (3)
+    _, _, _, info = svd(T, axis=0, trunc={"nkeep": 100}, requires_info=True)
+
+    assert info["discarded_weight"] == 0.0
+
+
 # High-order tensor tests
 
 def test_svd_high_order_different_axis_sizes():

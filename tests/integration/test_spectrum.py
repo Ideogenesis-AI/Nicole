@@ -798,7 +798,7 @@ def _build_ss_band_from_fierz(preserv: str):
     4. N₁N₂ outer product: extend N by inserting a dummy OUT/IN index pair, then
        contract those trivial indices to tensor-product the two on-site operators.
     5. Combine: SS = (1/4)(2·exchange − N₁N₂); merge and regularize.
-    6. compress() collapses the num_components > 1 that arise from the sum of
+    6. regularize() collapses the num_components > 1 that arise from the sum of
        two tensors back to 1, making _eigvalsh_block applicable.
     """
     Spc, Op = load_space("Band", preserv=preserv)
@@ -863,7 +863,7 @@ def test_spin_spin_band_u1su2():
       • T_merged route: spin-1 sector extracted from the F†F bilinear and
         rescaled by −1/√2 to match the RME convention of Op["S"].
       • Fierz route: four-fermion identity S₁·S₂ = (1/4)(2·exchange − N₁N₂)
-        followed by compress() + regularize().
+        followed by regularize().
 
     Block keys are ((total_U1, 2·J_total), same):
 

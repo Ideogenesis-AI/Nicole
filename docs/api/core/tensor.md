@@ -7,7 +7,6 @@ Block-sparse tensor with symmetry-aware indices.
       show_source: false
       heading_level: 2
       members:
-        - __init__
         - zeros
         - random
         - from_scalar
@@ -60,6 +59,5 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 
 ## Notes
 
-Tensors are mutable objects. Use `clone()` when independence is needed. For functional (non-mutating) operations, see the [operators](../manipulation/conjugate.md) module.
-
-Charge conservation is enforced: `∑(OUT charges) - ∑(IN charges) = neutral element`.
+- Tensors are mutable objects. Use `clone()` when independence is needed. For functional (non-mutating) operations, see the [operators](../manipulation/conjugate.md) module.
+- `Tensor` supports `==` and `!=` for exact structural and element-wise equality. For numerical equality with tolerances, use `allclose(A, B)` instead — see [allclose](../arithmetic/allclose.md).

@@ -20,14 +20,16 @@
 
 import torch
 
-from nicole import Direction, Index, Tensor, U1Group, Sector
+from nicole import Direction, Index, Tensor, U1Group, Z2Group, Sector
 from nicole.symmetry.unitary import SU2Group
+from nicole.symmetry.product import ProductGroup
 from nicole.display import (
     _charge_components,
     _format_bytes,
     _format_count_list,
     _format_single_value,
-    _group_signature
+    _group_signature,
+    index_summary,
 )
 
 
@@ -512,4 +514,151 @@ def test_tensor_summary_su2_sign_suffix_absent_for_abelian():
     
     assert "{+}" not in summary
     assert "{-}" not in summary
+
+
+# index_summary tests
+
+
+def test_index_summary_u1_out():
+    """Test index_summary for a U1/OUT index: group name and direction character."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    summary = str(idx)
+
+    assert "U1" in summary
+    assert "-" in summary
+    assert "0" in summary
+    assert "2" in summary
+
+
+def test_index_summary_u1_in():
+    """Test index_summary for a U1/IN index: direction character is '+'."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(1, 3),))
+    summary = str(idx)
+
+    assert "+" in summary
+    assert "-" not in summary
+    assert "1" in summary
+    assert "3" in summary
+
+
+def test_index_summary_no_sectors():
+    """Test index_summary with an empty index returns a '(no sectors)' line."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=())
+    summary = str(idx)
+
+    assert "no sectors" in summary
+
+
+def test_index_summary_multiple_sectors():
+    """Test index_summary lists every sector when there are multiple."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3), Sector(-1, 5)))
+    summary = str(idx)
+
+    # All charges and their dimensions must appear in the output.
+    for charge, dim in ((0, 2), (1, 3), (-1, 5)):
+        assert str(charge) in summary
+        assert str(dim) in summary
+
+
+def test_index_summary_z2_group_name():
+    """Test that Z2Group is identified by name 'Z2' in the header."""
+    group = Z2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    summary = str(idx)
+
+    assert "Z2" in summary
+
+
+def test_index_summary_su2_group_name():
+    """Test that SU2Group is identified by name 'SU2' in the header."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    summary = str(idx)
+
+    assert "SU2" in summary
+
+
+def test_index_summary_product_group():
+    """Test index_summary for a ProductGroup: group name and tuple charges appear."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    summary = str(idx)
+
+    # Group name is the joined component names.
+    assert "U1" in summary
+    assert "Z2" in summary
+    # Tuple charges are represented as "(0, 0)" and "(1, 1)".
+    assert "(0, 0)" in summary
+    assert "(1, 1)" in summary
+
+
+def test_index_summary_column_width_charge():
+    """Test that a charge string wider than 'Charge' (6 chars) widens the column."""
+    group = U1Group()
+    # "-100000" is 7 chars, which exceeds len("Charge") = 6.
+    idx = Index(Direction.OUT, group, sectors=(Sector(-100000, 2),))
+    summary = str(idx)
+
+    assert "-100000" in summary
+    # The header label "Charge" must also be present (right-aligned in a wider column).
+    assert "Charge" in summary
+
+
+def test_index_summary_column_width_dim():
+    """Test that a dim value wider than 'Dims' (4 chars) widens the column."""
+    group = U1Group()
+    # "10000" is 5 chars, which exceeds len("Dims") = 4.
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 10000),))
+    summary = str(idx)
+
+    assert "10000" in summary
+    assert "Dims" in summary
+
+
+def test_index_summary_indentation_scalar():
+    """Test that scalar-group data rows use a 4-space indent, not 6."""
+    group = U1Group()
+    # Charge "100000" fills charge_width exactly (6 chars = len("Charge")),
+    # so the data row is "    100000  ..." — 4-space indent immediately before the charge.
+    idx = Index(Direction.OUT, group, sectors=(Sector(100000, 2),))
+    lines = str(idx).split("\n")
+    data_lines = [ln for ln in lines if "100000" in ln]
+
+    assert len(data_lines) == 1
+    # With a 4-space indent and no extra alignment padding, the row starts with "    1".
+    assert data_lines[0].startswith("    100000")
+    assert not data_lines[0].startswith("      100000")
+
+
+def test_index_summary_indentation_product():
+    """Test that ProductGroup data rows use a 6-space indent."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    # Charge "(0, 0)" is 6 chars, filling charge_width exactly, so no alignment padding
+    # is added and the row is "      (0, 0)  ..." — 6-space indent immediately before.
+    idx = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2),))
+    lines = str(idx).split("\n")
+    data_lines = [ln for ln in lines if "(0, 0)" in ln]
+
+    assert len(data_lines) == 1
+    assert data_lines[0].startswith("      (0, 0)")
+
+
+def test_index_summary_str_repr_equal():
+    """Test that str(index) and repr(index) return identical strings."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    assert str(idx) == repr(idx)
+
+
+def test_index_summary_str_calls_index_summary():
+    """Test that str(index) delegates to index_summary(index)."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    assert str(idx) == index_summary(idx)
 

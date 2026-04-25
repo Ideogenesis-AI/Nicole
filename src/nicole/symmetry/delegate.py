@@ -141,7 +141,18 @@ class Bridge:
                 f"weights shape[1] must match OM dimension {om_dim}, "
                 f"got shape {self.weights.shape}"
             )
-    
+
+    def __eq__(self, other: object) -> bool:
+        """Return True if both cgspec and weights are exactly equal."""
+        if not isinstance(other, Bridge):
+            return NotImplemented
+        return self.cgspec == other.cgspec and torch.equal(self.weights, other.weights)
+
+    # Note: @dataclass(frozen=True) generates __hash__ regardless of an explicit
+    # __eq__. The generated hash is identity-based for the torch.Tensor field and
+    # therefore not consistent with value-based __eq__, but Bridge is only ever a
+    # mapping value (in intw), never a key, so this causes no practical issues.
+
     @property
     def om_dimension(self) -> int:
         """Return the dimension of the outer multiplicity space."""

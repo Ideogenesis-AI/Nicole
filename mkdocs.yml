@@ -88,6 +88,7 @@ nav:
       - merge_axes: api/manipulation/merge_axes.md
     - Arithmetic:
       - Basic Operations: api/arithmetic/addition.md
+      - Equality (allclose): api/arithmetic/allclose.md
       - Direct Sum (oplus): api/arithmetic/oplus.md
       - Diagonal (diag): api/arithmetic/diag.md
       - Inverse (inv): api/arithmetic/inv.md

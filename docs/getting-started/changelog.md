@@ -2,6 +2,77 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.5] - 2026-04-26
+
+**Arithmetic Completions and SVD Diagnostics**
+
+Rounds out the Tensor arithmetic surface with equality operators (`==`), `allclose` for
+numerical near-equality, unary negation (`-tensor`), and scalar division (`tensor /
+scalar`). Adds an optional `info` dict to `svd` for monitoring truncation loss
+(`"discarded_weight"`). All previously valid calls continue to work unchanged.
+
+### New Features
+
+#### Equality — `Tensor.__eq__` and `Bridge.__eq__`
+
+`Tensor` and `Bridge` now implement the Python equality operator `==`. `Tensor.__eq__`
+checks index count, full index structure, block key sets, exact element-wise block data
+(`torch.equal`), and, for non-Abelian tensors, exact intertwiner equality via
+`Bridge.__eq__`.
+
+#### `allclose` — Numerical Near-Equality
+
+A new `allclose(A, B, rtol=1e-5, atol=1e-8)` function tests numerical equality within
+floating-point tolerances. For SU(2) tensors, the physical tensor `R @ W` is compared
+block-by-block, making the check **gauge-invariant**: tensors that represent the same
+physical content but differ in their internal `(R, W)` factorization compare as equal.
+
+#### Unary Negation and Scalar Division
+
+`Tensor.__neg__` (`-T`) and `Tensor.__truediv__` (`T / scalar`) round out the arithmetic
+operators. Both are implemented through the existing `__mul__` path and therefore support
+autograd and all device / dtype combinations.
+
+#### SVD `requires_info` — Truncation Loss Monitoring
+
+`svd` accepts a new keyword argument `requires_info: bool = False`. When `True`, it
+returns a 4-tuple whose last element is an `info` dict; `info["discarded_weight"]` records
+the sum of all singular values truncated away across all charge sectors (zero when no
+truncation is applied). The default 3-tuple return is unchanged.
+
+### Documentation
+
+- **`allclose` API page**: New reference page `docs/api/arithmetic/allclose.md` with Notes
+  on the SU(2) gauge-invariance guarantee and cross-links to `Tensor.__eq__`
+- **SVD page updated**: Documents the `requires_info` parameter and the `"discarded_weight"`
+  key in the returned `info` dict
+- **Decomposition examples**: Extended to demonstrate monitoring of truncation loss via
+  `requires_info=True`
+
+### Test Suite (1603 tests)
+
+- **1593 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- 63 new tests covering `Tensor.__eq__`, `Bridge.__eq__`, `allclose`, `__neg__`,
+  `__truediv__`, SVD `info` dict, and `index_summary` for all four symmetry groups
+
+### Statistics
+
+- **43 commits** since v0.3.4
+- **32 files changed**: 1,028 insertions, 105 deletions
+- Source modules touched: `src/nicole/tensor.py`, `src/nicole/maneuver.py`,
+  `src/nicole/decomp.py`, `src/nicole/symmetry/delegate.py`, `src/nicole/__init__.py`
+
+### Compatibility
+
+**Breaking Changes:** None — all previously valid calls continue to work. The new `==`
+operator performs value-based comparison rather than identity comparison; any code that
+relied on identity-based `==` returning `True` will now receive the correct value-based
+result.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.4] - 2026-04-24
 
 **SVD Isometry for SU(2) Tensors**
@@ -856,6 +927,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.5]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.5
 [0.3.4]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.4
 [0.3.3]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.2

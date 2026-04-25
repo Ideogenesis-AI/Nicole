@@ -920,7 +920,36 @@ class Tensor:
         self._invalidate_sorted_keys()
 
     # ------------------------------------------------------------
-    #   Binary operations: add, sub, mul
+    #   Equality
+    # ------------------------------------------------------------
+
+    def __eq__(self, other: object) -> bool:
+        """Return True if two tensors have identical structure and block data.
+
+        Checks index count, full index structure per axis, block keys, and
+        exact element-wise equality of every dense block. For generic tensors,
+        also checks exact equality of every intertwiner via `Bridge.__eq__`.
+        """
+        if not isinstance(other, Tensor):
+            return NotImplemented
+        # Cheap structural guards first
+        if len(self.indices) != len(other.indices):
+            return False
+        if any(a != b for a, b in zip(self.indices, other.indices)):
+            return False
+        if set(self.data.keys()) != set(other.data.keys()):
+            return False
+        # Check intertwiners for generic tensors
+        if (self.intw is None) != (other.intw is None):
+            return False
+        # Expensive element-wise comparisons last
+        return (
+            all(torch.equal(self.data[k], other.data[k]) for k in self.data)
+            and (self.intw is None or all(self.intw[k] == other.intw[k] for k in self.intw))
+        )
+
+    # ------------------------------------------------------------
+    #   Unary and binary operations: add, sub, mul, div, neg
     # ------------------------------------------------------------
 
     def _align_for_binary(self, other: Tensor) -> Tuple[Tensor, Tensor]:
@@ -1093,6 +1122,14 @@ class Tensor:
         )
 
     __rmul__ = __mul__
+
+    def __neg__(self) -> Tensor:
+        """Negate every dense block."""
+        return self * (-1)
+
+    def __truediv__(self, scalar: Union[int, float, complex]) -> Tensor:
+        """Divide every dense block by a scalar."""
+        return self * (1 / scalar)
 
     # ------------------------------------------------------------
     #   Weights canonicalisation or regularisation
