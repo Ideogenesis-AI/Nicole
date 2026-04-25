@@ -13,6 +13,8 @@ Performs block-wise SVD, returning:
 - **U**: Left unitary tensor
 - **S_dict**: Dictionary mapping block keys to 1D singular value arrays
 - **Vh**: Right unitary tensor
+- **info** *(optional)*: Dict of auxiliary data, returned only when `requires_info=True`. Currently contains:
+  - `"discarded_weight"`: `float`, sum of all singular values truncated away across all charge sectors.
 
 This low-level function provides direct access to singular values for each block before they're combined into a tensor.
 
@@ -34,5 +36,6 @@ from nicole.decomp import svd
 ## Notes
 
 - Use `decomp()` for most cases. Use `svd()` when you need per-block singular value access before tensor creation.
+- Pass `requires_info=True` to obtain the `info` dict containing `"discarded_weight"`. This incurs a small extra computation and is intended for diagnostic use.
 - For Abelian tensors, `Vh` satisfies `Vh @ Vh† = I` directly from the standard block-wise matrix SVD.
 - For SU(2) tensors, the intertwiner weight matrix is canonicalized to a scaled unitary form before the SVD, ensuring `Vh` is a physical isometry (`Vh @ Vh† = I`).
