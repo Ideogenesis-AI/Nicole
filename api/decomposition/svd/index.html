@@ -1654,6 +1654,8 @@
       
         
       
+        
+      
     
     
     
@@ -1719,6 +1721,34 @@
     
   
     Basic Operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../arithmetic/allclose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equality (allclose)
   
 
     
@@ -3657,7 +3687,7 @@
 
 
 <a href="#nicole.decomp.svd" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">svd</span><span class="p">(</span><span class="n">T</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">trunc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">svd</span><span class="p">(</span><span class="n">T</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">trunc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">requires_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span> <span class="o">|</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3735,6 +3765,24 @@ Both can be specified together: thresh is applied first, then nkeep.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>requires_info</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, return a 4-tuple <code>(U, S_blocks, Vh, info)</code> where <code>info</code> is a dict
+containing auxiliary decomposition data. If False (default), return the usual
+3-tuple <code>(U, S_blocks, Vh)</code> with no overhead.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3764,11 +3812,35 @@ Both can be specified together: thresh is applied first, then nkeep.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Triplet <code>(U, S_blocks, Vh)</code> where:
+                <p>When <code>requires_info=False</code> (default): 3-tuple <code>(U, S_blocks, Vh)</code> where:
 <ul>
 <li>U has indices (left_index, bond_index)</li>
 <li>S_blocks is a Dict mapping block keys to 1D arrays of singular values</li>
 <li>Vh has indices (bond_index.flip(), *right_indices)</li>
+</ul></p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="tuple">tuple</span>[<a class="autorefs autorefs-internal" title="            Tensor
+
+
+  
+      dataclass
+   (nicole.tensor.Tensor)" href="../../core/tensor/#nicole.Tensor">Tensor</a>, <span title="typing.MutableMapping">MutableMapping</span>[<span title="nicole.blocks.BlockKey">BlockKey</span>, <span title="torch.Tensor">Tensor</span>], <a class="autorefs autorefs-internal" title="            Tensor
+
+
+  
+      dataclass
+   (nicole.tensor.Tensor)" href="../../core/tensor/#nicole.Tensor">Tensor</a>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When <code>requires_info=True</code>: 4-tuple <code>(U, S_blocks, Vh, info)</code> where <code>info</code>
+currently contains:
+<ul>
+<li>"discarded_weight": float, sum of all singular values truncated away across all charge sectors. Zero when <code>trunc</code> is None or nothing was cut.</li>
 </ul></p>
               </div>
             </td>
@@ -3823,6 +3895,10 @@ then "nkeep" is applied globally to the remaining singular values.</p>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Apply both: first thresh, then nkeep</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;thresh&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">,</span> <span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">})</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Special case: inspect discarded weight</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">},</span> <span class="n">requires_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">dw</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;discarded_weight&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 
 
@@ -3834,6 +3910,8 @@ then "nkeep" is applied globally to the remaining singular values.</p>
 <li><strong>U</strong>: Left unitary tensor</li>
 <li><strong>S_dict</strong>: Dictionary mapping block keys to 1D singular value arrays</li>
 <li><strong>Vh</strong>: Right unitary tensor</li>
+<li><strong>info</strong> <em>(optional)</em>: Dict of auxiliary data, returned only when <code>requires_info=True</code>. Currently contains:</li>
+<li><code>"discarded_weight"</code>: <code>float</code>, sum of all singular values truncated away across all charge sectors.</li>
 </ul></p>
 <p>This low-level function provides direct access to singular values for each block before they're combined into a tensor.</p>
 <h2 id="import">Import<a class="headerlink" href="#import" title="Permanent link">&para;</a></h2>
@@ -3850,6 +3928,7 @@ then "nkeep" is applied globally to the remaining singular values.</p>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Use <code>decomp()</code> for most cases. Use <code>svd()</code> when you need per-block singular value access before tensor creation.</li>
+<li>Pass <code>requires_info=True</code> to obtain the <code>info</code> dict containing <code>"discarded_weight"</code>. This incurs a small extra computation and is intended for diagnostic use.</li>
 <li>For Abelian tensors, <code>Vh</code> satisfies <code>Vh @ Vh† = I</code> directly from the standard block-wise matrix SVD.</li>
 <li>For SU(2) tensors, the intertwiner weight matrix is canonicalized to a scaled unitary form before the SVD, ensuring <code>Vh</code> is a physical isometry (<code>Vh @ Vh† = I</code>).</li>
 </ul>
@@ -3875,7 +3954,7 @@ then "nkeep" is applied globally to the remaining singular values.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 23, 2026 22:52:55 UTC"><span class="timeago" datetime="2026-04-23T22:52:55+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 23, 2026 22:52:55 UTC">2026-04-23</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 25, 2026 09:48:13 UTC"><span class="timeago" datetime="2026-04-25T09:48:13+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 25, 2026 09:48:13 UTC">2026-04-25</span>
   </span>
 
     
