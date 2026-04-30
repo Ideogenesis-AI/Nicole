@@ -85,7 +85,6 @@ class SU2Group(UnitaryGroup):
         int
             The same quantum number (2j).
         """
-        self.validate_charge(two_j)
         return two_j
 
     def irrep_dim(self, two_j: int) -> int:
@@ -103,7 +102,6 @@ class SU2Group(UnitaryGroup):
         int
             Dimension of the representation: 2j + 1.
         """
-        self.validate_charge(two_j)
         return two_j + 1
 
     def fuse_channels(self, *two_js: int) -> Tuple[int, ...]:
@@ -161,10 +159,6 @@ class SU2Group(UnitaryGroup):
         """
         if not two_js:
             return (0,)
-        
-        # Validate all charges
-        for two_j in two_js:
-            self.validate_charge(two_j)
         
         # Single spin: return itself
         if len(two_js) == 1:

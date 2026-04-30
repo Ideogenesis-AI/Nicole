@@ -2,6 +2,65 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.6] - 2026-04-30
+
+**API Versioning and Hot-path Optimization**
+
+Exposes the package version as `nicole.__version__` and removes redundant charge
+validation calls from hot paths in all symmetry group classes, together with a
+neutral-element cache in `ProductGroup`. All previously valid calls continue to
+work unchanged.
+
+### New Features
+
+#### `nicole.__version__`
+
+`__version__` is now a public attribute of the `nicole` package, populated at
+import time via `importlib.metadata.version("nicole")`. Users can check the running
+version with `import nicole; nicole.__version__`.
+
+### Enhancements
+
+#### Symmetry Group Hot-path Cleanup
+
+Redundant `validate_charge` guard calls have been removed from the internal paths of
+`U1Group.fuse_unique`, `Z2Group.fuse_unique`, `SU2Group.dual`, `SU2Group.irrep_dim`,
+`SU2Group.fuse_channels`, and several `ProductGroup` methods. Validation still runs at
+tensor construction time and through the public `validate_charge` method; removing the
+extra per-call guards eliminates repeated type and range checks on charges that are
+already known to be valid at the call site.
+
+`U1Group.fuse_unique` and `Z2Group.fuse_unique` are further simplified to use built-in
+`sum` and bitwise XOR, respectively. `ProductGroup.equal` is simplified to `a == b`,
+delegating to built-in tuple equality.
+
+#### `ProductGroup` Neutral-element Cache
+
+`ProductGroup.__init__` now stores the neutral element as a private `_neutral` tuple at
+construction time. The `neutral` property returns the cached value directly, avoiding a
+fresh generator expression over all component groups on every call.
+
+### Test Suite (1603 tests)
+
+- **1593 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- No new tests added in this release
+
+### Statistics
+
+- **7 commits** since v0.3.5
+- **4 files changed**: 10 insertions, 29 deletions
+- Source modules touched: `src/nicole/__init__.py`, `src/nicole/symmetry/abelian.py`,
+  `src/nicole/symmetry/product.py`, `src/nicole/symmetry/unitary.py`
+
+### Compatibility
+
+**Breaking Changes:** None — all previously valid calls continue to work. The new
+`__version__` attribute does not conflict with any existing public name.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.5] - 2026-04-26
 
 **Arithmetic Completions and SVD Diagnostics**
@@ -927,6 +986,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.6]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.6
 [0.3.5]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.5
 [0.3.4]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.4
 [0.3.3]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.3

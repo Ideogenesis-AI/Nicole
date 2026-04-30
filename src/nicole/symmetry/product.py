@@ -67,6 +67,7 @@ class ProductGroup(SymmetryGroup):
     
     components: Tuple[SymmetryGroup, ...]
     _has_unitary: bool
+    _neutral: Tuple[Any, ...]
     
     def __init__(self, components: Sequence[SymmetryGroup]) -> None:
         """Initialize ProductGroup with component symmetry groups.
@@ -128,6 +129,7 @@ class ProductGroup(SymmetryGroup):
         # Use object.__setattr__ since dataclass is frozen
         object.__setattr__(self, 'components', tuple(components))
         object.__setattr__(self, '_has_unitary', bool(unitary_indices))
+        object.__setattr__(self, '_neutral', tuple(comp.neutral for comp in components))
     
     @property
     def name(self) -> str:
@@ -137,7 +139,7 @@ class ProductGroup(SymmetryGroup):
     @property
     def neutral(self) -> Tuple[Any, ...]:
         """Return the neutral element as a tuple of component neutrals."""
-        return tuple(comp.neutral for comp in self.components)
+        return self._neutral
     
     @property
     def is_abelian(self) -> bool:
@@ -184,10 +186,6 @@ class ProductGroup(SymmetryGroup):
         if not qs:
             return self.neutral
         
-        # Validate all charges
-        for q in qs:
-            self.validate_charge(q)
-        
         # Fuse each component independently (all are Abelian)
         fused_components = []
         for i, comp in enumerate(self.components):
@@ -232,10 +230,6 @@ class ProductGroup(SymmetryGroup):
         """
         if not qs:
             return (self.neutral,)
-        
-        # Validate all charges
-        for q in qs:
-            self.validate_charge(q)
         
         # Single charge: return itself
         if len(qs) == 1:
@@ -283,9 +277,7 @@ class ProductGroup(SymmetryGroup):
         bool
             True if all components are equal.
         """
-        self.validate_charge(a)
-        self.validate_charge(b)
-        return all(comp.equal(ai, bi) for comp, ai, bi in zip(self.components, a, b))
+        return a == b  # all charge types support ==; tuple == is element-wise == in C
     
     def validate_charge(self, q: Any) -> None:
         """Validate that a charge is a tuple of correct length with valid components.
@@ -335,7 +327,6 @@ class ProductGroup(SymmetryGroup):
         Tuple
             Tuple of dual charges.
         """
-        self.validate_charge(q)
         return tuple(comp.dual(qi) for comp, qi in zip(self.components, q))
 
     def irrep_dim(self, q: Tuple[Any, ...]) -> int:
@@ -354,7 +345,6 @@ class ProductGroup(SymmetryGroup):
         int
             Product of component irrep dimensions.
         """
-        self.validate_charge(q)
         dim = 1
         for comp, qi in zip(self.components, q):
             dim *= comp.irrep_dim(qi)
