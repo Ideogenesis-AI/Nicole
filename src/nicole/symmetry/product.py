@@ -184,10 +184,6 @@ class ProductGroup(SymmetryGroup):
         if not qs:
             return self.neutral
         
-        # Validate all charges
-        for q in qs:
-            self.validate_charge(q)
-        
         # Fuse each component independently (all are Abelian)
         fused_components = []
         for i, comp in enumerate(self.components):
@@ -232,10 +228,6 @@ class ProductGroup(SymmetryGroup):
         """
         if not qs:
             return (self.neutral,)
-        
-        # Validate all charges
-        for q in qs:
-            self.validate_charge(q)
         
         # Single charge: return itself
         if len(qs) == 1:
@@ -283,8 +275,6 @@ class ProductGroup(SymmetryGroup):
         bool
             True if all components are equal.
         """
-        self.validate_charge(a)
-        self.validate_charge(b)
         return all(comp.equal(ai, bi) for comp, ai, bi in zip(self.components, a, b))
     
     def validate_charge(self, q: Any) -> None:
@@ -335,7 +325,6 @@ class ProductGroup(SymmetryGroup):
         Tuple
             Tuple of dual charges.
         """
-        self.validate_charge(q)
         return tuple(comp.dual(qi) for comp, qi in zip(self.components, q))
 
     def irrep_dim(self, q: Tuple[Any, ...]) -> int:
@@ -354,7 +343,6 @@ class ProductGroup(SymmetryGroup):
         int
             Product of component irrep dimensions.
         """
-        self.validate_charge(q)
         dim = 1
         for comp, qi in zip(self.components, q):
             dim *= comp.irrep_dim(qi)
