@@ -275,7 +275,7 @@ class ProductGroup(SymmetryGroup):
         bool
             True if all components are equal.
         """
-        return all(comp.equal(ai, bi) for comp, ai, bi in zip(self.components, a, b))
+        return a == b  # all charge types support ==; tuple == is element-wise == in C
     
     def validate_charge(self, q: Any) -> None:
         """Validate that a charge is a tuple of correct length with valid components.
