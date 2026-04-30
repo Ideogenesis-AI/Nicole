@@ -39,15 +39,10 @@ class U1Group(AbelianGroup):
         return 0
 
     def dual(self, q: int) -> int:
-        self.validate_charge(q)
         return -q
 
     def fuse_unique(self, *qs: int) -> int:
-        s = 0
-        for q in qs:
-            self.validate_charge(q)
-            s += int(q)
-        return s
+        return sum(qs)
 
     def equal(self, a: int, b: int) -> bool:
         return int(a) == int(b)
@@ -71,13 +66,11 @@ class Z2Group(AbelianGroup):
         return 0
 
     def dual(self, q: int) -> int:
-        self.validate_charge(q)
         return q & 1
 
     def fuse_unique(self, *qs: int) -> int:
         acc = 0
         for q in qs:
-            self.validate_charge(q)
             acc ^= (q & 1)
         return acc
 
