@@ -45,7 +45,7 @@ class U1Group(AbelianGroup):
         return sum(qs)
 
     def equal(self, a: int, b: int) -> bool:
-        return int(a) == int(b)
+        return a == b
 
     def validate_charge(self, q: Any) -> None:
         """Ensure a charge lies in the integer lattice."""
