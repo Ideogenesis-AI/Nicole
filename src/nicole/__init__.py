@@ -18,6 +18,8 @@
 
 """Nicole public API surface for symmetry-aware tensor utilities."""
 
+from importlib.metadata import version
+
 from .contract import contract, trace
 from .decomp import decomp
 from .einsum import einsum
@@ -34,6 +36,8 @@ from .symmetry.unitary import SU2Group
 from .symmetry.product import ProductGroup
 from .tensor import Tensor
 from .typing import Charge, Direction
+
+__version__ = version("nicole")
 
 __all__ = [
     "Charge",
