@@ -67,6 +67,7 @@ class ProductGroup(SymmetryGroup):
     
     components: Tuple[SymmetryGroup, ...]
     _has_unitary: bool
+    _neutral: Tuple[Any, ...]
     
     def __init__(self, components: Sequence[SymmetryGroup]) -> None:
         """Initialize ProductGroup with component symmetry groups.
@@ -128,6 +129,7 @@ class ProductGroup(SymmetryGroup):
         # Use object.__setattr__ since dataclass is frozen
         object.__setattr__(self, 'components', tuple(components))
         object.__setattr__(self, '_has_unitary', bool(unitary_indices))
+        object.__setattr__(self, '_neutral', tuple(comp.neutral for comp in components))
     
     @property
     def name(self) -> str:
@@ -137,7 +139,7 @@ class ProductGroup(SymmetryGroup):
     @property
     def neutral(self) -> Tuple[Any, ...]:
         """Return the neutral element as a tuple of component neutrals."""
-        return tuple(comp.neutral for comp in self.components)
+        return self._neutral
     
     @property
     def is_abelian(self) -> bool:
