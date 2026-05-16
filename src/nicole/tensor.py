@@ -827,6 +827,92 @@ class Tensor:
         self.intw = new_intw
         self._invalidate_sorted_keys()
 
+    def squeeze(self, position: int) -> None:
+        """Remove a trivial index (neutral charge, dimension 1) at a specified position.
+
+        This is the exact inverse of `insert_index`. The index at `position`
+        must be trivial — it must have exactly one sector whose charge is the
+        neutral charge of the group and whose dimension is 1. Any other index
+        raises a `ValueError`.
+
+        Parameters
+        ----------
+        position:
+            Position of the trivial index to remove (0-indexed).
+            Must be in range [0, len(self.indices) - 1].
+
+        Raises
+        ------
+        ValueError
+            If `position` is out of range.
+        ValueError
+            If the index at `position` is not trivial (not a single sector of
+            neutral charge and dimension 1).
+        ValueError
+            If removing the index would leave the tensor with exactly 1 index,
+            which is not a valid state (tensors must have 0 or ≥2 indices).
+
+        Notes
+        -----
+        This operation modifies the tensor in-place by:
+
+        - Removing the index and its itag at `position`
+        - Squeezing the singleton axis at `position` from all data blocks
+        - Updating block keys to drop the neutral charge at `position`
+
+        For non-Abelian groups (e.g. SU(2)), each intertwiner (Bridge) is
+        updated via `Bridge.remove_edge`, which applies the inverse R-symbol
+        and drops the neutral-charge edge. The OM dimension is preserved exactly.
+        """
+        n = len(self.indices)
+
+        # Validate position
+        if position < 0 or position >= n:
+            raise ValueError(f"Position {position} out of range [0, {n - 1}]")
+
+        # Validate that removing this index would not leave exactly 1 index
+        if n - 1 == 1:
+            raise ValueError(
+                f"Squeezing index at position {position} would leave 1 index, "
+                "which is not a valid tensor state (must have 0 or ≥2 indices)."
+            )
+
+        # Validate that the index at position is trivial
+        idx = self.indices[position]
+        group = self.indices[0].group
+        neutral_charge = group.neutral
+        if len(idx.sectors) != 1 or idx.sectors[0].charge != neutral_charge or idx.sectors[0].dim != 1:
+            raise ValueError(
+                f"Index at position {position} is not trivial: expected a single sector "
+                f"with neutral charge {neutral_charge} and dimension 1."
+            )
+
+        # Remove the index and its itag
+        indices_list = list(self.indices)
+        del indices_list[position]
+        self.indices = tuple(indices_list)
+
+        itags_list = list(self.itags)
+        del itags_list[position]
+        self.itags = tuple(itags_list)
+
+        # Update data blocks: drop the neutral charge from keys and squeeze the axis
+        new_data: Dict[BlockKey, torch.Tensor] = {}
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            new_intw = {}
+
+        for key, arr in self.data.items():
+            new_key = key[:position] + key[position + 1:]
+            new_data[new_key] = arr.squeeze(dim=position)
+
+            if new_intw is not None:
+                new_intw[new_key] = self.intw[key].remove_edge(position)
+
+        self.data = new_data
+        self.intw = new_intw
+        self._invalidate_sorted_keys()
+
     def normalize_sectors(self) -> None:
         """Remove sectors from each index that do not appear in any block.
 
