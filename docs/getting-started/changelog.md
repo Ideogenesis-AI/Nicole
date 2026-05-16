@@ -2,6 +2,53 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.3.7] - 2026-05-17
+
+**Squeeze Method for Tensors**
+
+Adds `Tensor.squeeze(position)` as the exact inverse of `insert_index`,
+removing a trivial index (neutral charge, dimension 1) from the tensor
+in-place. All previously valid calls continue to work unchanged.
+
+### New Features
+
+#### `Tensor.squeeze`
+
+`Tensor.squeeze(position)` removes the trivial index at `position`, squeezes
+the singleton axis from all data blocks, and rebuilds the block-key mapping
+with the neutral charge dropped. The method raises `ValueError` if the index
+is not trivial, the position is out of range, or the result would leave exactly
+one index.
+
+#### `Bridge.remove_edge`
+
+Internal counterpart that backs `Tensor.squeeze` for SU(2) tensors.
+`Bridge.remove_edge(position)` applies the R-symbol to slide the
+spin-0 edge to position 0, then drops it from the `CGSpec`; the
+outer-multiplicity dimension is preserved exactly. Raises `ValueError` if the
+edge at `position` is not spin-0.
+
+### Test Suite (1625 tests)
+
+- **1615 tests pass**, 10 skipped (accelerator-only tests on CPU-only CI)
+- 22 new tests in `tests/operations/test_maneuver.py` covering Abelian and
+  SU(2) groups, error paths, and weight roundtrips
+
+### Statistics
+
+- **6 commits** since v0.3.6
+- **4 files changed**: 566 insertions, 7 deletions
+- Source modules touched: `src/nicole/tensor.py`, `src/nicole/symmetry/delegate.py`
+- Test module touched: `tests/operations/test_maneuver.py`
+
+### Compatibility
+
+**Breaking Changes:** None — all previously valid calls continue to work.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.6] - 2026-04-30
 
 **API Versioning and Hot-path Optimization**
@@ -986,6 +1033,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.3.7]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.7
 [0.3.6]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.6
 [0.3.5]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.5
 [0.3.4]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.4
