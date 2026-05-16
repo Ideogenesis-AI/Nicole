@@ -91,6 +91,8 @@ class Tensor:
         In-place: Fill all data blocks with random values.
     insert_index()
         In-place: Insert a trivial index (neutral charge, dimension 1) at a position.
+    squeeze()
+        In-place: Remove a trivial index (neutral charge, dimension 1) at a position.
     normalize_sectors()
         In-place: Remove sectors from each index that do not appear in any block.
     trim_zero_blocks()
@@ -721,7 +723,7 @@ class Tensor:
         return self.data[self.key(i)]
 
     # ------------------------------------------------------------
-    #   Utility methods: rand_fill, insert_index, trim_zeros
+    #   Utility: rand_fill, insert_index, squeeze, trim_zeros
     # ------------------------------------------------------------
 
     @property
