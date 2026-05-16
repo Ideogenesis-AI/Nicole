@@ -2,274 +2,274 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/arithmetic/addition/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/arithmetic/allclose/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/arithmetic/diag/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/arithmetic/inv/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/arithmetic/oplus/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/contraction/contract/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/contraction/einsum/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/contraction/trace/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/core/direction/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/core/index-class/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/core/sector/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/core/tensor/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/creation/identity/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/creation/isometry/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/creation/isometry_n/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/creation/random/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/creation/zeros/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/decomposition/decomp/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/decomposition/eig/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/decomposition/qr/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/decomposition/svd/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/capcup/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/conjugate/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/filter_blocks/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/merge_axes/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/permute/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/retag/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/manipulation/transpose/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/bridge/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/overview/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/product-group/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/su2-group/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/u1-group/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/symmetry/z2-group/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/utilities/blocks/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/utilities/deserialize/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/utilities/display/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/utilities/load_space/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/api/utilities/serialize/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/autograd/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/build-operators/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/gpu-acceleration/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/load-space-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/performance/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/advanced/serialization-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/basic/arithmetic/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/basic/first-tensor/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/basic/indexing/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/operations/contraction-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/operations/decomposition-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/operations/manipulation-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/symmetries/product-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/symmetries/su2-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/symmetries/u1-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/examples/symmetries/z2-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/changelog/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/contributing/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/core-concepts/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/installation/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/quick-examples/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/terminology/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/what-is-nicole/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/why-nicole/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/getting-started/yuzuha-protocol/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
     <url>
          <loc>https://ideogenesis-ai.github.io/Nicole/tutorials/</loc>
-         <lastmod>2026-04-30</lastmod>
+         <lastmod>2026-05-16</lastmod>
     </url>
 </urlset>
