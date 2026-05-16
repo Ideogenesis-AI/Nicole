@@ -373,6 +373,71 @@ class Bridge:
         new_weights = self.weights @ r_symbol
         return Bridge(cgspec=cgspec_final, weights=new_weights)
 
+    def remove_edge(self, position: int) -> Bridge:
+        """Return a new Bridge with the trivial neutral edge at `position` removed.
+
+        This is the exact inverse of `insert_edge`. The edge at `position` must
+        be spin-0 (neutral charge); a `ValueError` is raised otherwise.
+
+        The removal is performed in two steps:
+
+        1. If `position != 0`, compute the inverse permutation that slides edge
+           `position` back to index 0, apply the corresponding R-symbol to the
+           weights, and obtain a CGSpec with the neutral edge at position 0.
+        2. Rebuild the CGSpec from all edges except the first one, returning a
+           new Bridge with the trimmed CGSpec and updated weights.
+
+        Because the neutral representation does not participate in coupling,
+        the OM dimension is preserved exactly.
+        This is the building block for `Tensor.squeeze()` on SU(2) tensors.
+
+        Parameters
+        ----------
+        position : int
+            0-based index of the neutral edge to remove. The edge at this
+            position must be spin-0.
+
+        Returns
+        -------
+        Bridge
+            New Bridge instance with the neutral edge removed and weights
+            updated by the appropriate inverse R-symbol.
+
+        Raises
+        ------
+        ValueError
+            If the edge at `position` is not spin-0 (neutral charge).
+        """
+        # Verify the edge at position is spin-0
+        edge = self.cgspec.edges[position]
+        if edge.j != yuzuha.Spin(0):
+            raise ValueError(
+                f"Edge at position {position} is not spin-0 (neutral charge); "
+                f"cannot remove a non-trivial edge with squeeze."
+            )
+
+        N = len(self.cgspec.edges)
+
+        if position == 0:
+            # Edge is already at position 0; just drop it
+            trimmed_cgspec = yuzuha.CGSpec.from_edges(list(self.cgspec.edges[1:]))
+            return Bridge(cgspec=trimmed_cgspec, weights=self.weights)
+
+        # Step 1: inverse permutation slides edge at `position` back to index 0.
+        # The forward permutation in insert_edge was:
+        #   perm = [1, 2, ..., position, 0, position+1, ..., N-1]
+        # Its inverse maps position → 0 while shifting everything else:
+        #   perm_inv = [position, 0, 1, ..., position-1, position+1, ..., N-1]
+        perm_inv = [position] + list(range(0, position)) + list(range(position + 1, N))
+        r_array, cgspec_at_0 = yuzuha.compute_rsymbol(self.cgspec, perm_inv)
+        r_symbol = torch.from_numpy(r_array)
+        r_symbol = r_symbol.to(device=self.weights.device, dtype=self.weights.dtype)
+        new_weights = self.weights @ r_symbol
+
+        # Step 2: drop the first edge (the spin-0 edge now at position 0)
+        trimmed_cgspec = yuzuha.CGSpec.from_edges(list(cgspec_at_0.edges[1:]))
+        return Bridge(cgspec=trimmed_cgspec, weights=new_weights)
+
     @staticmethod
     def from_block(
         group: SymmetryGroup,
