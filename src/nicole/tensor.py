@@ -627,11 +627,6 @@ class Tensor:
         This method can only be called on scalar tensors (0D tensors). It calls
         the backward() method on the underlying PyTorch tensor to compute gradients
         for all tensors in the computational graph that have requires_grad=True.
-        
-        Raises
-        ------
-        ValueError
-            If the tensor is not a scalar (has more than 0 dimensions)
             
         Examples
         --------
@@ -834,25 +829,13 @@ class Tensor:
 
         This is the exact inverse of `insert_index`. The index at `position`
         must be trivial — it must have exactly one sector whose charge is the
-        neutral charge of the group and whose dimension is 1. Any other index
-        raises a `ValueError`.
+        neutral charge of the group and whose dimension is 1.
 
         Parameters
         ----------
         position:
             Position of the trivial index to remove (0-indexed).
             Must be in range [0, len(self.indices) - 1].
-
-        Raises
-        ------
-        ValueError
-            If `position` is out of range.
-        ValueError
-            If the index at `position` is not trivial (not a single sector of
-            neutral charge and dimension 1).
-        ValueError
-            If removing the index would leave the tensor with exactly 1 index,
-            which is not a valid state (tensors must have 0 or ≥2 indices).
 
         Notes
         -----
