@@ -16,6 +16,7 @@ Block-sparse tensor with symmetry-aware indices.
         - clone
         - rand_fill
         - insert_index
+        - squeeze
         - trim_zero_blocks
         - normalize_sectors
         - regularize

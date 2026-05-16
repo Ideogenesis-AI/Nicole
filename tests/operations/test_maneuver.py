@@ -18,7 +18,7 @@
 
 """Tests for typical tensor maneuvers:
     - allclose, conj, permute, transpose
-    - retag, invert, insert_index
+    - retag, invert, insert_index, squeeze
     - merge_axes, trim_zero_blocks
 """
 
@@ -2371,6 +2371,428 @@ def test_insert_index_su2_preserves_weights():
         new_key = (neutral,) + orig_key
         assert new_key in T.intw
         assert torch.allclose(T.intw[new_key].weights, orig_w)
+
+
+# squeeze tests
+
+def test_squeeze_at_beginning():
+    """Test squeezing a trivial index inserted at the beginning (round-trip)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=42, itags=["a", "b"])
+
+    original_keys = set(tensor.data.keys())
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(0, Direction.OUT, itag="new")
+    tensor.squeeze(0)
+
+    # Structure restored
+    assert len(tensor.indices) == 2
+    assert tensor.itags == ("a", "b")
+
+    # Block keys restored
+    assert set(tensor.data.keys()) == original_keys
+
+    # Data values restored
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_at_end():
+    """Test squeezing a trivial index inserted at the end (round-trip)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=10, itags=["a", "b"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(2, Direction.IN, itag="end")
+    tensor.squeeze(2)
+
+    assert tensor.itags == ("a", "b")
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_in_middle():
+    """Test squeezing a trivial index inserted in the middle (round-trip)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=7, itags=["a", "b", "c", "d"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(2, Direction.OUT, itag="mid")
+    tensor.squeeze(2)
+
+    assert tensor.itags == ("a", "b", "c", "d")
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_removes_itag():
+    """Test that the itag at the squeezed position is removed and others shift."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    idx4 = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(1, 2)))
+    tensor = Tensor.random([idx1, idx2, idx3, idx4], seed=99, itags=["a", "b", "c", "d"])
+
+    tensor.insert_index(1, Direction.IN, itag="trivial")
+    assert tensor.itags == ("a", "trivial", "b", "c", "d")
+
+    tensor.squeeze(1)
+    assert tensor.itags == ("a", "b", "c", "d")
+
+
+def test_squeeze_preserves_data_values():
+    """Test that data values exactly match the pre-insert blocks after squeeze."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 2), Sector(0, 3), Sector(1, 2)))
+    tensor = Tensor.random([idx1, idx2], seed=123, itags=["p", "q"])
+
+    saved = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(0, Direction.OUT, itag="x")
+    tensor.squeeze(0)
+
+    for k in saved:
+        assert torch.allclose(tensor.data[k], saved[k])
+
+
+def test_squeeze_multiple():
+    """Test squeezing two consecutively inserted trivial indices."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=55, itags=["a", "b"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(0, Direction.OUT, itag="x")
+    tensor.insert_index(2, Direction.IN, itag="y")
+    # Now has indices: x, a, y, b
+    tensor.squeeze(2)
+    tensor.squeeze(0)
+
+    assert tensor.itags == ("a", "b")
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_position_out_of_range():
+    """Test that out-of-range positions raise ValueError."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=1)
+
+    with pytest.raises(ValueError, match="out of range"):
+        tensor.squeeze(-1)
+
+    with pytest.raises(ValueError, match="out of range"):
+        tensor.squeeze(2)
+
+
+def test_squeeze_non_trivial_raises():
+    """Test that squeezing a non-trivial index raises ValueError."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=2)
+
+    with pytest.raises(ValueError):
+        tensor.squeeze(0)
+
+
+def test_squeeze_would_leave_one_index_raises():
+    """Test that squeezing to exactly 1 index raises ValueError."""
+    group = U1Group()
+    # One trivial index plus one real index = 2 total; squeezing trivial → 1 index (forbidden)
+    idx_trivial = Index(Direction.OUT, group, sectors=(Sector(0, 1),))
+    idx_real = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.zeros([idx_trivial, idx_real])
+
+    with pytest.raises(ValueError, match="1 index"):
+        tensor.squeeze(0)
+
+
+def test_squeeze_z2_group():
+    """Test squeeze round-trip with Z2Group."""
+    group = Z2Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=77, itags=["a", "b"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(1, Direction.OUT, itag="z")
+    tensor.squeeze(1)
+
+    assert tensor.itags == ("a", "b")
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_product_group():
+    """Test squeeze round-trip with ProductGroup."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx1 = Index(Direction.OUT, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 3)))
+    tensor = Tensor.random([idx1, idx2], seed=88, itags=["a", "b"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(0, Direction.IN, itag="p")
+    tensor.squeeze(0)
+
+    assert tensor.itags == ("a", "b")
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_complex_dtype():
+    """Test that squeeze preserves complex dtype and data."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=42, dtype=torch.complex128, itags=["a", "b"])
+
+    original_blocks = {k: v.clone() for k, v in tensor.data.items()}
+
+    tensor.insert_index(1, Direction.OUT, itag="c")
+    tensor.squeeze(1)
+
+    assert tensor.dtype == torch.complex128
+    for k, v in tensor.data.items():
+        assert torch.allclose(v, original_blocks[k])
+
+
+def test_squeeze_inplace():
+    """Test that squeeze returns None (in-place modification)."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=5, itags=["a", "b"])
+
+    tensor.insert_index(0, Direction.OUT, itag="new")
+    retval = tensor.squeeze(0)
+    assert retval is None
+
+
+def test_squeeze_preserves_label():
+    """Test that squeeze does not change the tensor label."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=6, itags=["a", "b"])
+    tensor.label = "MyTensor"
+
+    tensor.insert_index(0, Direction.OUT, itag="new")
+    tensor.squeeze(0)
+
+    assert tensor.label == "MyTensor"
+
+
+def test_squeeze_invalidates_sorted_keys():
+    """Test that squeeze clears the sorted-keys cache."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx1, idx2], seed=9, itags=["a", "b"])
+
+    tensor.insert_index(0, Direction.OUT, itag="new")
+    # Populate the cache
+    _ = tensor.sorted_keys
+    assert tensor._sorted_keys is not None
+
+    tensor.squeeze(0)
+    assert tensor._sorted_keys is None
+
+
+# SU(2) squeeze tests
+
+def test_squeeze_su2_intw_keys_match_data_keys():
+    """Test that intw keys equal data keys after squeeze."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=10, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=11)
+
+    T.insert_index(1, Direction.IN, itag="new")
+    T.squeeze(1)
+
+    assert set(T.intw.keys()) == set(T.data.keys())
+
+
+def test_squeeze_su2_removes_neutral_edge():
+    """Test that the neutral edge is absent from all Bridges after squeeze."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=20, itags=["a", "b", "c", "d"])
+
+    num_edges_before = T.intw[next(iter(T.intw))].num_external
+
+    T.insert_index(2, Direction.OUT, itag="new")
+    T.squeeze(2)
+
+    for bridge in T.intw.values():
+        assert bridge.num_external == num_edges_before
+
+
+def test_squeeze_su2_other_edges_unchanged():
+    """Test that non-squeezed edges in the CGSpec are unchanged after squeeze."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=30, itags=["a", "b", "c", "d"])
+
+    original_edges = {k: list(b.cgspec.edges) for k, b in T.intw.items()}
+
+    T.insert_index(0, Direction.OUT, itag="new")
+    T.squeeze(0)
+
+    for k, bridge in T.intw.items():
+        for i, edge in enumerate(bridge.cgspec.edges):
+            assert edge == original_edges[k][i]
+
+
+def test_squeeze_su2_preserves_om_dimension():
+    """Test that OM dimension is preserved after squeeze (4th-order tensor)."""
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=40, itags=["a", "b", "c", "d"])
+
+    om_before = {k: b.om_dimension for k, b in T.intw.items()}
+
+    T.insert_index(2, Direction.IN, itag="new")
+    T.squeeze(2)
+
+    for k, om in om_before.items():
+        assert T.intw[k].om_dimension == om
+
+
+def test_squeeze_su2_weights_roundtrip():
+    """Test weight round-trip after insert_index + squeeze at position 0.
+
+    Inserting at position 0 produces an identity R-symbol, so this test verifies
+    the round-trip when the R-symbol is trivial.
+    """
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=50, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=51)
+
+    T_orig = T.clone()
+    original_weights = {k: b.weights.clone() for k, b in T.intw.items()}
+
+    T.insert_index(0, Direction.OUT, itag="new")
+    T.squeeze(0)
+
+    for k, orig_w in original_weights.items():
+        assert torch.allclose(T.intw[k].weights, orig_w, atol=1e-12)
+    assert_physical_tensors_equal(T_orig, T)
+
+
+def test_squeeze_su2_weights_roundtrip_at_middle():
+    """Test weight round-trip after insert_index + squeeze at a middle position.
+
+    Positions 1..N-2 also yield an identity R-symbol for leading edges, so this
+    exercises the non-zero code path (perm_inv is computed) while still
+    expecting exact weight restoration.
+    """
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=50, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=51)
+
+    T_orig = T.clone()
+    original_weights = {k: b.weights.clone() for k, b in T.intw.items()}
+
+    T.insert_index(2, Direction.IN, itag="new")
+    T.squeeze(2)
+
+    for k, orig_w in original_weights.items():
+        assert torch.allclose(T.intw[k].weights, orig_w, atol=1e-12)
+    assert_physical_tensors_equal(T_orig, T)
+
+
+def test_squeeze_su2_weights_roundtrip_at_end():
+    """Test weight round-trip after insert_index + squeeze at the terminal position.
+
+    Inserting at the terminal position (index N) produces a **non-trivial**
+    R-symbol.  For blocks whose last original edge carries half-integer spin
+    (2j = 1, i.e. j = 1/2), the Frobenius-Schur phase gives R = -I, so the
+    weights are negated by insert_index.  This test first asserts that negation
+    for the affected blocks, then verifies that a subsequent squeeze exactly
+    restores the original weights for all blocks.
+
+    Blocks with last-original-edge 2j = 1 (R = -I after insert at terminal):
+        (1, 1, 1, 1), (1, 2, 2, 1), (2, 1, 2, 1), (2, 2, 1, 1)
+    Blocks with last-original-edge 2j = 2 (R = +I, weights unchanged):
+        (1, 1, 2, 2), (1, 2, 1, 2), (2, 1, 1, 2), (2, 2, 2, 2)
+    """
+    group = SU2Group()
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(1, 2), Sector(2, 3)))
+    T = Tensor.random([idx_a, idx_b, idx_c, idx_d], seed=50, itags=["a", "b", "c", "d"])
+    populate_random_weights(T, seed=51)
+
+    T_orig = T.clone()
+    original_weights = {k: b.weights.clone() for k, b in T.intw.items()}
+    neutral = group.neutral
+
+    T.insert_index(4, Direction.IN, itag="new")
+
+    # After insert at terminal position, blocks whose last original edge has
+    # half-integer spin (2j = 1) acquire R = -I from the Frobenius-Schur phase,
+    # so their weights must be negated at this intermediate stage.
+    for orig_key, orig_w in original_weights.items():
+        new_key = orig_key + (neutral,)
+        assert new_key in T.intw
+        last_two_j = orig_key[-1]
+        if last_two_j == 1:
+            assert torch.allclose(T.intw[new_key].weights, -orig_w, atol=1e-12), (
+                f"Expected negated weights for block {orig_key} (2j_last=1)"
+            )
+        else:
+            assert torch.allclose(T.intw[new_key].weights, orig_w, atol=1e-12), (
+                f"Expected unchanged weights for block {orig_key} (2j_last={last_two_j})"
+            )
+
+    T.squeeze(4)
+
+    # After squeeze the inverse R-symbol is applied, restoring all weights exactly.
+    for k, orig_w in original_weights.items():
+        assert torch.allclose(T.intw[k].weights, orig_w, atol=1e-12)
+    assert_physical_tensors_equal(T_orig, T)
 
 
 # Merge axes tests
