@@ -105,6 +105,16 @@ Supporting functionality:
 | [serialize](utilities/serialize.md) | Convert a Tensor to a serializable dict |
 | [deserialize](utilities/deserialize.md) | Reconstruct a Tensor from a serialized dict |
 
+## Tensor Networks (BUG)
+
+Tensor-train states and the two-site BUG time integrator (`nicole.bug`):
+
+| Topic | Description |
+|-------|-------------|
+| [Overview](tensor-network/index.md) | The `nicole.bug` subpackage at a glance |
+| [Tensor-Train States](tensor-network/tensor-train.md) | `TensorTrain`, `TensorTrainOperator`, builders |
+| [BUG Integrator](tensor-network/bug.md) | `bug_two_site`, `BUGInfo`, bond gates |
+
 ## Usage Patterns
 
 For practical examples and complete working code, see:

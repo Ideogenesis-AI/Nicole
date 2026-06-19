@@ -2,6 +2,36 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [Unreleased]
+
+**Tensor-Train States and the BUG Time Integrator**
+
+Adds `nicole.bug`, a self-contained tensor-train (MPS/MPO) layer and a two-site
+Basis-Update & Galerkin (BUG) time integrator built on Nicole tensors. The
+subpackage carries its own itag/direction conventions so symmetry structure is
+preserved end to end, and exploits Nicole block sparsity for U(1)-symmetric
+states such as Heisenberg domain walls.
+
+### New Features
+
+#### `nicole.bug` Subpackage
+
+A new optional subpackage providing tensor-network time evolution:
+
+- **States and operators**: `TensorTrain` (MPS) and `TensorTrainOperator` (MPO)
+  with builders `product_tt`, `random_tt`, `siteinds`, and `mpo_from_opsum`
+  (via the `OpSum` term collector).
+- **Two-site BUG integrator**: `bug_two_site` advances a state by one Lie or
+  Strang odd/even sweep of rank-adaptive, symmetry-faithful K/L/S bond updates,
+  returning a `BUGInfo` record of bond growth and S-step truncation.
+- **Bond gates**: `bug_xx_bond_gates`, `bug_heisenberg_bond_gates`, and
+  `bug_xx_parity_mpos` build nearest-neighbour XX and Heisenberg terms.
+- **Local kernels**: dense/U(1)-symmetric QR/LQ/SVD helpers and a Krylov
+  `expv` substep with native Hermitian-Lanczos and general backends.
+
+The subpackage is additive and imported explicitly (`import nicole.bug`); it
+does not change any existing public API.
+
 ## [0.3.6] - 2026-04-30
 
 **API Versioning and Hot-path Optimization**

@@ -29,6 +29,7 @@ With the assistance of various AI coding agents, Nicole reimagines the block-sym
 - **GPU Acceleration**: Optional GPU support (CUDA/MPS) for accelerated computations on large tensors
 - **Autograd Control**: Optional automatic gradient tracking for efficient optimization tasks
 - **Tensor Operations**: Essential operations including contraction, decompositions, and more
+- **Tensor Networks**: Optional `nicole.bug` subpackage with tensor-train (MPS/MPO) states and a two-site BUG time integrator
 - **Type-Safe API**: Modern Python with type hints for better IDE/AI support and fewer runtime errors
 - **Extensible Design**: Clean abstractions for adding custom symmetry groups (following Yuzuha protocol)
 

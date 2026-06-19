@@ -113,6 +113,10 @@ nav:
       - load_space: api/utilities/load_space.md
       - serialize: api/utilities/serialize.md
       - deserialize: api/utilities/deserialize.md
+    - Tensor Networks:
+      - Overview: api/tensor-network/index.md
+      - Tensor-Train States: api/tensor-network/tensor-train.md
+      - BUG Integrator: api/tensor-network/bug.md
   - Examples:
     - examples/index.md
     - Basic Usage:
