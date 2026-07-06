@@ -1322,6 +1322,32 @@ def test_contract_many_u1_sectors_matches_manual_reference():
         assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
 
 
+def test_contract_su2_many_sectors():
+    """Test SU(2) contraction with many spin sectors, stressing the shared pairing index."""
+    group = SU2Group()
+
+    # 8 spin sectors per contracted axis (2j = 0..14).
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=tuple(Sector(two_j, 2) for two_j in range(0, 16, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
+
+    A = Tensor.random([idx_a, idx_b], seed=922, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=923, itags=["b", "c"])
+    populate_random_weights(A, seed=924)
+    populate_random_weights(B, seed=925)
+
+    C = contract(A, B, axes=(1, 0))
+
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    for key, block in C.data.items():
+        assert block.ndim == 3
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
 def test_contract_many_product_group_sectors_matches_manual_reference():
     """Test contraction with many ProductGroup sectors (low hit rate) against a reference."""
     group = ProductGroup([U1Group(), U1Group()])
@@ -1463,32 +1489,6 @@ def test_contract_many_sectors_sparse_no_match():
 
     result = contract(A, B)
     assert result.data == {}
-
-
-def test_contract_su2_many_sectors():
-    """Test SU(2) contraction with many spin sectors, stressing the shared pairing index."""
-    group = SU2Group()
-
-    # 8 spin sectors per contracted axis (2j = 0..14).
-    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
-    idx_b = Index(Direction.IN, group, sectors=tuple(Sector(two_j, 2) for two_j in range(0, 16, 2)))
-    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
-
-    A = Tensor.random([idx_a, idx_b], seed=922, itags=["a", "b"])
-    B = Tensor.random([idx_b.flip(), idx_c], seed=923, itags=["b", "c"])
-    populate_random_weights(A, seed=924)
-    populate_random_weights(B, seed=925)
-
-    C = contract(A, B, axes=(1, 0))
-
-    assert C.intw is not None
-    assert_charge_neutral(C)
-    for key, block in C.data.items():
-        assert block.ndim == 3
-        bridge = C.intw[key]
-        assert bridge.num_components == block.shape[-1]
-        assert bridge.num_components > 0
-        assert bridge.om_dimension > 0
 
 
 # Trace tests
