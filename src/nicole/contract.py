@@ -33,16 +33,14 @@ import torch
 
 from .blocks import BlockKey, BlockSchema
 from .index import Index
-from .symmetry import SymmetryGroup
 from .symmetry.delegate import compute_xsymbol, compute_rsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
 
 
-def _dir_weight(idx: Index, charge: Charge) -> Tuple[SymmetryGroup, Charge]:
-    """Return the symmetry group and orientation-adjusted charge contribution."""
-    group = idx.group
-    return group, (charge if idx.direction == Direction.OUT else group.dual(charge))
+def _dir_weight(idx: Index, charge: Charge) -> Charge:
+    """Return the orientation-adjusted charge contribution."""
+    return charge if idx.direction == Direction.OUT else idx.group.dual(charge)
 
 
 def _detect_contraction_pairs(
@@ -318,38 +316,39 @@ def contract(
     # Allocate the output blocks.
     out_blocks: Dict[BlockKey, torch.Tensor] = {}
     out_intw: Optional[Dict[BlockKey, Bridge]] = {} if A.intw is not None else None
+
+    axesA = [ia for ia, _ in axes_list]
+    axesB = [ib for _, ib in axes_list]
+
+    # Charge-indexed pair discovery: a block keyA is compatible with keyB on a
+    # contracted axis pair (ia, ib) iff the direction-adjusted charge on ib equals
+    # group.dual(direction-adjusted charge on ia). This holds for Abelian groups
+    # (unique group inverse) and equally for non-Abelian groups (Schur orthogonality:
+    # the neutral/trivial channel appears in fuse_channels(qa, qb) iff qb == dual(qa)),
+    # so the required B-side signature can be computed directly from keyA without
+    # scanning B.data, turning the O(N_A * N_B) pair scan below into O(N_A + N_B + M)
+    # where M is the number of actually compatible pairs.
+    index_B: Dict[Tuple[Charge, ...], list[BlockKey]] = {}
+    for keyB in B.data:
+        signature = tuple(_dir_weight(B.indices[ib], keyB[ib]) for ib in axesB)
+        index_B.setdefault(signature, []).append(keyB)
+
     # Iterate over all admissible blocks in the input tensors.
     for keyA, arrA in A.data.items():
-        for keyB, arrB in B.data.items():
-            # Check if the blocks are compatible for contraction.
-            ok = True
-            for ia, ib in axes_list:
-                # Validate charge conservation for the pair.
-                group, qa = _dir_weight(A.indices[ia], keyA[ia])
-                _, qb = _dir_weight(B.indices[ib], keyB[ib])
-                
-                # Check if fusion to neutral is allowed
-                if group.is_abelian:
-                    # Abelian: use fuse_unique
-                    if not group.equal(group.fuse_unique(qa, qb), group.neutral):
-                        ok = False
-                        break
-                else:
-                    # Non-Abelian: check if neutral is in fuse_channels
-                    if group.neutral not in group.fuse_channels(qa, qb):
-                        ok = False
-                        break
-                
-                # Ensure matching dimensions.
-                if arrA.shape[ia] != arrB.shape[ib]:
-                    ok = False
-                    break
-            if not ok:
+        required_signature = []
+        for ia in axesA:
+            qa = _dir_weight(A.indices[ia], keyA[ia])
+            required_signature.append(A.indices[ia].group.dual(qa))
+        required_signature = tuple(required_signature)
+
+        for keyB in index_B.get(required_signature, ()):
+            arrB = B.data[keyB]
+            # Defensive check: charge compatibility (established via the index above)
+            # already implies matching sector dimensions, but keep this as a guard
+            # against any inconsistency in ragged sector bookkeeping.
+            if any(arrA.shape[ia] != arrB.shape[ib] for ia, ib in axes_list):
                 continue
-            # Perform the tensor contraction.
-            axesA = [ia for ia, _ in axes_list]
-            axesB = [ib for _, ib in axes_list]
-            
+
             # Build the output charge key from the surviving axes.
             out_key = tuple(keyA[i] for i in range(len(keyA)) if i not in contracted_A) + tuple(
                 keyB[i] for i in range(len(keyB)) if i not in contracted_B
