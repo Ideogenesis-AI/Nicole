@@ -2,6 +2,77 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.4.0] - 2026-07-15
+
+**Entering Beta Stage**
+
+Promotes Nicole from Alpha to Beta: the public API is now considered stable,
+and future changes will follow the compatibility expectations of a
+Beta-stage project. Alongside this milestone, `contract()` gains a
+charge-indexed block-pairing scheme that cuts pairing cost from
+`O(N_A · N_B)` to `O(N_A + N_B + M)`, and two minor fixes address a
+complex-weight display bug and an insecure third-party script in the
+documentation site. No public API is changed.
+
+### Entering Beta Stage
+
+Nicole's `Development Status` classifier moves from `3 - Alpha` to
+`4 - Beta`, reflecting the maturity of the public API surface after seven
+Alpha releases (v0.3.0-v0.3.7) covering SU(2) support, device propagation,
+and index maneuvering, and current test coverage of over 1600 tests.
+
+### Enhancements
+
+#### Charge-indexed Block Pairing in `contract()`
+
+The compatibility condition for a block pair always reduces to
+`qb == group.dual(qa)` per contracted axis, for both Abelian groups (unique
+group inverse) and non-Abelian groups (Schur orthogonality). `contract()` now
+indexes `B.data` once into a signature-keyed dictionary and looks up each
+`A.data` block's required partner signature directly, instead of scanning all
+of `B.data` for every block in `A`. This turns block-pair discovery into
+`O(N_A + N_B + M)`, where `M` is the number of actually compatible pairs. The
+per-pair shape check is retained as a defensive guard. `_dir_weight` is
+simplified to return only the orientation-adjusted charge.
+
+### Minor Fixes
+
+#### Complex-weight Sign Indicator
+
+`tensor_summary` no longer raises `TypeError` when displaying an SU(2)
+intertwiner weight that is complex-valued; complex weights are now shown with
+a dedicated `{✕}` suffix instead of being compared for sign.
+
+#### Insecure Polyfill Script Removed from Documentation Site
+
+The `polyfill.io` script referenced in `mkdocs.yml` has been removed, since
+the domain has changed ownership and been used to serve malicious code.
+MathJax rendering is unaffected.
+
+### Test Suite (1632 tests)
+
+- **1622 tests pass**, 10 skipped (CUDA-only tests on a CUDA-less CI runner)
+- 7 new tests in `tests/operations/test_contract.py` covering many-sector
+  contraction for `U1Group`, `ProductGroup`, and SU(2) against brute-force
+  manual references, multi-axis contraction, the zero-contracted-axes
+  outer-product case, and a sparse many-block case
+
+### Statistics
+
+- **6 commits** since v0.3.7
+- **5 files changed**: 240 insertions, 38 deletions
+- Source modules touched: `src/nicole/contract.py`, `src/nicole/display.py`
+- Test module touched: `tests/operations/test_contract.py`
+- Documentation touched: `mkdocs.yml`
+
+### Compatibility
+
+**Breaking Changes:** None — all previously valid calls continue to work.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.3.7] - 2026-05-17
 
 **Squeeze Method for Tensors**
@@ -1033,6 +1104,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.4.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.0
 [0.3.7]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.7
 [0.3.6]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.6
 [0.3.5]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.5
