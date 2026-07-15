@@ -294,7 +294,7 @@ def tensor_summary(
             sign_suffix = ""
             if intw is not None and key in intw and intw[key].weights.numel() == 1:
                 w = intw[key].weights.item()
-                sign_suffix = "{+}" if w >= 0 else "{-}"
+                sign_suffix = "{✕}" if isinstance(w, complex) else ("{+}" if w >= 0 else "{-}")
             if arr.numel() == 1:
                 # Scalar block — print the entry itself.
                 value_repr = _format_single_value(arr)

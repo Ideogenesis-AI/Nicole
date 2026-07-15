@@ -1287,6 +1287,210 @@ def test_contract_su2_automatic_detection():
     assert result.intw is not None
 
 
+# Charge-indexed block-pairing tests
+#
+# These stress the block-pair discovery mechanism in contract() (a hash index
+# keyed on group.dual of the contracted-axis charges, replacing a brute-force
+# O(N_A * N_B) scan) by using many distinct charge sectors per index, so that
+# only a small fraction of candidate block pairs are actually compatible.
+
+def test_contract_many_u1_sectors_matches_manual_reference():
+    """Test single-pair contraction with many U(1) sectors against a brute-force reference."""
+    group = U1Group()
+    charges = range(-15, 15)  # 30 distinct sectors per index
+    idx_a = Index(Direction.OUT, group, sectors=tuple(Sector(q, 2) for q in charges))
+    idx_mid_left = Index(Direction.IN, group, sectors=tuple(Sector(q, 2) for q in charges))
+    idx_mid_right = Index(Direction.OUT, group, sectors=tuple(Sector(q, 2) for q in charges))
+    idx_c = Index(Direction.IN, group, sectors=tuple(Sector(q, 2) for q in charges))
+
+    A = Tensor.random([idx_a, idx_mid_left], seed=910, itags=["a", "mid"])
+    B = Tensor.random([idx_mid_right, idx_c], seed=911, itags=["mid", "c"])
+
+    result = contract(A, B, axes=(1, 0))
+    assert_charge_neutral(result)
+
+    manual = {}
+    for (qa, qmid_left), block_a in A.data.items():
+        for (qmid_right, qc), block_b in B.data.items():
+            if group.equal(qmid_left, qmid_right):
+                out_key = (qa, qc)
+                contracted = torch.tensordot(block_a, block_b, dims=([1], [0]))
+                manual[out_key] = manual.get(out_key, 0) + contracted
+
+    assert set(result.data.keys()) == set(manual.keys())
+    for key in manual:
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_su2_many_sectors():
+    """Test SU(2) contraction with many spin sectors, stressing the shared pairing index."""
+    group = SU2Group()
+
+    # 8 spin sectors per contracted axis (2j = 0..14).
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(2, 3)))
+    idx_b = Index(Direction.IN, group, sectors=tuple(Sector(two_j, 2) for two_j in range(0, 16, 2)))
+    idx_c = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(2, 2)))
+
+    A = Tensor.random([idx_a, idx_b], seed=922, itags=["a", "b"])
+    B = Tensor.random([idx_b.flip(), idx_c], seed=923, itags=["b", "c"])
+    populate_random_weights(A, seed=924)
+    populate_random_weights(B, seed=925)
+
+    C = contract(A, B, axes=(1, 0))
+
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    for key, block in C.data.items():
+        assert block.ndim == 3
+        bridge = C.intw[key]
+        assert bridge.num_components == block.shape[-1]
+        assert bridge.num_components > 0
+        assert bridge.om_dimension > 0
+
+
+def test_contract_many_product_group_sectors_matches_manual_reference():
+    """Test contraction with many ProductGroup sectors (low hit rate) against a reference."""
+    group = ProductGroup([U1Group(), U1Group()])
+    charges = [(q1, q2) for q1 in range(-5, 5) for q2 in range(-3, 3)]  # 60 sectors
+
+    idx_a = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_mid_left = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_mid_right = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_c = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+
+    A = Tensor.random([idx_a, idx_mid_left], seed=912, itags=["a", "mid"])
+    B = Tensor.random([idx_mid_right, idx_c], seed=913, itags=["mid", "c"])
+
+    result = contract(A, B, axes=(1, 0))
+    assert_charge_neutral(result)
+
+    manual = {}
+    for (qa, qmid_left), block_a in A.data.items():
+        for (qmid_right, qc), block_b in B.data.items():
+            if group.equal(qmid_left, qmid_right):
+                out_key = (qa, qc)
+                contracted = torch.tensordot(block_a, block_b, dims=([1], [0]))
+                manual[out_key] = manual.get(out_key, 0) + contracted
+
+    assert set(result.data.keys()) == set(manual.keys())
+    for key in manual:
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_many_sectors_two_pairs_matches_manual_reference():
+    """Test two-index-pair contraction with many sectors per axis against a reference."""
+    group = U1Group()
+    charges = range(-6, 6)  # 12 sectors per contracted axis
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    idx_b_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_c = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_d_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+
+    idx_d_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_e = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+
+    A = Tensor.random([idx_a, idx_b_out, idx_c, idx_d_out], seed=914, itags=["a", "b", "c", "d"])
+    B = Tensor.random([idx_d_in, idx_e, idx_b_in, idx_f], seed=915, itags=["d", "e", "b", "f"])
+
+    result = contract(A, B)
+    assert set(result.itags) == {"a", "c", "e", "f"}
+    assert_charge_neutral(result)
+
+    manual = {}
+    for (qa, qb, qc, qd), block_a in A.data.items():
+        for (qd2, qe, qb2, qf), block_b in B.data.items():
+            if group.equal(qb, qb2) and group.equal(qd, qd2):
+                out_key = (qa, qc, qe, qf)
+                contracted = torch.einsum('abcd,debf->acef', block_a, block_b)
+                manual[out_key] = manual.get(out_key, 0) + contracted
+
+    assert set(result.data.keys()) == set(manual.keys())
+    for key in manual:
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_many_sectors_three_pairs_matches_manual_reference():
+    """Test three-index-pair contraction with many sectors per axis against a reference."""
+    group = U1Group()
+    charges = range(-4, 4)  # 8 sectors per contracted axis
+    idx_a = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_b_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_c_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_d = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    idx_e_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in charges))
+
+    idx_e_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_f = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_c_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_b_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in charges))
+    idx_g = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+
+    A = Tensor.random(
+        [idx_a, idx_b_out, idx_c_out, idx_d, idx_e_out], seed=916, itags=["a", "b", "c", "d", "e"]
+    )
+    B = Tensor.random(
+        [idx_e_in, idx_f, idx_c_in, idx_b_in, idx_g], seed=917, itags=["e", "f", "c", "b", "g"]
+    )
+
+    result = contract(A, B)
+    assert set(result.itags) == {"a", "d", "f", "g"}
+    assert_charge_neutral(result)
+
+    manual = {}
+    for (qa, qb, qc, qd, qe), block_a in A.data.items():
+        for (qe2, qf, qc2, qb2, qg), block_b in B.data.items():
+            if group.equal(qb, qb2) and group.equal(qc, qc2) and group.equal(qe, qe2):
+                out_key = (qa, qd, qf, qg)
+                contracted = torch.einsum('abcde,efcbg->adfg', block_a, block_b)
+                manual[out_key] = manual.get(out_key, 0) + contracted
+
+    assert set(result.data.keys()) == set(manual.keys())
+    for key in manual:
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_outer_product_zero_contracted_axes():
+    """Test contraction with an explicitly empty axes list (pure outer product)."""
+    group = U1Group()
+    idx_a1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_a2 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    idx_b1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(-1, 2)))
+    idx_b2 = Index(Direction.OUT, group, sectors=(Sector(0, 1), Sector(-1, 2)))
+
+    A = Tensor.random([idx_a1, idx_a2], seed=918, itags=["a1", "a2"])
+    B = Tensor.random([idx_b1, idx_b2], seed=919, itags=["b1", "b2"])
+
+    result = contract(A, B, axes=([], []))
+
+    assert list(result.itags) == ["a1", "a2", "b1", "b2"]
+
+    manual = {}
+    for keyA, block_a in A.data.items():
+        for keyB, block_b in B.data.items():
+            manual[keyA + keyB] = torch.tensordot(block_a, block_b, dims=([], []))
+
+    assert set(result.data.keys()) == set(manual.keys())
+    for key in manual:
+        assert torch.allclose(result.data[key], manual[key], rtol=1e-10, atol=1e-12)
+
+
+def test_contract_many_sectors_sparse_no_match():
+    """Test that many disjoint charge sectors yield an empty result with no spurious matches."""
+    group = U1Group()
+    idx_left = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    idx_mid_out = Index(Direction.OUT, group, sectors=tuple(Sector(q, 1) for q in range(0, 20)))
+    idx_mid_in = Index(Direction.IN, group, sectors=tuple(Sector(q, 1) for q in range(100, 120)))
+    idx_right = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+
+    A = Tensor.random([idx_left, idx_mid_out], seed=920, itags=["L", "M"])
+    B = Tensor.random([idx_mid_in, idx_right], seed=921, itags=["M", "R"])
+
+    result = contract(A, B)
+    assert result.data == {}
+
+
 # Trace tests
 
 def test_trace_automatic():
