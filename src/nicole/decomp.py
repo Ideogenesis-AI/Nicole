@@ -158,8 +158,9 @@ def svd(
     tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor, dict[str, Any]]
         When `requires_info=True`: 4-tuple `(U, S_blocks, Vh, info)` where `info`
         currently contains:
-        - "discarded_weight": float, sum of all singular values truncated away
-          across all charge sectors. Zero when `trunc` is None or nothing was cut.
+        - "discarded_weight": float in [0, 1), the relative sum of squared singular
+          values truncated away across all charge sectors, i.e. the fractional squared
+          2-norm loss ‖T − T_trunc‖²/‖T‖². Zero when `trunc` is None or nothing was cut.
     
     Raises
     ------
@@ -177,6 +178,15 @@ def svd(
     
     When both modes are specified, "thresh" is applied first (per-block filtering),
     then "nkeep" is applied globally to the remaining singular values.
+    
+    The reported "discarded_weight" is the relative squared weight
+    
+        discarded_weight = (Σ_q d_q Σ_dropped s²) / (Σ_q d_q Σ_all s²)
+    
+    where `d_q = irrep_dim(q)` is the number of degenerate Schmidt values each reduced
+    singular value stands for, so the denominator equals `T.norm()**2`. For Abelian
+    groups `d_q = 1`. The factor weights the reported value only, not the truncation
+    criteria: all `d_q` Schmidt vectors of a multiplet share the same singular value.
     
     Examples
     --------
@@ -270,7 +280,12 @@ def svd(
     # Perform SVD for each left charge sector by concatenating all blocks with same q_left
     svd_results: Dict[tuple, Tuple[torch.Tensor, torch.Tensor, Dict[BlockKey, torch.Tensor]]] = {}
     bond_charge_dims: Dict[tuple, int] = {}
-    _discarded_weight = 0.0  # accumulated as Python float
+    # Discarded weight bookkeeping (accumulated as Python floats). Both sums carry
+    # the irrep-dimension factor d_q, so their ratio is the physical squared 2-norm
+    # loss ‖T − T_trunc‖²/‖T‖²; see the Notes section of the docstring.
+    _discarded_sq = 0.0  # Σ_q d_q Σ_dropped s²
+    _total_sq = 0.0      # Σ_q d_q Σ_all s²
+    abelian = T.group.is_abelian
     
     for q_left, block_list in blocks_by_left_charge.items():
         # Concatenate all matrices with the same left charge horizontally
@@ -280,12 +295,20 @@ def svd(
         # Perform single SVD on concatenated matrix
         U, s, Vh = torch.linalg.svd(concatenated_mat, full_matrices=False)
         
+        if requires_info:
+            # Multiplicity of this sector in the full state space: each reduced singular
+            # value stands for d_q degenerate full-space Schmidt values.
+            mult = 1.0 if abelian else float(T.group.irrep_dim(q_left))
+            # The normalization denominator needs the untruncated spectrum, so
+            # accumulate it here, before any truncation mask is applied below.
+            _total_sq += mult * float((s ** 2).sum())
+        
         # Apply per-block truncation for thresh mode
         if trunc is not None and "thresh" in trunc:
             keep_mask = s >= trunc["thresh"]
             # Accumulate discarded weight if info is requested
             if requires_info:
-                _discarded_weight += float(s[~keep_mask].sum())
+                _discarded_sq += mult * float((s[~keep_mask] ** 2).sum())
             # Apply truncation to U, s, and Vh
             U = U[:, keep_mask]
             s = s[keep_mask]
@@ -323,9 +346,12 @@ def svd(
         all_singular_values.sort(key=lambda x: x[0], reverse=True)
         keep_set = set((q, idx) for _, q, idx in all_singular_values[:trunc["nkeep"]])
         
-        # Accumulate discarded weight if info is requested
+        # Accumulate discarded weight if info is requested. The per-sector multiplicity
+        # is recovered from the charge stored alongside each singular value.
         if requires_info:
-            _discarded_weight += sum(float(val) for val, _, _ in all_singular_values[trunc["nkeep"]:])
+            for val, q, _ in all_singular_values[trunc["nkeep"]:]:
+                mult = 1.0 if abelian else float(T.group.irrep_dim(q))
+                _discarded_sq += mult * float(val) ** 2
         
         # Apply truncation to each block
         new_svd_results = {}
@@ -434,7 +460,10 @@ def svd(
     
     # Special pass: return U, S, and Vh tensors with info
     if requires_info:
-        info: Dict[str, Any] = {"discarded_weight": _discarded_weight}
+        # An identically-zero tensor has no spectrum to lose, so report 0
+        # rather than dividing by zero.
+        dw = _discarded_sq / _total_sq if _total_sq > 0.0 else 0.0
+        info: Dict[str, Any] = {"discarded_weight": dw}
         return U_tensor, S_blocks, Vh_tensor, info
     
     # Regular pass: return U, S, and Vh tensors without info
