@@ -16,7 +16,8 @@ description = "Nicole: a symmetry-aware tensor library"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Changkai Zhang", email = "changkai.zhang@lmu.de" }]
+authors = [{ name = "Changkai Zhang", email = "c.zhang@ideogenesis.ai" }]
+maintainers = [{ name = "Ideogenesis AI", email = "developer@ideogenesis.ai" }]
 keywords = ["tensor", "symmetry", "quantum", "pytorch", "block-sparse",
   "abelian", "non-abelian"]
 classifiers = [
