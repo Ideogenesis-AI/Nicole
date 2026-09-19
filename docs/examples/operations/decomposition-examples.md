@@ -124,11 +124,11 @@ for key, s_values in S_dict.items():
     print(f"  Ratio: {s_values[0] / s_values[-1]:.2e}")
 ```
 
-To monitor truncation loss, pass `requires_info=True`:
+To monitor truncation loss, pass `requires_info=True`. The reported discarded weight is relative and squared: it is the fraction of the squared norm lost by the truncation, so `1e-8` means the truncated tensor differs from the original by a relative 2-norm error of `1e-4`.
 
 ```python exec="1" session="decomposition" result="console" idprefix="" source="material-block"
 U_sv, S_dict, Vh_sv, info = svd(T, axis=0, trunc={"nkeep": 2}, requires_info=True)
-print(f"Discarded weight: {info['discarded_weight']:.4f}")
+print(f"Discarded weight: {info['discarded_weight']:.4e}")
 ```
 
 ## QR Decomposition

@@ -632,7 +632,7 @@ def test_svd_info_no_truncation():
 
 
 def test_svd_info_nkeep():
-    """info["discarded_weight"] equals sum of singular values dropped by nkeep."""
+    """info["discarded_weight"] is the relative squared weight dropped by nkeep."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
@@ -641,18 +641,18 @@ def test_svd_info_nkeep():
 
     # Full SVD to get ground-truth singular values
     _, S_full, _ = svd(T, axis=0)
-    full_sum = sum(float(s.sum()) for s in S_full.values())
+    full_sq = sum(float((s ** 2).sum()) for s in S_full.values())
 
     # Truncated SVD with info
     _, S_trunc, _, info = svd(T, axis=0, trunc={"nkeep": 4}, requires_info=True)
-    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+    kept_sq = sum(float((s ** 2).sum()) for s in S_trunc.values())
 
-    expected_discarded = full_sum - kept_sum
+    expected_discarded = (full_sq - kept_sq) / full_sq
     assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
 
 
 def test_svd_info_thresh():
-    """info["discarded_weight"] equals sum of singular values below threshold."""
+    """info["discarded_weight"] is the relative squared weight below the threshold."""
     group = U1Group()
     idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 8),))
     idx2 = Index(Direction.IN, group, sectors=(Sector(0, 8),))
@@ -662,13 +662,13 @@ def test_svd_info_thresh():
 
     # Full SVD to get ground-truth singular values
     _, S_full, _ = svd(T, axis=0)
-    full_sum = sum(float(s.sum()) for s in S_full.values())
+    full_sq = sum(float((s ** 2).sum()) for s in S_full.values())
 
     # Truncated SVD with info
     _, S_trunc, _, info = svd(T, axis=0, trunc={"thresh": threshold}, requires_info=True)
-    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+    kept_sq = sum(float((s ** 2).sum()) for s in S_trunc.values())
 
-    expected_discarded = full_sum - kept_sum
+    expected_discarded = (full_sq - kept_sq) / full_sq
     assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
 
 
@@ -682,13 +682,13 @@ def test_svd_info_combined():
 
     # Full SVD for reference
     _, S_full, _ = svd(T, axis=0)
-    full_sum = sum(float(s.sum()) for s in S_full.values())
+    full_sq = sum(float((s ** 2).sum()) for s in S_full.values())
 
     # Combined truncation with info
     _, S_trunc, _, info = svd(T, axis=0, trunc={"thresh": 0.3, "nkeep": 4}, requires_info=True)
-    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+    kept_sq = sum(float((s ** 2).sum()) for s in S_trunc.values())
 
-    expected_discarded = full_sum - kept_sum
+    expected_discarded = (full_sq - kept_sq) / full_sq
     assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
 
 
@@ -702,13 +702,13 @@ def test_svd_info_multiblock():
 
     # Full SVD for reference
     _, S_full, _ = svd(T, axis=0)
-    full_sum = sum(float(s.sum()) for s in S_full.values())
+    full_sq = sum(float((s ** 2).sum()) for s in S_full.values())
 
     # Truncate globally across multiple blocks
     _, S_trunc, _, info = svd(T, axis=0, trunc={"nkeep": 5}, requires_info=True)
-    kept_sum = sum(float(s.sum()) for s in S_trunc.values())
+    kept_sq = sum(float((s ** 2).sum()) for s in S_trunc.values())
 
-    expected_discarded = full_sum - kept_sum
+    expected_discarded = (full_sq - kept_sq) / full_sq
     assert math.isclose(info["discarded_weight"], expected_discarded, rel_tol=1e-5)
     assert info["discarded_weight"] > 0.0
 
@@ -725,6 +725,35 @@ def test_svd_info_nothing_truncated():
     _, _, _, info = svd(T, axis=0, trunc={"nkeep": 100}, requires_info=True)
 
     assert info["discarded_weight"] == 0.0
+
+
+def test_svd_info_discarded_weight_bounded():
+    """info["discarded_weight"] lies in [0, 1) as a relative quantity."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6), Sector(1, 6)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 6), Sector(1, 6)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=77)
+    _, _, _, info = svd(T, axis=0, trunc={"nkeep": 3}, requires_info=True)
+
+    assert 0.0 <= info["discarded_weight"] < 1.0
+
+
+def test_svd_info_matches_reconstruction_norm():
+    """info["discarded_weight"] equals 1 - ‖T_trunc‖²/‖T‖², the definition itself."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 6), Sector(1, 5)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 5), Sector(1, 6)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=88)
+    _, _, _, info = svd(T, axis=0, trunc={"nkeep": 4}, requires_info=True)
+
+    # Rebuild the truncated tensor and measure the norm it actually retains.
+    U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 4})
+    T_trunc = contract(U, contract(S_tensor, Vh))
+
+    expected = 1.0 - T_trunc.norm() ** 2 / T.norm() ** 2
+    assert math.isclose(info["discarded_weight"], expected, rel_tol=1e-5)
 
 
 # High-order tensor tests
@@ -1173,6 +1202,31 @@ def test_svd_su2_truncation_nkeep_s_blocks_3d():
     for key, block in S_tensor.data.items():
         assert block.ndim == 3, f"S block {key} must be 3D for SU(2)"
         assert block.shape[-1] == 1, f"S block {key} trailing dim must be 1"
+
+
+def test_svd_su2_discarded_weight_multiplicity():
+    """SU(2) discarded weight carries the irrep-dimension factor of each multiplet."""
+    T = _make_su2_3rd_order(seed=53)
+    group = T.group
+
+    # Each reduced singular value stands for irrep_dim(q) degenerate full-space Schmidt
+    # values, so the multiplicity-weighted spectrum must reproduce the tensor norm.
+    _, S_full, _ = svd(T, axis=0)
+    weighted_sq = sum(
+        group.irrep_dim(key[0]) * float((s ** 2).sum()) for key, s in S_full.items()
+    )
+    assert math.isclose(weighted_sq, T.norm() ** 2, rel_tol=1e-8)
+
+    # With the same weighting in the numerator, the reported value is the physical
+    # fractional norm loss.
+    _, _, _, info = svd(T, axis=0, trunc={"nkeep": 3}, requires_info=True)
+    assert info["discarded_weight"] > 0.0
+
+    U, S_tensor, Vh = decomp(T, axes=0, mode="SVD", trunc={"nkeep": 3})
+    T_trunc = contract(U, contract(S_tensor, Vh))
+
+    expected = 1.0 - T_trunc.norm() ** 2 / T.norm() ** 2
+    assert math.isclose(info["discarded_weight"], expected, rel_tol=1e-5)
 
 
 def test_svd_su2_charge_neutral():
