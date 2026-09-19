@@ -2,6 +2,85 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.4.1] - 2026-09-20
+
+**Relative Squared Discarded Weight in SVD**
+
+Redefines the `"discarded_weight"` diagnostic reported by
+`svd(..., requires_info=True)`. It was previously the raw sum of truncated
+singular values; it is now the relative squared weight
+`‖T − T_trunc‖²/‖T‖²`, the fractional squared 2-norm lost by truncation. For
+SU(2) tensors, each reduced singular value is weighted by the dimension of
+its irrep so that the reported value is the physical norm loss in the full
+state space. Package metadata is updated with new author and maintainer
+contact information. The `svd` signature and return structure are unchanged.
+
+### API Changes
+
+#### `"discarded_weight"` is now a Relative Squared Weight
+
+`info["discarded_weight"]` is now defined as
+`(Σ_q d_q Σ_dropped s²) / (Σ_q d_q Σ_all s²)`, where `d_q = irrep_dim(q)` is
+the multiplicity of left charge sector `q` in the full state space. The
+denominator equals `T.norm()**2`, so the value lies in `[0, 1)` and equals
+`1 − ‖T_trunc‖²/‖T‖²`. For Abelian groups `d_q = 1`. The multiplicity factor
+weights the reported value only and does not enter the truncation criteria.
+An identically-zero tensor reports `0.0`.
+
+#### Package Metadata
+
+The author email in `pyproject.toml` is updated to `c.zhang@ideogenesis.ai`,
+and a `maintainers` entry for `Ideogenesis AI <developer@ideogenesis.ai>` is
+added.
+
+### Documentation
+
+- `docs/api/decomposition/svd.md` states the `[0, 1)` range and the
+  `‖T − T_trunc‖²/‖T‖²` definition, and adds a note on the irrep-dimension
+  factor for generic symmetry groups
+- `docs/examples/operations/decomposition-examples.md` explains that the
+  weight is relative and squared, with a worked interpretation of `1e-8` as a
+  relative 2-norm error of `1e-4`
+- The `svd` docstring gains a Notes paragraph giving the formula and the role
+  of `d_q`
+- The documentation hero image is refreshed
+
+### Test Suite (1635 tests)
+
+- **1625 tests pass**, 10 skipped (CUDA-only tests on a CUDA-less CI runner)
+- 5 existing `info` tests in `tests/operations/test_factorize.py` are updated
+  to assert the relative squared weight against the full and truncated
+  `S_dict` spectra
+- 3 new tests in `tests/operations/test_factorize.py`: bounded range
+  `[0, 1)`, agreement with `1 − ‖T_trunc‖²/‖T‖²` from a reconstructed
+  `U · S · Vh`, and the SU(2) multiplicity weighting reproducing
+  `T.norm()**2` and the reconstruction norm loss
+
+### Statistics
+
+- **8 commits** since v0.4.0
+- **6 files changed**: 111 insertions, 26 deletions
+- Source module touched: `src/nicole/decomp.py`
+- Test module touched: `tests/operations/test_factorize.py`
+- Documentation touched: `docs/api/decomposition/svd.md`,
+  `docs/examples/operations/decomposition-examples.md`,
+  `docs/images/hero.png`
+- Metadata touched: `pyproject.toml`
+
+### Compatibility
+
+**Breaking Changes:** The numerical meaning of `info["discarded_weight"]`
+returned by `svd(..., requires_info=True)` has changed; absolute thresholds
+calibrated to the old sum-of-singular-values definition must be recalibrated
+to the relative squared scale in `[0, 1)`. The `svd` signature, return tuple,
+`info` keys, and all truncation behavior are unchanged, and `U`, `S_dict`,
+and `Vh` are bit-for-bit identical to v0.4.0. Calls without
+`requires_info=True` are unaffected.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.4.0] - 2026-07-15
 
 **Entering Beta Stage**
@@ -1104,6 +1183,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.4.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.0
 [0.3.7]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.7
 [0.3.6]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.6
