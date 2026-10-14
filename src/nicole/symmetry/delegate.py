@@ -34,6 +34,7 @@ contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional, Sequence, Tuple, Union
 
 import torch
@@ -562,6 +563,54 @@ class Bridge:
             weights[0, 0] = 1.0
         
         return Bridge(cgspec, weights)
+
+
+# --- Canonical Weights ---
+
+@lru_cache(maxsize=1024)
+def canonical_bridge(
+    cgspec: yuzuha.CGSpec,
+    value: float,
+    num_components: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> Bridge:
+    """Return a shared Bridge whose every weight equals `value`.
+
+    Canonical weights are fixed by the coupling tree rather than by the block
+    data, so one Bridge serves every block and every tensor with the same key.
+    Repeated calls return the identical object, which is sound because `Bridge`
+    is frozen, but it does mean the weights must never be written to in place.
+    Use `Bridge.clone` where private storage is needed.
+
+    Parameters
+    ----------
+    cgspec : yuzuha.CGSpec
+        Coupling specification, which fixes the number of weight columns.
+    value : float
+        Value given to every weight entry, usually `sqrt(irrep_dim(q))`.
+    num_components : int
+        Number of weight rows, matching the trailing component axis of the block.
+    dtype : torch.dtype
+        Data type of the weight matrix.
+    device : torch.device
+        Device holding the weight matrix.
+
+    Returns
+    -------
+    Bridge
+        Shared Bridge carrying the requested weights.
+
+    Examples
+    --------
+    >>> bridge = canonical_bridge(cgspec, 2.0 ** 0.5, 1, torch.float64, torch.device('cpu'))
+    >>> canonical_bridge(cgspec, 2.0 ** 0.5, 1, torch.float64, torch.device('cpu')) is bridge
+    True
+    """
+    weights = torch.full(
+        (num_components, cgspec.om_dimension()), value, dtype=dtype, device=device
+    )
+    return Bridge(cgspec=cgspec, weights=weights)
 
 
 # --- Serialization ---
