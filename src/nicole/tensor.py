@@ -27,6 +27,7 @@ charge conservation dictated by the index metadata.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import sqrt
 from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional
 
 import torch
@@ -1388,6 +1389,7 @@ class Tensor:
             return
 
         group = self.indices[0].group
+        dtype, device = self.dtype, self.device
         _sp_eps = torch.finfo(torch.float32).eps
 
         if len(self.indices) == 2:
@@ -1397,17 +1399,15 @@ class Tensor:
                 if bridge is None:
                     continue
 
-                q = key[0]
-                target = torch.sqrt(
-                    torch.tensor(group.irrep_dim(q), dtype=self.dtype, device=self.device)
-                )
+                # Use sqrt(irrep_dim(q)) as the target weight.
+                target = sqrt(group.irrep_dim(key[0]))
+                # Compute the factor to normalize the weight to the target.
                 factors = bridge.weights[:, 0] / target         # (k,) signed ratio
-                # Rebuild the Bridge rather than writing into its weights:
-                # the weight storage can be shared with another tensor, and an
-                # in-place write would also reject a dtype change.
-                self.intw[key] = dg.Bridge(
-                    cgspec=bridge.cgspec,
-                    weights=torch.ones_like(bridge.weights) * target,
+                # Take a shared canonical Bridge rather than writing into this
+                # one: the weight storage can be shared with another tensor, and
+                # an in-place write would also reject a dtype change.
+                self.intw[key] = dg.canonical_bridge(
+                    bridge.cgspec, target, bridge.num_components, dtype, device
                 )
                 self.data[key] = arr * factors                  # (..., k) * (k,)
         else:
