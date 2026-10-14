@@ -35,6 +35,7 @@ from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
 from .typing import normalize_dtype_for_device
+from .typing import real_dtype_for
 from .symmetry import SymmetryGroup
 from .symmetry import delegate as dg
 
@@ -97,6 +98,10 @@ class Tensor:
         In-place: Remove sectors from each index that do not appear in any block.
     trim_zero_blocks()
         In-place: Remove blocks whose magnitude is negligible relative to the norm.
+    real
+        Property returning the real part as a real-dtype tensor.
+    imag
+        Property returning the imaginary part as a real-dtype tensor.
     check_dtype()
         Verify that every block and intertwiner weight matches `dtype`.
     device
@@ -538,6 +543,65 @@ class Tensor:
                 f"Tensor declares dtype {self.dtype} but carries "
                 f"{len(offenders)} disagreeing entries: {', '.join(offenders)}"
             )
+
+    def _split_complex(self, part: str) -> Tensor:
+        """Return the real or imaginary part of this tensor as a real tensor."""
+        real_dtype = real_dtype_for(self.dtype)
+
+        if self.intw is not None and self.dtype.is_complex:
+            # A block is stored as sum_c data[..., c] * weights[c, :], whose
+            # real part is Re(R)Re(W) - Im(R)Im(W): two component terms, where
+            # the split below writes the first one alone. Only a hand-built
+            # Bridge reaches this, as every symbol yuzuha produces is real.
+            for key, bridge in self.intw.items():
+                if torch.any(bridge.weights.imag != 0):
+                    raise ValueError(
+                        f"Intertwiner weights for block {key} have a non-zero "
+                        "imaginary part, which the single-component split used "
+                        "here cannot represent"
+                    )
+
+        if part == 'real':
+            data = {k: v.real.contiguous() for k, v in self.data.items()}
+        elif self.dtype.is_complex:
+            data = {k: v.imag.contiguous() for k, v in self.data.items()}
+        else:
+            # A real tensor has a vanishing imaginary part, as in NumPy.
+            data = {k: torch.zeros_like(v) for k, v in self.data.items()}
+
+        # Demote the weights through `.real` rather than leaving it to the
+        # constructor, whose `.to()` warns about discarding an imaginary part
+        # that the check above has already established to be zero.
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            intw = {
+                k: dg.Bridge(cgspec=b.cgspec, weights=b.weights.real.contiguous())
+                for k, b in self.intw.items()
+            } if self.dtype.is_complex else dict(self.intw)
+
+        return Tensor(
+            indices=self.indices, itags=self.itags, data=data, intw=intw,
+            dtype=real_dtype, label=self.label,
+        )
+
+    @property
+    def real(self) -> Tensor:
+        """Real part of this tensor, as a real-dtype tensor.
+
+        A real tensor is returned unchanged, matching `torch.Tensor.real`.
+        """
+        if not self.dtype.is_complex:
+            return self
+        return self._split_complex('real')
+
+    @property
+    def imag(self) -> Tensor:
+        """Imaginary part of this tensor, as a real-dtype tensor.
+
+        Unlike `torch.Tensor.imag`, which rejects a real input, a real tensor
+        yields zeros, following NumPy.
+        """
+        return self._split_complex('imag')
 
     # ------------------------------------------------------------
     #   Device management: cpu, cuda, mps
