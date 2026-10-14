@@ -107,7 +107,7 @@ class Tensor:
     device
         Property returning the device where tensor blocks are stored.
     to()
-        Move tensor to specified device (CPU, CUDA, MPS, etc.).
+        Move tensor to specified device (CPU, CUDA, MPS, etc.), and cast its dtype.
     cpu()
         Move tensor to CPU.
     cuda()
@@ -615,30 +615,63 @@ class Tensor:
         # All blocks must be on same device
         return next(iter(self.data.values())).device
     
-    def to(self, device: Union[str, torch.device]) -> Tensor:
-        """Move tensor to specified device.
+    def to(self, device: Optional[Union[str, torch.device]] = None,
+           dtype: Optional[torch.dtype] = None) -> Tensor:
+        """Move tensor to a specified device and optionally cast its dtype.
         
         Parameters
         ----------
-        device : str or torch.device
-            Target device ('cpu', 'cuda', 'mps', etc.)
+        device : str or torch.device, optional
+            Target device ('cpu', 'cuda', 'mps', etc.). If None, the tensor
+            stays where it is.
+        dtype : torch.dtype, optional
+            Target dtype, applied to the dense blocks and the intertwiner
+            weights alike. If None, the current dtype is preserved, subject to
+            the device normalization below.
             
         Returns
         -------
         Tensor
-            New tensor on the specified device
+            New tensor on the specified device, or self if neither the device
+            nor the dtype changes.
+
+        Raises
+        ------
+        ValueError
+            If `dtype` is real and the tensor is complex. Discarding an
+            imaginary part is never implicit; use `real` or `imag` to say
+            which part is wanted.
         
         Notes
         -----
         MPS (Apple Silicon) doesn't support float64/complex128. If moving a tensor with
         these dtypes to MPS, they will be automatically downgraded to float32/complex64.
+
+        Examples
+        --------
+        >>> state = Tensor.random([idx, idx.flip()], itags=["a", "b"])
+        >>> state.to(dtype=torch.complex128).dtype
+        torch.complex128
         """
-        device = torch.device(device)
-        if device == self.device:
+        if dtype is not None and self.dtype.is_complex and not dtype.is_complex:
+            raise ValueError(
+                f"Casting {self.dtype} to {dtype} would discard the imaginary "
+                "part; use .real or .imag to select one explicitly"
+            )
+
+        # Settle a pure cast before touching `self.device`, whose every access
+        # goes through torch's default-device mode: an idempotent promotion is
+        # a common defensive call and should stay close to free.
+        if device is None and (dtype is None or dtype is self.dtype):
             return self
+
+        device = self.device if device is None else torch.device(device)
         
         # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
-        new_dtype = normalize_dtype_for_device(self.dtype, device)
+        new_dtype = normalize_dtype_for_device(self.dtype if dtype is None else dtype, device)
+        
+        if device == self.device and new_dtype is self.dtype:
+            return self
         
         if new_dtype != self.dtype:
             # Need to convert dtype as well as device
