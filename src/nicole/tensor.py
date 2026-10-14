@@ -1402,7 +1402,13 @@ class Tensor:
                     torch.tensor(group.irrep_dim(q), dtype=self.dtype, device=self.device)
                 )
                 factors = bridge.weights[:, 0] / target         # (k,) signed ratio
-                bridge.weights[:] = target                      # all rows → +target
+                # Rebuild the Bridge rather than writing into its weights:
+                # the weight storage can be shared with another tensor, and an
+                # in-place write would also reject a dtype change.
+                self.intw[key] = dg.Bridge(
+                    cgspec=bridge.cgspec,
+                    weights=torch.ones_like(bridge.weights) * target,
+                )
                 self.data[key] = arr * factors                  # (..., k) * (k,)
         else:
             # Higher-order: row-normalize Bridge weight matrix.
@@ -1414,7 +1420,10 @@ class Tensor:
 
                 norms = bridge.weights.norm(dim=1)          # (k,)
                 safe_norms = norms.clamp(min=1e-12)
-                bridge.weights[:] = bridge.weights / safe_norms[:, None]
+                self.intw[key] = dg.Bridge(
+                    cgspec=bridge.cgspec,
+                    weights=bridge.weights / safe_norms[:, None],
+                )
                 self.data[key] = arr * norms                # (..., k) * (k,)
 
         # Remove linearly dependent components after normalization so the SVD
