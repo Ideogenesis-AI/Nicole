@@ -126,21 +126,26 @@ class Bridge:
         if not isinstance(self.weights, torch.Tensor):
             raise TypeError(f"weights must be a torch.Tensor, got {type(self.weights)}")
         
-        if self.weights.ndim != 2:
+        # Read the shape once rather than reaching for `ndim` and `shape`
+        # separately: Bridges are built per block in inner loops, and every
+        # tensor attribute access passes through torch's default-device mode.
+        shape = self.weights.shape
+        
+        if len(shape) != 2:
             raise ValueError(
-                f"weights must be a 2D tensor, got shape {self.weights.shape}"
+                f"weights must be a 2D tensor, got shape {shape}"
             )
         
-        if self.weights.shape[0] < 1:
+        if shape[0] < 1:
             raise ValueError(
-                f"weights must have at least 1 component (row), got shape {self.weights.shape}"
+                f"weights must have at least 1 component (row), got shape {shape}"
             )
         
         om_dim = self.cgspec.om_dimension()
-        if self.weights.shape[1] != om_dim:
+        if shape[1] != om_dim:
             raise ValueError(
                 f"weights shape[1] must match OM dimension {om_dim}, "
-                f"got shape {self.weights.shape}"
+                f"got shape {shape}"
             )
 
     def __eq__(self, other: object) -> bool:
