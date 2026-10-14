@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Hashable, Union
+from typing import Dict, Hashable, Union
 
 import torch
 
@@ -70,6 +70,66 @@ class Sector:
         """Validate that the sector has a strictly positive dimension."""
         if self.dim <= 0:
             raise ValueError("Sector dimension must be positive")
+
+
+# Real/complex dtype pairings, used to decide the dtype of an operation
+# without asking torch. `torch.result_type` answers the same question but
+# costs around 400 ns per call against roughly 20 ns for a dict lookup, which
+# is a measurable fraction of an elementary tensor operation.
+_COMPLEX_OF: Dict[torch.dtype, torch.dtype] = {
+    torch.float16: torch.complex32,
+    torch.bfloat16: torch.complex64,
+    torch.float32: torch.complex64,
+    torch.float64: torch.complex128,
+    torch.complex32: torch.complex32,
+    torch.complex64: torch.complex64,
+    torch.complex128: torch.complex128,
+}
+
+_REAL_OF: Dict[torch.dtype, torch.dtype] = {
+    torch.complex32: torch.float16,
+    torch.complex64: torch.float32,
+    torch.complex128: torch.float64,
+}
+
+
+def complex_dtype_for(dtype: torch.dtype) -> torch.dtype:
+    """Return the complex dtype that pairs with `dtype`.
+
+    A complex dtype is returned unchanged. Integer and boolean dtypes have no
+    natural complex counterpart of the same width and map to `complex128`,
+    matching how torch promotes them against a Python complex scalar.
+
+    Parameters
+    ----
+    dtype:
+        Real or complex dtype to promote.
+
+    Returns
+    ----
+    torch.dtype
+        Complex dtype of the corresponding precision.
+    """
+    return _COMPLEX_OF.get(dtype, torch.complex128)
+
+
+def real_dtype_for(dtype: torch.dtype) -> torch.dtype:
+    """Return the real dtype that pairs with `dtype`.
+
+    A real dtype is returned unchanged, so this is safe to apply to any dtype
+    when only the real component's precision matters.
+
+    Parameters
+    ----
+    dtype:
+        Real or complex dtype to demote.
+
+    Returns
+    ----
+    torch.dtype
+        Real dtype of the corresponding precision.
+    """
+    return _REAL_OF.get(dtype, dtype)
 
 
 def normalize_dtype_for_device(dtype: torch.dtype, device: Union[str, torch.device]) -> torch.dtype:
