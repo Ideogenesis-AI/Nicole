@@ -573,10 +573,11 @@ def test_scalar_division_consistent_with_multiplication():
 def test_scalar_division_scalar_tensor():
     """Test division of a 0D scalar tensor."""
     group = U1Group()
-    s = Tensor(indices=(), itags=(), data={(): torch.tensor(6.0)}, dtype=torch.float64)
+    s = Tensor(indices=(), itags=(), data={(): torch.tensor(6.0, dtype=torch.float64)},
+               dtype=torch.float64)
 
     t = s / 3.0
-    assert torch.allclose(t.data[()], torch.tensor(2.0))
+    assert torch.allclose(t.data[()], torch.tensor(2.0, dtype=torch.float64))
 
 
 def test_scalar_division_su2_preserves_intw():
