@@ -175,15 +175,16 @@ class Bridge:
     
     def to(
         self, 
-        device: Union[str, torch.device], 
+        device: Optional[Union[str, torch.device]] = None, 
         dtype: Optional[torch.dtype] = None
     ) -> Bridge:
         """Move Bridge to a new device and optionally convert dtype.
         
         Parameters
         ----------
-        device : str or torch.device
-            Target device ('cpu', 'cuda', 'mps', etc.)
+        device : str or torch.device, optional
+            Target device ('cpu', 'cuda', 'mps', etc.).
+            If None, stays where it is.
         dtype : torch.dtype, optional
             Target dtype. If None, preserves current dtype.
         
@@ -199,8 +200,9 @@ class Bridge:
         >>> bridge_gpu = bridge.to('cuda')
         >>> bridge_gpu.device.type
         'cuda'
+        >>> bridge_complex = bridge.to(dtype=torch.complex128)
         """
-        device = torch.device(device)
+        device = self.device if device is None else torch.device(device)
         
         # Check if already on target device/dtype
         if dtype is None:
