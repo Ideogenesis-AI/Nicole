@@ -3390,9 +3390,9 @@ def test_trim_zero_blocks_negative_values():
     
     eps = torch.finfo(torch.float64).eps
     data = {
-        (-1, -1): torch.tensor([[-1.0, -0.5], [-0.3, -0.8]]),  # All negative, non-zero
-        (0, 0): torch.tensor([[-eps/2, -eps/3], [-eps/4, -eps/5]]),  # All negative, near-zero
-        (1, 1): torch.tensor([[0.7, 0.2], [0.4, 0.9]]),  # All positive, non-zero
+        (-1, -1): torch.tensor([[-1.0, -0.5], [-0.3, -0.8]], dtype=torch.float64),
+        (0, 0): torch.tensor([[-eps/2, -eps/3], [-eps/4, -eps/5]], dtype=torch.float64),
+        (1, 1): torch.tensor([[0.7, 0.2], [0.4, 0.9]], dtype=torch.float64),
     }
     
     tensor = Tensor(
@@ -3433,11 +3433,11 @@ def test_trim_zero_blocks_mixed_signs():
     eps = torch.finfo(torch.float64).eps
     data = {
         # Mixed signs with large magnitude - should be kept
-        (-1, -1): torch.tensor([[1.5, -2.3], [-0.8, 1.2]]),
+        (-1, -1): torch.tensor([[1.5, -2.3], [-0.8, 1.2]], dtype=torch.float64),
         # Mixed signs with tiny magnitude - should be removed
-        (0, 0): torch.tensor([[eps/2, -eps/3], [-eps/4, eps/5]]),
+        (0, 0): torch.tensor([[eps/2, -eps/3], [-eps/4, eps/5]], dtype=torch.float64),
         # Mixed signs with one large value - should be kept
-        (1, 1): torch.tensor([[eps/2, -eps/3], [2.0, -eps/5]]),
+        (1, 1): torch.tensor([[eps/2, -eps/3], [2.0, -eps/5]], dtype=torch.float64),
     }
     
     tensor = Tensor(
