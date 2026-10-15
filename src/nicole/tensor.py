@@ -1424,11 +1424,15 @@ class Tensor:
                 if bridge is None:
                     continue
 
-                norms = bridge.weights.norm(dim=1)          # (k,)
+                # Taking the moduli first leaves the norm unchanged and is what
+                # lets this run on MPS, which has no complex kernel for `norm`.
+                weights = bridge.weights
+                rows = weights.abs() if dtype.is_complex else weights
+                norms = rows.norm(dim=1)                        # (k,)
                 safe_norms = norms.clamp(min=1e-12)
                 self.intw[key] = dg.Bridge(
                     cgspec=bridge.cgspec,
-                    weights=bridge.weights / safe_norms[:, None],
+                    weights=weights / safe_norms[:, None],
                 )
                 self.data[key] = arr * norms                # (..., k) * (k,)
 
