@@ -985,6 +985,92 @@ def test_check_dtype_raises_on_disagreeing_weights():
         tensor.check_dtype()
 
 
+# real / imag tests
+
+def test_real_returns_self_for_real_tensor():
+    """Test that a real tensor is its own real part, as in torch."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=406, itags=["a", "b"])
+    
+    assert tensor.real is tensor
+
+
+def test_imag_is_zero_for_real_tensor():
+    """Test that a real tensor has a vanishing imaginary part, as in NumPy.
+
+    This is deliberately unlike torch.Tensor.imag, which rejects a real input.
+    """
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=407, itags=["a", "b"])
+    
+    imag = tensor.imag
+    
+    assert imag.dtype is torch.float64
+    for block in imag.data.values():
+        assert torch.all(block == 0)
+
+
+def test_real_imag_demote_dtype():
+    """Test that both parts come back at the real dtype of matching precision."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    for dtype, real_dtype in ((torch.complex128, torch.float64),
+                              (torch.complex64, torch.float32)):
+        tensor = Tensor.random([idx, idx.flip()], seed=408, itags=["a", "b"], dtype=dtype)
+        assert tensor.real.dtype is real_dtype
+        assert tensor.imag.dtype is real_dtype
+
+
+def test_real_imag_reconstruct_complex_tensor():
+    """Test that the two parts recombine into the original complex tensor."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=409, itags=["a", "b"],
+                           dtype=torch.complex128)
+    
+    rebuilt = tensor.real + tensor.imag * 1j
+    
+    assert rebuilt.dtype is torch.complex128
+    assert set(rebuilt.data.keys()) == set(tensor.data.keys())
+    for key in tensor.data:
+        assert torch.allclose(rebuilt.data[key], tensor.data[key])
+
+
+def test_real_imag_su2_keeps_intertwiner():
+    """Test that splitting a generic tensor carries a real-dtype Bridge along."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=410, itags=["a", "b"],
+                           dtype=torch.complex128)
+    
+    for part in (tensor.real, tensor.imag):
+        assert part.intw is not None
+        part.check_dtype()
+
+
+def test_real_imag_reject_complex_weights():
+    """Test that a hand-built complex-weighted Bridge is refused by the split.
+
+    The single-component split cannot represent Re(R)Re(W) - Im(R)Im(W), and
+    no yuzuha symbol produces such a weight, so this guards a hand-built one.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=411, itags=["a", "b"],
+                           dtype=torch.complex128)
+    assert tensor.intw is not None
+    
+    key = next(iter(tensor.intw))
+    bridge = tensor.intw[key]
+    tensor.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=bridge.weights + 1j)
+    
+    with pytest.raises(ValueError, match="imaginary part"):
+        _ = tensor.real
+
+
 # Serialize / deserialize tests
 
 def _assert_tensors_equal(a: Tensor, b: Tensor) -> None:
