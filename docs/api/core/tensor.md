@@ -54,7 +54,7 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 - **Autograd control**: Optional gradient tracking
 - **Immutable indices**: Index structure fixed at creation
 
-### Dtype
+### Data Types for Tensors
 
 A tensor's `dtype` covers the whole object: every dense block and, for
 non-Abelian tensors, every intertwiner weight matrix carries it. The default is
