@@ -28,7 +28,7 @@ charge conservation for a given block key.
 from __future__ import annotations
 
 from itertools import product
-from typing import Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Sequence, List, Tuple, Iterable, Mapping, Optional, Union
 
 import torch
 
@@ -240,7 +240,7 @@ class BlockSchema:
         bridge_b: Bridge,
         rtol: float = 1e-12,
         atol: float = 1e-15
-    ) -> Tuple[bool, float]:
+    ) -> Tuple[bool, Union[float, complex]]:
         """Check if two Bridge weight matrices are compatible for direct addition/subtraction.
         
         Parameters
@@ -256,10 +256,11 @@ class BlockSchema:
         -------
         compatible : bool
             True if weights are identical or collinear (can add without concatenation)
-        scale_factor : float
+        scale_factor : float or complex
             Scalar α such that weights_b ≈ α * weights_a.
             For identical weights, α = 1.0.
-            For collinear weights, α is the computed scale factor.
+            For collinear weights, α is the computed scale factor, which is
+            complex when the weights are.
             For incompatible weights, this value is unused.
         
         Notes
@@ -268,8 +269,10 @@ class BlockSchema:
         - Identical: same shape and match element-wise within tolerance (α = 1)
         - Collinear: num_components == 1 and weight vectors are parallel (α ≠ 1)
         
-        Collinearity uses squared cosine similarity: cos²(θ) = (w1·w2)² / (||w1||²·||w2||²).
-        If cos²(θ) ≈ 1, vectors are parallel, and α = (w1·w2) / (w1·w1).
+        Collinearity uses squared cosine similarity: cos²(θ) = |w1·w2|² / (||w1||²·||w2||²).
+        If cos²(θ) ≈ 1, vectors are parallel, and α = (w1·w2) / (w1·w1). For complex
+        weights the products are the conjugating inner product, so that weights
+        related by a pure phase count as collinear.
         """
         weights_a = bridge_a.weights
         weights_b = bridge_b.weights
@@ -295,13 +298,23 @@ class BlockSchema:
                     return (False, 1.0)
             
             # Compute cosine similarity
-            dot = torch.dot(wa_flat, wb_flat)
-            cos_theta_sq = (dot / (norm_a * norm_b)) ** 2
+            if weights_a.is_complex():
+                # Over the complex numbers collinearity needs the conjugating
+                # inner product and the modulus of the overlap: two weight
+                # vectors differing by a pure phase are collinear, which a
+                # plain dot product and an unsquared modulus would both miss.
+                dot = torch.vdot(wa_flat, wb_flat)
+                cos_theta_sq = (dot.abs() / (norm_a * norm_b)) ** 2
+                self_dot = torch.vdot(wa_flat, wa_flat)
+            else:
+                dot = torch.dot(wa_flat, wb_flat)
+                cos_theta_sq = (dot / (norm_a * norm_b)) ** 2
+                self_dot = torch.dot(wa_flat, wa_flat)
             
             # Check if parallel (|cos(θ)| ≈ 1)
             one = torch.tensor(1.0, dtype=cos_theta_sq.dtype, device=cos_theta_sq.device)
             if torch.allclose(cos_theta_sq, one, rtol=rtol, atol=atol):
-                scale = (dot / torch.dot(wa_flat, wa_flat)).item()
+                scale = (dot / self_dot).item()
                 return (True, scale)
         
         return (False, 1.0)
