@@ -29,7 +29,7 @@ from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
 from nicole import diag, identity, isometry
 from nicole.blocks import BlockSchema
 from nicole.symmetry import delegate as dg
-from ..utils import assert_blocks_equal, populate_random_weights
+from ..utils import assert_blocks_equal, assert_dtype_coherent, populate_random_weights
 
 
 def test_default_device_is_cpu():
@@ -170,8 +170,8 @@ def test_tensor_to_dtype_casts_intertwiner_weights():
     
     promoted = tensor.to(dtype=torch.complex128)
     
-    # check_dtype walks every block and every weight, which is the invariant here
-    promoted.check_dtype()
+    # Walk every block and every weight, which is the invariant here
+    assert_dtype_coherent(promoted)
     for bridge in promoted.intw.values():
         assert bridge.weights.dtype == torch.complex128
 
