@@ -43,9 +43,6 @@ from .symmetry import delegate as dg
 # Disable autograd by default for performance (tensor networks rarely need gradients)
 torch.set_grad_enabled(False)
 
-# Set default device to CPU (users can change via torch.set_default_device if needed)
-torch.set_default_device('cpu')
-
 
 @dataclass
 class Tensor:
