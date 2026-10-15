@@ -25,6 +25,8 @@ from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group,
 from nicole.symmetry.product import ProductGroup
 from nicole.decomp import svd, eig
 
+from ..utils import assert_dtype_coherent
+
 
 # =============================================================================
 #  Tests for diag function
@@ -115,7 +117,7 @@ def test_diag_casts_blocks_to_requested_dtype():
     assert S_diag.dtype == torch.float32
     for key, block in S_diag.data.items():
         assert block.dtype == torch.float32, f"Block {key} was left at {block.dtype}"
-    S_diag.check_dtype()
+    assert_dtype_coherent(S_diag)
 
 
 def test_diag_places_blocks_on_requested_device():
