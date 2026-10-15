@@ -880,12 +880,13 @@ def eig(
     D_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     # Choose dtype based on the solver used.
-    # eigh (is_hermitian=True) always returns real eigenvalues; infer the dtype directly
-    # from the first result block (avoids dependence on Nicole's Tensor.dtype API).
+    # eigh (is_hermitian=True) always returns real eigenvalues, but eigenvectors
+    # at the dtype of the input, so a complex Hermitian tensor keeps complex
+    # eigenvectors while its eigenvalues demote to the real counterpart.
     # eig  (is_hermitian=False) returns complex; promote to the corresponding complex dtype.
     if is_hermitian:
-        sample_eigvals = next(iter(eig_results.values()))[1] if eig_results else None
-        D_dtype = U_dtype = sample_eigvals.dtype if sample_eigvals is not None else T.dtype
+        U_dtype = T.dtype
+        D_dtype = real_dtype_for(T.dtype)
     else:
         D_dtype = U_dtype = torch.promote_types(T.dtype, torch.complex128)
     
