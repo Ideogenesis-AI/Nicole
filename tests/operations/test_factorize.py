@@ -477,6 +477,43 @@ def test_svd_complex_dtype():
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
+def test_svd_complex_singular_values_are_real():
+    """Test that a complex SVD stores its singular values at a real dtype.
+
+    Singular values are real even for a complex input, so forcing them complex
+    would waste both storage and arithmetic.
+    """
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], dtype=torch.complex128, itags=["a", "b"], seed=6)
+    
+    U, S_blocks, Vh = svd(T, 0)
+    
+    assert U.dtype is torch.complex128
+    assert Vh.dtype is torch.complex128
+    assert S_blocks
+    for key, block in S_blocks.items():
+        assert block.dtype is torch.float64, \
+            f"Expected float64 singular values, got {block.dtype} at {key}"
+        assert torch.all(block >= 0)
+
+
+def test_svd_complex64_singular_values_match_precision():
+    """Test that a complex64 input yields float32 singular values, not float64."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    T = Tensor.random([idx1, idx2], dtype=torch.complex64, itags=["a", "b"], seed=7)
+    
+    _, S_blocks, _ = svd(T, 0)
+    
+    for block in S_blocks.values():
+        assert block.dtype is torch.float32
+
+
 # Truncation tests
 
 def test_svd_returns_dict():
