@@ -23,6 +23,8 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group
+from nicole import contract
+from nicole.decomp import svd
 from nicole.symmetry.product import ProductGroup
 import nicole.symmetry.delegate as dg
 from ..utils import assert_blocks_equal, populate_random_weights
@@ -1421,3 +1423,70 @@ def test_subtraction_su2_4th_order_different_weights():
         phys_a = A.data[key].flatten(0, -2) @ A.intw[key].weights
         phys_b = B.data[key].flatten(0, -2) @ B.intw[key].weights
         assert torch.allclose(phys_c, phys_a - phys_b, rtol=1e-10, atol=1e-12)
+
+
+# Dtype invariant tests
+
+def _max_abs_imag_weight(tensor: Tensor) -> float:
+    """Return the largest imaginary part across a tensor's intertwiner weights."""
+    assert tensor.intw is not None
+    return max(bridge.weights.imag.abs().max().item() for bridge in tensor.intw.values())
+
+
+def test_intertwiner_weights_stay_real_through_operations():
+    """Test that intertwiner weight values are real whatever is done to a tensor.
+
+    Every weight descends from a Clebsch-Gordan coefficient, R-symbol, X-symbol
+    or Frobenius-Schur phase, none of which yuzuha computes in complex
+    arithmetic, and every operation combining weights is real-linear. Bridge.conj
+    and the unconjugated weight overlap in contract both rely on this, so the
+    imaginary part must be exactly zero rather than merely small.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx, idx.flip()], seed=501, itags=["a", "b"])
+    B = Tensor.random([idx, idx.flip()], seed=502, itags=["b", "c"])
+
+    complex_a = A * (1 + 0.5j)
+    assert complex_a.dtype is torch.complex128
+    assert _max_abs_imag_weight(complex_a) == 0.0
+
+    assert _max_abs_imag_weight(complex_a.conj()) == 0.0
+    assert _max_abs_imag_weight(complex_a + complex_a) == 0.0
+    assert _max_abs_imag_weight(contract(complex_a, B * (1 + 0.5j))) == 0.0
+
+    U, _, Vh = svd(complex_a, 1)
+    assert _max_abs_imag_weight(U) == 0.0
+    assert _max_abs_imag_weight(Vh) == 0.0
+
+    regularized = A * (1 + 0.5j)
+    regularized.regularize()
+    assert _max_abs_imag_weight(regularized) == 0.0
+
+
+def test_real_dtype_survives_every_operation():
+    """Test that nothing silently promotes a real tensor to complex."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx, idx.flip()], seed=503, itags=["a", "b"])
+    B = Tensor.random([idx, idx.flip()], seed=504, itags=["b", "c"])
+
+    assert (A + B).dtype is torch.float64
+    assert (A - B).dtype is torch.float64
+    assert (A * 2.0).dtype is torch.float64
+    assert (A / 2.0).dtype is torch.float64
+    assert (-A).dtype is torch.float64
+    assert A.conj().dtype is torch.float64
+    assert contract(A, B).dtype is torch.float64
+
+    # svd hands back S as a mapping of singular-value blocks, not a Tensor
+    U, S_blocks, Vh = svd(A, 1)
+    assert U.dtype is torch.float64
+    assert Vh.dtype is torch.float64
+    for block in S_blocks.values():
+        assert block.dtype is torch.float64
+
+    # An integer scalar must not widen the dtype either
+    assert (A * 2).dtype is torch.float64
