@@ -19,6 +19,8 @@
 """Tests for device management and GPU support."""
 
 import cmath
+import subprocess
+import sys
 
 import torch
 import pytest
@@ -43,6 +45,24 @@ def test_default_device_is_cpu():
     assert tensor.device == torch.device('cpu')
     for block in tensor.data.values():
         assert block.device == torch.device('cpu')
+
+
+def test_import_does_not_change_the_default_device():
+    """Test that importing nicole leaves the caller's default device alone.
+
+    Run in a subprocess, since the import under test has to happen after the
+    default device is set and nicole is long since imported here. The 'meta'
+    device stands in for a real accelerator so the check runs anywhere.
+    """
+    script = (
+        "import torch; torch.set_default_device('meta');"
+        "import nicole; print(torch.get_default_device())"
+    )
+    completed = subprocess.run(
+        [sys.executable, '-c', script],
+        capture_output=True, text=True, check=True,
+    )
+    assert completed.stdout.strip() == 'meta'
 
 
 def test_set_default_device():
