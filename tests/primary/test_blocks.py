@@ -18,6 +18,7 @@
 
 """Tests for BlockSchema utility class."""
 
+import cmath
 import math
 import torch
 import pytest
@@ -597,6 +598,70 @@ def test_bridge_collinear_zero_weights():
     
     # One zero, one non-zero
     compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_zero)
+    assert compatible is False
+
+
+def _multi_component_cgspec():
+    """Build a CGSpec with om_dimension > 1, so a phase test is not trivial."""
+    edges = [yuzuha.Edge.outgoing(yuzuha.Spin(1)) for _ in range(4)]
+    cgspec = yuzuha.CGSpec.from_edges(edges)
+    assert cgspec.om_dimension() > 1
+    return cgspec
+
+
+def test_bridge_collinear_complex_phase():
+    """Test that weights differing by a pure phase are collinear.
+
+    Over the complex numbers collinearity needs the conjugating inner product
+    and the modulus of the overlap. A plain dot product would report a
+    phase-shifted pair as non-collinear.
+    """
+    cgspec = _multi_component_cgspec()
+    om_dim = cgspec.om_dimension()
+    
+    weights_a = torch.randn(1, om_dim, dtype=torch.complex128)
+    phase = torch.exp(torch.tensor(1j * 0.7, dtype=torch.complex128))
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights_a)
+    bridge_b = dg.Bridge(cgspec=cgspec, weights=weights_a * phase)
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    assert compatible is True
+    # The exact complex factor is recovered, not just its modulus
+    assert isinstance(scale, complex)
+    assert cmath.isclose(scale, complex(phase), rel_tol=1e-9)
+
+
+def test_bridge_collinear_complex_scaled():
+    """Test that a complex scale factor is recovered exactly."""
+    cgspec = _multi_component_cgspec()
+    om_dim = cgspec.om_dimension()
+    
+    weights_a = torch.randn(1, om_dim, dtype=torch.complex128)
+    alpha = 2.5 - 1.25j
+    bridge_a = dg.Bridge(cgspec=cgspec, weights=weights_a)
+    bridge_b = dg.Bridge(cgspec=cgspec,
+                         weights=weights_a * torch.tensor(alpha, dtype=torch.complex128))
+    
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
+    assert compatible is True
+    assert cmath.isclose(scale, alpha, rel_tol=1e-9)
+
+
+def test_bridge_collinear_complex_not_collinear():
+    """Test that genuinely independent complex weights are rejected."""
+    cgspec = _multi_component_cgspec()
+    om_dim = cgspec.om_dimension()
+    
+    torch.manual_seed(77)
+    bridge_a = dg.Bridge(cgspec=cgspec,
+                         weights=torch.randn(1, om_dim, dtype=torch.complex128))
+    bridge_b = dg.Bridge(cgspec=cgspec,
+                         weights=torch.randn(1, om_dim, dtype=torch.complex128))
+    
+    compatible, _ = BlockSchema.bridge_collinear(bridge_a, bridge_b)
+    
     assert compatible is False
 
 
