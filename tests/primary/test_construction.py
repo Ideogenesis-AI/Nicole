@@ -629,6 +629,38 @@ def test_tensor_construction_complex64():
     assert tensor.data[(0, 0)].dtype == torch.complex64
 
 
+def test_tensor_dtype_sampled_from_blocks_when_omitted():
+    """Test that an omitted dtype is read off the blocks, not assumed real."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    blocks = {(0, 0): torch.zeros(2, 2, dtype=torch.complex128)}
+    
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data=blocks)
+    
+    assert tensor.dtype is torch.complex128
+
+
+def test_tensor_dtype_sampled_from_blocks_single_precision():
+    """Test that sampling reports the precision of the blocks, not just their kind."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    blocks = {(0, 0): torch.zeros(2, 2, dtype=torch.float32)}
+    
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data=blocks)
+    
+    assert tensor.dtype is torch.float32
+
+
+def test_tensor_dtype_defaults_to_float64_without_blocks():
+    """Test that a blockless tensor falls back to float64, there being nothing to sample."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    
+    tensor = Tensor(indices=(idx, idx.flip()), itags=("A", "B"), data={})
+    
+    assert tensor.dtype is torch.float64
+
+
 # ProductGroup integration tests
 
 def test_tensor_zeros_product_group_u1_u1():
