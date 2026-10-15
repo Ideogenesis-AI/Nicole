@@ -64,9 +64,9 @@ from .symmetry import delegate as dg
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
 
-    The isometry condition Vh @ Vh† = I requires W W^T = irrep_dim(q_left) · I,
+    The isometry condition Vh @ Vh† = I requires W W† = irrep_dim(q_left) · I,
     i.e. the weight matrix must be a scaled unitary with scale = sqrt(irrep_dim).
-    For each block, the weight matrix W is SVD-decomposed as W = U S Vhᵀ.
+    For each block, the weight matrix W is SVD-decomposed as W = U S Vh.
     The working copy carries:
 
         W_new  = sqrt(irrep_dim) · Vh[:k, :]   (orthonormal rows at canonical scale)
@@ -95,7 +95,7 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         q_left = key[left_axis]
         target = math.sqrt(group.irrep_dim(q_left))
 
-        # SVD of the weight matrix W = U S Vhᵀ.  Components whose singular
+        # SVD of the weight matrix W = U S Vh.  Components whose singular
         # values fall below cutoff are linearly dependent and are dropped.
         U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
         k = max(1, int((S >= cutoff).sum().item()))
@@ -108,7 +108,7 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         new_data[key] = (r_flat @ (U[:, :k] * S[:k]) / target).reshape(data.shape[:-1] + (k,))
 
         # New weights: W_new = target · Vh[:k, :].  Rows are orthonormal and
-        # scaled by target, so W_new @ W_new^T = target² · I, satisfying the
+        # scaled by target, so W_new @ W_new† = target² · I, satisfying the
         # isometry condition (see docstring).
         new_intw[key] = dg.Bridge(
             cgspec=bridge.cgspec,
