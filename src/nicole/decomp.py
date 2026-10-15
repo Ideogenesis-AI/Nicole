@@ -58,6 +58,7 @@ from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Direction, Sector
+from .typing import real_dtype_for
 from .symmetry import delegate as dg
 
 
@@ -387,9 +388,11 @@ def svd(
     S_blocks: Dict[BlockKey, torch.Tensor] = {}
     Vh_blocks: Dict[BlockKey, torch.Tensor] = {}
     
-    # Promote to appropriate dtype (float for real input, stays as-is for complex)
-    target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] \
-        else torch.promote_types(T.dtype, torch.float64)
+    # Singular values are real even for a complex tensor, so they are stored at
+    # the real dtype of matching precision. An integer dtype still has to widen.
+    real_dtype = real_dtype_for(T.dtype)
+    target_dtype = torch.promote_types(real_dtype, torch.float32) \
+        if real_dtype is torch.float32 else torch.promote_types(real_dtype, torch.float64)
     
     for q_left, (U, s, Vh_dict) in svd_results.items():
         # For U tensor: indices (left_index, bond_index)
