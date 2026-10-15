@@ -167,6 +167,26 @@ def test_eq_su2_different_intw():
     assert A != B
 
 
+def test_eq_different_dtype():
+    """Tensors holding the same values at different dtypes are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx.flip()], seed=42, itags=["a", "b"])
+    B = A.to(dtype=torch.complex128)
+    # Every imaginary part is zero, so only the dtype separates them
+    assert all(torch.equal(A.data[k], B.data[k].real) for k in A.data)
+    assert A != B
+
+
+def test_eq_different_precision():
+    """Tensors that differ only in floating-point precision are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+    A = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+    B = Tensor.zeros([idx, idx.flip()], dtype=torch.float32, itags=["a", "b"])
+    assert A != B
+
+
 # Addition tests
 
 def test_addition_simple():
