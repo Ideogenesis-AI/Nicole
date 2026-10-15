@@ -59,6 +59,7 @@ from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
+from .typing import normalize_dtype_for_device
 from .typing import promote_tensors
 from .symmetry import delegate as dg
 
@@ -819,6 +820,9 @@ def diag(
     if device is None:
         device = torch.get_default_device()
     device = torch.device(device)
+    
+    # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+    dtype = normalize_dtype_for_device(dtype, device)
     
     # Check if group is Abelian or generic (non-Abelian)
     group = bond_index.group
