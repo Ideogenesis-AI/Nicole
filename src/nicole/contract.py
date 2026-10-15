@@ -36,6 +36,7 @@ from .index import Index
 from .symmetry.delegate import compute_xsymbol, compute_rsymbol, Bridge
 from .tensor import Tensor
 from .typing import Charge, Direction
+from .typing import promote_tensors
 
 
 def _dir_weight(idx: Index, charge: Charge) -> Charge:
@@ -303,6 +304,11 @@ def contract(
         if A.indices[ia].group != B.indices[ib].group:
             raise ValueError("Contraction requires matching groups on paired indices")
 
+    # Bring both operands to a common dtype once. Promoting whole tensors rather
+    # than individual blocks also carries the intertwiner weights along, which a
+    # per-block cast cannot do, and keeps the block loop free of dtype work.
+    A, B = promote_tensors(A, B)
+
     # Identify the contracted axes.
     contracted_A = {ia for ia, _ in axes_list}
     contracted_B = {ib for _, ib in axes_list}
@@ -368,14 +374,6 @@ def contract(
                 # Non-Abelian (SU(2)): contract physical axes only, preserve component dimensions
                 # Block A: (...phys_A..., k_a), Block B: (...phys_B..., k_b)
                 # Contract ONLY physical axes, keeping component dimensions separate
-                
-                # Promote dtype if needed (tensordot requires matching dtypes)
-                dtype_result = torch.promote_types(arrA.dtype, arrB.dtype)
-                if arrA.dtype != dtype_result:
-                    arrA = arrA.to(dtype_result)
-                if arrB.dtype != dtype_result:
-                    arrB = arrB.to(dtype_result)
-                
                 res_phys = torch.tensordot(arrA, arrB, dims=(axesA, axesB))
                 
                 # After tensordot, the component dimensions are scattered in the result
@@ -396,8 +394,8 @@ def contract(
                     # align_perm = axesB ∘ axesA⁻¹ misaligns the two CG trees; we correct
                     # this by applying the corresponding R-symbol to bridge_b's weights
                     # before forming the overlap matrix.
-                    weights_a = bridge_a.weights.to(dtype_result)
-                    weights_b = bridge_b.weights.to(dtype_result)
+                    weights_a = bridge_a.weights
+                    weights_b = bridge_b.weights
 
                     # Compute align_perm such that align_perm[axesA[k]] = axesB[k]:
                     # this maps B's CG-tree edge slots into the same contracted
@@ -409,7 +407,7 @@ def contract(
                     # Apply R-symbol only when align_perm is non-trivial
                     if align_perm != list(range(len(axesA))):
                         r_b, _ = compute_rsymbol(bridge_b, align_perm)
-                        weights_b = weights_b @ r_b.to(dtype_result)
+                        weights_b = weights_b @ r_b
 
                     weight_overlap = weights_a @ weights_b.T
                     res = (res_phys * weight_overlap).sum().reshape(())
@@ -472,8 +470,8 @@ def contract(
             out_intw = None
     
     out_tensor = Tensor(
-        indices=out_indices, itags=out_itags, data=out_blocks, intw=out_intw,
-        dtype=torch.promote_types(A.dtype, B.dtype)
+        indices=out_indices, itags=out_itags, data=out_blocks,
+        intw=out_intw, dtype=A.dtype
     )
 
     # Normalize intertwiner weights (prevents decay across successive
