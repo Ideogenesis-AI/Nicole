@@ -245,13 +245,23 @@ class Bridge:
         flipped (incoming <-> outgoing). The cumulated Frobenius-Schur phase
         returned by `yuzuha.compute_conjugate` is multiplied into the weight
         matrix, so the resulting weights may differ from the original by a
-        global factor of ±1.
+        global factor of ±1. The weights themselves are not conjugated, as
+        their values are real whatever their dtype (see Notes).
         
         Returns
         -------
         Bridge
             New Bridge instance with flipped edge directions and weights scaled
             by the cumulated FS phase (±1).
+        
+        Notes
+        -----
+        Intertwiner weight values are real by construction. Each one descends
+        from a Clebsch-Gordan coefficient, R-symbol, X-symbol, or
+        Frobenius-Schur phase, all of which `yuzuha` computes in real
+        arithmetic, and every operation that combines weights is real-linear.
+        A Bridge belonging to a complex tensor therefore has a complex dtype,
+        for coherence with the data blocks, but a zero imaginary part.
         
         Examples
         --------
@@ -262,6 +272,8 @@ class Bridge:
         ...     assert orig.dir == conj.dir.flip()
         """
         phase, conj_spec = yuzuha.compute_conjugate(self.cgspec)
+        # Deliberately not conjugated: weight values are real at any dtype, as
+        # the Notes explain, so a conjugation would only cost time.
         new_weights = self.weights * phase
         return Bridge(cgspec=conj_spec, weights=new_weights)
     
