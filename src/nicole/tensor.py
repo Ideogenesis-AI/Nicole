@@ -570,7 +570,7 @@ class Tensor:
             # A real tensor has a vanishing imaginary part, as in NumPy.
             data = {k: torch.zeros_like(v) for k, v in self.data.items()}
 
-        # Demote the weights through `.real` rather than leaving it to the
+        # Demote the weights through `.real` instead of leaving it to the
         # constructor, whose `.to()` warns about discarding an imaginary part
         # that the check above has already established to be zero.
         intw: Optional[Dict[BlockKey, dg.Bridge]] = None
@@ -1403,7 +1403,7 @@ class Tensor:
                 target = sqrt(group.irrep_dim(key[0]))
                 # Compute the factor to normalize the weight to the target.
                 factors = bridge.weights[:, 0] / target         # (k,) signed ratio
-                # Take a shared canonical Bridge rather than writing into this
+                # Take a shared canonical Bridge instead of writing into this
                 # one: the weight storage can be shared with another tensor, and
                 # an in-place write would also reject a dtype change.
                 self.intw[key] = dg.canonical_bridge(
