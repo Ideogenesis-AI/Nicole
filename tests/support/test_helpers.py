@@ -748,6 +748,30 @@ def test_regularize_higher_order_small_weight_normalized():
     assert torch.allclose(tensor.data[target_key], r_before * small_w)
 
 
+def test_regularize_higher_order_complex():
+    """Test that a complex higher-order tensor normalizes its weight rows."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=306, itags=["a", "b", "c"]) * (1 + 0.5j)
+    assert tensor.dtype is torch.complex128
+    populate_random_weights(tensor, seed=306)
+
+    norm_before = tensor.norm()
+
+    tensor.regularize()
+
+    # The row norm goes through the moduli, which is what makes this run on MPS
+    for key, bridge in tensor.intw.items():
+        row_norms = bridge.weights.abs().norm(dim=1)
+        assert torch.allclose(row_norms, torch.ones_like(row_norms)), (
+            f"Weight rows not normalized for block {key}"
+        )
+
+    assert math.isclose(tensor.norm(), norm_before, rel_tol=1e-12)
+
+
 # Compression-aspect tests for regularize
 
 def test_regularize_compresses_dependent_components():
