@@ -1144,6 +1144,8 @@ class Tensor:
         # Check intertwiners for generic tensors
         if (self.intw is None) != (other.intw is None):
             return False
+        if self.dtype is not other.dtype:
+            return False
         # Expensive element-wise comparisons last
         return (
             all(torch.equal(self.data[k], other.data[k]) for k in self.data)
