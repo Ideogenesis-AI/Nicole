@@ -18,13 +18,16 @@
 
 """Tests for device management and GPU support."""
 
+import cmath
+
 import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
 from nicole import diag, identity, isometry
+from nicole.blocks import BlockSchema
 from nicole.symmetry import delegate as dg
-from ..utils import assert_blocks_equal
+from ..utils import assert_blocks_equal, populate_random_weights
 
 
 def test_default_device_is_cpu():
@@ -428,6 +431,58 @@ def test_mps_dtype_normalization_bridge_from_block():
     
     assert bridge.weights.dtype == torch.float32
     assert bridge.weights.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_regularize_complex_higher_order():
+    """Test that regularizing a complex higher-order tensor runs on MPS.
+
+    MPS has no complex kernel for `norm`, so the row normalization has to take
+    the moduli of the weights first. On CPU the two spellings agree, which
+    leaves this the only test that can tell them apart.
+    """
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=306, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=306)
+    tensor = tensor.to('mps', dtype=torch.complex64)
+    assert tensor.dtype is torch.complex64
+
+    tensor.regularize()
+
+    for key, bridge in tensor.intw.items():
+        assert bridge.weights.device.type == 'mps'
+        row_norms = bridge.weights.abs().norm(dim=1)
+        assert torch.allclose(row_norms, torch.ones_like(row_norms), atol=1e-5), (
+            f"Weight rows not normalized for block {key}"
+        )
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_bridge_collinear_complex():
+    """Test that the complex collinearity check runs on MPS.
+
+    Like regularize, the check normalizes through the moduli so that it does
+    not reach for an MPS complex `norm` kernel that does not exist.
+    """
+    group = SU2Group()
+    directions = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge = dg.Bridge.from_block(group, (1, 1, 1, 1), directions,
+                                  dtype=torch.complex64, device='mps')
+    om_dim = bridge.weights.shape[1]
+    assert om_dim > 1
+
+    weights = torch.randn(1, om_dim, dtype=torch.complex64, device='mps')
+    phase = torch.exp(torch.tensor(1j * 0.7, dtype=torch.complex64, device='mps'))
+    bridge_a = dg.Bridge(cgspec=bridge.cgspec, weights=weights)
+    bridge_b = dg.Bridge(cgspec=bridge.cgspec, weights=weights * phase)
+
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b, rtol=1e-5, atol=1e-7)
+
+    assert compatible is True
+    assert cmath.isclose(scale, complex(phase.item()), rel_tol=1e-4)
 
 
 def test_tensor_explicit_device_in_constructor():
