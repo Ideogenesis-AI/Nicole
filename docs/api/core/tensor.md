@@ -26,6 +26,9 @@ Block-sparse tensor with symmetry-aware indices.
         - group
         - show
         - conj
+        - real
+        - imag
+        - check_dtype
         - permute
         - transpose
         - retag
@@ -47,8 +50,32 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 - **Automatic charge conservation**: Selection rules enforced by structure
 - **PyTorch-backed blocks**: Dense operations within each symmetry sector
 - **Device management**: CPU and GPU (CUDA/MPS) support
+- **Coherent dtype**: Blocks and intertwiner weights always agree
 - **Autograd control**: Optional gradient tracking
 - **Immutable indices**: Index structure fixed at creation
+
+### Dtype
+
+A tensor's `dtype` covers the whole object: every dense block and, for
+non-Abelian tensors, every intertwiner weight matrix carries it. The default is
+`float64`.
+
+Casting is explicit, through `to(dtype=...)`, which converts blocks and weights
+together. A complex-to-real cast is refused, since discarding an imaginary part
+should never be implicit — use `real` or `imag` to say which part you want.
+Note that `imag` returns zeros for a real tensor, following NumPy, whereas
+`torch.Tensor.imag` rejects a real input.
+
+Operations on two tensors promote them to a common dtype, so a real tensor can
+be combined with a complex one directly. This covers `+` and `-` as well as
+[contract](../contraction/contract.md), [einsum](../contraction/einsum.md) and
+[oplus](../arithmetic/oplus.md). Two things to watch:
+
+- Scalar operations preserve precision rather than widening, so a `float32`
+  tensor times `1j` gives `complex64`, not `complex128`.
+- `==` compares dtype as well as values, so the same values at two dtypes are
+  not equal. Use [allclose](../arithmetic/allclose.md) when only the values
+  matter.
 
 ## See Also
 
