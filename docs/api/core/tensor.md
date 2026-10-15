@@ -28,7 +28,6 @@ Block-sparse tensor with symmetry-aware indices.
         - conj
         - real
         - imag
-        - check_dtype
         - permute
         - transpose
         - retag
@@ -58,7 +57,9 @@ The `Tensor` class is the core data structure in Nicole, representing block-spar
 
 A tensor's `dtype` covers the whole object: every dense block and, for
 non-Abelian tensors, every intertwiner weight matrix carries it. The default is
-`float64`.
+`float64`. Operations maintain this, but a tensor built directly from a block
+dictionary takes its dtype from one of the blocks, so the blocks you supply
+must all share the same dtype.
 
 Casting is explicit, through `to(dtype=...)`, which converts blocks and weights
 together. A complex-to-real cast is refused, since discarding an imaginary part
