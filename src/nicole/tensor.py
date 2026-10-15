@@ -1304,33 +1304,29 @@ class Tensor:
 
     def __mul__(self, scalar: Union[int, float, complex]) -> Tensor:
         """Scale every dense block by a scalar."""
+        dtype = scalar_result_dtype(self.dtype, scalar)
+
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
             # Perform operation on torch tensor to preserve computational graph
-            scalar_data = self.data[()] * scalar
-            # Determine scalar dtype for promotion
-            if isinstance(scalar, complex):
-                scalar_dtype = torch.complex128
-            elif isinstance(scalar, float):
-                scalar_dtype = torch.float64
-            else:  # int
-                scalar_dtype = torch.int64
             return Tensor(
-                indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
+                indices=(), itags=(), data={(): self.data[()] * scalar},
+                dtype=dtype, label=self.label
             )
         
         new_data = {k: (v * scalar) for k, v in self.data.items()}
-        # Determine scalar dtype for promotion
-        if isinstance(scalar, complex):
-            scalar_dtype = torch.complex128
-        elif isinstance(scalar, float):
-            scalar_dtype = torch.float64
-        else:  # int
-            scalar_dtype = torch.int64
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            # A complex scalar promotes the blocks, so carry the intertwiner
+            # weights with them. The dict is copied either way: Bridges are
+            # shared, and in-place methods such as `regularize` assign into
+            # whichever dict they are handed.
+            new_intw = dict(self.intw) if dtype is self.dtype else \
+                {k: b.to(dtype=dtype) for k, b in self.intw.items()}
+
         return Tensor(
-            indices=self.indices, itags=self.itags, data=new_data, intw=self.intw,
-            dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=dtype, label=self.label
         )
 
     __rmul__ = __mul__
