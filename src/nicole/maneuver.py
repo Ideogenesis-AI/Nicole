@@ -824,6 +824,12 @@ def diag(
     # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
     dtype = normalize_dtype_for_device(dtype, device)
     
+    # Every block of one S shares a dtype and device, so one sample settles the
+    # loop below, where a per-block `to` is usually a no-op but never free.
+    sample = next(iter(S_blocks.values()), None)
+    dtype_or_device_differs = sample is not None and \
+        (sample.dtype is not dtype or sample.device != device)
+    
     # Check if group is Abelian or generic (non-Abelian)
     group = bond_index.group
     
@@ -832,6 +838,8 @@ def diag(
         diag_blocks: Dict[BlockKey, torch.Tensor] = {}
         for key, vec_array in S_blocks.items():
             # Create diagonal matrix from 1D array
+            if dtype_or_device_differs:
+                vec_array = vec_array.to(device=device, dtype=dtype)
             diag_matrix = torch.diag(vec_array)
             diag_blocks[key] = diag_matrix
         
@@ -850,6 +858,8 @@ def diag(
         
         for key, vec_array in S_blocks.items():
             # Create diagonal matrix from 1D array with trailing reduced multiplicity dimension
+            if dtype_or_device_differs:
+                vec_array = vec_array.to(device=device, dtype=dtype)
             diag_matrix = torch.diag(vec_array).unsqueeze(-1)
             diag_blocks[key] = diag_matrix
             
