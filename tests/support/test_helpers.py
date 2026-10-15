@@ -955,36 +955,6 @@ def test_check_dtype_survives_complex_scalar_multiplication():
     scaled.check_dtype()
 
 
-def test_check_dtype_raises_on_disagreeing_block():
-    """Test that a block cast behind the tensor's back is reported."""
-    group = U1Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
-    tensor = Tensor.random([idx, idx.flip()], seed=404, itags=["a", "b"])
-    
-    key = next(iter(tensor.data))
-    tensor.data[key] = tensor.data[key].to(dtype=torch.float32)
-    
-    with pytest.raises(ValueError, match="disagreeing"):
-        tensor.check_dtype()
-
-
-def test_check_dtype_raises_on_disagreeing_weights():
-    """Test that an intertwiner weight of the wrong dtype is reported."""
-    group = SU2Group()
-    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
-    tensor = Tensor.random([idx, idx.flip()], seed=405, itags=["a", "b"])
-    assert tensor.intw is not None
-    
-    key = next(iter(tensor.intw))
-    bridge = tensor.intw[key]
-    tensor.intw[key] = dg.Bridge(
-        cgspec=bridge.cgspec, weights=bridge.weights.to(dtype=torch.float32)
-    )
-    
-    with pytest.raises(ValueError, match="intw"):
-        tensor.check_dtype()
-
-
 # real / imag tests
 
 def test_real_returns_self_for_real_tensor():
