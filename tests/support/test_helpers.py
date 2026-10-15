@@ -28,7 +28,7 @@ from nicole import Tensor, U1Group, Z2Group, SU2Group, ProductGroup
 from nicole import Direction, Index, Sector
 from nicole import filter_blocks
 from nicole.serialize import serialize, deserialize
-from ..utils import populate_random_weights
+from ..utils import assert_dtype_coherent, populate_random_weights
 
 
 # Clone tests
@@ -898,19 +898,19 @@ def test_regularize_cutoff_forwarded():
     assert t_low.intw[key].num_components == n_before
 
 
-# check_dtype tests
+# dtype coherence tests
 
-def test_check_dtype_passes_for_abelian():
+def test_dtype_coherent_for_abelian():
     """Test that a freshly built Abelian tensor is dtype-coherent."""
     group = U1Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
     
     for dtype in (torch.float32, torch.float64, torch.complex64, torch.complex128):
         tensor = Tensor.random([idx, idx.flip()], seed=401, itags=["a", "b"], dtype=dtype)
-        tensor.check_dtype()
+        assert_dtype_coherent(tensor)
 
 
-def test_check_dtype_passes_for_su2():
+def test_dtype_coherent_for_su2():
     """Test that data and intertwiner weights agree for an SU(2) tensor."""
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
@@ -918,10 +918,10 @@ def test_check_dtype_passes_for_su2():
     for dtype in (torch.float64, torch.complex128):
         tensor = Tensor.random([idx, idx.flip()], seed=402, itags=["a", "b"], dtype=dtype)
         assert tensor.intw is not None
-        tensor.check_dtype()
+        assert_dtype_coherent(tensor)
 
 
-def test_check_dtype_passes_for_product_group():
+def test_dtype_coherent_for_product_group():
     """Test that a product group carrying an SU(2) factor is dtype-coherent."""
     group = ProductGroup([U1Group(), SU2Group()])
     idx = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2), Sector((1, 2), 3)))
@@ -929,10 +929,10 @@ def test_check_dtype_passes_for_product_group():
     tensor = Tensor.random([idx, idx.flip()], seed=412, itags=["a", "b"],
                            dtype=torch.complex128)
     assert tensor.intw is not None
-    tensor.check_dtype()
+    assert_dtype_coherent(tensor)
 
 
-def test_check_dtype_passes_for_z2():
+def test_dtype_coherent_for_z2():
     """Test that an Abelian group without intertwiners is dtype-coherent."""
     group = Z2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
@@ -940,10 +940,10 @@ def test_check_dtype_passes_for_z2():
     tensor = Tensor.random([idx, idx.flip()], seed=413, itags=["a", "b"],
                            dtype=torch.complex128)
     assert tensor.intw is None
-    tensor.check_dtype()
+    assert_dtype_coherent(tensor)
 
 
-def test_check_dtype_survives_complex_scalar_multiplication():
+def test_dtype_coherence_survives_complex_scalar_multiplication():
     """Test that a complex scalar carries the intertwiner weights along with it."""
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
@@ -952,7 +952,7 @@ def test_check_dtype_survives_complex_scalar_multiplication():
     scaled = tensor * (1 + 1j)
     
     assert scaled.dtype is torch.complex128
-    scaled.check_dtype()
+    assert_dtype_coherent(scaled)
 
 
 # real / imag tests
@@ -1018,7 +1018,7 @@ def test_real_imag_su2_keeps_intertwiner():
     
     for part in (tensor.real, tensor.imag):
         assert part.intw is not None
-        part.check_dtype()
+        assert_dtype_coherent(part)
 
 
 def test_real_imag_reject_complex_weights():
