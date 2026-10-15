@@ -287,8 +287,12 @@ class BlockSchema:
             wa_flat = weights_a.flatten()
             wb_flat = weights_b.flatten()
             
-            norm_a = torch.linalg.vector_norm(wa_flat)
-            norm_b = torch.linalg.vector_norm(wb_flat)
+            # The 2-norm of a vector is the 2-norm of its moduli, and taking
+            # the moduli first is what makes this work on MPS, whose backend
+            # has no complex kernel for the norm itself.
+            is_complex = weights_a.is_complex()
+            norm_a = torch.linalg.vector_norm(wa_flat.abs() if is_complex else wa_flat)
+            norm_b = torch.linalg.vector_norm(wb_flat.abs() if is_complex else wb_flat)
             
             # Check if either is zero
             if norm_a < atol or norm_b < atol:
@@ -298,7 +302,7 @@ class BlockSchema:
                     return (False, 1.0)
             
             # Compute cosine similarity
-            if weights_a.is_complex():
+            if is_complex:
                 # Over the complex numbers collinearity needs the conjugating
                 # inner product and the modulus of the overlap: two weight
                 # vectors differing by a pure phase are collinear, which a
