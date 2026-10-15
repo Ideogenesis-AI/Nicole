@@ -22,6 +22,8 @@ import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
+from nicole import diag, identity, isometry
+from nicole.symmetry import delegate as dg
 from ..utils import assert_blocks_equal
 
 
@@ -347,6 +349,85 @@ def test_mps_to_method_complex_dtype():
     for block in t_mps.data.values():
         assert block.dtype == torch.complex64
         assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_identity():
+    """Test that identity normalizes its dtype for MPS."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    ident = identity(idx, dtype=torch.float64, device='mps')
+    assert ident.device.type == 'mps'
+    assert ident.dtype == torch.float32
+    for block in ident.data.values():
+        assert block.dtype == torch.float32
+    
+    ident_c = identity(idx, dtype=torch.complex128, device='mps')
+    assert ident_c.dtype == torch.complex64
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_identity_su2():
+    """Test that an SU(2) identity normalizes its intertwiner weights too."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    ident = identity(idx, dtype=torch.float64, device='mps')
+    
+    assert ident.dtype == torch.float32
+    assert ident.intw is not None
+    for bridge in ident.intw.values():
+        assert bridge.weights.dtype == torch.float32
+        assert bridge.weights.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_isometry():
+    """Test that isometry normalizes its dtype for MPS."""
+    group = U1Group()
+    first = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    second = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    iso = isometry(first, second, dtype=torch.float64, device='mps')
+    
+    assert iso.device.type == 'mps'
+    assert iso.dtype == torch.float32
+    for block in iso.data.values():
+        assert block.dtype == torch.float32
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_diag():
+    """Test that diag normalizes its dtype for MPS."""
+    group = U1Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
+    
+    S_blocks = {(0, 0): torch.tensor([2.0, 1.5]),
+                (1, 1): torch.tensor([1.0, 0.8, 0.3])}
+    diagonal = diag(S_blocks, bond_index, dtype=torch.float64, device='mps')
+    
+    assert diagonal.device.type == 'mps'
+    assert diagonal.dtype == torch.float32
+    for block in diagonal.data.values():
+        assert block.dtype == torch.float32
+        assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_bridge_from_block():
+    """Test that Bridge.from_block normalizes the dtype of synthesized weights."""
+    group = SU2Group()
+    idx_in = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    bridge = dg.Bridge.from_block(
+        group, (1, 1), [idx_in.direction, idx_out.direction],
+        dtype=torch.float64, device='mps',
+    )
+    
+    assert bridge.weights.dtype == torch.float32
+    assert bridge.weights.device.type == 'mps'
 
 
 def test_tensor_explicit_device_in_constructor():
