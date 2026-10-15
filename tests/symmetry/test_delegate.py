@@ -665,6 +665,30 @@ def test_bridge_conj_with_custom_weights():
             assert orig.dir == conj.dir.flip()
 
 
+def test_bridge_conj_does_not_conjugate_weights():
+    """Test that conj() scales the weights by the FS phase without conjugating.
+
+    Weight values are real at any dtype, since every one descends from a
+    Clebsch-Gordan coefficient, R-symbol, X-symbol or Frobenius-Schur phase and
+    all of those are computed in real arithmetic. A complex-dtype Bridge
+    therefore has a zero imaginary part and conjugating it would only cost time.
+    """
+    group = SU2Group()
+    key = (1, 1)
+    directions = [Direction.IN, Direction.OUT]
+
+    bridge = Bridge.from_block(group, key, directions, dtype=torch.complex128)
+    assert bridge.weights.dtype is torch.complex128
+    assert bridge.weights.imag.abs().max().item() == 0.0
+
+    bridge_conj = bridge.conj()
+
+    phase, _ = yuzuha.compute_conjugate(bridge.cgspec)
+    assert bridge_conj.weights.dtype is torch.complex128
+    assert torch.allclose(bridge_conj.weights, bridge.weights * phase)
+    assert bridge_conj.weights.imag.abs().max().item() == 0.0
+
+
 # Bridge.invert_edges() tests
 
 def test_invert_edges_single_position():
