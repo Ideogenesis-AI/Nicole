@@ -3025,6 +3025,82 @@ def test_eig_is_hermitian_su2_hermitian():
             f"U†U ≠ I at SU(2) block {key}, max err={( prod - eye).abs().max():.2e}"
 
 
+def test_eig_is_hermitian_abelian_complex():
+    """Abelian (U1) + is_hermitian=True on a complex tensor: eigenvectors stay complex.
+
+    A complex Hermitian tensor has real eigenvalues but genuinely complex
+    eigenvectors. Taking the eigenvector dtype from eigh's real eigenvalues
+    would discard their imaginary part and leave the reconstruction wrong.
+    """
+    group = U1Group()
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(0, 3), Sector(1, 2)))
+    idx_in  = Index(Direction.IN,  group, sectors=(Sector(0, 3), Sector(1, 2)))
+    T = Tensor.random([idx_out, idx_in], itags=["i", "j"], seed=84,
+                      dtype=torch.complex128)
+    # Symmetrize each block so T is Hermitian, not merely symmetric
+    for key in list(T.data.keys()):
+        T.data[key] = (T.data[key] + T.data[key].T.conj()) / 2
+
+    U, D = eig(T, is_hermitian=True)
+
+    # Eigenvalues demote to the real dtype of matching precision
+    assert U.dtype is torch.complex128
+    for key, vals in D.items():
+        assert vals.dtype is torch.float64, \
+            f"Expected float64 eigenvalues from eigh, got {vals.dtype} at {key}"
+
+    # The eigenvectors must actually carry an imaginary part
+    max_imag = max(arr.imag.abs().max().item() for arr in U.data.values())
+    assert max_imag > 1e-6, \
+        f"Eigenvectors lost their imaginary part, max|Im U| = {max_imag:.2e}"
+
+    # T @ U = U @ diag(D) must hold at machine precision
+    for key, t_arr in T.data.items():
+        if key not in U.data:
+            continue
+        U_mat = U.data[key]
+        lhs = t_arr @ U_mat
+        rhs = U_mat @ torch.diag(D[key].to(dtype=U.dtype))
+        assert torch.allclose(lhs, rhs, atol=1e-12), \
+            f"T@U = U@diag(D) failed at {key}, max err={(lhs - rhs).abs().max():.2e}"
+
+    # And the eigenvectors remain unitary
+    for key, arr in U.data.items():
+        prod = arr.T.conj() @ arr
+        eye  = torch.eye(prod.shape[0], dtype=prod.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"U†U ≠ I at block {key}, max err={(prod - eye).abs().max():.2e}"
+
+
+def test_eig_is_hermitian_su2_complex():
+    """SU(2) + is_hermitian=True on a complex tensor: eigenvectors stay complex."""
+    T = _make_su2_2nd_order(seed=85) * (1 + 0.5j)
+    assert T.dtype is torch.complex128
+    # Symmetrize the reduced data blocks so T is Hermitian
+    for key in list(T.data.keys()):
+        mat = T.data[key].squeeze(-1)
+        T.data[key] = ((mat + mat.T.conj()) / 2).unsqueeze(-1)
+
+    U, D = eig(T, is_hermitian=True)
+
+    assert U.dtype is torch.complex128
+    for key, vals in D.items():
+        assert vals.dtype is torch.float64, \
+            f"Expected float64 eigenvalues from eigh, got {vals.dtype} at {key}"
+
+    max_imag = max(arr.imag.abs().max().item() for arr in U.data.values())
+    assert max_imag > 1e-6, \
+        f"Reduced eigenvectors lost their imaginary part, max|Im U| = {max_imag:.2e}"
+
+    # Reduced eigenvector blocks must remain unitary
+    for key, arr in U.data.items():
+        U_mat = arr.squeeze(-1)
+        prod  = U_mat.T.conj() @ U_mat
+        eye   = torch.eye(prod.shape[0], dtype=prod.dtype)
+        assert torch.allclose(prod, eye, atol=1e-10), \
+            f"U†U ≠ I at SU(2) block {key}, max err={(prod - eye).abs().max():.2e}"
+
+
 def test_eig_is_hermitian_su2_nonhermitian():
     """SU(2) + is_hermitian=False: decomposition holds, reduced eigenvectors not orthonormal."""
     T = _make_su2_2nd_order(seed=83)
