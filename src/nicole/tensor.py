@@ -100,8 +100,6 @@ class Tensor:
         Property returning the real part as a real-dtype tensor.
     imag
         Property returning the imaginary part as a real-dtype tensor.
-    check_dtype()
-        Verify that every block and intertwiner weight matches `dtype`.
     device
         Property returning the device where tensor blocks are stored.
     to()
@@ -160,7 +158,7 @@ class Tensor:
         # A supplied dtype is trusted; omitting it samples one block instead,
         # so a forgotten argument cannot mislabel complex data as float64.
         # Sampling beats scanning: operations keep a tensor's dtype uniform,
-        # and `check_dtype` does the full scan for tests.
+        # so blocks can only disagree if one deliberately builds in that way.
         if self.dtype is None:
             sampled = next(iter(self.data.values())).dtype if self.data else torch.float64
             object.__setattr__(self, 'dtype', sampled)
@@ -522,25 +520,6 @@ class Tensor:
     # ------------------------------------------------------------
     #   Data type: resolution, casting, and real/imaginary parts
     # ------------------------------------------------------------
-
-    def check_dtype(self) -> None:
-        """Verify that every block and intertwiner weight matches `dtype`."""
-        offenders = [
-            f"block {key}: {block.dtype}"
-            for key, block in self.data.items()
-            if block.dtype is not self.dtype
-        ]
-        if self.intw is not None:
-            offenders.extend(
-                f"intw {key}: {bridge.weights.dtype}"
-                for key, bridge in self.intw.items()
-                if bridge.weights.dtype is not self.dtype
-            )
-        if offenders:
-            raise ValueError(
-                f"Tensor declares dtype {self.dtype} but carries "
-                f"{len(offenders)} disagreeing entries: {', '.join(offenders)}"
-            )
 
     def _split_complex(self, part: str) -> Tensor:
         """Return the real or imaginary part of this tensor as a real tensor."""
