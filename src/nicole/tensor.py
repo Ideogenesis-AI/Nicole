@@ -35,8 +35,8 @@ import torch
 from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
-from .typing import normalize_dtype_for_device
-from .typing import real_dtype_for
+from .typing import promote_tensors, normalize_dtype_for_device
+from .typing import real_dtype_for, scalar_result_dtype
 from .symmetry import SymmetryGroup
 from .symmetry import delegate as dg
 
@@ -1173,13 +1173,17 @@ class Tensor:
         - If weights differ: concatenates along reduced multiplicity dimension
                              compresses out any resulting linear dependence
         """
+        # Promote up front so that the branches below, including the ones where
+        # only one side holds a block, all emit blocks of a single dtype.
+        self, other = promote_tensors(self, other)
+
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
             scalar_data = self.data[()] + other.data[()]
             return Tensor(
                 indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+                dtype=self.dtype, label=self.label
             )
         
         self._align_for_binary(other)
@@ -1226,7 +1230,7 @@ class Tensor:
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+            dtype=self.dtype, label=self.label
         )
 
     def __sub__(self, other: Tensor) -> Tensor:
@@ -1237,13 +1241,17 @@ class Tensor:
         - If weights differ: concatenates along reduced multiplicity dimension
                              compresses out any resulting linear dependence
         """
+        # Promote up front so that the branches below, including the ones where
+        # only one side holds a block, all emit blocks of a single dtype.
+        self, other = promote_tensors(self, other)
+
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
             scalar_data = self.data[()] - other.data[()]
             return Tensor(
                 indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+                dtype=self.dtype, label=self.label
             )
         
         self._align_for_binary(other)
@@ -1291,7 +1299,7 @@ class Tensor:
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+            dtype=self.dtype, label=self.label
         )
 
     def __mul__(self, scalar: Union[int, float, complex]) -> Tensor:
