@@ -217,7 +217,10 @@ def normalize_dtype_for_device(dtype: torch.dtype, device: Union[str, torch.devi
     - float64 -> float32 on MPS
     - complex128 -> complex64 on MPS
     """
-    device = torch.device(device)
+    # Callers have usually resolved the device already, and re-wrapping one
+    # costs more than the rest of this function put together.
+    if not isinstance(device, torch.device):
+        device = torch.device(device)
     
     if device.type == 'mps':
         # MPS doesn't support float64 or complex128
