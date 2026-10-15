@@ -1044,3 +1044,46 @@ def test_bridge_eq_non_bridge_returns_not_implemented():
     b = _make_bridge([1, 1, 2], [1, 1, -1])
     assert b.__eq__(42) is NotImplemented
     assert b.__eq__("hello") is NotImplemented
+
+
+# canonical_bridge tests
+
+def test_canonical_bridge_weights_take_the_given_value():
+    """Test that every weight entry equals the requested canonical value."""
+    group = SU2Group()
+    bridge = Bridge.from_block(group, (1, 1), [Direction.IN, Direction.OUT])
+    
+    canonical = dg.canonical_bridge(
+        bridge.cgspec, 2.0, 1, torch.float64, torch.device('cpu')
+    )
+    
+    assert canonical.weights.shape == (1, bridge.om_dimension)
+    assert torch.all(canonical.weights == 2.0)
+
+
+def test_canonical_bridge_is_shared_between_calls():
+    """Test that repeated calls hand back the identical cached object.
+
+    Bridge is frozen, so sharing is sound, but it does mean the weights must
+    never be written to in place.
+    """
+    group = SU2Group()
+    bridge = Bridge.from_block(group, (1, 1), [Direction.IN, Direction.OUT])
+    args = (bridge.cgspec, 3.0, 1, torch.float64, torch.device('cpu'))
+    
+    assert dg.canonical_bridge(*args) is dg.canonical_bridge(*args)
+
+
+def test_canonical_bridge_distinguishes_its_arguments():
+    """Test that a different value, component count or dtype is not shared."""
+    group = SU2Group()
+    bridge = Bridge.from_block(group, (1, 1), [Direction.IN, Direction.OUT])
+    cpu = torch.device('cpu')
+    base = dg.canonical_bridge(bridge.cgspec, 3.0, 1, torch.float64, cpu)
+    
+    assert dg.canonical_bridge(bridge.cgspec, 4.0, 1, torch.float64, cpu) is not base
+    assert dg.canonical_bridge(bridge.cgspec, 3.0, 2, torch.float64, cpu) is not base
+    
+    complex_bridge = dg.canonical_bridge(bridge.cgspec, 3.0, 1, torch.complex128, cpu)
+    assert complex_bridge is not base
+    assert complex_bridge.weights.dtype is torch.complex128
