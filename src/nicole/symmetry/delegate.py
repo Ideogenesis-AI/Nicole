@@ -41,6 +41,7 @@ import torch
 import yuzuha
 
 from ..typing import Charge, Direction
+from ..typing import normalize_dtype_for_device
 from .base import SymmetryGroup
 from .product import ProductGroup
 from .unitary import SU2Group
@@ -575,6 +576,8 @@ class Bridge:
             if device is None:
                 device = torch.get_default_device()
             device = torch.device(device)
+            # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+            dtype = normalize_dtype_for_device(dtype, device)
             # Default: 1 component with first element as 1, rest as 0
             weights = torch.zeros(1, om_dim, dtype=dtype, device=device)
             weights[0, 0] = 1.0
