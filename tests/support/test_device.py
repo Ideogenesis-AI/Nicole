@@ -87,6 +87,70 @@ def test_tensor_to_cpu():
     assert_blocks_equal(tensor, tensor_cpu2)
 
 
+def test_tensor_to_dtype_cast():
+    """Test that to(dtype=...) casts without being given a device."""
+    torch.set_default_device('cpu')
+    
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    assert tensor.dtype == torch.float64
+    
+    promoted = tensor.to(dtype=torch.complex128)
+    
+    assert promoted.dtype == torch.complex128
+    assert promoted.device == torch.device('cpu')
+    for block in promoted.data.values():
+        assert block.dtype == torch.complex128
+
+
+def test_tensor_to_dtype_idempotent_returns_self():
+    """Test that casting to the dtype already held is a no-op."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    
+    assert tensor.to(dtype=torch.float64) is tensor
+    assert tensor.to() is tensor
+
+
+def test_tensor_to_dtype_round_trip():
+    """Test that promoting to complex and demoting via real recovers the values."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    
+    back = tensor.to(dtype=torch.complex128).real
+    
+    assert back.dtype == torch.float64
+    assert_blocks_equal(tensor, back)
+
+
+def test_tensor_to_dtype_rejects_lossy_demotion():
+    """Test that discarding an imaginary part is never implicit."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42, dtype=torch.complex128)
+    
+    with pytest.raises(ValueError, match=r"\.real or \.imag"):
+        tensor.to(dtype=torch.float64)
+
+
+def test_tensor_to_dtype_casts_intertwiner_weights():
+    """Test that a cast reaches the Bridge weights, not just the data blocks."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    assert tensor.intw is not None
+    
+    promoted = tensor.to(dtype=torch.complex128)
+    
+    # check_dtype walks every block and every weight, which is the invariant here
+    promoted.check_dtype()
+    for bridge in promoted.intw.values():
+        assert bridge.weights.dtype == torch.complex128
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_tensor_to_cuda():
     """Test moving tensor to CUDA device."""
