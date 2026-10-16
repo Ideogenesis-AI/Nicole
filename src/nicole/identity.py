@@ -34,6 +34,7 @@ import torch
 from .index import Index, combine_indices
 from .tensor import Tensor
 from .typing import Charge, Direction
+from .typing import normalize_dtype_for_device
 from .symmetry import delegate as dg
 
 
@@ -71,6 +72,9 @@ def identity(
     if device is None:
         device = torch.get_default_device()
     device = torch.device(device)
+
+    # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+    dtype = normalize_dtype_for_device(dtype, device)
 
     # Prepare the left index and its flipped partner.
     left = index
@@ -167,6 +171,9 @@ def isometry(
     if device is None:
         device = torch.get_default_device()
     device = torch.device(device)
+    
+    # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+    dtype = normalize_dtype_for_device(dtype, device)
     
     # Determine orientation of the fused index; default to the dual of `first`.
     default_dir = first.direction.reverse()

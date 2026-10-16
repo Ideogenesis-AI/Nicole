@@ -46,6 +46,7 @@ from typing import List, Tuple
 from .contract import contract, trace
 from .maneuver import permute
 from .tensor import Tensor
+from .typing import promote_tensors
 
 
 def _parse_equation(
@@ -293,6 +294,10 @@ def einsum(equation: str, *tensors: Tensor) -> Tensor:
     """
     if not tensors:
         raise ValueError("einsum requires at least one input tensor.")
+
+    # Promote once over every operand, so no contraction in the left-to-right
+    # loop below ever meets a dtype mismatch.
+    tensors = promote_tensors(*tensors)
 
     input_subs_raw, output_sub = _parse_equation(equation, tensors)
 

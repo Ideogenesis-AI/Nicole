@@ -25,6 +25,8 @@ from nicole import Direction, Index, Sector, Tensor, U1Group, Z2Group, SU2Group,
 from nicole.symmetry.product import ProductGroup
 from nicole.decomp import svd, eig
 
+from ..utils import assert_dtype_coherent
+
 
 # =============================================================================
 #  Tests for diag function
@@ -96,6 +98,57 @@ def test_diag_custom_dtype():
     S_diag = diag(S_blocks, bond_index, dtype=torch.float32)
     
     assert S_diag.dtype == torch.float32
+
+
+def test_diag_casts_blocks_to_requested_dtype():
+    """Test that a requested dtype reaches the blocks, not just the metadata.
+
+    The declared dtype and the block dtypes used to disagree here, since the
+    incoming vectors were embedded exactly as received.
+    """
+    group = U1Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
+    
+    S_blocks = {(0, 0): torch.tensor([2.0, 1.5], dtype=torch.float64),
+                (1, 1): torch.tensor([1.0, 0.8, 0.3], dtype=torch.float64)}
+    
+    S_diag = diag(S_blocks, bond_index, dtype=torch.float32)
+    
+    assert S_diag.dtype == torch.float32
+    for key, block in S_diag.data.items():
+        assert block.dtype == torch.float32, f"Block {key} was left at {block.dtype}"
+    assert_dtype_coherent(S_diag)
+
+
+def test_diag_places_blocks_on_requested_device():
+    """Test that a requested device reaches the blocks for an Abelian group."""
+    group = U1Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
+    
+    S_blocks = {(0, 0): torch.tensor([2.0, 1.5]),
+                (1, 1): torch.tensor([1.0, 0.8, 0.3])}
+    
+    S_diag = diag(S_blocks, bond_index, device='cpu')
+    
+    assert S_diag.device == torch.device('cpu')
+    for block in S_diag.data.values():
+        assert block.device == torch.device('cpu')
+
+
+def test_diag_promotes_blocks_to_complex():
+    """Test that a complex request promotes real singular values."""
+    group = U1Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2),))
+    
+    S_blocks = {(0, 0): torch.tensor([2.0, 1.5])}
+    
+    S_diag = diag(S_blocks, bond_index, dtype=torch.complex128)
+    
+    assert S_diag.dtype == torch.complex128
+    for block in S_diag.data.values():
+        assert block.dtype == torch.complex128
+    assert torch.allclose(S_diag.data[(0, 0)].real,
+                          torch.diag(torch.tensor([2.0, 1.5], dtype=torch.float64)))
 
 
 def test_diag_z2_group():

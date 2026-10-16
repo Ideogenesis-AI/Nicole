@@ -18,11 +18,18 @@
 
 """Tests for device management and GPU support."""
 
+import cmath
+import subprocess
+import sys
+
 import torch
 import pytest
 
 from nicole import Direction, Index, Sector, Tensor, U1Group, SU2Group
-from ..utils import assert_blocks_equal
+from nicole import diag, identity, isometry
+from nicole.blocks import BlockSchema
+from nicole.symmetry import delegate as dg
+from ..utils import assert_blocks_equal, assert_dtype_coherent, populate_random_weights
 
 
 def test_default_device_is_cpu():
@@ -38,6 +45,24 @@ def test_default_device_is_cpu():
     assert tensor.device == torch.device('cpu')
     for block in tensor.data.values():
         assert block.device == torch.device('cpu')
+
+
+def test_import_does_not_change_the_default_device():
+    """Test that importing nicole leaves the caller's default device alone.
+
+    Run in a subprocess, since the import under test has to happen after the
+    default device is set and nicole is long since imported here. The 'meta'
+    device stands in for a real accelerator so the check runs anywhere.
+    """
+    script = (
+        "import torch; torch.set_default_device('meta');"
+        "import nicole; print(torch.get_default_device())"
+    )
+    completed = subprocess.run(
+        [sys.executable, '-c', script],
+        capture_output=True, text=True, check=True,
+    )
+    assert completed.stdout.strip() == 'meta'
 
 
 def test_set_default_device():
@@ -85,6 +110,70 @@ def test_tensor_to_cpu():
     tensor_cpu2 = tensor.cpu()
     assert tensor_cpu2.device == torch.device('cpu')
     assert_blocks_equal(tensor, tensor_cpu2)
+
+
+def test_tensor_to_dtype_cast():
+    """Test that to(dtype=...) casts without being given a device."""
+    torch.set_default_device('cpu')
+    
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    assert tensor.dtype == torch.float64
+    
+    promoted = tensor.to(dtype=torch.complex128)
+    
+    assert promoted.dtype == torch.complex128
+    assert promoted.device == torch.device('cpu')
+    for block in promoted.data.values():
+        assert block.dtype == torch.complex128
+
+
+def test_tensor_to_dtype_idempotent_returns_self():
+    """Test that casting to the dtype already held is a no-op."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    
+    assert tensor.to(dtype=torch.float64) is tensor
+    assert tensor.to() is tensor
+
+
+def test_tensor_to_dtype_round_trip():
+    """Test that promoting to complex and demoting via real recovers the values."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    
+    back = tensor.to(dtype=torch.complex128).real
+    
+    assert back.dtype == torch.float64
+    assert_blocks_equal(tensor, back)
+
+
+def test_tensor_to_dtype_rejects_lossy_demotion():
+    """Test that discarding an imaginary part is never implicit."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42, dtype=torch.complex128)
+    
+    with pytest.raises(ValueError, match=r"\.real or \.imag"):
+        tensor.to(dtype=torch.float64)
+
+
+def test_tensor_to_dtype_casts_intertwiner_weights():
+    """Test that a cast reaches the Bridge weights, not just the data blocks."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=42)
+    assert tensor.intw is not None
+    
+    promoted = tensor.to(dtype=torch.complex128)
+    
+    # Walk every block and every weight, which is the invariant here
+    assert_dtype_coherent(promoted)
+    for bridge in promoted.intw.values():
+        assert bridge.weights.dtype == torch.complex128
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
@@ -283,6 +372,137 @@ def test_mps_to_method_complex_dtype():
     for block in t_mps.data.values():
         assert block.dtype == torch.complex64
         assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_identity():
+    """Test that identity normalizes its dtype for MPS."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    ident = identity(idx, dtype=torch.float64, device='mps')
+    assert ident.device.type == 'mps'
+    assert ident.dtype == torch.float32
+    for block in ident.data.values():
+        assert block.dtype == torch.float32
+    
+    ident_c = identity(idx, dtype=torch.complex128, device='mps')
+    assert ident_c.dtype == torch.complex64
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_identity_su2():
+    """Test that an SU(2) identity normalizes its intertwiner weights too."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    ident = identity(idx, dtype=torch.float64, device='mps')
+    
+    assert ident.dtype == torch.float32
+    assert ident.intw is not None
+    for bridge in ident.intw.values():
+        assert bridge.weights.dtype == torch.float32
+        assert bridge.weights.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_isometry():
+    """Test that isometry normalizes its dtype for MPS."""
+    group = U1Group()
+    first = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    second = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    iso = isometry(first, second, dtype=torch.float64, device='mps')
+    
+    assert iso.device.type == 'mps'
+    assert iso.dtype == torch.float32
+    for block in iso.data.values():
+        assert block.dtype == torch.float32
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_diag():
+    """Test that diag normalizes its dtype for MPS."""
+    group = U1Group()
+    bond_index = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 3)))
+    
+    S_blocks = {(0, 0): torch.tensor([2.0, 1.5]),
+                (1, 1): torch.tensor([1.0, 0.8, 0.3])}
+    diagonal = diag(S_blocks, bond_index, dtype=torch.float64, device='mps')
+    
+    assert diagonal.device.type == 'mps'
+    assert diagonal.dtype == torch.float32
+    for block in diagonal.data.values():
+        assert block.dtype == torch.float32
+        assert block.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_dtype_normalization_bridge_from_block():
+    """Test that Bridge.from_block normalizes the dtype of synthesized weights."""
+    group = SU2Group()
+    idx_in = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    idx_out = Index(Direction.OUT, group, sectors=(Sector(1, 2),))
+    
+    bridge = dg.Bridge.from_block(
+        group, (1, 1), [idx_in.direction, idx_out.direction],
+        dtype=torch.float64, device='mps',
+    )
+    
+    assert bridge.weights.dtype == torch.float32
+    assert bridge.weights.device.type == 'mps'
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_regularize_complex_higher_order():
+    """Test that regularizing a complex higher-order tensor runs on MPS.
+
+    MPS has no complex kernel for `norm`, so the row normalization has to take
+    the moduli of the weights first. On CPU the two spellings agree, which
+    leaves this the only test that can tell them apart.
+    """
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=306, itags=["a", "b", "c"])
+    populate_random_weights(tensor, seed=306)
+    tensor = tensor.to('mps', dtype=torch.complex64)
+    assert tensor.dtype is torch.complex64
+
+    tensor.regularize()
+
+    for key, bridge in tensor.intw.items():
+        assert bridge.weights.device.type == 'mps'
+        row_norms = bridge.weights.abs().norm(dim=1)
+        assert torch.allclose(row_norms, torch.ones_like(row_norms), atol=1e-5), (
+            f"Weight rows not normalized for block {key}"
+        )
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+def test_mps_bridge_collinear_complex():
+    """Test that the complex collinearity check runs on MPS.
+
+    Like regularize, the check normalizes through the moduli so that it does
+    not reach for an MPS complex `norm` kernel that does not exist.
+    """
+    group = SU2Group()
+    directions = [Direction.IN, Direction.IN, Direction.OUT, Direction.OUT]
+    bridge = dg.Bridge.from_block(group, (1, 1, 1, 1), directions,
+                                  dtype=torch.complex64, device='mps')
+    om_dim = bridge.weights.shape[1]
+    assert om_dim > 1
+
+    weights = torch.randn(1, om_dim, dtype=torch.complex64, device='mps')
+    phase = torch.exp(torch.tensor(1j * 0.7, dtype=torch.complex64, device='mps'))
+    bridge_a = dg.Bridge(cgspec=bridge.cgspec, weights=weights)
+    bridge_b = dg.Bridge(cgspec=bridge.cgspec, weights=weights * phase)
+
+    compatible, scale = BlockSchema.bridge_collinear(bridge_a, bridge_b, rtol=1e-5, atol=1e-7)
+
+    assert compatible is True
+    assert cmath.isclose(scale, complex(phase.item()), rel_tol=1e-4)
 
 
 def test_tensor_explicit_device_in_constructor():

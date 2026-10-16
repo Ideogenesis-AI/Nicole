@@ -58,15 +58,16 @@ from .blocks import BlockKey
 from .index import Index
 from .tensor import Tensor
 from .typing import Direction, Sector
+from .typing import real_dtype_for
 from .symmetry import delegate as dg
 
 
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
 
-    The isometry condition Vh @ Vh† = I requires W W^T = irrep_dim(q_left) · I,
+    The isometry condition Vh @ Vh† = I requires W W† = irrep_dim(q_left) · I,
     i.e. the weight matrix must be a scaled unitary with scale = sqrt(irrep_dim).
-    For each block, the weight matrix W is SVD-decomposed as W = U S Vhᵀ.
+    For each block, the weight matrix W is SVD-decomposed as W = U S Vh.
     The working copy carries:
 
         W_new  = sqrt(irrep_dim) · Vh[:k, :]   (orthonormal rows at canonical scale)
@@ -95,7 +96,7 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         q_left = key[left_axis]
         target = math.sqrt(group.irrep_dim(q_left))
 
-        # SVD of the weight matrix W = U S Vhᵀ.  Components whose singular
+        # SVD of the weight matrix W = U S Vh.  Components whose singular
         # values fall below cutoff are linearly dependent and are dropped.
         U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
         k = max(1, int((S >= cutoff).sum().item()))
@@ -108,7 +109,7 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         new_data[key] = (r_flat @ (U[:, :k] * S[:k]) / target).reshape(data.shape[:-1] + (k,))
 
         # New weights: W_new = target · Vh[:k, :].  Rows are orthonormal and
-        # scaled by target, so W_new @ W_new^T = target² · I, satisfying the
+        # scaled by target, so W_new @ W_new† = target² · I, satisfying the
         # isometry condition (see docstring).
         new_intw[key] = dg.Bridge(
             cgspec=bridge.cgspec,
@@ -387,9 +388,11 @@ def svd(
     S_blocks: Dict[BlockKey, torch.Tensor] = {}
     Vh_blocks: Dict[BlockKey, torch.Tensor] = {}
     
-    # Promote to appropriate dtype (float for real input, stays as-is for complex)
-    target_dtype = torch.promote_types(T.dtype, torch.float32) if T.dtype in [torch.float32, torch.complex64] \
-        else torch.promote_types(T.dtype, torch.float64)
+    # Singular values are real even for a complex tensor, so they are stored at
+    # the real dtype of matching precision. An integer dtype still has to widen.
+    real_dtype = real_dtype_for(T.dtype)
+    target_dtype = torch.promote_types(real_dtype, torch.float32) \
+        if real_dtype is torch.float32 else torch.promote_types(real_dtype, torch.float64)
     
     for q_left, (U, s, Vh_dict) in svd_results.items():
         # For U tensor: indices (left_index, bond_index)
@@ -877,12 +880,13 @@ def eig(
     D_blocks: Dict[BlockKey, torch.Tensor] = {}
     
     # Choose dtype based on the solver used.
-    # eigh (is_hermitian=True) always returns real eigenvalues; infer the dtype directly
-    # from the first result block (avoids dependence on Nicole's Tensor.dtype API).
+    # eigh (is_hermitian=True) always returns real eigenvalues, but eigenvectors
+    # at the dtype of the input, so a complex Hermitian tensor keeps complex
+    # eigenvectors while its eigenvalues demote to the real counterpart.
     # eig  (is_hermitian=False) returns complex; promote to the corresponding complex dtype.
     if is_hermitian:
-        sample_eigvals = next(iter(eig_results.values()))[1] if eig_results else None
-        D_dtype = U_dtype = sample_eigvals.dtype if sample_eigvals is not None else T.dtype
+        U_dtype = T.dtype
+        D_dtype = real_dtype_for(T.dtype)
     else:
         D_dtype = U_dtype = torch.promote_types(T.dtype, torch.complex128)
     

@@ -31,6 +31,8 @@ assert_data_weights_equal:
     Assert that two SU(2) tensors have identical data and weights block-by-block.
 assert_physical_tensors_equal:
     Assert that two SU(2) tensors have identical physical tensors R@W block-by-block.
+assert_dtype_coherent:
+    Assert that every block and intertwiner weight matches a tensor's `dtype`.
 
 Comparison Guidelines
 ---------------------
@@ -75,6 +77,29 @@ def assert_charge_neutral(tensor: Tensor) -> None:
     
     for key in tensor.data:
         assert BlockSchema.charges_conserved(tensor.indices, key)
+
+
+def assert_dtype_coherent(tensor: Tensor) -> None:
+    """Verify that every block and intertwiner weight matches the tensor's `dtype`.
+
+    Nicole keeps the declared dtype, the dense blocks and the intertwiner
+    weights in agreement through every operation. Construction samples a single
+    block instead of scanning, so this walks the whole tensor to confirm the
+    invariant holds.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor whose blocks and intertwiner weights are checked.
+    """
+    for key, block in tensor.data.items():
+        assert block.dtype is tensor.dtype, \
+            f"Block {key} is {block.dtype}, expected {tensor.dtype}"
+
+    if tensor.intw is not None:
+        for key, bridge in tensor.intw.items():
+            assert bridge.weights.dtype is tensor.dtype, \
+                f"Intertwiner weights {key} are {bridge.weights.dtype}, expected {tensor.dtype}"
 
 
 def assert_blocks_equal(a: Tensor, b: Tensor, rtol: float = 1e-5, atol: float = 1e-8) -> None:

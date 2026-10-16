@@ -34,12 +34,14 @@ contraction, and `compute_rsymbol` computes the R-symbol for edge permutation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional, Sequence, Tuple, Union
 
 import torch
 import yuzuha
 
 from ..typing import Charge, Direction
+from ..typing import normalize_dtype_for_device
 from .base import SymmetryGroup
 from .product import ProductGroup
 from .unitary import SU2Group
@@ -125,21 +127,26 @@ class Bridge:
         if not isinstance(self.weights, torch.Tensor):
             raise TypeError(f"weights must be a torch.Tensor, got {type(self.weights)}")
         
-        if self.weights.ndim != 2:
+        # Read the shape once rather than reaching for `ndim` and `shape`
+        # separately: Bridges are built per block in inner loops, and every
+        # tensor attribute access passes through torch's default-device mode.
+        shape = self.weights.shape
+        
+        if len(shape) != 2:
             raise ValueError(
-                f"weights must be a 2D tensor, got shape {self.weights.shape}"
+                f"weights must be a 2D tensor, got shape {shape}"
             )
         
-        if self.weights.shape[0] < 1:
+        if shape[0] < 1:
             raise ValueError(
-                f"weights must have at least 1 component (row), got shape {self.weights.shape}"
+                f"weights must have at least 1 component (row), got shape {shape}"
             )
         
         om_dim = self.cgspec.om_dimension()
-        if self.weights.shape[1] != om_dim:
+        if shape[1] != om_dim:
             raise ValueError(
                 f"weights shape[1] must match OM dimension {om_dim}, "
-                f"got shape {self.weights.shape}"
+                f"got shape {shape}"
             )
 
     def __eq__(self, other: object) -> bool:
@@ -175,15 +182,16 @@ class Bridge:
     
     def to(
         self, 
-        device: Union[str, torch.device], 
+        device: Optional[Union[str, torch.device]] = None, 
         dtype: Optional[torch.dtype] = None
     ) -> Bridge:
         """Move Bridge to a new device and optionally convert dtype.
         
         Parameters
         ----------
-        device : str or torch.device
-            Target device ('cpu', 'cuda', 'mps', etc.)
+        device : str or torch.device, optional
+            Target device ('cpu', 'cuda', 'mps', etc.).
+            If None, stays where it is.
         dtype : torch.dtype, optional
             Target dtype. If None, preserves current dtype.
         
@@ -199,8 +207,9 @@ class Bridge:
         >>> bridge_gpu = bridge.to('cuda')
         >>> bridge_gpu.device.type
         'cuda'
+        >>> bridge_complex = bridge.to(dtype=torch.complex128)
         """
-        device = torch.device(device)
+        device = self.device if device is None else torch.device(device)
         
         # Check if already on target device/dtype
         if dtype is None:
@@ -237,13 +246,23 @@ class Bridge:
         flipped (incoming <-> outgoing). The cumulated Frobenius-Schur phase
         returned by `yuzuha.compute_conjugate` is multiplied into the weight
         matrix, so the resulting weights may differ from the original by a
-        global factor of ±1.
+        global factor of ±1. The weights themselves are not conjugated, as
+        their values are real whatever their dtype (see Notes).
         
         Returns
         -------
         Bridge
             New Bridge instance with flipped edge directions and weights scaled
             by the cumulated FS phase (±1).
+        
+        Notes
+        -----
+        Intertwiner weight values are real by construction. Each one descends
+        from a Clebsch-Gordan coefficient, R-symbol, X-symbol, or
+        Frobenius-Schur phase, all of which `yuzuha` computes in real
+        arithmetic, and every operation that combines weights is real-linear.
+        A Bridge belonging to a complex tensor therefore has a complex dtype,
+        for coherence with the data blocks, but a zero imaginary part.
         
         Examples
         --------
@@ -254,6 +273,8 @@ class Bridge:
         ...     assert orig.dir == conj.dir.flip()
         """
         phase, conj_spec = yuzuha.compute_conjugate(self.cgspec)
+        # Deliberately not conjugated: weight values are real at any dtype, as
+        # the Notes explain, so a conjugation would only cost time.
         new_weights = self.weights * phase
         return Bridge(cgspec=conj_spec, weights=new_weights)
     
@@ -555,11 +576,61 @@ class Bridge:
             if device is None:
                 device = torch.get_default_device()
             device = torch.device(device)
+            # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+            dtype = normalize_dtype_for_device(dtype, device)
             # Default: 1 component with first element as 1, rest as 0
             weights = torch.zeros(1, om_dim, dtype=dtype, device=device)
             weights[0, 0] = 1.0
         
         return Bridge(cgspec, weights)
+
+
+# --- Canonical Weights ---
+
+@lru_cache(maxsize=1024)
+def canonical_bridge(
+    cgspec: yuzuha.CGSpec,
+    value: float,
+    num_components: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> Bridge:
+    """Return a shared Bridge whose every weight equals `value`.
+
+    Canonical weights are fixed by the coupling tree rather than by the block
+    data, so one Bridge serves every block and every tensor with the same key.
+    Repeated calls return the identical object, which is sound because `Bridge`
+    is frozen, but it does mean the weights must never be written to in place.
+    Use `Bridge.clone` where private storage is needed.
+
+    Parameters
+    ----------
+    cgspec : yuzuha.CGSpec
+        Coupling specification, which fixes the number of weight columns.
+    value : float
+        Value given to every weight entry, usually `sqrt(irrep_dim(q))`.
+    num_components : int
+        Number of weight rows, matching the trailing component axis of the block.
+    dtype : torch.dtype
+        Data type of the weight matrix.
+    device : torch.device
+        Device holding the weight matrix.
+
+    Returns
+    -------
+    Bridge
+        Shared Bridge carrying the requested weights.
+
+    Examples
+    --------
+    >>> bridge = canonical_bridge(cgspec, 2.0 ** 0.5, 1, torch.float64, torch.device('cpu'))
+    >>> canonical_bridge(cgspec, 2.0 ** 0.5, 1, torch.float64, torch.device('cpu')) is bridge
+    True
+    """
+    weights = torch.full(
+        (num_components, cgspec.om_dimension()), value, dtype=dtype, device=device
+    )
+    return Bridge(cgspec=cgspec, weights=weights)
 
 
 # --- Serialization ---

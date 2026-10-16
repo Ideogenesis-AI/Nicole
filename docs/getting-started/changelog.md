@@ -2,6 +2,213 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.4.2] - 2026-10-16
+
+**Complex Tensors and a Coherent Dtype**
+
+Makes `dtype` a coherent property of a `Tensor`: the dense blocks and the
+Bridge intertwiner weights are guaranteed to agree, `to(dtype=...)` is the
+explicit cast, and every operation combining two tensors promotes its operands
+automatically. Complex tensors work throughout the library, for Abelian and
+generic symmetry groups alike. Four complex-math bugs are fixed alongside, one
+of which produced silently wrong eigenvectors. Separately, the library no
+longer forces the process-wide default device to CPU at import, which both
+respects the caller's choice and makes every benchmarked operation 16% to 50%
+faster.
+
+### Complex Dtype Support
+
+#### A Coherent Dtype
+
+A tensor carried dtype in three independent places — the `dtype` field, the
+dense blocks, and each Bridge's weight matrix — and nothing kept them in sync.
+The field now defaults to "take it from the data", resolved by sampling one
+block, which keeps the cost constant in the block count. An explicitly passed
+`dtype` that disagrees with the blocks is treated as a cast request covering
+both data and intertwiner weights. The public constructors (`zeros`, `random`,
+`from_scalar`, `rand_fill`, and the `identity` family) keep their
+`dtype=torch.float64` default, so the user-facing default is unchanged.
+
+#### New API
+
+- `Tensor.to(dtype=...)` casts blocks and intertwiner weights together.
+  `device` is now optional, so a dtype-only call is possible. A lossy
+  complex-to-real cast raises `ValueError` naming `.real`/`.imag`
+- `Tensor.real` and `Tensor.imag` return a real-dtype tensor of matching
+  precision. `real` returns a real tensor unchanged, as torch does; `imag`
+  returns zeros for a real tensor, following NumPy rather than torch, which
+  rejects a real input
+
+#### Automatic Promotion
+
+Operations combining two tensors promote their operands to a common dtype, so
+a real tensor can be mixed with a complex one directly: `+`, `-`, `contract`,
+`trace`, `oplus`, and `einsum`, the last promoting once over all operands, not
+pair by pair down the chain, so a mixed-precision expression is evaluated at
+the final precision throughout, with no rounding at the intermediate steps.
+The promotion short-circuits on an identity check, so operands that already
+agree cost nothing, which is what keeps complex support off the real path.
+
+Scalar operations preserve precision: a `float32` tensor times `1j` gives
+`complex64`, not `complex128`. This also fixes `float32_tensor * (1+0j)`
+producing `complex64` blocks while `Tensor.dtype` recorded `complex128`. A
+product no longer shares mutable `Bridge` objects with its original. `__eq__`
+treats dtype as part of the comparison and returns `False` when it differs.
+
+### Complex-math Fixes
+
+#### Hermitian Eigenvectors Keep Their Imaginary Part
+
+`eig(is_hermitian=True)` took the eigenvector dtype from `eigh`'s real
+eigenvalues, discarding the imaginary part of complex eigenvectors. A complex
+Hermitian tensor has real eigenvalues but genuinely complex eigenvectors.
+So eigenvectors now carry the input dtype and eigenvalues its real counterpart.
+
+#### Phase-shifted Intertwiner Weights are Recognized as Collinear
+
+`BlockSchema.bridge_collinear` compared weight matrices with a real dot
+product, so two differing by a pure phase were reported as non-collinear,
+forcing a needless concatenation. It now recovers the exact complex scale
+factor.
+
+#### Singular Values are Returned at a Real Dtype
+
+`svd` now stores singular values at the real counterpart dtype, since they are
+real whatever the input. This makes a complex SVD cheaper as well as more
+correct.
+
+#### `diag` Places Its Blocks on the Requested Device
+
+`maneuver.diag` now moves each diagonal vector onto the requested `device` and
+`dtype` before building its block, where the request previously reached only
+the output `Tensor`'s metadata.
+
+### Performance
+
+#### The Default Device Is No Longer Forced at Import
+
+`src/nicole/tensor.py` called `torch.set_default_device('cpu')` at import.
+CPU is already torch's default, so the call changed nothing about where tensors
+land; it only pushed a device mode onto torch's function stack, which then
+intercepted every torch call for the life of the process, at roughly 530 ns
+apiece. It was also wrong on its own terms: a caller who selected a device
+before importing had that choice silently reverted.
+
+Against v0.4.1, from an equal yuzuha cache with alternating passes and medians
+taken across them, **all 41 benchmark cases are faster, by a median of 30.4%**,
+ranging from 16.2% to 49.5%. The largest gains are metadata-bound: `U1 norm`
+49.5%, `SU2 norm` 48.5%, `U1 trace` 44.7%, `SU2 conj` 41.0%. `SU2 einsum
+3-operand`, 3.3 ms of genuine numerical work, improves 28.4%.
+`torch.set_grad_enabled(False)` is unaffected and stays.
+
+#### The Complex Support Itself Costs Nothing
+
+Measured separately against v0.4.1 under the same protocol: median -2.0%, worst
+case +0.50%, no operation regressing by more than 1%. The block-count sweep
+stays flat at 1, 8 and 32 sectors, confirming the dtype decision is O(1), not
+per-block.
+
+### Other Changes
+
+- `identity`, `isometry`, `maneuver.diag` and `Bridge.from_block` now normalize
+  dtype for the target device, so each honors the precision MPS actually has
+- MPS has no complex kernel for the norm, so `bridge_collinear` and
+  `regularize` take moduli before the norm, which leaves the value unchanged
+  because the 2-norm of a vector equals the 2-norm of its moduli
+- `regularize` no longer writes intertwiner weights in place, which would throw
+  on a dtype change
+- Constructing a Bridge is about twice as cheap, which `contract`, `permute`,
+  `decomp` and `regularize` each pay once per block
+- The `decomp` docstring states the isometry condition as `W W† = d·I`
+- `src/nicole/space.py` is deliberately untouched, being a real-valued operator
+  template by design; a complex Hamiltonian is obtained with `to(dtype=...)`
+
+### Documentation
+
+- `docs/api/core/tensor.md` adds `real` and `imag` to the rendered members,
+  and a Data Types section covering the coherence guarantee, casting, and the
+  promotion rules, with scalar precision and dtype-aware equality called out as
+  the two surprises, and a note that a tensor built directly from a block
+  dictionary takes its dtype from one of the blocks
+- The `Bridge.conj` docstring records that intertwiner weight values are real
+  at any dtype
+
+### Test Suite (1702 tests)
+
+- **1692 tests pass**, 10 skipped: 6 requiring CUDA, and 4 pre-existing skips
+  where MPS has no `torch.linalg.qr` or `torch.linalg.eig`
+- **67 new tests** across 10 existing test files; no new test file was added,
+  the suite being organized per module
+  - `tests/support/test_types.py` (15): the dtype helpers, with the real path
+    asserted by object identity
+  - `tests/support/test_helpers.py` (12): dtype coherence across U(1), SU(2),
+    `ProductGroup` and Z2, the `real`/`imag` accessors, and `regularize` on a
+    complex higher-order tensor
+  - `tests/support/test_device.py` (13): `to(dtype=...)`, MPS allocation for
+    `identity`, `isometry`, `diag` and `Bridge.from_block`, the two MPS moduli
+    workarounds, and that importing nicole leaves the default device alone
+  - `tests/operations/test_einsum.py` (6): dtype promotion, including that
+    promoting up front keeps a mixed-precision chain at the final precision
+  - `tests/operations/test_arithmetic.py` (4): the real-weights invariant, a
+    real tensor's dtype surviving every operation, and equality across dtypes
+  - `tests/operations/test_factorize.py` (4): complex Hermitian `eig` for U(1)
+    and SU(2), and real singular values at both precisions
+  - `tests/symmetry/test_delegate.py` (4): shared-Bridge caching and
+    `Bridge.conj` leaving weight values real
+  - `tests/primary/test_blocks.py` (3): `bridge_collinear` on phase-shifted
+    and genuinely independent complex weights
+  - `tests/primary/test_construction.py` (3): the dtype resolved when the
+    constructor is given none
+  - `tests/operations/test_diag_inv.py` (3): `diag` reaching the blocks with
+    its requested dtype and device
+- Coverage was verified by mutation, not by inspection: each of the 16
+  non-trivial source changes was reverted in turn and the suite re-run,
+  confirming every one is guarded by a test that fails without it
+- 2 pre-existing `trim_zero_blocks` tests in
+  `tests/operations/test_maneuver.py` now pass `dtype=torch.float64`
+  explicitly, their blocks having been built from bare `torch.tensor([[...]])`
+  literals that default to `float32`
+
+### Statistics
+
+- **60 commits** since v0.4.1
+- **23 files changed**: 1596 insertions, 110 deletions
+- Source modules touched: `src/nicole/tensor.py`, `src/nicole/typing.py`,
+  `src/nicole/symmetry/delegate.py`, `src/nicole/blocks.py`,
+  `src/nicole/decomp.py`, `src/nicole/contract.py`, `src/nicole/maneuver.py`,
+  `src/nicole/identity.py`, `src/nicole/einsum.py`
+- Test modules touched: 12 files across `tests/support/`, `tests/operations/`,
+  `tests/primary/`, `tests/symmetry/`, and the shared `tests/utils.py`
+- Documentation touched: `docs/api/core/tensor.md`
+- Metadata touched: `pyproject.toml`
+
+### Compatibility
+
+**Breaking Changes:** Three, all narrow.
+
+1. A `Tensor` constructed directly from the dataclass now reports its blocks'
+   dtype instead of a declared `float64`, so
+   `Tensor(..., data={k: torch.tensor([[1.0]])})` reports `float32`, a bare
+   `torch.tensor` literal being `float32`. In v0.4.1 the same call declared
+   `float64` while holding `float32` blocks, so the label was simply wrong.
+   Pass `dtype=` explicitly to pin it. The public constructors are unaffected
+   and still default to `float64`.
+2. Importing nicole no longer sets the process-wide default device. Code that
+   relied on `import nicole` resetting it to CPU must call
+   `torch.set_default_device('cpu')` itself. Since CPU is torch's own default,
+   this affects only callers who deliberately set a non-CPU default before
+   importing and expected it to be overridden.
+3. `eig(is_hermitian=True)` on a complex Hermitian tensor now returns complex
+   eigenvectors where it previously returned real ones with the imaginary part
+   discarded, and complex `svd` returns real-dtype singular values. Both are
+   fixes, but code asserting the old dtypes needs updating. Results for
+   real-valued inputs are unchanged, and `U`, `S` and `Vh` for a real input are
+   bit-for-bit identical to v0.4.1.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.4.1] - 2026-09-20
 
 **Relative Squared Discarded Weight in SVD**
@@ -1183,6 +1390,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.4.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.0
 [0.3.7]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.3.7

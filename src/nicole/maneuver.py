@@ -59,6 +59,8 @@ from .blocks import BlockKey, BlockSchema
 from .index import Index
 from .tensor import Tensor
 from .typing import Charge, Direction, Sector
+from .typing import normalize_dtype_for_device
+from .typing import promote_tensors
 from .symmetry import delegate as dg
 
 
@@ -492,6 +494,10 @@ def oplus(
                         f"identical dimensions, got {dim_map_A[charge]} and {dim_map_B[charge]}"
                     )
     
+    # Bring both operands to a common dtype, so the padded buffers allocated
+    # per block below need no further dtype decision.
+    A, B = promote_tensors(A, B)
+
     # Step 4: Build output indices
     out_indices = []
     # Track sector information for each axis
@@ -576,7 +582,7 @@ def oplus(
                     out_shape.append(dim_map_A[charge] if charge in dim_map_A else dim_map_B[charge])
             
             # Initialize output block with zeros
-            out_block = torch.zeros(out_shape, dtype=torch.promote_types(A.dtype, B.dtype), device=A.device)
+            out_block = torch.zeros(out_shape, dtype=A.dtype, device=A.device)
             
             # Place block from A if it exists
             if charge_key in A.data:
@@ -693,7 +699,7 @@ def oplus(
     # Step 6: Create and return output tensor
     return Tensor(
         indices=tuple(out_indices), itags=A.itags, data=out_data, intw=out_intw,
-        dtype=torch.promote_types(A.dtype, B.dtype), label=A.label
+        dtype=A.dtype, label=A.label
     )
 
 
@@ -815,6 +821,15 @@ def diag(
         device = torch.get_default_device()
     device = torch.device(device)
     
+    # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
+    dtype = normalize_dtype_for_device(dtype, device)
+    
+    # Every block of one S shares a dtype and device, so one sample settles the
+    # loop below, where a per-block `to` is usually a no-op but never free.
+    sample = next(iter(S_blocks.values()), None)
+    dtype_or_device_differs = sample is not None and \
+        (sample.dtype is not dtype or sample.device != device)
+    
     # Check if group is Abelian or generic (non-Abelian)
     group = bond_index.group
     
@@ -823,6 +838,8 @@ def diag(
         diag_blocks: Dict[BlockKey, torch.Tensor] = {}
         for key, vec_array in S_blocks.items():
             # Create diagonal matrix from 1D array
+            if dtype_or_device_differs:
+                vec_array = vec_array.to(device=device, dtype=dtype)
             diag_matrix = torch.diag(vec_array)
             diag_blocks[key] = diag_matrix
         
@@ -841,6 +858,8 @@ def diag(
         
         for key, vec_array in S_blocks.items():
             # Create diagonal matrix from 1D array with trailing reduced multiplicity dimension
+            if dtype_or_device_differs:
+                vec_array = vec_array.to(device=device, dtype=dtype)
             diag_matrix = torch.diag(vec_array).unsqueeze(-1)
             diag_blocks[key] = diag_matrix
             

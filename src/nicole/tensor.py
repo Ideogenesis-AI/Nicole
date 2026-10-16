@@ -27,6 +27,7 @@ charge conservation dictated by the index metadata.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import sqrt
 from typing import Dict, Mapping, MutableMapping, Sequence, Tuple, Union, Optional
 
 import torch
@@ -34,15 +35,13 @@ import torch
 from .blocks import BlockKey, BlockSchema
 from .index import Index, union_indices
 from .typing import Direction, Sector
-from .typing import normalize_dtype_for_device
+from .typing import promote_tensors, normalize_dtype_for_device
+from .typing import real_dtype_for, scalar_result_dtype
 from .symmetry import SymmetryGroup
 from .symmetry import delegate as dg
 
 # Disable autograd by default for performance (tensor networks rarely need gradients)
 torch.set_grad_enabled(False)
-
-# Set default device to CPU (users can change via torch.set_default_device if needed)
-torch.set_default_device('cpu')
 
 
 @dataclass
@@ -65,7 +64,7 @@ class Tensor:
     intw:
         Mapping from block keys to intertwiners delegated to Yuzuha protocol.
     dtype:
-        Data type for the dense blocks. Defaults to double precision real values.
+        Data type shared by the dense blocks and the intertwiner weights.
     label:
         Human-readable label for the tensor. Defaults to "Tensor".
     device:
@@ -97,10 +96,14 @@ class Tensor:
         In-place: Remove sectors from each index that do not appear in any block.
     trim_zero_blocks()
         In-place: Remove blocks whose magnitude is negligible relative to the norm.
+    real
+        Property returning the real part as a real-dtype tensor.
+    imag
+        Property returning the imaginary part as a real-dtype tensor.
     device
         Property returning the device where tensor blocks are stored.
     to()
-        Move tensor to specified device (CPU, CUDA, MPS, etc.).
+        Move tensor to specified device (CPU, CUDA, MPS, etc.), and cast its dtype.
     cpu()
         Move tensor to CPU.
     cuda()
@@ -142,7 +145,7 @@ class Tensor:
     itags: Tuple[str, ...]
     data: MutableMapping[BlockKey, torch.Tensor]
     intw: Optional[MutableMapping[BlockKey, dg.Bridge]] = field(default=None)
-    dtype: torch.dtype = torch.float64
+    dtype: Optional[torch.dtype] = None
     label: str = "Tensor"
     _sorted_keys: Optional[Tuple[BlockKey, ...]] = field(default=None, repr=False, compare=False)
 
@@ -151,7 +154,15 @@ class Tensor:
     # ------------------------------------------------------------
 
     def __post_init__(self) -> None:
-        """Validate the provided block dictionary against the index schema."""
+        """Resolve the dtype and validate the block dictionary against the index schema."""
+        # A supplied dtype is trusted; omitting it samples one block instead,
+        # so a forgotten argument cannot mislabel complex data as float64.
+        # Sampling beats scanning: operations keep a tensor's dtype uniform,
+        # so blocks can only disagree if one deliberately builds in that way.
+        if self.dtype is None:
+            sampled = next(iter(self.data.values())).dtype if self.data else torch.float64
+            object.__setattr__(self, 'dtype', sampled)
+
         # Allow 0 indices (scalars) or >= 2 indices
         # Disallow exactly 1 index (breaks symmetry semantics)
         if len(self.indices) == 1:
@@ -507,6 +518,69 @@ class Tensor:
             sorted_keys=selected_keys, max_lines=None, block_ids=list(block_ids)))
     
     # ------------------------------------------------------------
+    #   Data type: resolution, casting, and real/imaginary parts
+    # ------------------------------------------------------------
+
+    def _split_complex(self, part: str) -> Tensor:
+        """Return the real or imaginary part of this tensor as a real tensor."""
+        real_dtype = real_dtype_for(self.dtype)
+
+        if self.intw is not None and self.dtype.is_complex:
+            # A block is stored as sum_c data[..., c] * weights[c, :], whose
+            # real part is Re(R)Re(W) - Im(R)Im(W): two component terms, where
+            # the split below writes the first one alone. Only a hand-built
+            # Bridge reaches this, as every symbol yuzuha produces is real.
+            for key, bridge in self.intw.items():
+                if torch.any(bridge.weights.imag != 0):
+                    raise ValueError(
+                        f"Intertwiner weights for block {key} have a non-zero "
+                        "imaginary part, which the single-component split used "
+                        "here cannot represent"
+                    )
+
+        if part == 'real':
+            data = {k: v.real.contiguous() for k, v in self.data.items()}
+        elif self.dtype.is_complex:
+            data = {k: v.imag.contiguous() for k, v in self.data.items()}
+        else:
+            # A real tensor has a vanishing imaginary part, as in NumPy.
+            data = {k: torch.zeros_like(v) for k, v in self.data.items()}
+
+        # Demote the weights through `.real` instead of leaving it to the
+        # constructor, whose `.to()` warns about discarding an imaginary part
+        # that the check above has already established to be zero.
+        intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            intw = {
+                k: dg.Bridge(cgspec=b.cgspec, weights=b.weights.real.contiguous())
+                for k, b in self.intw.items()
+            } if self.dtype.is_complex else dict(self.intw)
+
+        return Tensor(
+            indices=self.indices, itags=self.itags, data=data, intw=intw,
+            dtype=real_dtype, label=self.label,
+        )
+
+    @property
+    def real(self) -> Tensor:
+        """Real part of this tensor, as a real-dtype tensor.
+
+        A real tensor is returned unchanged, matching `torch.Tensor.real`.
+        """
+        if not self.dtype.is_complex:
+            return self
+        return self._split_complex('real')
+
+    @property
+    def imag(self) -> Tensor:
+        """Imaginary part of this tensor, as a real-dtype tensor.
+
+        Unlike `torch.Tensor.imag`, which rejects a real input, a real tensor
+        yields zeros, following NumPy.
+        """
+        return self._split_complex('imag')
+
+    # ------------------------------------------------------------
     #   Device management: cpu, cuda, mps
     # ------------------------------------------------------------
 
@@ -518,30 +592,63 @@ class Tensor:
         # All blocks must be on same device
         return next(iter(self.data.values())).device
     
-    def to(self, device: Union[str, torch.device]) -> Tensor:
-        """Move tensor to specified device.
+    def to(self, device: Optional[Union[str, torch.device]] = None,
+           dtype: Optional[torch.dtype] = None) -> Tensor:
+        """Move tensor to a specified device and optionally cast its dtype.
         
         Parameters
         ----------
-        device : str or torch.device
-            Target device ('cpu', 'cuda', 'mps', etc.)
+        device : str or torch.device, optional
+            Target device ('cpu', 'cuda', 'mps', etc.). If None, the tensor
+            stays where it is.
+        dtype : torch.dtype, optional
+            Target dtype, applied to the dense blocks and the intertwiner
+            weights alike. If None, the current dtype is preserved, subject to
+            the device normalization below.
             
         Returns
         -------
         Tensor
-            New tensor on the specified device
+            New tensor on the specified device, or self if neither the device
+            nor the dtype changes.
+
+        Raises
+        ------
+        ValueError
+            If `dtype` is real and the tensor is complex. Discarding an
+            imaginary part is never implicit; use `real` or `imag` to say
+            which part is wanted.
         
         Notes
         -----
         MPS (Apple Silicon) doesn't support float64/complex128. If moving a tensor with
         these dtypes to MPS, they will be automatically downgraded to float32/complex64.
+
+        Examples
+        --------
+        >>> state = Tensor.random([idx, idx.flip()], itags=["a", "b"])
+        >>> state.to(dtype=torch.complex128).dtype
+        torch.complex128
         """
-        device = torch.device(device)
-        if device == self.device:
+        if dtype is not None and self.dtype.is_complex and not dtype.is_complex:
+            raise ValueError(
+                f"Casting {self.dtype} to {dtype} would discard the imaginary "
+                "part; use .real or .imag to select one explicitly"
+            )
+
+        # Settle a pure cast before touching `self.device`, whose every access
+        # goes through torch's default-device mode: an idempotent promotion is
+        # a common defensive call and should stay close to free.
+        if device is None and (dtype is None or dtype is self.dtype):
             return self
+
+        device = self.device if device is None else torch.device(device)
         
         # Normalize dtype for device compatibility (e.g., MPS doesn't support float64)
-        new_dtype = normalize_dtype_for_device(self.dtype, device)
+        new_dtype = normalize_dtype_for_device(self.dtype if dtype is None else dtype, device)
+        
+        if device == self.device and new_dtype is self.dtype:
+            return self
         
         if new_dtype != self.dtype:
             # Need to convert dtype as well as device
@@ -1013,6 +1120,8 @@ class Tensor:
         # Check intertwiners for generic tensors
         if (self.intw is None) != (other.intw is None):
             return False
+        if self.dtype is not other.dtype:
+            return False
         # Expensive element-wise comparisons last
         return (
             all(torch.equal(self.data[k], other.data[k]) for k in self.data)
@@ -1040,13 +1149,17 @@ class Tensor:
         - If weights differ: concatenates along reduced multiplicity dimension
                              compresses out any resulting linear dependence
         """
+        # Promote up front so that the branches below, including the ones where
+        # only one side holds a block, all emit blocks of a single dtype.
+        self, other = promote_tensors(self, other)
+
         # Special case for scalar + scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
             scalar_data = self.data[()] + other.data[()]
             return Tensor(
                 indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+                dtype=self.dtype, label=self.label
             )
         
         self._align_for_binary(other)
@@ -1093,7 +1206,7 @@ class Tensor:
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+            dtype=self.dtype, label=self.label
         )
 
     def __sub__(self, other: Tensor) -> Tensor:
@@ -1104,13 +1217,17 @@ class Tensor:
         - If weights differ: concatenates along reduced multiplicity dimension
                              compresses out any resulting linear dependence
         """
+        # Promote up front so that the branches below, including the ones where
+        # only one side holds a block, all emit blocks of a single dtype.
+        self, other = promote_tensors(self, other)
+
         # Special case for scalar - scalar
         if self.is_scalar() and other.is_scalar():
             # Perform operation on torch tensors to preserve computational graph
             scalar_data = self.data[()] - other.data[()]
             return Tensor(
                 indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+                dtype=self.dtype, label=self.label
             )
         
         self._align_for_binary(other)
@@ -1158,38 +1275,34 @@ class Tensor:
         
         return Tensor(
             indices=new_indices, itags=self.itags, data=new_data, intw=new_intw,
-            dtype=torch.promote_types(self.dtype, other.dtype), label=self.label
+            dtype=self.dtype, label=self.label
         )
 
     def __mul__(self, scalar: Union[int, float, complex]) -> Tensor:
         """Scale every dense block by a scalar."""
+        dtype = scalar_result_dtype(self.dtype, scalar)
+
         # Special case for scalar tensor * scalar value
         if self.is_scalar():
             # Perform operation on torch tensor to preserve computational graph
-            scalar_data = self.data[()] * scalar
-            # Determine scalar dtype for promotion
-            if isinstance(scalar, complex):
-                scalar_dtype = torch.complex128
-            elif isinstance(scalar, float):
-                scalar_dtype = torch.float64
-            else:  # int
-                scalar_dtype = torch.int64
             return Tensor(
-                indices=(), itags=(), data={(): scalar_data},
-                dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
+                indices=(), itags=(), data={(): self.data[()] * scalar},
+                dtype=dtype, label=self.label
             )
         
         new_data = {k: (v * scalar) for k, v in self.data.items()}
-        # Determine scalar dtype for promotion
-        if isinstance(scalar, complex):
-            scalar_dtype = torch.complex128
-        elif isinstance(scalar, float):
-            scalar_dtype = torch.float64
-        else:  # int
-            scalar_dtype = torch.int64
+        new_intw: Optional[Dict[BlockKey, dg.Bridge]] = None
+        if self.intw is not None:
+            # A complex scalar promotes the blocks, so carry the intertwiner
+            # weights with them. The dict is copied either way: Bridges are
+            # shared, and in-place methods such as `regularize` assign into
+            # whichever dict they are handed.
+            new_intw = dict(self.intw) if dtype is self.dtype else \
+                {k: b.to(dtype=dtype) for k, b in self.intw.items()}
+
         return Tensor(
-            indices=self.indices, itags=self.itags, data=new_data, intw=self.intw,
-            dtype=torch.promote_types(self.dtype, scalar_dtype), label=self.label
+            indices=self.indices, itags=self.itags, data=new_data, intw=new_intw,
+            dtype=dtype, label=self.label
         )
 
     __rmul__ = __mul__
@@ -1258,6 +1371,7 @@ class Tensor:
             return
 
         group = self.indices[0].group
+        dtype, device = self.dtype, self.device
         _sp_eps = torch.finfo(torch.float32).eps
 
         if len(self.indices) == 2:
@@ -1267,12 +1381,16 @@ class Tensor:
                 if bridge is None:
                     continue
 
-                q = key[0]
-                target = torch.sqrt(
-                    torch.tensor(group.irrep_dim(q), dtype=self.dtype, device=self.device)
-                )
+                # Use sqrt(irrep_dim(q)) as the target weight.
+                target = sqrt(group.irrep_dim(key[0]))
+                # Compute the factor to normalize the weight to the target.
                 factors = bridge.weights[:, 0] / target         # (k,) signed ratio
-                bridge.weights[:] = target                      # all rows → +target
+                # Take a shared canonical Bridge instead of writing into this
+                # one: the weight storage can be shared with another tensor, and
+                # an in-place write would also reject a dtype change.
+                self.intw[key] = dg.canonical_bridge(
+                    bridge.cgspec, target, bridge.num_components, dtype, device
+                )
                 self.data[key] = arr * factors                  # (..., k) * (k,)
         else:
             # Higher-order: row-normalize Bridge weight matrix.
@@ -1282,9 +1400,16 @@ class Tensor:
                 if bridge is None:
                     continue
 
-                norms = bridge.weights.norm(dim=1)          # (k,)
+                # Taking the moduli first leaves the norm unchanged and is what
+                # lets this run on MPS, which has no complex kernel for `norm`.
+                weights = bridge.weights
+                rows = weights.abs() if dtype.is_complex else weights
+                norms = rows.norm(dim=1)                        # (k,)
                 safe_norms = norms.clamp(min=1e-12)
-                bridge.weights[:] = bridge.weights / safe_norms[:, None]
+                self.intw[key] = dg.Bridge(
+                    cgspec=bridge.cgspec,
+                    weights=weights / safe_norms[:, None],
+                )
                 self.data[key] = arr * norms                # (..., k) * (k,)
 
         # Remove linearly dependent components after normalization so the SVD

@@ -22,9 +22,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Hashable, Union
+from functools import reduce
+from typing import TYPE_CHECKING
+from typing import Dict, Hashable, Tuple, Union
 
 import torch
+
+if TYPE_CHECKING:
+    # Only for annotations: `tensor` imports from here, so the dependency has
+    # to stay one-way at runtime.
+    from .tensor import Tensor
 
 # Charge can be any hashable value. For single symmetry groups (U1Group, Z2Group,
 # SU2Group), charges are typically integers. For ProductGroup (multiple symmetries),
@@ -72,6 +79,120 @@ class Sector:
             raise ValueError("Sector dimension must be positive")
 
 
+# Real/complex dtype pairings, used to decide the dtype of an operation
+# without asking torch. `torch.result_type` answers the same question but
+# costs around 400 ns per call against roughly 20 ns for a dict lookup, which
+# is a measurable fraction of an elementary tensor operation.
+_COMPLEX_OF: Dict[torch.dtype, torch.dtype] = {
+    torch.float16: torch.complex32,
+    torch.bfloat16: torch.complex64,
+    torch.float32: torch.complex64,
+    torch.float64: torch.complex128,
+    torch.complex32: torch.complex32,
+    torch.complex64: torch.complex64,
+    torch.complex128: torch.complex128,
+}
+
+_REAL_OF: Dict[torch.dtype, torch.dtype] = {
+    torch.complex32: torch.float16,
+    torch.complex64: torch.float32,
+    torch.complex128: torch.float64,
+}
+
+
+def complex_dtype_for(dtype: torch.dtype) -> torch.dtype:
+    """Return the complex dtype that pairs with `dtype`.
+
+    A complex dtype is returned unchanged. Integer and boolean dtypes have no
+    natural complex counterpart of the same width and map to `complex128`,
+    matching how torch promotes them against a Python complex scalar.
+
+    Parameters
+    ----
+    dtype:
+        Real or complex dtype to promote.
+
+    Returns
+    ----
+    torch.dtype
+        Complex dtype of the corresponding precision.
+    """
+    return _COMPLEX_OF.get(dtype, torch.complex128)
+
+
+def real_dtype_for(dtype: torch.dtype) -> torch.dtype:
+    """Return the real dtype that pairs with `dtype`.
+
+    A real dtype is returned unchanged, so this is safe to apply to any dtype
+    when only the real component's precision matters.
+
+    Parameters
+    ----
+    dtype:
+        Real or complex dtype to demote.
+
+    Returns
+    ----
+    torch.dtype
+        Real dtype of the corresponding precision.
+    """
+    return _REAL_OF.get(dtype, dtype)
+
+
+def promote_tensors(*tensors: Tensor) -> Tuple[Tensor, ...]:
+    """Cast tensors to their common dtype, leaving them be when it is shared.
+
+    Tensors that already agree are returned as given, so a real-valued
+    operation neither casts nor allocates.
+
+    Parameters
+    ----
+    tensors:
+        One or more tensors to bring to a common dtype.
+
+    Returns
+    ----
+    Tuple
+        The tensors, each cast only if its own dtype differs from the common one.
+    """
+    first = tensors[0].dtype
+    # Torch dtypes are singletons, so `is` settles the matching case without
+    # asking torch for a promotion it does not need.
+    for other in tensors:
+        if other.dtype is not first:
+            dtype = reduce(torch.promote_types, (t.dtype for t in tensors))
+            return tuple(t if t.dtype is dtype else t.to(dtype=dtype) for t in tensors)
+    return tensors
+
+
+def scalar_result_dtype(dtype: torch.dtype, scalar: Union[int, float, complex]) -> torch.dtype:
+    """Return the dtype a tensor of `dtype` takes on after meeting `scalar`.
+
+    Only a complex scalar can widen a floating-point dtype, and it widens to
+    the complex dtype of matching precision, so a `float32` tensor scaled by a
+    complex number becomes `complex64` instead of `complex128`.
+
+    Parameters
+    ----
+    dtype:
+        Current dtype of the tensor.
+    scalar:
+        Python scalar the tensor is combined with.
+
+    Returns
+    ----
+    torch.dtype
+        Dtype the operation should produce.
+    """
+    if isinstance(scalar, complex):
+        return _COMPLEX_OF.get(dtype, torch.complex128)
+    if dtype.is_floating_point or dtype.is_complex:
+        return dtype
+    # An integer tensor widens to the default real dtype under a float scalar,
+    # following torch.
+    return torch.get_default_dtype() if isinstance(scalar, float) else dtype
+
+
 def normalize_dtype_for_device(dtype: torch.dtype, device: Union[str, torch.device]) -> torch.dtype:
     """Normalize dtype to be compatible with the target device.
     
@@ -96,7 +217,10 @@ def normalize_dtype_for_device(dtype: torch.dtype, device: Union[str, torch.devi
     - float64 -> float32 on MPS
     - complex128 -> complex64 on MPS
     """
-    device = torch.device(device)
+    # Callers have usually resolved the device already, and re-wrapping one
+    # costs more than the rest of this function put together.
+    if not isinstance(device, torch.device):
+        device = torch.device(device)
     
     if device.type == 'mps':
         # MPS doesn't support float64 or complex128

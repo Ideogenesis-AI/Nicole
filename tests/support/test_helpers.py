@@ -16,7 +16,7 @@
 # along with Nicole. If not, see <https://www.gnu.org/licenses/>.
 
 
-"""Tests for tensor helper operations: clone, keys & blocks, regularize, serialize."""
+"""Tests for tensor helpers: clone, keys & blocks, regularize, dtype, serialize."""
 
 import math
 
@@ -28,7 +28,7 @@ from nicole import Tensor, U1Group, Z2Group, SU2Group, ProductGroup
 from nicole import Direction, Index, Sector
 from nicole import filter_blocks
 from nicole.serialize import serialize, deserialize
-from ..utils import populate_random_weights
+from ..utils import assert_dtype_coherent, populate_random_weights
 
 
 # Clone tests
@@ -748,6 +748,30 @@ def test_regularize_higher_order_small_weight_normalized():
     assert torch.allclose(tensor.data[target_key], r_before * small_w)
 
 
+def test_regularize_higher_order_complex():
+    """Test that a complex higher-order tensor normalizes its weight rows."""
+    group = SU2Group()
+    idx1 = Index(Direction.IN,  group, sectors=(Sector(1, 2), Sector(2, 3)))
+    idx2 = Index(Direction.IN,  group, sectors=(Sector(1, 2),))
+    idx3 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2), Sector(2, 3)))
+    tensor = Tensor.random([idx1, idx2, idx3], seed=306, itags=["a", "b", "c"]) * (1 + 0.5j)
+    assert tensor.dtype is torch.complex128
+    populate_random_weights(tensor, seed=306)
+
+    norm_before = tensor.norm()
+
+    tensor.regularize()
+
+    # The row norm goes through the moduli, which is what makes this run on MPS
+    for key, bridge in tensor.intw.items():
+        row_norms = bridge.weights.abs().norm(dim=1)
+        assert torch.allclose(row_norms, torch.ones_like(row_norms)), (
+            f"Weight rows not normalized for block {key}"
+        )
+
+    assert math.isclose(tensor.norm(), norm_before, rel_tol=1e-12)
+
+
 # Compression-aspect tests for regularize
 
 def test_regularize_compresses_dependent_components():
@@ -872,6 +896,149 @@ def test_regularize_cutoff_forwarded():
     t_low = tensor.clone()
     t_low.regularize(cutoff=1e-20)
     assert t_low.intw[key].num_components == n_before
+
+
+# dtype coherence tests
+
+def test_dtype_coherent_for_abelian():
+    """Test that a freshly built Abelian tensor is dtype-coherent."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    for dtype in (torch.float32, torch.float64, torch.complex64, torch.complex128):
+        tensor = Tensor.random([idx, idx.flip()], seed=401, itags=["a", "b"], dtype=dtype)
+        assert_dtype_coherent(tensor)
+
+
+def test_dtype_coherent_for_su2():
+    """Test that data and intertwiner weights agree for an SU(2) tensor."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    
+    for dtype in (torch.float64, torch.complex128):
+        tensor = Tensor.random([idx, idx.flip()], seed=402, itags=["a", "b"], dtype=dtype)
+        assert tensor.intw is not None
+        assert_dtype_coherent(tensor)
+
+
+def test_dtype_coherent_for_product_group():
+    """Test that a product group carrying an SU(2) factor is dtype-coherent."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx = Index(Direction.OUT, group, sectors=(Sector((0, 1), 2), Sector((1, 2), 3)))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=412, itags=["a", "b"],
+                           dtype=torch.complex128)
+    assert tensor.intw is not None
+    assert_dtype_coherent(tensor)
+
+
+def test_dtype_coherent_for_z2():
+    """Test that an Abelian group without intertwiners is dtype-coherent."""
+    group = Z2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    tensor = Tensor.random([idx, idx.flip()], seed=413, itags=["a", "b"],
+                           dtype=torch.complex128)
+    assert tensor.intw is None
+    assert_dtype_coherent(tensor)
+
+
+def test_dtype_coherence_survives_complex_scalar_multiplication():
+    """Test that a complex scalar carries the intertwiner weights along with it."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=403, itags=["a", "b"])
+    
+    scaled = tensor * (1 + 1j)
+    
+    assert scaled.dtype is torch.complex128
+    assert_dtype_coherent(scaled)
+
+
+# real / imag tests
+
+def test_real_returns_self_for_real_tensor():
+    """Test that a real tensor is its own real part, as in torch."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=406, itags=["a", "b"])
+    
+    assert tensor.real is tensor
+
+
+def test_imag_is_zero_for_real_tensor():
+    """Test that a real tensor has a vanishing imaginary part, as in NumPy.
+
+    This is deliberately unlike torch.Tensor.imag, which rejects a real input.
+    """
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=407, itags=["a", "b"])
+    
+    imag = tensor.imag
+    
+    assert imag.dtype is torch.float64
+    for block in imag.data.values():
+        assert torch.all(block == 0)
+
+
+def test_real_imag_demote_dtype():
+    """Test that both parts come back at the real dtype of matching precision."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    
+    for dtype, real_dtype in ((torch.complex128, torch.float64),
+                              (torch.complex64, torch.float32)):
+        tensor = Tensor.random([idx, idx.flip()], seed=408, itags=["a", "b"], dtype=dtype)
+        assert tensor.real.dtype is real_dtype
+        assert tensor.imag.dtype is real_dtype
+
+
+def test_real_imag_reconstruct_complex_tensor():
+    """Test that the two parts recombine into the original complex tensor."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    tensor = Tensor.random([idx, idx.flip()], seed=409, itags=["a", "b"],
+                           dtype=torch.complex128)
+    
+    rebuilt = tensor.real + tensor.imag * 1j
+    
+    assert rebuilt.dtype is torch.complex128
+    assert set(rebuilt.data.keys()) == set(tensor.data.keys())
+    for key in tensor.data:
+        assert torch.allclose(rebuilt.data[key], tensor.data[key])
+
+
+def test_real_imag_su2_keeps_intertwiner():
+    """Test that splitting a generic tensor carries a real-dtype Bridge along."""
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=410, itags=["a", "b"],
+                           dtype=torch.complex128)
+    
+    for part in (tensor.real, tensor.imag):
+        assert part.intw is not None
+        assert_dtype_coherent(part)
+
+
+def test_real_imag_reject_complex_weights():
+    """Test that a hand-built complex-weighted Bridge is refused by the split.
+
+    The single-component split cannot represent Re(R)Re(W) - Im(R)Im(W), and
+    no yuzuha symbol produces such a weight, so this guards a hand-built one.
+    """
+    group = SU2Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], seed=411, itags=["a", "b"],
+                           dtype=torch.complex128)
+    assert tensor.intw is not None
+    
+    key = next(iter(tensor.intw))
+    bridge = tensor.intw[key]
+    tensor.intw[key] = dg.Bridge(cgspec=bridge.cgspec, weights=bridge.weights + 1j)
+    
+    with pytest.raises(ValueError, match="imaginary part"):
+        _ = tensor.real
 
 
 # Serialize / deserialize tests

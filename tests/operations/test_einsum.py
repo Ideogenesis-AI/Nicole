@@ -826,3 +826,116 @@ def test_einsum_outer_product_permuted_output_su2():
     assert list(result.itags) == ["k", "l", "i", "j"]
     assert_physical_tensors_equal(result, expected)
     assert_charge_neutral(result)
+
+
+# ===========================================================================
+#  Dtype promotion
+# ===========================================================================
+
+def test_einsum_promotes_real_operand_to_complex():
+    """einsum promotes a real operand to match a complex one."""
+    group = U1Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx_i, idx_j], seed=400, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], dtype=torch.complex128,
+                      seed=401, itags=["j", "k"])
+
+    result = einsum('ij,jk->ik', A, B)
+
+    assert result.dtype is torch.complex128
+    assert all(block.dtype is torch.complex128 for block in result.data.values())
+
+
+def test_einsum_promotes_to_the_wider_precision():
+    """einsum lifts a float32 operand to the float64 of its partner."""
+    group = U1Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx_i, idx_j], dtype=torch.float32, seed=402, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], seed=403, itags=["j", "k"])
+
+    result = einsum('ij,jk->ik', A, B)
+
+    assert result.dtype is torch.float64
+    assert all(block.dtype is torch.float64 for block in result.data.values())
+
+
+def test_einsum_promotes_across_three_operands():
+    """A single complex operand pulls the whole three-operand contraction complex."""
+    group = U1Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx_i, idx_j], seed=404, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], dtype=torch.complex128,
+                      seed=405, itags=["j", "k"])
+    C = Tensor.random([idx_i, idx_j], seed=406, itags=["k", "l"])
+
+    result = einsum('ij,jk,kl->il', A, B, C)
+
+    assert result.dtype is torch.complex128
+    assert all(block.dtype is torch.complex128 for block in result.data.values())
+
+
+def test_einsum_promotes_before_the_first_contraction():
+    """Promotion happens once over every operand, not pairwise down the chain.
+
+    Contracting left to right would evaluate the float32 pair at float32 and
+    only then widen, costing about float32 epsilon in the answer. Promoting
+    everything up front keeps the whole chain at float64.
+    """
+    group = U1Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 8), Sector(1, 8)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 8), Sector(1, 8)))
+
+    A = Tensor.random([idx_i, idx_j], dtype=torch.float32, seed=412, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], dtype=torch.float32,
+                      seed=413, itags=["j", "k"])
+    C = Tensor.random([idx_i, idx_j], seed=414, itags=["k", "l"])
+
+    result = einsum('ij,jk,kl->il', A, B, C)
+
+    # Reference: widen first, so every multiply is already at float64
+    expected = einsum('ij,jk,kl->il',
+                      A.to(dtype=torch.float64), B.to(dtype=torch.float64), C)
+
+    assert result.dtype is torch.float64
+    assert_blocks_equal(result, expected, rtol=1e-12, atol=1e-14)
+
+
+def test_einsum_promotes_intertwiners_su2():
+    """Promotion reaches the intertwiners of a generic-symmetry tensor too."""
+    group = SU2Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    A = Tensor.random([idx_i, idx_j], seed=407, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], dtype=torch.complex128,
+                      seed=408, itags=["j", "k"])
+    populate_random_weights(A, seed=409)
+
+    result = einsum('ij,jk->ik', A, B)
+
+    assert result.dtype is torch.complex128
+    assert all(bridge.weights.dtype is torch.complex128
+               for bridge in result.intw.values())
+
+
+def test_einsum_matches_contract_under_promotion():
+    """A promoted einsum agrees with the equivalent contract call."""
+    group = U1Group()
+    idx_i = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx_j = Index(Direction.IN,  group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    A = Tensor.random([idx_i, idx_j], seed=410, itags=["i", "j"])
+    B = Tensor.random([idx_j.flip(), idx_i.flip()], dtype=torch.complex128,
+                      seed=411, itags=["j", "k"])
+
+    result   = einsum('ij,jk->ik', A, B)
+    expected = contract(A, B, axes=([1], [0]))
+
+    assert_blocks_equal(result, expected)
+    assert_charge_neutral(result)
