@@ -555,3 +555,13 @@ def test_fast_path_preserves_dataclass_protocol(group):
     assert group == twin
     assert hash(group) == hash(twin)
     assert repr(group) == repr(twin)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_survives_round_trip(group):
+    """Pickling and deep-copying rebuild a group with working fast paths."""
+    for clone in (pickle.loads(pickle.dumps(group)), copy.deepcopy(group)):
+        assert clone == group
+        for q in _product_charges(group):
+            assert clone.dual(q) == group.dual(q)
+            assert clone.fuse_channels(q, q) == group.fuse_channels(q, q)
