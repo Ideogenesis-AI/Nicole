@@ -169,6 +169,14 @@ class ProductGroup(SymmetryGroup):
         object.__setattr__(self, 'fuse_channels', fuse_channels)
         object.__setattr__(self, 'dual', dual)
 
+    def __reduce__(self):
+        """Rebuild through `__init__` so pickling never touches the fast paths.
+
+        The installed implementations can be closures, which are not picklable,
+        and the default dataclass reduction would copy them out of the instance
+        dict. Reconstructing from `components` re-runs the tier selection.
+        """
+        return (ProductGroup, (self.components,))
     
     @property
     def name(self) -> str:
