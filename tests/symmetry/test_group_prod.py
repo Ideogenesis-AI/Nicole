@@ -18,9 +18,14 @@
 
 """Tests for ProductGroup: multiple independent symmetries."""
 
+import copy
+import pickle
+from dataclasses import dataclass
+
 import pytest
 
 from nicole.symmetry.abelian import U1Group, Z2Group
+from nicole.symmetry.base import AbelianGroup
 from nicole.symmetry.product import ProductGroup
 from nicole.symmetry.unitary import SU2Group
 
@@ -441,3 +446,69 @@ def test_product_group_name_three_components():
     """Test name property for U1×U1×Z2."""
     group = ProductGroup([U1Group(), U1Group(), Z2Group()])
     assert group.name == "U1×U1×Z2"
+
+
+# Fast path parity tests
+#
+# ProductGroup installs specialized fuse_unique/fuse_channels/dual into the
+# instance dict for two-component products. These tests pin every tier to the
+# generic class methods, which are reached by calling them unbound.
+
+
+@dataclass(frozen=True)
+class _Z3Group(AbelianGroup):
+    """Z3 group, used only to exercise the tier-2 fallback for unlisted types."""
+
+    @property
+    def name(self) -> str:
+        return "Z3"
+
+    @property
+    def neutral(self) -> int:
+        return 0
+
+    def dual(self, q: int) -> int:
+        return (-q) % 3
+
+    def fuse_unique(self, *qs: int) -> int:
+        return sum(qs) % 3
+
+    def equal(self, a: int, b: int) -> bool:
+        return a % 3 == b % 3
+
+    def validate_charge(self, q) -> None:
+        if q not in (0, 1, 2):
+            raise ValueError("Z3 charge must be 0, 1 or 2")
+
+
+# Representative charges per component type, used to build product charges.
+_SAMPLE_CHARGES = {
+    U1Group: (-2, 0, 1, 3),
+    Z2Group: (0, 1),
+    _Z3Group: (0, 1, 2),
+    SU2Group: (0, 1, 2, 3, 4),
+}
+
+
+def _product_charges(group):
+    """Return a few charge tuples spanning each component's sample charges."""
+    per_component = [_SAMPLE_CHARGES[type(c)] for c in group.components]
+    return [
+        tuple(samples[i % len(samples)] for samples in per_component)
+        for i in range(max(len(s) for s in per_component))
+    ]
+
+
+# One group per tier: the six tier-1 signatures, two tier-2 signatures using the
+# unlisted Z3, and a three-component group that keeps the generic methods.
+_PARITY_GROUPS = [
+    ProductGroup([U1Group(), U1Group()]),
+    ProductGroup([U1Group(), Z2Group()]),
+    ProductGroup([Z2Group(), U1Group()]),
+    ProductGroup([Z2Group(), Z2Group()]),
+    ProductGroup([U1Group(), SU2Group()]),
+    ProductGroup([Z2Group(), SU2Group()]),
+    ProductGroup([_Z3Group(), U1Group()]),
+    ProductGroup([_Z3Group(), SU2Group()]),
+    ProductGroup([U1Group(), Z2Group(), SU2Group()]),
+]
