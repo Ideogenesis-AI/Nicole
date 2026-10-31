@@ -546,3 +546,12 @@ def test_fast_path_fuse_unique_matches_generic(group, n_charges):
     for i in range(len(charges)):
         qs = tuple(charges[(i + k) % len(charges)] for k in range(n_charges))
         assert group.fuse_unique(*qs) == ProductGroup.fuse_unique(group, *qs)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_preserves_dataclass_protocol(group):
+    """Installed functions leave equality, hashing, and repr untouched."""
+    twin = ProductGroup(list(group.components))
+    assert group == twin
+    assert hash(group) == hash(twin)
+    assert repr(group) == repr(twin)
