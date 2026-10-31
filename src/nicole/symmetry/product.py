@@ -132,6 +132,43 @@ class ProductGroup(SymmetryGroup):
         object.__setattr__(self, 'components', tuple(components))
         object.__setattr__(self, '_has_unitary', bool(unitary_indices))
         object.__setattr__(self, '_neutral', tuple(comp.neutral for comp in components))
+
+        self._install_fast_paths()
+
+    def _install_fast_paths(self) -> None:
+        """Resolve and install the specialized fusion and dual implementations.
+
+        Selection happens once, here, so that call sites pay no dispatch cost:
+        the chosen plain functions go into the instance dict, where they shadow
+        the generic class methods. Products of three or more components keep the
+        generic methods. See the Fast Paths section at the end of this module.
+
+        The installed names are not dataclass fields, so the generated `__eq__`,
+        `__hash__`, and `__repr__` are unaffected.
+        """
+        components = self.components
+        # Only pairs are specialized. Three or more components keep the generic
+        # methods and pay their per-component loop in full: unrolling it would
+        # take a separate implementation per arity, so no fast path is offered.
+        if len(components) != 2:
+            return
+
+        # Hand-written arithmetic for the group pairs that occur in practice.
+        # Keying on type objects, not names, keeps the lookup an identity hash.
+        spec = _REGISTRY.get((type(components[0]), type(components[1])))
+        if spec is None:
+            # Any other pair, user-defined groups included, is specialized
+            # generically from whatever the two components themselves provide.
+            spec = _specialize_pair(components[0], components[1], self._has_unitary)
+
+        fuse_unique, fuse_channels, dual = spec
+        # A None fuse_unique leaves the generic method in place, which is what
+        # products containing a UnitaryGroup need so that it still raises.
+        if fuse_unique is not None:
+            object.__setattr__(self, 'fuse_unique', fuse_unique)
+        object.__setattr__(self, 'fuse_channels', fuse_channels)
+        object.__setattr__(self, 'dual', dual)
+
     
     @property
     def name(self) -> str:
