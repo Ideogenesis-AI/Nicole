@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
 
 from .base import SymmetryGroup, AbelianGroup, UnitaryGroup
+from .abelian import U1Group, Z2Group
+from .unitary import SU2Group
 
 
 @dataclass(frozen=True)
@@ -378,3 +380,304 @@ class ProductGroup(SymmetryGroup):
                 f"Component index {i} out of range [0, {len(self.components)})"
             )
         return self.components[i]
+
+
+# --- Fast Paths ---
+#
+# Charge fusion sits in the innermost loops of block enumeration, so the generic
+# implementations above — which loop over components, rebuild per-component
+# charge lists, and call back into each component group — cost far more than the
+# arithmetic they perform. The functions below specialize the three hot methods
+# (`fuse_unique`, `fuse_channels`, `dual`) for the product shapes that occur in
+# practice. `ProductGroup.__init__` picks one set once and installs it in the
+# instance dict, where it shadows the class method, so no dispatch cost is paid
+# per call. Every specialization must stay bit-identical to the generic method,
+# including the Z2 `& 1` normalization.
+#
+# Each registry entry is a `(fuse_unique, fuse_channels, dual)` triple. A `None`
+# in the `fuse_unique` slot means the generic method stays in place; this is used
+# for products containing SU(2), where it must keep raising TypeError.
+
+
+def _fuse_unique_u1_u1(*qs):
+    """Fuse U1xU1 charges component-wise."""
+    if len(qs) == 2:
+        a, b = qs
+        return (a[0] + b[0], a[1] + b[1])
+    s0 = 0
+    s1 = 0
+    for q in qs:
+        s0 += q[0]
+        s1 += q[1]
+    return (s0, s1)
+
+
+def _fuse_unique_u1_z2(*qs):
+    """Fuse U1xZ2 charges component-wise."""
+    if len(qs) == 2:
+        a, b = qs
+        return (a[0] + b[0], (a[1] ^ b[1]) & 1)
+    s0 = 0
+    p1 = 0
+    for q in qs:
+        s0 += q[0]
+        p1 ^= q[1] & 1
+    return (s0, p1)
+
+
+def _fuse_unique_z2_u1(*qs):
+    """Fuse Z2xU1 charges component-wise."""
+    if len(qs) == 2:
+        a, b = qs
+        return ((a[0] ^ b[0]) & 1, a[1] + b[1])
+    p0 = 0
+    s1 = 0
+    for q in qs:
+        p0 ^= q[0] & 1
+        s1 += q[1]
+    return (p0, s1)
+
+
+def _fuse_unique_z2_z2(*qs):
+    """Fuse Z2xZ2 charges component-wise."""
+    if len(qs) == 2:
+        a, b = qs
+        return ((a[0] ^ b[0]) & 1, (a[1] ^ b[1]) & 1)
+    p0 = 0
+    p1 = 0
+    for q in qs:
+        p0 ^= q[0] & 1
+        p1 ^= q[1] & 1
+    return (p0, p1)
+
+
+# The Abelian fuse_channels functions repeat the two-charge arithmetic instead
+# of calling their fuse_unique counterpart: two charges is by far the common
+# case, and the saved call is most of the cost of the operation.
+
+
+def _fuse_channels_u1_u1(*qs):
+    """Return the single U1xU1 fusion channel."""
+    if len(qs) == 2:
+        a, b = qs
+        return ((a[0] + b[0], a[1] + b[1]),)
+    if len(qs) == 1:
+        return (qs[0],)
+    return (_fuse_unique_u1_u1(*qs),)
+
+
+def _fuse_channels_u1_z2(*qs):
+    """Return the single U1xZ2 fusion channel."""
+    if len(qs) == 2:
+        a, b = qs
+        return ((a[0] + b[0], (a[1] ^ b[1]) & 1),)
+    if len(qs) == 1:
+        return (qs[0],)
+    return (_fuse_unique_u1_z2(*qs),)
+
+
+def _fuse_channels_z2_u1(*qs):
+    """Return the single Z2xU1 fusion channel."""
+    if len(qs) == 2:
+        a, b = qs
+        return (((a[0] ^ b[0]) & 1, a[1] + b[1]),)
+    if len(qs) == 1:
+        return (qs[0],)
+    return (_fuse_unique_z2_u1(*qs),)
+
+
+def _fuse_channels_z2_z2(*qs):
+    """Return the single Z2xZ2 fusion channel."""
+    if len(qs) == 2:
+        a, b = qs
+        return (((a[0] ^ b[0]) & 1, (a[1] ^ b[1]) & 1),)
+    if len(qs) == 1:
+        return (qs[0],)
+    return (_fuse_unique_z2_z2(*qs),)
+
+
+def _fuse_channels_u1_su2(*qs):
+    """Return all U1xSU2 fusion channels."""
+    n = len(qs)
+    if n == 2:
+        # Two charges: the SU(2) triangular rule spans |ja - jb| .. ja + jb.
+        a, b = qs
+        charge = a[0] + b[0]
+        ja = a[1]
+        jb = b[1]
+        lo = ja - jb if ja > jb else jb - ja
+        return tuple((charge, j) for j in range(lo, ja + jb + 2, 2))
+    if n < 2:
+        return (qs[0],) if n else ((0, 0),)
+    # n charges: accumulate the U1 sum and the SU(2) bounds in one pass.
+    charge = 0
+    j_sum = 0
+    j_largest = 0
+    for q in qs:
+        charge += q[0]
+        j = q[1]
+        j_sum += j
+        # An inline comparison rather than max(), which would cost a call per
+        # charge on a path that runs once per block key.
+        if j > j_largest:
+            j_largest = j
+    # Maximal cancellation has the largest spin opposing all the others.
+    lo = max(0, 2 * j_largest - j_sum)
+    # Stepping down from the maximum by 2 keeps the integrality of the channels.
+    start = j_sum - 2 * ((j_sum - lo) // 2)
+    return tuple((charge, j) for j in range(start, j_sum + 2, 2))
+
+
+def _fuse_channels_z2_su2(*qs):
+    """Return all Z2xSU2 fusion channels."""
+    n = len(qs)
+    if n == 2:
+        a, b = qs
+        parity = (a[0] ^ b[0]) & 1
+        ja = a[1]
+        jb = b[1]
+        lo = ja - jb if ja > jb else jb - ja
+        return tuple((parity, j) for j in range(lo, ja + jb + 2, 2))
+    if n < 2:
+        return (qs[0],) if n else ((0, 0),)
+    parity = 0
+    j_sum = 0
+    j_largest = 0
+    for q in qs:
+        parity ^= q[0] & 1
+        j = q[1]
+        j_sum += j
+        if j > j_largest:
+            j_largest = j
+    lo = max(0, 2 * j_largest - j_sum)
+    start = j_sum - 2 * ((j_sum - lo) // 2)
+    return tuple((parity, j) for j in range(start, j_sum + 2, 2))
+
+
+def _dual_u1_u1(q):
+    """Return the dual of a U1xU1 charge."""
+    return (-q[0], -q[1])
+
+
+def _dual_u1_z2(q):
+    """Return the dual of a U1xZ2 charge."""
+    return (-q[0], q[1] & 1)
+
+
+def _dual_z2_u1(q):
+    """Return the dual of a Z2xU1 charge."""
+    return (q[0] & 1, -q[1])
+
+
+def _dual_z2_z2(q):
+    """Return the dual of a Z2xZ2 charge."""
+    return (q[0] & 1, q[1] & 1)
+
+
+def _dual_u1_su2(q):
+    """Return the dual of a U1xSU2 charge (SU(2) irreps are self-dual)."""
+    return (-q[0], q[1])
+
+
+def _dual_z2_su2(q):
+    """Return the dual of a Z2xSU2 charge (SU(2) irreps are self-dual)."""
+    return (q[0] & 1, q[1])
+
+
+# Keyed on the tuple of component *types*, so selection is an identity-hashed
+# dict lookup rather than a comparison of group name strings.
+_REGISTRY: dict = {
+    (U1Group, U1Group): (_fuse_unique_u1_u1, _fuse_channels_u1_u1, _dual_u1_u1),
+    (U1Group, Z2Group): (_fuse_unique_u1_z2, _fuse_channels_u1_z2, _dual_u1_z2),
+    (Z2Group, U1Group): (_fuse_unique_z2_u1, _fuse_channels_z2_u1, _dual_z2_u1),
+    (Z2Group, Z2Group): (_fuse_unique_z2_z2, _fuse_channels_z2_z2, _dual_z2_z2),
+    (U1Group, SU2Group): (None, _fuse_channels_u1_su2, _dual_u1_su2),
+    (Z2Group, SU2Group): (None, _fuse_channels_z2_su2, _dual_z2_su2),
+}
+
+
+# --- Generic Pairs ---
+#
+# Fallback for two-component products whose component types the registry does
+# not list, user-defined groups included. Their arithmetic is unknown here and
+# so cannot be inlined; instead each implementation is a closure built once per
+# group that captures the component bound methods. The call path still avoids
+# the attribute lookups and the per-component loop that the generic methods pay,
+# at the cost of one call per component. The triples follow the registry
+# convention, so `fuse_unique` is None whenever the second component is a
+# UnitaryGroup. Products of three or more components get no fast path at all.
+
+
+def _specialize_pair(first, second, has_unitary):
+    """Build specialized fusion and dual functions for any two-component product.
+
+    The returned closures capture the component bound methods, so the call path
+    is free of attribute lookups and of the per-component loop that the generic
+    methods run. This covers component types that `_REGISTRY` does not list,
+    including user-defined groups.
+
+    Parameters
+    ----
+    first, second:
+        The two component groups, in order.
+    has_unitary:
+        Whether `second` is a `UnitaryGroup`, in which case fusion is
+        multi-channel and no `fuse_unique` is provided.
+
+    Returns
+    ----
+    tuple
+        A `(fuse_unique, fuse_channels, dual)` triple, with `fuse_unique` set to
+        `None` when `has_unitary` is true.
+    """
+    dual_first = first.dual
+    dual_second = second.dual
+
+    def dual(q):
+        return (dual_first(q[0]), dual_second(q[1]))
+
+    if has_unitary:
+        return (*_specialize_unitary_channels(first, second), dual)
+    else:
+        return (*_specialize_abelian_fusion(first, second), dual)
+
+
+def _specialize_unitary_channels(first, second):
+    """Build fuse_unique and fuse_channels for an Abelian group times a UnitaryGroup."""
+    fuse_first = first.fuse_unique
+    channels_second = second.fuse_channels
+    neutral = (first.neutral, second.neutral)
+
+    def fuse_channels(*qs):
+        if len(qs) < 2:
+            return (qs[0],) if qs else (neutral,)
+        fused_first = fuse_first(*[q[0] for q in qs])
+        return tuple(
+            (fused_first, ch) for ch in channels_second(*[q[1] for q in qs])
+        )
+
+    # Fusion is multi-channel here, so there is no unique outcome to specialize:
+    # a None fuse_unique leaves the generic method in place, where it raises.
+    return None, fuse_channels
+
+
+def _specialize_abelian_fusion(first, second):
+    """Build fuse_unique and fuse_channels for a pair of Abelian groups."""
+    fuse_first = first.fuse_unique
+    fuse_second = second.fuse_unique
+
+    def fuse_unique(*qs):
+        if len(qs) == 2:
+            a, b = qs
+            return (fuse_first(a[0], b[0]), fuse_second(a[1], b[1]))
+        return (fuse_first(*[q[0] for q in qs]), fuse_second(*[q[1] for q in qs]))
+
+    def fuse_channels(*qs):
+        if len(qs) == 2:
+            a, b = qs
+            return ((fuse_first(a[0], b[0]), fuse_second(a[1], b[1])),)
+        if len(qs) == 1:
+            return (qs[0],)
+        return (fuse_unique(*qs),)
+
+    return fuse_unique, fuse_channels
