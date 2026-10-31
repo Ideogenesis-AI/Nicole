@@ -512,3 +512,37 @@ _PARITY_GROUPS = [
     ProductGroup([_Z3Group(), SU2Group()]),
     ProductGroup([U1Group(), Z2Group(), SU2Group()]),
 ]
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_dual_matches_generic(group):
+    """Installed dual agrees with the generic implementation."""
+    for q in _product_charges(group):
+        assert group.dual(q) == ProductGroup.dual(group, q)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+@pytest.mark.parametrize("n_charges", [0, 1, 2, 3])
+def test_fast_path_fuse_channels_matches_generic(group, n_charges):
+    """Installed fuse_channels agrees with the generic implementation."""
+    charges = _product_charges(group)
+    for i in range(len(charges)):
+        # Rotate the sample charges so every argument slot sees every value.
+        qs = tuple(charges[(i + k) % len(charges)] for k in range(n_charges))
+        assert group.fuse_channels(*qs) == ProductGroup.fuse_channels(group, *qs)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+@pytest.mark.parametrize("n_charges", [0, 1, 2, 3])
+def test_fast_path_fuse_unique_matches_generic(group, n_charges):
+    """Installed fuse_unique agrees with the generic implementation."""
+    if not group.is_abelian:
+        # Non-Abelian products keep the generic fuse_unique, which must raise.
+        with pytest.raises(TypeError, match="non-Abelian component"):
+            group.fuse_unique((0,) * group.num_components)
+        return
+
+    charges = _product_charges(group)
+    for i in range(len(charges)):
+        qs = tuple(charges[(i + k) % len(charges)] for k in range(n_charges))
+        assert group.fuse_unique(*qs) == ProductGroup.fuse_unique(group, *qs)
