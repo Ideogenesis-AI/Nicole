@@ -238,7 +238,7 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         q_left = key[left_axis]
         target = math.sqrt(group.irrep_dim(q_left))
 
-        # SVD of the weight matrix W = U S Vh.  Components whose singular
+        # SVD of the weight matrix W = U S Vh. Components whose singular
         # values fall below cutoff are linearly dependent and are dropped.
         # Routed through the fallback ladder: a non-convergence here would take
         # down the whole decomposition of a generic-symmetry tensor.
