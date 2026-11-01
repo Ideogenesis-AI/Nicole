@@ -49,7 +49,8 @@ decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
 from __future__ import annotations
 
 from typing import Dict, List, Literal, Sequence, Tuple, MutableMapping
-from typing import Any, Optional, Union
+from typing import Any, Iterator, Optional, Union
+import contextlib
 import logging
 import math
 
@@ -246,6 +247,28 @@ def _rsvd_budget(ranks: Dict[tuple, int], nkeep: int) -> Dict[tuple, int]:
         q_left: min(full_rank, max(1, math.ceil(rho * full_rank)))
         for q_left, full_rank in ranks.items()
     }
+
+
+@contextlib.contextmanager
+def _rsvd_rng(device: torch.device, seed: Optional[int]) -> Iterator[None]:
+    """Seed the global RNG for a randomized decomposition, then restore it.
+
+    `torch.svd_lowrank` draws its test matrix from the global generator and takes no
+    `generator` argument, so reproducibility has to go through `torch.manual_seed`.
+    Forking first keeps that from perturbing the caller's RNG stream. A seed of None
+    is a no-op, leaving the global state untouched in both directions.
+    """
+    if seed is None:
+        yield
+        return
+
+    # fork_rng indexes CUDA devices; an empty list forks the CPU generator alone.
+    devices = [device.index or 0] if device.type == "cuda" else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(seed)
+        yield
+
+
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
 
