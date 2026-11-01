@@ -41,8 +41,9 @@ eig(T, itag=None, order="ascend", trunc=None, is_hermitian=False)
     uses torch.linalg.eigh for real eigenvalues and orthonormal eigenvectors.
 
 decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
-    High-level decomposition with four modes:
+    High-level decomposition with five modes:
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
+    - "RSVD": As "SVD", but computed with the randomized engine
     - "UR": Returns (U, R) where R = S*Vh
     - "LV": Returns (L, V) where L = U*S
     - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
@@ -1279,6 +1280,8 @@ def decomp(
     mode:
         Decomposition mode:
         - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
+        - "RSVD": As "SVD", but each sector is computed with the randomized engine
+          instead of the exact one. Requires `trunc["nkeep"]`.
         - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
         - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
@@ -1300,11 +1303,13 @@ def decomp(
         - "nkeep": Keep at most n singular values globally
         - "thresh": Keep singular values >= t per block
         Both can be specified together: thresh is applied first, then nkeep.
+        Mode "RSVD" takes its tuning from this dict as well, through the keys
+        "oversample", "niter" and "seed"; see `svd`.
     
     Returns
     -------
     tuple[Tensor, Tensor] or tuple[Tensor, Tensor, Tensor]
-        - "SVD" mode: (U, S, Vh) with S as diagonal matrix tensor
+        - "SVD" and "RSVD" modes: (U, S, Vh) with S as diagonal matrix tensor
         - "UR" mode: (U, R) where R incorporates singular values
         - "LV" mode: (L, V) where L incorporates singular values
         - "QR" mode: (Q, R) where Q is orthogonal and R is upper triangular
@@ -1312,8 +1317,9 @@ def decomp(
     Raises
     ------
     ValueError
-        If mode is not one of "SVD", "UR", "LV", or "QR",
-        or if flow is not ">>", "<<", or "><"
+        If mode is not one of "SVD", "RSVD", "UR", "LV", or "QR",
+        if flow is not ">>", "<<", or "><",
+        or if mode="RSVD" is used without `trunc["nkeep"]`
     
     Examples
     --------
@@ -1333,11 +1339,16 @@ def decomp(
     >>> 
     >>> # LV mode: Get L=U*S and V
     >>> L, V = decomp(T, axes=0, mode="LV")
+    >>> 
+    >>> # RSVD mode: same output as SVD, computed with the randomized engine
+    >>> U, S, Vh = decomp(T, axes=0, mode="RSVD", trunc={"nkeep": 1, "seed": 42})
     
     Notes
     -----
     - UR and LV modes are more memory and computationally efficient than SVD mode
     - SVD mode constructs a full diagonal matrix tensor for S
+    - RSVD mode pays off only when the kept rank is well below the full rank of a
+      sector, and when the spectrum decays; otherwise the exact engine wins
     - All modes produce mathematically equivalent decompositions
     - When multiple axes are specified, they are first merged using an n-to-1 isometry,
       decomposed, and then the U tensor is unmerged back to the original axes
@@ -1348,8 +1359,8 @@ def decomp(
     
     # Validated before either path branches on it, so a multi-axis call fails
     # before any of its axes are merged.
-    if mode.upper() not in ("SVD", "UR", "LV", "QR"):
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
+    if mode.upper() not in ("SVD", "RSVD", "UR", "LV", "QR"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'RSVD', 'UR', 'LV', or 'QR'")
     
     # Check if axes is a sequence (multiple axes)
     is_multi_axis = isinstance(axes, (list, tuple))
@@ -1375,7 +1386,7 @@ def decomp(
         )
         
         # Unmerge the U tensor (first element of decomp_result)
-        if mode.upper() == "SVD":
+        if mode.upper() in ("SVD", "RSVD"):
             U, S, Vh = decomp_result
             # Unmerge U by contracting with conjugate isometry
             # The merged index is at position 0 of U, and at last position of iso_conj
@@ -1428,15 +1439,18 @@ def decomp(
     left_index = T.indices[axis_idx]
     # Natural flow is "<<" if left_index is OUT, ">>" if left_index is IN
     natural_flow = "<<" if left_index.direction == Direction.OUT else ">>"
+    # Determine decomposition engine based on mode
+    engine = "random" if mode.upper() == "RSVD" else "exact"
     
     # Perform SVD to get U, singular values dict, and Vh (pass integer axis_idx)
-    U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc)
+    # "RSVD" differs from "SVD" only in which solver runs underneath.
+    U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc, engine=engine)
     
     # Update U and Vh bond tags to use custom tags
     U.retag({U.itags[1]: bond_tag_left})
     Vh.retag({Vh.itags[0]: bond_tag_right})
     
-    if mode.upper() == "SVD":
+    if mode.upper() in ("SVD", "RSVD"):
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
         
