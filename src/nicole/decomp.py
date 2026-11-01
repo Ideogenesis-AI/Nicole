@@ -240,7 +240,9 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
 
         # SVD of the weight matrix W = U S Vh.  Components whose singular
         # values fall below cutoff are linearly dependent and are dropped.
-        U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+        # Routed through the fallback ladder: a non-convergence here would take
+        # down the whole decomposition of a generic-symmetry tensor.
+        U, S, Vh, _ = _svd_robust(bridge.weights)
         k = max(1, int((S >= cutoff).sum().item()))
 
         # New data: R_new = R_flat @ (U[:,:k] · S[:k]) / target.
