@@ -50,6 +50,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Literal, Sequence, Tuple, MutableMapping
 from typing import Any, Optional, Union
+import logging
 import math
 
 import torch
@@ -60,6 +61,10 @@ from .tensor import Tensor
 from .typing import Direction, Sector
 from .typing import real_dtype_for
 from .symmetry import delegate as dg
+
+# Library logger: deliberately left without a handler or a level, so its records
+# stay inert until the application configures logging.getLogger("nicole").
+logger = logging.getLogger(__name__)
 
 
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
