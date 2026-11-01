@@ -66,6 +66,57 @@ from .symmetry import delegate as dg
 # stay inert until the application configures logging.getLogger("nicole").
 logger = logging.getLogger(__name__)
 
+# Default randomized-SVD parameters. The randomized method resolves the leading
+# singular values accurately-enough only when oversampled: a subspace of exactly
+# the target rank is not enough.
+RSVD_OVERSAMPLE = 10
+RSVD_NITER = 2
+
+
+def _rsvd_matrix(
+    mat: torch.Tensor,
+    k: int,
+    *, # keyword-only arguments
+    oversample: int = RSVD_OVERSAMPLE,
+    niter: int = RSVD_NITER,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Randomized SVD of a single matrix, in the layout `torch.linalg.svd` returns.
+
+    Thin adapter over `torch.svd_lowrank`, which implements Algorithm 5.1 of Halko,
+    Martinsson and Tropp (2009), converting its `V` to the `Vh` this module speaks.
+    It works in a subspace of dimension `k + oversample`, and all that many triplets
+    come back: the trailing ones are approximated far less accurately than the
+    leading `k`, but they widen the candidate pool for a later global truncation.
+    Pass `oversample=0` for exactly `k`.
+
+    Parameters
+    ----------
+    mat:
+        Matrix to decompose.
+    k:
+        Target rank. Clamped to the interval `[1, min(mat.shape)]`.
+    oversample:
+        Extra subspace dimensions beyond `k`. Accuracy of the leading `k` singular
+        values depends on this being positive; pass 0 only when `k` is already the
+        full rank.
+    niter:
+        Number of subspace (power) iterations.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        Triplet `(U, s, Vh)` with `s` in descending order, of rank
+        `min(k + oversample, min(mat.shape))`.
+    """
+    full_rank = min(mat.shape)
+    k = max(1, min(k, full_rank))
+    q = min(full_rank, k + max(0, oversample))
+
+    U, s, V = torch.svd_lowrank(mat, q=q, niter=niter)
+
+    # svd_lowrank hands back V; the rest of this module speaks Vh throughout.
+    return U, s, V.mH
+
 
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
