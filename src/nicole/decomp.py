@@ -1370,7 +1370,7 @@ def decomp(
         )
         
         # Unmerge the U tensor (first element of decomp_result)
-        if mode == "SVD":
+        if mode.upper() == "SVD":
             U, S, Vh = decomp_result
             # Unmerge U by contracting with conjugate isometry
             # The merged index is at position 0 of U, and at last position of iso_conj
@@ -1378,7 +1378,7 @@ def decomp(
             U_unmerged = contract(iso_conj, U, axes=(iso_conj_last_idx, 0))
             U_unmerged.trim_zero_blocks()
             return U_unmerged, S, Vh
-        else:  # mode == "UR", "LV", or "QR"
+        else:  # mode is "UR", "LV", or "QR"
             first, second = decomp_result
             # For UR mode, first is U; for LV mode, first is L; for QR mode, first is Q
             # All have the merged index at position 0
@@ -1390,8 +1390,7 @@ def decomp(
     
     # Single axis: original behavior
     # Validate mode
-    mode = mode.upper()
-    if mode not in ("SVD", "UR", "LV", "QR"):
+    if mode.upper() not in ("SVD", "UR", "LV", "QR"):
         raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
     
     # Validate flow parameter
@@ -1436,7 +1435,7 @@ def decomp(
     U.retag({U.itags[1]: bond_tag_left})
     Vh.retag({Vh.itags[0]: bond_tag_right})
     
-    if mode == "SVD":
+    if mode.upper() == "SVD":
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
         
@@ -1497,7 +1496,7 @@ def decomp(
         
         return U, S_tensor, Vh
     
-    elif mode == "UR":
+    elif mode.upper() == "UR":
         # Multiply singular values into Vh to get R = S*Vh
         R_blocks: Dict[BlockKey, torch.Tensor] = {}
         
@@ -1538,7 +1537,7 @@ def decomp(
         
         return U, R_tensor
     
-    elif mode == "LV":
+    elif mode.upper() == "LV":
         # Multiply singular values into U to get L = U*S
         L_blocks: Dict[BlockKey, torch.Tensor] = {}
         
@@ -1579,7 +1578,7 @@ def decomp(
         
         return L_tensor, Vh
     
-    elif mode == "QR":
+    elif mode.upper() == "QR":
         # Use the qr function directly
         # axes go into Q, remaining axes go into R
         Q, R = qr(T, axis_idx)
