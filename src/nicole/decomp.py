@@ -396,6 +396,9 @@ def svd(
         - "discarded_weight": float in [0, 1), the relative sum of squared singular
           values truncated away across all charge sectors, i.e. the fractional squared
           2-norm loss ‖T − T_trunc‖²/‖T‖². Zero when `trunc` is None or nothing was cut.
+        - "engine": the engine that ran, echoing the argument of the same name.
+        - "fallbacks": dict mapping each charge sector that needed the fallback
+          ladder to the list of steps it took. Empty when nothing failed.
     
     Raises
     ------
@@ -792,7 +795,11 @@ def svd(
         # An identically-zero tensor has no spectrum to lose, so report 0
         # rather than dividing by zero.
         dw = _discarded_sq / _total_sq if _total_sq > 0.0 else 0.0
-        info: Dict[str, Any] = {"discarded_weight": dw}
+        info: Dict[str, Any] = {
+            "discarded_weight": dw,
+            "engine": engine,
+            "fallbacks": fallbacks,
+        }
         return U_tensor, S_blocks, Vh_tensor, info
     
     # Regular pass: return U, S, and Vh tensors without info
