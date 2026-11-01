@@ -1346,6 +1346,11 @@ def decomp(
     from .maneuver import capcup, merge_axes
     from .contract import contract
     
+    # Validated before either path branches on it, so a multi-axis call fails
+    # before any of its axes are merged.
+    if mode.upper() not in ("SVD", "UR", "LV", "QR"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
+    
     # Check if axes is a sequence (multiple axes)
     is_multi_axis = isinstance(axes, (list, tuple))
     
@@ -1389,10 +1394,6 @@ def decomp(
             return first_unmerged, second
     
     # Single axis: original behavior
-    # Validate mode
-    if mode.upper() not in ("SVD", "UR", "LV", "QR"):
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
-    
     # Validate flow parameter
     if flow not in (">>", "<<", "><"):
         raise ValueError(f"Invalid flow '{flow}'. Must be '>>', '<<', or '><'")
