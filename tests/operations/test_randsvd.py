@@ -434,6 +434,92 @@ def test_decomp_rsvd_case_insensitive(axes):
         assert a.indices == b.indices
 
 
+# Fallback ladder
+
+def test_fallback_recovers_from_non_convergence(monkeypatch, caplog):
+    """A non-converging driver is answered by the randomized full-rank route."""
+    T = _make_u1_tensor()
+    real_svd = torch.linalg.svd
+    state = {"failures": 0}
+
+    def flaky_svd(mat, *args, **kwargs):
+        # Fail only on the sector matrices, so the randomized fallback's own
+        # internal call on the projected matrix can still succeed.
+        if mat.ndim == 2 and mat.shape[0] != mat.shape[1]:
+            state["failures"] += 1
+            raise torch.linalg.LinAlgError("linalg.svd: did not converge")
+        return real_svd(mat, *args, **kwargs)
+
+    monkeypatch.setattr(torch.linalg, "svd", flaky_svd)
+
+    with caplog.at_level(logging.DEBUG, logger="nicole.decomp"):
+        U, S, Vh, info = svd(T, axis=0, requires_info=True)
+
+    assert state["failures"] > 0
+    assert info["fallbacks"], "the ladder should have recorded the sectors it rescued"
+    assert all(steps == ["full_rank_rsvd"] for steps in info["fallbacks"].values())
+    assert any("did not converge" in record.getMessage() for record in caplog.records)
+
+
+def test_fallback_result_is_still_correct(monkeypatch):
+    """The decomposition recovered by the fallback reconstructs the tensor."""
+    T = _make_u1_tensor()
+    real_svd = torch.linalg.svd
+
+    def flaky_svd(mat, *args, **kwargs):
+        if mat.ndim == 2 and mat.shape[0] != mat.shape[1]:
+            raise torch.linalg.LinAlgError("linalg.svd: did not converge")
+        return real_svd(mat, *args, **kwargs)
+
+    monkeypatch.setattr(torch.linalg, "svd", flaky_svd)
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
+    monkeypatch.undo()
+
+    reconstructed = contract(contract(U, S, axes=(1, 0)), Vh, axes=(1, 0))
+    assert (T - reconstructed).norm() / T.norm() < 1e-10
+
+
+def test_fallback_exhausted_reraises(monkeypatch):
+    """When nothing works, the original failure surfaces with context."""
+    mat = torch.randn(6, 4, dtype=torch.float64)
+
+    def always_fails(*args, **kwargs):
+        raise torch.linalg.LinAlgError("linalg.svd: did not converge")
+
+    monkeypatch.setattr(torch.linalg, "svd", always_fails)
+
+    with pytest.raises(torch.linalg.LinAlgError, match="no fallback succeeded"):
+        _svd_robust(mat, sector=(1,))
+
+
+def test_fallback_is_silent_without_logging_configured(monkeypatch, capsys):
+    """An unconfigured library logger emits nothing and raises nothing."""
+    T = _make_u1_tensor()
+    real_svd = torch.linalg.svd
+
+    def flaky_svd(mat, *args, **kwargs):
+        if mat.ndim == 2 and mat.shape[0] != mat.shape[1]:
+            raise torch.linalg.LinAlgError("linalg.svd: did not converge")
+        return real_svd(mat, *args, **kwargs)
+
+    monkeypatch.setattr(torch.linalg, "svd", flaky_svd)
+    svd(T, axis=0)
+    monkeypatch.undo()
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_svd_robust_reports_no_fallback_on_success():
+    """A healthy matrix goes through the direct call and records nothing."""
+    mat = torch.randn(8, 5, dtype=torch.float64)
+
+    U, s, Vh, fallbacks = _svd_robust(mat)
+
+    assert fallbacks == []
+    assert torch.allclose(U @ torch.diag(s) @ Vh, mat, atol=1e-12)
+
 
 # The randomized matrix helper in isolation
 
