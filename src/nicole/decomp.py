@@ -73,6 +73,12 @@ RSVD_OVERSAMPLE = 10
 RSVD_NITER = 2
 
 
+def _describe_matrix(mat: torch.Tensor, sector: Optional[Any]) -> str:
+    """Format a matrix's identity for a diagnostic log record."""
+    where = "weight matrix" if sector is None else f"sector {sector}"
+    return f"{where}, shape {tuple(mat.shape)}, dtype {mat.dtype}, device {mat.device}"
+
+
 def _rsvd_matrix(
     mat: torch.Tensor,
     k: int,
@@ -118,6 +124,86 @@ def _rsvd_matrix(
     return U, s, V.mH
 
 
+def _svd_robust(
+    mat: torch.Tensor,
+    *, # keyword-only arguments
+    sector: Optional[Any] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
+    """SVD of a single matrix, retrying through a fallback ladder on non-convergence.
+
+    `torch.linalg.svd` can fail to converge on badly scaled or near-degenerate
+    input. Instead of aborting the whole decomposition, each failure is answered
+    with a different route to the same factorization:
+
+    1. `torch.linalg.svd`, the direct call.
+    2. On CUDA only, a retry with the `gesvd` cuSOLVER driver, which is slower but
+       more robust than the default. The `driver` argument rejects CPU input, so
+       this step is skipped there.
+    3. A full-rank randomized SVD. Its random rotation breaks up the near-degeneracy
+       or bad scaling that stalled the iteration, and preserves the spectrum of
+       `mat` while doing so.
+
+    Every step is reported at DEBUG level. Being full rank, step 3 returns a
+    complete spectrum, so callers may treat its output as exact.
+
+    Parameters
+    ----------
+    mat:
+        Matrix to decompose.
+    sector:
+        Charge sector the matrix came from, used only in diagnostic messages.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor, list[str]]
+        Quadruple `(U, s, Vh, fallbacks)` where `fallbacks` names the steps taken
+        past the direct call, and is empty when that call succeeded.
+
+    Raises
+    ------
+    torch.linalg.LinAlgError
+        If every step of the ladder fails.
+    """
+    try:
+        U, s, Vh = torch.linalg.svd(mat, full_matrices=False)
+        return U, s, Vh, []
+    except torch.linalg.LinAlgError as exc:
+        # Bind to a name that outlives the except block, which clears `exc`.
+        primary = exc
+        logger.debug(
+            "torch.linalg.svd did not converge (%s): %s. Entering the fallback ladder.",
+            _describe_matrix(mat, sector), primary,
+        )
+
+    fallbacks: List[str] = []
+
+    if mat.is_cuda:
+        fallbacks.append("gesvd")
+        try:
+            U, s, Vh = torch.linalg.svd(mat, full_matrices=False, driver="gesvd")
+            logger.debug("Recovered with the gesvd driver (%s).", _describe_matrix(mat, sector))
+            return U, s, Vh, fallbacks
+        except torch.linalg.LinAlgError as exc:
+            logger.debug("The gesvd driver also failed (%s): %s.", _describe_matrix(mat, sector), exc)
+
+    fallbacks.append("full_rank_rsvd")
+    try:
+        # Oversampling is pointless here: the subspace already spans the full rank.
+        U, s, Vh = _rsvd_matrix(mat, min(mat.shape), oversample=0, niter=RSVD_NITER)
+        logger.debug(
+            "Recovered with a full-rank randomized SVD (%s).", _describe_matrix(mat, sector)
+        )
+        return U, s, Vh, fallbacks
+    except torch.linalg.LinAlgError as exc:
+        logger.debug(
+            "The full-rank randomized SVD also failed (%s): %s.",
+            _describe_matrix(mat, sector), exc,
+        )
+
+    raise torch.linalg.LinAlgError(
+        f"SVD failed to converge and no fallback succeeded ({_describe_matrix(mat, sector)}). "
+        f"Tried: {', '.join(['linalg.svd'] + fallbacks)}."
+    ) from primary
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
     """Return a working copy of T with canonicalized intertwiner weights.
 
