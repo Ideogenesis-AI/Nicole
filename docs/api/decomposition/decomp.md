@@ -9,11 +9,12 @@ High-level tensor decomposition with multiple output modes.
 
 ## Description
 
-Performs symmetry-preserving decomposition with four output modes:
+Performs symmetry-preserving decomposition with five output modes:
 
 ### Modes
 
 - **"SVD"**: Returns (U, S, Vh) with S as diagonal tensor
+- **"RSVD"**: As "SVD", but each sector is computed with the randomized engine
 - **"UR"**: Returns (U, R) where R = S @ Vh (most efficient for reconstruction)
 - **"LV"**: Returns (L, V) where L = U @ S
 - **"QR"**: Returns (Q, R) where Q is orthogonal and R is upper triangular (no truncation)
@@ -28,9 +29,10 @@ Index or indices to separate from all others. Can be:
 - Sequence of integer positions or string tags (merges multiple axes first)
 
 ### mode
-Decomposition mode: "SVD", "UR", "LV", or "QR" (default: "SVD")
+Decomposition mode: "SVD", "RSVD", "UR", "LV", or "QR" (default: "SVD")
 
 - **"SVD"**, **"UR"**, **"LV"**: SVD-based decomposition with optional truncation
+- **"RSVD"**: identical output to "SVD", computed with a randomized SVD instead of the exact one. Requires `trunc={"nkeep": ...}`, which sets the target rank, and is worth using only when the kept rank is well below the full rank of a sector — see [svd](svd.md) for the measured crossover
 - **"QR"**: QR decomposition (orthogonal factorization, no truncation)
 
 ### flow
@@ -51,6 +53,7 @@ Optional truncation with `trunc` parameter (dict) - only for SVD-based modes:
 - **"thresh"**: Keep singular values ≥ t per block
 - Both can be specified together (thresh applied first, then nkeep)
 - Not applicable for "QR" mode (QR decomposition doesn't support truncation)
+- Mode "RSVD" takes its tuning from the same dict, through the keys `oversample`, `niter` and `seed`; see [svd](svd.md). The other modes ignore them
 
 ## Usage Examples
 
