@@ -52,6 +52,8 @@ U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 50, "seed": 42}, engine="random
 
 Seeding is necessary for reproducibility because `torch.svd_lowrank` draws its test matrix from the global generator and accepts no `generator` argument. Nicole forks the RNG around the decomposition, so a seeded call leaves the caller's random stream untouched.
 
+The randomized engine does not run on MPS. `torch.svd_lowrank` builds its subspace basis with `torch.linalg.qr`, which PyTorch has not implemented for that backend, so an MPS tensor raises `NotImplementedError`. The exact engine is unaffected, since `torch.linalg.svd` falls back to the CPU there. Use `engine="exact"` on MPS, or move the tensor to the CPU first.
+
 ### When the randomized engine pays off
 
 Two conditions have to hold together:
