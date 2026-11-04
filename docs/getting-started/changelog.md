@@ -2,6 +2,139 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.5.0] - 2026-11-07
+
+**Randomized SVD and Optimizations**
+
+Adds a randomized SVD engine alongside the exact one, a fallback ladder for a
+non-converging `torch.linalg.svd`, and specialized charge arithmetic for
+two-component product groups. Keeping a few hundred singular values out of a
+few thousand spends almost all of its time resolving a tail that is discarded
+immediately afterwards, which the randomized engine skips when the kept rank
+is small and the spectrum decays. A single badly scaled sector previously
+brought down an entire tensor decomposition, and is now retried along the
+ladder. Charge fusion runs in the innermost loop of block enumeration, and the
+specialized routines take the component loop out of it. The exact engine
+remains the default, and every existing call produces the same result as in
+the previous versions.
+
+### Randomized SVD
+
+#### New API
+
+- `svd` gains a keyword-only `engine` parameter, `"exact"` (default,
+  `torch.linalg.svd`) or `"random"` (`torch.svd_lowrank` per charge sector)
+- `decomp` gains the mode `"RSVD"`, identical to `"SVD"` except for the
+  solver underneath
+- `trunc` gains three keys read only by the randomized engine: `oversample`
+  (default 10), `niter` (default 2) and `seed`
+- `engine="random"` without `trunc["nkeep"]` raises `ValueError`
+
+#### Behavior
+
+`"nkeep"` sets the target rank, split across sectors as
+`k_q = max(1, ceil(rho * r_q))` with `rho = nkeep / (sum of full ranks)`, so
+every sector keeps at least one value and the candidate pool covers `"nkeep"`.
+Each sector returns `k_q + oversample` triplets, and the global selection
+ranks them across all sectors at once. `"discarded_weight"` is computed from
+each sector's Frobenius norm instead of the uncomputed tail; the exact
+engine's accounting is unchanged. A `seed` makes a run reproducible and leaves
+the caller's global RNG stream untouched.
+
+### Fallback on Non-convergence
+
+A non-converging `torch.linalg.svd` is retried per sector along a ladder:
+the direct call; the `gesvd` cuSOLVER driver on CUDA only; a full-rank
+randomized SVD, whose result is treated as exact by the truncation
+bookkeeping; then `torch.linalg.LinAlgError` naming the sector, shape, dtype
+and device. The ladder applies in `svd` and to the Bridge weight matrix in
+`_regularize_for_svd`. Steps are reported at `DEBUG` on the new
+`nicole.decomp` logger, which carries no handler of its own, and `svd`'s
+`info` dict gains `"engine"` and `"fallbacks"` keys.
+
+### Specialized Charge Arithmetic for Product Groups
+
+A two-component `ProductGroup` installs specialized `fuse_unique`,
+`fuse_channels` and `dual` routines on the instance at construction. The six
+built-in pairs — U(1)×U(1), U(1)×Z(2), Z(2)×U(1), Z(2)×Z(2), U(1)×SU(2) and
+Z(2)×SU(2) — get hand-written bodies; any other pair gets a closure over the
+component methods; products of three or more components keep the generic
+methods. Results are bit-identical, and equality, hashing and repr are
+unchanged. `ProductGroup` now reduces to a call of its own constructor when
+pickled, so pickle and deepcopy round trips re-run the selection.
+
+### Other Changes
+
+- `BlockSchema.charge_totals` fuses the direction-adjusted contributions in
+  one n-ary call instead of folding them pairwise
+- `decomp` validates `mode` before merging any axes, and no longer overwrites
+  the parameter when normalizing its case
+- The trove classifiers declare Python 3.13, 3.14 and 3.15
+- The README's Python badge is static at `≥ 3.11` instead of the shields.io
+  `pyversions` badge
+
+### Documentation
+
+- `docs/api/decomposition/svd.md`: Engines section, tuning table, measured
+  crossover, per-sector budget, fallback ladder with the logging needed to
+  observe it, and the MPS limitation
+- `docs/api/decomposition/decomp.md`: `"RSVD"` listed among the modes with
+  its `nkeep` requirement
+- `docs/api/symmetry/product-group.md`: the fast paths and their speedups
+- `docs/getting-started/installation.md`: rewritten around the verified
+  requirements, correcting the Yuzuha floor, the Python range, the CUDA index
+  URL and a duplicated development section
+
+### Test Suite (1840 tests)
+
+- **1828 tests pass**, 12 skipped: 6 requiring CUDA, and 6 where MPS has no
+  `torch.linalg.qr` or `torch.linalg.eig`, two of them the new RSVD cases
+- **138 new tests** across one new and two existing files
+  - `tests/operations/test_randsvd.py` (37, new): the randomized engine
+    against the exact one, isometry of the factors, the per-sector budget and
+    oversampling, seeding in both directions, each rung of the fallback
+    ladder under a forced non-convergence, validation, and `decomp`
+    integration
+  - `tests/symmetry/test_group_prod.py` (99): every installed routine pinned
+    to the generic implementation it shadows, over zero to three charges and
+    across nine groups, together with the dataclass protocol and pickle
+    round trips
+  - `tests/integration/test_propagation.py` (2): RSVD device propagation for
+    U(1) and SU(2), skipped on MPS on the same grounds as QR and `eig`
+
+### Statistics
+
+- **32 commits** since v0.4.2
+- **12 files changed**: 1677 insertions, 165 deletions
+- Source modules touched: `src/nicole/decomp.py`,
+  `src/nicole/symmetry/product.py`, `src/nicole/blocks.py`
+- Test modules touched: `tests/operations/test_randsvd.py` (new),
+  `tests/symmetry/test_group_prod.py`, `tests/integration/test_propagation.py`
+- Documentation touched: `docs/getting-started/installation.md`,
+  `docs/api/decomposition/svd.md`, `docs/api/decomposition/decomp.md`,
+  `docs/api/symmetry/product-group.md`, `README.md`
+- Metadata touched: `pyproject.toml`
+
+### Compatibility
+
+**Breaking Changes:** None. `engine` is keyword-only and defaults to
+`"exact"`, `"RSVD"` is a new `decomp` mode alongside the existing four, and
+the three tuning keys are additions to `trunc` that the exact engine ignores.
+Output for every call valid in the previous versions is unchanged, and the
+fast paths are bit-identical to the generic `ProductGroup` methods they
+shadow. One behavioral change is worth noting: a non-converging
+`torch.linalg.svd` that previously raised immediately now runs the fallback
+ladder first, raising only once every rung is exhausted.
+
+**Known Limitation:** the randomized engine does not run on MPS, where
+PyTorch has not implemented the `torch.linalg.qr` that `torch.svd_lowrank`
+builds its subspace basis with. An MPS tensor raises `NotImplementedError`;
+use `engine="exact"` there, or move to the CPU first.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.4.2] - 2026-10-16
 
 **Complex Tensors and a Coherent Dtype**
@@ -1390,6 +1523,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.5.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.0
