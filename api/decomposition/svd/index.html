@@ -2195,6 +2195,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Engines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tuning-the-randomized-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning the randomized engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-the-randomized-engine-pays-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the randomized engine pays off
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-sector-rank-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-sector rank budget
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fallback-on-non-convergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fallback on non-convergence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3610,6 +3671,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Engines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tuning-the-randomized-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning the randomized engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-the-randomized-engine-pays-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When the randomized engine pays off
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-sector-rank-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-sector rank budget
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fallback-on-non-convergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fallback on non-convergence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3693,12 +3815,13 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">trunc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">requires_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">Tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="o">|</span> <span class="n">Tuple</span><span class="p">[</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="p">]</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">engine</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;exact&quot;</span><span class="p">,</span> <span class="s2">&quot;random&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exact&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">Tuple</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">]</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">|</span> <span class="n">Tuple</span><span class="p">[</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">Tensor</span><span class="p">,</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="n">BlockKey</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="p">]</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -3770,6 +3893,14 @@ This axis forms the left partition, all others form the right partition.</p>
 <li>"thresh": Keep singular values &gt;= t per block</li>
 </ul>
 Both can be specified together: thresh is applied first, then nkeep.</p>
+<p>The randomized engine takes its tuning from the same dict, since "nkeep" is
+already what sets its target rank. These keys are ignored by the exact
+engine:
+<ul>
+<li>"oversample": extra subspace dimensions per sector (default 10). These triplets are computed for accuracy and then offered to the global "nkeep" selection, so 0 both disables oversampling and narrows the candidate pool to the per-sector target rank</li>
+<li>"niter": subspace (power) iterations (default 2)</li>
+<li>"seed": seed making the decomposition reproducible (default None)</li>
+</ul></p>
               </div>
             </td>
             <td>
@@ -3792,6 +3923,28 @@ containing auxiliary decomposition data. If False (default), return the usual
             </td>
             <td>
                   <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>engine</code>
+            </td>
+            <td>
+                  <code><span title="typing.Literal">Literal</span>[&#39;exact&#39;, &#39;random&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which solver computes each sector's decomposition:
+<ul>
+<li>"exact" (default): <code>torch.linalg.svd</code>, the complete spectrum.</li>
+<li>"random": a randomized SVD resolving only the leading singular values. Requires <code>trunc["nkeep"]</code> to set the target rank.</li>
+</ul>
+Either engine falls back through a ladder of alternative routes when the
+direct call fails to converge; see the Notes section.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;exact&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -3852,6 +4005,8 @@ containing auxiliary decomposition data. If False (default), return the usual
 currently contains:
 <ul>
 <li>"discarded_weight": float in [0, 1), the relative sum of squared singular values truncated away across all charge sectors, i.e. the fractional squared 2-norm loss ‖T − T_trunc‖²/‖T‖². Zero when <code>trunc</code> is None or nothing was cut.</li>
+<li>"engine": the engine that ran, echoing the argument of the same name.</li>
+<li>"fallbacks": dict mapping each charge sector that needed the fallback ladder to the list of steps it took. Empty when nothing failed.</li>
 </ul></p>
               </div>
             </td>
@@ -3875,7 +4030,18 @@ currently contains:
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If trunc format is invalid or contains unsupported modes.</p>
+                <p>If trunc format is invalid or contains unsupported modes, if engine is not
+"exact" or "random", or if engine="random" is used without <code>trunc["nkeep"]</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.linalg.LinAlgError">LinAlgError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If a sector fails to converge and no step of the fallback ladder succeeds.</p>
               </div>
             </td>
           </tr>
@@ -3899,6 +4065,21 @@ then "nkeep" is applied globally to the remaining singular values.</p>
 singular value stands for, so the denominator equals <code>T.norm()**2</code>. For Abelian
 groups <code>d_q = 1</code>. The factor weights the reported value only, not the truncation
 criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same singular value.</p>
+<p>Under <code>engine="random"</code> the discarded tail is never computed, so the same quantity
+is obtained from the identity <code>Σ_i s_i² = ‖M‖_F²</code>: the denominator comes from the
+Frobenius norm of each sector's matrix, exactly and at negligible cost, and the
+numerator is the difference against the retained singular values.</p>
+<p>The fallback ladder, applied per sector and reported at DEBUG level on the
+"nicole.decomp" logger, answers a non-converging <code>torch.linalg.svd</code> with a retry
+on the <code>gesvd</code> cuSOLVER driver (CUDA only) and then with a full-rank randomized
+SVD, before giving up and re-raising. Being full rank, the last step returns a
+complete spectrum, so a sector recovered that way is treated as exact.</p>
+<p>The randomized engine turns the global "nkeep" budget into a per-sector target
+rank by reducing every sector by the same ratio of its own full rank, with a
+floor of one singular value per sector. This allocates by dimension and not by
+spectral weight, which is exact when the two correlate — the usual case for a
+symmetric MPS — and otherwise draws rank away from a small dominant sector
+towards a large negligible one.</p>
 </details>
 
 <p><span class="doc-section-title">Examples:</span></p>
@@ -3917,6 +4098,14 @@ criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same sin
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Special case: inspect discarded weight</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">},</span> <span class="n">requires_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">dw</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;discarded_weight&quot;</span><span class="p">]</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Randomized engine: only the leading 10 singular values are computed</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">},</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;random&quot;</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="gp">&gt;&gt;&gt; </span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Reproducible randomized decomposition: the tuning rides along in trunc</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="gp">... </span>    <span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;seed&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">},</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;random&quot;</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="gp">... </span><span class="p">)</span>
 </span></code></pre></div>
 
 
@@ -3930,10 +4119,83 @@ criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same sin
 <li><strong>Vh</strong>: Right unitary tensor</li>
 <li><strong>info</strong> <em>(optional)</em>: Dict of auxiliary data, returned only when <code>requires_info=True</code>. Currently contains:</li>
 <li><code>"discarded_weight"</code>: <code>float</code> in <code>[0, 1)</code>, the relative sum of squared singular values truncated away across all charge sectors, i.e. the fractional squared 2-norm loss <code>‖T − T_trunc‖²/‖T‖²</code>.</li>
+<li><code>"engine"</code>: the engine that ran, echoing the <code>engine</code> argument.</li>
+<li><code>"fallbacks"</code>: dict mapping each charge sector that needed the fallback ladder to the list of steps it took. Empty when nothing failed.</li>
 </ul></p>
 <p>This low-level function provides direct access to singular values for each block before they're combined into a tensor.</p>
+<h2 id="engines">Engines<a class="headerlink" href="#engines" title="Permanent link">&para;</a></h2>
+<p>The <code>engine</code> argument selects the solver used on each charge sector.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Exact: torch.linalg.svd, the complete spectrum (default)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">50</span><span class="p">})</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Randomized: only the leading singular values are computed</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">50</span><span class="p">},</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;random&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>engine="random"</code> requires <code>trunc["nkeep"]</code> to set the target rank; a <code>"thresh"</code> criterion alone does not bound the rank, so omitting <code>"nkeep"</code> raises <code>ValueError</code>.</p>
+<h3 id="tuning-the-randomized-engine">Tuning the randomized engine<a class="headerlink" href="#tuning-the-randomized-engine" title="Permanent link">&para;</a></h3>
+<p>The tuning rides along in the same <code>trunc</code> dict, since <code>"nkeep"</code> already doubles as the target rank. These three keys are ignored by the exact engine:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>oversample</code></td>
+<td><code>10</code></td>
+<td>Extra subspace dimensions beyond the per-sector target rank</td>
+</tr>
+<tr>
+<td><code>niter</code></td>
+<td><code>2</code></td>
+<td>Subspace (power) iterations</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>None</code></td>
+<td>Seed making the decomposition reproducible</td>
+</tr>
+</tbody>
+</table>
+<p>The oversampled triplets are returned in full: they cost nothing once computed, and they widen the candidate pool for the global <code>"nkeep"</code> selection. Trimming them could not help anyway, since a projection only shrinks singular values, so a trailing estimate never displaces a larger one. Set <code>oversample=0</code> for exactly the target rank per sector.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">U</span><span class="p">,</span> <span class="n">S_blocks</span><span class="p">,</span> <span class="n">Vh</span> <span class="o">=</span> <span class="n">svd</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">trunc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;nkeep&quot;</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span> <span class="s2">&quot;seed&quot;</span><span class="p">:</span> <span class="mi">42</span><span class="p">},</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;random&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Seeding is necessary for reproducibility because <code>torch.svd_lowrank</code> draws its test matrix from the global generator and accepts no <code>generator</code> argument. Nicole forks the RNG around the decomposition, so a seeded call leaves the caller's random stream untouched.</p>
+<p>The randomized engine does not run on MPS. <code>torch.svd_lowrank</code> builds its subspace basis with <code>torch.linalg.qr</code>, which PyTorch has not implemented for that backend, so an MPS tensor raises <code>NotImplementedError</code>. The exact engine is unaffected, since <code>torch.linalg.svd</code> falls back to the CPU there. Use <code>engine="exact"</code> on MPS, or move the tensor to the CPU first.</p>
+<h3 id="when-the-randomized-engine-pays-off">When the randomized engine pays off<a class="headerlink" href="#when-the-randomized-engine-pays-off" title="Permanent link">&para;</a></h3>
+<p>Two conditions have to hold together:</p>
+<p><strong>The kept rank must be well below the full rank.</strong> Randomized SVD costs roughly <code>(2 * niter + 2) * O(m * n * q)</code> against the exact <code>O(m * n * min(m, n))</code>. On a four-sector U(1) tensor of total rank 390, the speedup over the exact engine runs 2.2x at <code>rho = 0.02</code>, 1.6x at <code>rho = 0.1</code>, and 1.2x at <code>rho = 0.2</code>, crossing below 1x at around <code>rho = 0.3</code>. Use it below roughly a fifth of the full rank.</p>
+<p><strong>The spectrum must decay.</strong> A randomized method works by finding a dominant subspace, so a flat spectrum leaves it nothing to find. On the same tensor with singular values spanning six decades, the retained values come back to a relative error of <code>1e-6</code> or better; with a flat spectrum the error is around 5 percent no matter how much oversampling is thrown at it. Timing is identical in both cases, since it depends only on the shapes.</p>
+<p>Oversampling is not optional. At <code>nkeep = 19</code> on the decaying spectrum, the maximum relative error falls from <code>8.9e-2</code> with no oversampling to <code>1.4e-3</code> at 5 columns and <code>9.5e-6</code> at the default 10, while the speedup only drops from 2.7x to 2.0x.</p>
+<h2 id="per-sector-rank-budget">Per-sector rank budget<a class="headerlink" href="#per-sector-rank-budget" title="Permanent link">&para;</a></h2>
+<p><code>"nkeep"</code> is a global budget, but a randomized SVD has to be told its target rank before it runs. Nicole reduces every sector by the same ratio of its own full rank:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>rho = nkeep / (sum of full ranks over all sectors)
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>k_q = max(1, ceil(rho * r_q))
+</span></code></pre></div>
+<p>The ceiling guarantees <code>sum(k_q) &gt;= nkeep</code>, so the global selection that follows never runs short of candidates, and the floor of 1 keeps every charge sector on the bond index, which the budget would otherwise be free to erase.</p>
+<p>This allocates by dimension, not by spectral weight. The two correlate in the usual symmetric-MPS case, where the split is exactly optimal. When they do not — a sector that is large but spectrally negligible drawing rank away from a small dominant one — the retained squared weight stays within about 2 percent of the optimum on measured adversarial layouts.</p>
+<p>Oversampling recovers even that gap, which is a second reason to leave it on. Each sector returns <code>k_q + oversample</code> candidates, so a dominant sector short-changed by the budget can still win back rank in the global selection, which ranks candidates across all sectors at once. At the default <code>oversample=10</code> the discarded weight on such a layout matches the exact engine.</p>
+<h2 id="fallback-on-non-convergence">Fallback on non-convergence<a class="headerlink" href="#fallback-on-non-convergence" title="Permanent link">&para;</a></h2>
+<p><code>torch.linalg.svd</code> can fail to converge on badly scaled or near-degenerate input. Instead of aborting, each sector is retried along a short ladder:</p>
+<ol>
+<li><code>torch.linalg.svd</code>, the direct call.</li>
+<li>On CUDA only, a retry with the <code>gesvd</code> cuSOLVER driver, which is slower but more robust. The <code>driver</code> argument rejects CPU input, so this step is skipped there.</li>
+<li>A full-rank randomized SVD. The random projection rotates the matrix into a fresh orthonormal basis before any driver sees it, which breaks up the near-degeneracy or bad scaling that stalled the iteration. At full rank the rotation preserves the spectrum, so the factorization is still that of the original matrix.</li>
+<li>Re-raise <code>torch.linalg.LinAlgError</code> with the sector, shape, dtype and device named.</li>
+</ol>
+<p>Being full rank, step 3 returns a complete spectrum, so a sector recovered that way is treated as exact and feeds the usual truncation and discarded-weight bookkeeping.</p>
+<p>Every step is reported at <code>DEBUG</code> on the <code>nicole.decomp</code> logger. Nicole installs no handler, so the records are inert until the application opts in:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">()</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;nicole&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The <code>info</code> dict's <code>"fallbacks"</code> entry carries the same information programmatically, with no logging configuration needed.</p>
 <h2 id="import">Import<a class="headerlink" href="#import" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole.decomp</span><span class="w"> </span><span class="kn">import</span> <span class="n">svd</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole.decomp</span><span class="w"> </span><span class="kn">import</span> <span class="n">svd</span>
 </span></code></pre></div>
 <p>(Not exported in public API)</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
@@ -3948,6 +4210,7 @@ criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same sin
 <li>Use <code>decomp()</code> for most cases. Use <code>svd()</code> when you need per-block singular value access before tensor creation.</li>
 <li>Pass <code>requires_info=True</code> to obtain the <code>info</code> dict containing <code>"discarded_weight"</code>. This incurs a small extra computation and is intended for diagnostic use.</li>
 <li><code>"discarded_weight"</code> is a relative squared weight: squared singular values normalized by the full spectrum. For a generic symmetry group each reduced singular value carries a multiplicity factor <code>irrep_dim(q)</code>, the number of degenerate Schmidt values it stands for. The factor weights the reported value only, not the <code>"thresh"</code> or <code>"nkeep"</code> truncation criteria.</li>
+<li>Under <code>engine="random"</code> the discarded tail is never computed, so the same quantity comes from the identity <code>Σ_i s_i² = ‖M‖_F²</code>: the denominator is the Frobenius norm of each sector's matrix, exact and nearly free, and the numerator is the difference against the retained singular values. The two engines agree to the accuracy of the retained values themselves.</li>
 <li>For Abelian tensors, <code>Vh</code> satisfies <code>Vh @ Vh† = I</code> directly from the standard block-wise matrix SVD.</li>
 <li>For SU(2) tensors, the intertwiner weight matrix is canonicalized to a scaled unitary form before the SVD, ensuring <code>Vh</code> is a physical isometry (<code>Vh @ Vh† = I</code>).</li>
 </ul>
@@ -3973,7 +4236,7 @@ criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same sin
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="August 24, 2026 06:28:41 UTC"><span class="timeago" datetime="2026-08-24T06:28:41+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="August 24, 2026 06:28:41 UTC">2026-08-24</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 2, 2026 07:07:58 UTC"><span class="timeago" datetime="2026-11-02T07:07:58+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 2, 2026 07:07:58 UTC">2026-11-02</span>
   </span>
 
     
@@ -4001,9 +4264,9 @@ criteria: all <code>d_q</code> Schmidt vectors of a multiplet share the same sin
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       
