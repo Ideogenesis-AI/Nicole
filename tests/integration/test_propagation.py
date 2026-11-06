@@ -39,7 +39,8 @@ Skip conditions
 ---------------
 - The entire module is skipped when no accelerator (MPS or CUDA) is available.
 - `TestDecompDevice.test_qr_abelian` is skipped on MPS because
-  `torch.linalg.qr` is not implemented for that backend.
+  `torch.linalg.qr` is not implemented for that backend. The `RSVD` mode is
+  skipped there for the same reason, reached through `torch.svd_lowrank`.
 """
 
 from typing import Dict, List
@@ -296,6 +297,26 @@ class TestDecompDevice:
         assert_on_device(Vh, accel_device, "svd_su2/Vh")
         assert U.intw  is not None, "SU(2) U from SVD must carry Bridge weights"
         assert Vh.intw is not None, "SU(2) Vh from SVD must carry Bridge weights"
+
+    def test_rsvd_abelian(self, accel_device: torch.device) -> None:
+        if accel_device.type == "mps":
+            pytest.skip("torch.svd_lowrank calls torch.linalg.qr, unimplemented for MPS")
+        T = self._u1_matrix(accel_device)
+        U, S, Vh = decomp(T, axes=0, mode="RSVD", trunc={"nkeep": 4, "seed": 11})
+        assert_on_device(U,  accel_device, "rsvd/U")
+        assert_on_device(S,  accel_device, "rsvd/S")
+        assert_on_device(Vh, accel_device, "rsvd/Vh")
+
+    def test_rsvd_su2(self, accel_device: torch.device) -> None:
+        if accel_device.type == "mps":
+            pytest.skip("torch.svd_lowrank calls torch.linalg.qr, unimplemented for MPS")
+        T = self._su2_matrix(accel_device)
+        U, S, Vh = decomp(T, axes=0, mode="RSVD", trunc={"nkeep": 2, "seed": 11})
+        assert_on_device(U,  accel_device, "rsvd_su2/U")
+        assert_on_device(S,  accel_device, "rsvd_su2/S")
+        assert_on_device(Vh, accel_device, "rsvd_su2/Vh")
+        assert U.intw  is not None, "SU(2) U from RSVD must carry Bridge weights"
+        assert Vh.intw is not None, "SU(2) Vh from RSVD must carry Bridge weights"
 
     def test_qr_abelian(self, accel_device: torch.device) -> None:
         if accel_device.type == "mps":

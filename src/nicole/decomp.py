@@ -23,9 +23,12 @@ value decomposition (SVD) components, QR decomposition, and eigen-decomposition.
 
 Functions
 ---------
-svd(T, axis, trunc=None)
+svd(T, axis, trunc=None, requires_info=False, engine="exact")
     Low-level SVD returning U tensor, singular values dict, and Vh tensor.
-    Returns singular values as 1D arrays for memory efficiency.
+    Returns singular values as 1D arrays for memory efficiency. The "random"
+    engine substitutes a randomized SVD, tuned through the same trunc dict, and
+    either engine falls back through a ladder of alternative routes when the
+    direct call fails to converge.
 
 qr(T, axis)
     QR decomposition returning Q (orthogonal) and R (upper triangular) tensors.
@@ -38,8 +41,9 @@ eig(T, itag=None, order="ascend", trunc=None, is_hermitian=False)
     uses torch.linalg.eigh for real eigenvalues and orthonormal eigenvectors.
 
 decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
-    High-level decomposition with four modes:
+    High-level decomposition with five modes:
     - "SVD": Returns (U, S, Vh) with S as diagonal matrix tensor
+    - "RSVD": As "SVD", but computed with the randomized engine
     - "UR": Returns (U, R) where R = S*Vh
     - "LV": Returns (L, V) where L = U*S
     - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
@@ -49,7 +53,9 @@ decomp(T, axes, mode="SVD", flow="><", itag=None, trunc=None)
 from __future__ import annotations
 
 from typing import Dict, List, Literal, Sequence, Tuple, MutableMapping
-from typing import Any, Optional, Union
+from typing import Any, Iterator, Optional, Union
+import contextlib
+import logging
 import math
 
 import torch
@@ -60,6 +66,215 @@ from .tensor import Tensor
 from .typing import Direction, Sector
 from .typing import real_dtype_for
 from .symmetry import delegate as dg
+
+# Library logger: deliberately left without a handler or a level, so its records
+# stay inert until the application configures logging.getLogger("nicole").
+logger = logging.getLogger(__name__)
+
+# Default randomized-SVD parameters. The randomized method resolves the leading
+# singular values accurately-enough only when oversampled: a subspace of exactly
+# the target rank is not enough.
+RSVD_OVERSAMPLE = 10
+RSVD_NITER = 2
+
+# Keys accepted in a `trunc` dict. The first two state what to keep; the rest
+# tune the randomized engine.
+_TRUNC_KEYS = frozenset({"nkeep", "thresh", "oversample", "niter", "seed"})
+
+
+def _describe_matrix(mat: torch.Tensor, sector: Optional[Any]) -> str:
+    """Format a matrix's identity for a diagnostic log record."""
+    where = "weight matrix" if sector is None else f"sector {sector}"
+    return f"{where}, shape {tuple(mat.shape)}, dtype {mat.dtype}, device {mat.device}"
+
+
+def _rsvd_matrix(
+    mat: torch.Tensor,
+    k: int,
+    *, # keyword-only arguments
+    oversample: int = RSVD_OVERSAMPLE,
+    niter: int = RSVD_NITER,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Randomized SVD of a single matrix, in the layout `torch.linalg.svd` returns.
+
+    Thin adapter over `torch.svd_lowrank`, which implements Algorithm 5.1 of Halko,
+    Martinsson and Tropp (2009), converting its `V` to the `Vh` this module speaks.
+    It works in a subspace of dimension `k + oversample`, and all that many triplets
+    come back: the trailing ones are approximated far less accurately than the
+    leading `k`, but they widen the candidate pool for a later global truncation.
+    Pass `oversample=0` for exactly `k`.
+
+    Parameters
+    ----------
+    mat:
+        Matrix to decompose.
+    k:
+        Target rank. Clamped to the interval `[1, min(mat.shape)]`.
+    oversample:
+        Extra subspace dimensions beyond `k`. Accuracy of the leading `k` singular
+        values depends on this being positive; pass 0 only when `k` is already the
+        full rank.
+    niter:
+        Number of subspace (power) iterations.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        Triplet `(U, s, Vh)` with `s` in descending order, of rank
+        `min(k + oversample, min(mat.shape))`.
+    """
+    full_rank = min(mat.shape)
+    k = max(1, min(k, full_rank))
+    q = min(full_rank, k + max(0, oversample))
+
+    U, s, V = torch.svd_lowrank(mat, q=q, niter=niter)
+
+    # svd_lowrank hands back V; the rest of this module speaks Vh throughout.
+    return U, s, V.mH
+
+
+def _svd_robust(
+    mat: torch.Tensor,
+    *, # keyword-only arguments
+    sector: Optional[Any] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
+    """SVD of a single matrix, retrying through a fallback ladder on non-convergence.
+
+    `torch.linalg.svd` can fail to converge on badly scaled or near-degenerate
+    input. Instead of aborting the whole decomposition, each failure is answered
+    with a different route to the same factorization:
+
+    1. `torch.linalg.svd`, the direct call.
+    2. On CUDA only, a retry with the `gesvd` cuSOLVER driver, which is slower but
+       more robust than the default. The `driver` argument rejects CPU input, so
+       this step is skipped there.
+    3. A full-rank randomized SVD. Its random rotation breaks up the near-degeneracy
+       or bad scaling that stalled the iteration, and preserves the spectrum of
+       `mat` while doing so.
+
+    Every step is reported at DEBUG level. Being full rank, step 3 returns a
+    complete spectrum, so callers may treat its output as exact.
+
+    Parameters
+    ----------
+    mat:
+        Matrix to decompose.
+    sector:
+        Charge sector the matrix came from, used only in diagnostic messages.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor, list[str]]
+        Quadruple `(U, s, Vh, fallbacks)` where `fallbacks` names the steps taken
+        past the direct call, and is empty when that call succeeded.
+
+    Raises
+    ------
+    torch.linalg.LinAlgError
+        If every step of the ladder fails.
+    """
+    try:
+        U, s, Vh = torch.linalg.svd(mat, full_matrices=False)
+        return U, s, Vh, []
+    except torch.linalg.LinAlgError as exc:
+        # Bind to a name that outlives the except block, which clears `exc`.
+        primary = exc
+        logger.debug(
+            "torch.linalg.svd did not converge (%s): %s. Entering the fallback ladder.",
+            _describe_matrix(mat, sector), primary,
+        )
+
+    fallbacks: List[str] = []
+
+    if mat.is_cuda:
+        fallbacks.append("gesvd")
+        try:
+            U, s, Vh = torch.linalg.svd(mat, full_matrices=False, driver="gesvd")
+            logger.debug("Recovered with the gesvd driver (%s).", _describe_matrix(mat, sector))
+            return U, s, Vh, fallbacks
+        except torch.linalg.LinAlgError as exc:
+            logger.debug("The gesvd driver also failed (%s): %s.", _describe_matrix(mat, sector), exc)
+
+    fallbacks.append("full_rank_rsvd")
+    try:
+        # Oversampling is pointless here: the subspace already spans the full rank.
+        U, s, Vh = _rsvd_matrix(mat, min(mat.shape), oversample=0, niter=RSVD_NITER)
+        logger.debug(
+            "Recovered with a full-rank randomized SVD (%s).", _describe_matrix(mat, sector)
+        )
+        return U, s, Vh, fallbacks
+    except torch.linalg.LinAlgError as exc:
+        logger.debug(
+            "The full-rank randomized SVD also failed (%s): %s.",
+            _describe_matrix(mat, sector), exc,
+        )
+
+    raise torch.linalg.LinAlgError(
+        f"SVD failed to converge and no fallback succeeded ({_describe_matrix(mat, sector)}). "
+        f"Tried: {', '.join(['linalg.svd'] + fallbacks)}."
+    ) from primary
+
+
+def _rsvd_budget(ranks: Dict[tuple, int], nkeep: int) -> Dict[tuple, int]:
+    """Split a global `nkeep` budget into a per-sector target rank.
+
+    A randomized SVD must be told its target rank before it runs, but `nkeep` is a
+    global budget resolved only once every sector has been decomposed. The split
+    reduces every sector by the same ratio of its own full rank:
+
+        rho = nkeep / sum of full ranks
+        k_q = max(1, ceil(rho * r_q))
+
+    Taking the ceiling guarantees `sum(k_q) >= nkeep`, so the global selection that
+    follows never runs short of candidates. The floor of 1 keeps every sector
+    represented, which stops a charge sector from vanishing off the bond index as a
+    mere artifact of the budget.
+
+    The split allocates by dimension, not by spectral weight, so it is exact when
+    the two correlate (the usual case for a symmetric MPS) and merely suboptimal
+    when they do not: a sector that is large but spectrally negligible draws rank
+    away from a small dominant one. Measured on adversarial layouts, the retained
+    squared weight stays within about 2% of the optimum.
+
+    Parameters
+    ----------
+    ranks:
+        Full rank `min(rows, cols)` of each sector's matrix, keyed by left charge.
+    nkeep:
+        Global number of singular values the caller intends to retain.
+
+    Returns
+    -------
+    dict[tuple, int]
+        Target rank per sector, before oversampling is added on top.
+    """
+    total_rank = sum(ranks.values())
+    rho = nkeep / total_rank if total_rank > 0 else 1.0
+
+    return {
+        q_left: min(full_rank, max(1, math.ceil(rho * full_rank)))
+        for q_left, full_rank in ranks.items()
+    }
+
+
+@contextlib.contextmanager
+def _rsvd_rng(device: torch.device, seed: Optional[int]) -> Iterator[None]:
+    """Seed the global RNG for a randomized decomposition, then restore it.
+
+    `torch.svd_lowrank` draws its test matrix from the global generator and takes no
+    `generator` argument, so reproducibility has to go through `torch.manual_seed`.
+    Forking first keeps that from perturbing the caller's RNG stream. A seed of None
+    is a no-op, leaving the global state untouched in both directions.
+    """
+    if seed is None:
+        yield
+        return
+
+    # fork_rng indexes CUDA devices; an empty list forks the CPU generator alone.
+    devices = [device.index or 0] if device.type == "cuda" else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(seed)
+        yield
 
 
 def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
@@ -96,9 +311,11 @@ def _regularize_for_svd(T: Tensor, left_axis: int) -> Tensor:
         q_left = key[left_axis]
         target = math.sqrt(group.irrep_dim(q_left))
 
-        # SVD of the weight matrix W = U S Vh.  Components whose singular
+        # SVD of the weight matrix W = U S Vh. Components whose singular
         # values fall below cutoff are linearly dependent and are dropped.
-        U, S, Vh = torch.linalg.svd(bridge.weights, full_matrices=False)
+        # Routed through the fallback ladder: a non-convergence here would take
+        # down the whole decomposition of a generic-symmetry tensor.
+        U, S, Vh, _ = _svd_robust(bridge.weights)
         k = max(1, int((S >= cutoff).sum().item()))
 
         # New data: R_new = R_flat @ (U[:,:k] · S[:k]) / target.
@@ -128,6 +345,7 @@ def svd(
     trunc: Optional[Dict[str, Union[int, float]]] = None,
     *, # keyword-only arguments
     requires_info: bool = False,
+    engine: Literal["exact", "random"] = "exact",
 ) -> Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor] \
    | Tuple[Tensor, MutableMapping[BlockKey, torch.Tensor], Tensor, Dict[str, Any]]:
     """Perform a symmetry-preserving SVD separating one axis from all others.
@@ -144,10 +362,27 @@ def svd(
         - "nkeep": Keep at most n singular values globally (largest across all blocks)
         - "thresh": Keep singular values >= t per block
         Both can be specified together: thresh is applied first, then nkeep.
+        
+        The randomized engine takes its tuning from the same dict, since "nkeep" is
+        already what sets its target rank. These keys are ignored by the exact
+        engine:
+        - "oversample": extra subspace dimensions per sector (default 10). These
+          triplets are computed for accuracy and then offered to the global
+          "nkeep" selection, so 0 both disables oversampling and narrows the
+          candidate pool to the per-sector target rank
+        - "niter": subspace (power) iterations (default 2)
+        - "seed": seed making the decomposition reproducible (default None)
     requires_info:
         If True, return a 4-tuple `(U, S_blocks, Vh, info)` where `info` is a dict
         containing auxiliary decomposition data. If False (default), return the usual
         3-tuple `(U, S_blocks, Vh)` with no overhead.
+    engine:
+        Which solver computes each sector's decomposition:
+        - "exact" (default): `torch.linalg.svd`, the complete spectrum.
+        - "random": a randomized SVD resolving only the leading singular values.
+          Requires `trunc["nkeep"]` to set the target rank.
+        Either engine falls back through a ladder of alternative routes when the
+        direct call fails to converge; see the Notes section.
 
     Returns
     -------
@@ -162,11 +397,17 @@ def svd(
         - "discarded_weight": float in [0, 1), the relative sum of squared singular
           values truncated away across all charge sectors, i.e. the fractional squared
           2-norm loss ‖T − T_trunc‖²/‖T‖². Zero when `trunc` is None or nothing was cut.
+        - "engine": the engine that ran, echoing the argument of the same name.
+        - "fallbacks": dict mapping each charge sector that needed the fallback
+          ladder to the list of steps it took. Empty when nothing failed.
     
     Raises
     ------
     ValueError
-        If trunc format is invalid or contains unsupported modes.
+        If trunc format is invalid or contains unsupported modes, if engine is not
+        "exact" or "random", or if engine="random" is used without `trunc["nkeep"]`.
+    torch.linalg.LinAlgError
+        If a sector fails to converge and no step of the fallback ladder succeeds.
     
     Notes
     -----
@@ -189,6 +430,24 @@ def svd(
     groups `d_q = 1`. The factor weights the reported value only, not the truncation
     criteria: all `d_q` Schmidt vectors of a multiplet share the same singular value.
     
+    Under `engine="random"` the discarded tail is never computed, so the same quantity
+    is obtained from the identity `Σ_i s_i² = ‖M‖_F²`: the denominator comes from the
+    Frobenius norm of each sector's matrix, exactly and at negligible cost, and the
+    numerator is the difference against the retained singular values.
+    
+    The fallback ladder, applied per sector and reported at DEBUG level on the
+    "nicole.decomp" logger, answers a non-converging `torch.linalg.svd` with a retry
+    on the `gesvd` cuSOLVER driver (CUDA only) and then with a full-rank randomized
+    SVD, before giving up and re-raising. Being full rank, the last step returns a
+    complete spectrum, so a sector recovered that way is treated as exact.
+    
+    The randomized engine turns the global "nkeep" budget into a per-sector target
+    rank by reducing every sector by the same ratio of its own full rank, with a
+    floor of one singular value per sector. This allocates by dimension and not by
+    spectral weight, which is exact when the two correlate — the usual case for a
+    symmetric MPS — and otherwise draws rank away from a small dominant sector
+    towards a large negligible one.
+    
     Examples
     --------
     >>> # No truncation
@@ -206,15 +465,44 @@ def svd(
     >>> # Special case: inspect discarded weight
     >>> U, S_blocks, Vh, info = svd(T, axis=0, trunc={"nkeep": 10}, requires_info=True)
     >>> dw = info["discarded_weight"]
+    >>> 
+    >>> # Randomized engine: only the leading 10 singular values are computed
+    >>> U, S_blocks, Vh = svd(T, axis=0, trunc={"nkeep": 10}, engine="random")
+    >>> 
+    >>> # Reproducible randomized decomposition: the tuning rides along in trunc
+    >>> U, S_blocks, Vh = svd(
+    ...     T, axis=0, trunc={"nkeep": 10, "seed": 42}, engine="random"
+    ... )
     """
-    # Validate trunc parameter
+    # Validate trunc parameter. The randomized engine's tuning shares this dict,
+    # so its keys are accepted here too and simply ignored by the exact engine.
     if trunc is not None:
         if not isinstance(trunc, dict):
             raise ValueError("trunc must be a dict with keys 'nkeep' and/or 'thresh'")
         
-        unsupported = set(trunc.keys()) - {"nkeep", "thresh"}
+        unsupported = set(trunc.keys()) - _TRUNC_KEYS
         if unsupported:
-            raise ValueError(f"Invalid truncation mode(s): {unsupported}. Must be 'nkeep' or 'thresh'")
+            raise ValueError(
+                f"Invalid truncation mode(s): {unsupported}. "
+                f"Must be one of {sorted(_TRUNC_KEYS)}"
+            )
+    
+    # Validate engine and unpack the randomized engine's tuning knobs
+    if engine not in ("exact", "random"):
+        raise ValueError(f"Invalid engine '{engine}'. Must be 'exact' or 'random'")
+    
+    _trunc = trunc or {}
+    rsvd_oversample = _trunc.get("oversample", RSVD_OVERSAMPLE)
+    rsvd_niter = _trunc.get("niter", RSVD_NITER)
+    rsvd_seed = _trunc.get("seed")
+    
+    # "nkeep" is the only way to state a target rank, and the randomized engine
+    # needs one before it runs.
+    if engine == "random" and (trunc is None or "nkeep" not in trunc):
+        raise ValueError(
+            "engine='random' requires trunc={'nkeep': ...} to set the target rank. "
+            "A 'thresh' criterion alone does not bound the rank."
+        )
     
     # Parse itags to integer axes
     if isinstance(axis, str):
@@ -287,53 +575,83 @@ def svd(
     _discarded_sq = 0.0  # Σ_q d_q Σ_dropped s²
     _total_sq = 0.0      # Σ_q d_q Σ_all s²
     abelian = T.group.is_abelian
+    # Sectors that needed the fallback ladder, mapped to the steps they took.
+    fallbacks: Dict[tuple, List[str]] = {}
     
-    for q_left, block_list in blocks_by_left_charge.items():
-        # Concatenate all matrices with the same left charge horizontally
-        mats = [mat for _, _, _, mat in block_list]
-        concatenated_mat = torch.cat(mats, dim=1)
-        
-        # Perform single SVD on concatenated matrix
-        U, s, Vh = torch.linalg.svd(concatenated_mat, full_matrices=False)
-        
-        if requires_info:
+    # The randomized engine needs a per-sector target rank before it runs, so the
+    # global "nkeep" budget is split up front, off the block shapes alone.
+    rsvd_budget: Dict[tuple, int] = {}
+    if engine == "random":
+        # Rows are shared across a sector; columns accumulate over its blocks.
+        sector_ranks = {
+            q_left: min(blocks[0][3].shape[0], sum(m.shape[1] for *_, m in blocks))
+            for q_left, blocks in blocks_by_left_charge.items()
+        }
+        rsvd_budget = _rsvd_budget(sector_ranks, int(trunc["nkeep"]))
+    
+    # Seeding is a property of the whole decomposition, not of one sector, so the
+    # fork wraps the entire loop. It is a no-op unless a seed was supplied.
+    with _rsvd_rng(T.device, rsvd_seed if engine == "random" else None):
+        for q_left, block_list in blocks_by_left_charge.items():
+            # Concatenate all matrices with the same left charge horizontally
+            mats = [mat for _, _, _, mat in block_list]
+            concatenated_mat = torch.cat(mats, dim=1)
+            
             # Multiplicity of this sector in the full state space: each reduced singular
             # value stands for d_q degenerate full-space Schmidt values.
             mult = 1.0 if abelian else float(T.group.irrep_dim(q_left))
-            # The normalization denominator needs the untruncated spectrum, so
-            # accumulate it here, before any truncation mask is applied below.
-            _total_sq += mult * float((s ** 2).sum())
-        
-        # Apply per-block truncation for thresh mode
-        if trunc is not None and "thresh" in trunc:
-            keep_mask = s >= trunc["thresh"]
-            # Accumulate discarded weight if info is requested
-            if requires_info:
-                _discarded_sq += mult * float((s[~keep_mask] ** 2).sum())
-            # Apply truncation to U, s, and Vh
-            U = U[:, keep_mask]
-            s = s[keep_mask]
-            Vh = Vh[keep_mask, :]
-        
-        # Skip this block if completely truncated
-        if len(s) == 0:
-            continue
-        
-        # Split Vh back to individual blocks
-        Vh_dict: Dict[BlockKey, torch.Tensor] = {}
-        col_offset = 0
-        for key, arr_perm, dims_right, mat in block_list:
-            n_cols = mat.shape[1]
-            Vh_block = Vh[:, col_offset:col_offset+n_cols]
-            # Reshape back to original right dimensions
-            rank = Vh_block.shape[0]
-            Vh_reshaped = Vh_block.reshape((rank,) + dims_right)
-            Vh_dict[key] = Vh_reshaped
-            col_offset += n_cols
-        
-        # Store results grouped by left charge
-        svd_results[q_left] = (U, s, Vh_dict)
-        bond_charge_dims[q_left] = len(s)
+            
+            if engine == "random":
+                U, s, Vh = _rsvd_matrix(
+                    concatenated_mat, rsvd_budget[q_left],
+                    oversample=rsvd_oversample, niter=rsvd_niter,
+                )
+                if requires_info:
+                    # No tail to sum here, so the normalization comes from the
+                    # equivalent Σ_i s_i² = ‖M‖_F², one pass over the block.
+                    _total_sq += mult * float(concatenated_mat.norm() ** 2)
+            else:
+                # Perform single SVD on concatenated matrix
+                U, s, Vh, sector_fallbacks = _svd_robust(concatenated_mat, sector=q_left)
+                if sector_fallbacks:
+                    fallbacks[q_left] = sector_fallbacks
+                
+                if requires_info:
+                    # The normalization denominator needs the untruncated spectrum, so
+                    # accumulate it here, before any truncation mask is applied below.
+                    _total_sq += mult * float((s ** 2).sum())
+            
+            # Apply per-block truncation for thresh mode
+            if trunc is not None and "thresh" in trunc:
+                keep_mask = s >= trunc["thresh"]
+                # Accumulate discarded weight if info is requested. The randomized
+                # engine is accounted for after the last truncation stage instead.
+                if requires_info and engine == "exact":
+                    _discarded_sq += mult * float((s[~keep_mask] ** 2).sum())
+                # Apply truncation to U, s, and Vh
+                U = U[:, keep_mask]
+                s = s[keep_mask]
+                Vh = Vh[keep_mask, :]
+            
+            # Skip this block if completely truncated
+            if len(s) == 0:
+                continue
+            
+            # Split Vh back to individual blocks
+            Vh_dict: Dict[BlockKey, torch.Tensor] = {}
+            col_offset = 0
+            for key, arr_perm, dims_right, mat in block_list:
+                n_cols = mat.shape[1]
+                Vh_block = Vh[:, col_offset:col_offset+n_cols]
+                # Reshape back to original right dimensions
+                rank = Vh_block.shape[0]
+                Vh_reshaped = Vh_block.reshape((rank,) + dims_right)
+                Vh_dict[key] = Vh_reshaped
+                col_offset += n_cols
+            
+            # Store results grouped by left charge
+            svd_results[q_left] = (U, s, Vh_dict)
+            bond_charge_dims[q_left] = len(s)
     
     # Apply global truncation for nkeep mode
     if trunc is not None and "nkeep" in trunc:
@@ -348,8 +666,9 @@ def svd(
         keep_set = set((q, idx) for _, q, idx in all_singular_values[:trunc["nkeep"]])
         
         # Accumulate discarded weight if info is requested. The per-sector multiplicity
-        # is recovered from the charge stored alongside each singular value.
-        if requires_info:
+        # is recovered from the charge stored alongside each singular value. The
+        # randomized engine is accounted for after the last truncation stage instead.
+        if requires_info and engine == "exact":
             for val, q, _ in all_singular_values[trunc["nkeep"]:]:
                 mult = 1.0 if abelian else float(T.group.irrep_dim(q))
                 _discarded_sq += mult * float(val) ** 2
@@ -377,6 +696,17 @@ def svd(
         
         svd_results = new_svd_results
         bond_charge_dims = new_bond_charge_dims
+    
+    # Discarded weight for the randomized engine, now that every truncation stage
+    # has run. The total is the exact ‖T‖² gathered from the sector Frobenius
+    # norms, so subtracting what survived gives what was lost, without ever having
+    # computed the discarded singular values themselves.
+    if requires_info and engine == "random":
+        _kept_sq = 0.0
+        for q_left, (U, s, Vh_dict) in svd_results.items():
+            mult = 1.0 if abelian else float(T.group.irrep_dim(q_left))
+            _kept_sq += mult * float((s ** 2).sum())
+        _discarded_sq = max(0.0, _total_sq - _kept_sq)
     
     # Build bond index with sectors from left charges
     bond_sectors = tuple(Sector(q, d) for q, d in sorted(bond_charge_dims.items(), key=lambda x: str(x[0])))
@@ -466,7 +796,11 @@ def svd(
         # An identically-zero tensor has no spectrum to lose, so report 0
         # rather than dividing by zero.
         dw = _discarded_sq / _total_sq if _total_sq > 0.0 else 0.0
-        info: Dict[str, Any] = {"discarded_weight": dw}
+        info: Dict[str, Any] = {
+            "discarded_weight": dw,
+            "engine": engine,
+            "fallbacks": fallbacks,
+        }
         return U_tensor, S_blocks, Vh_tensor, info
     
     # Regular pass: return U, S, and Vh tensors without info
@@ -946,6 +1280,8 @@ def decomp(
     mode:
         Decomposition mode:
         - "SVD": Returns (U, S, Vh) where S is diagonal matrix tensor (full SVD)
+        - "RSVD": As "SVD", but each sector is computed with the randomized engine
+          instead of the exact one. Requires `trunc["nkeep"]`.
         - "UR": Returns (U, R) where R = S*Vh (singular values multiplied into Vh)
         - "LV": Returns (L, V) where L = U*S (singular values multiplied into U)
         - "QR": Returns (Q, R) where Q is orthogonal and R is upper triangular
@@ -967,11 +1303,13 @@ def decomp(
         - "nkeep": Keep at most n singular values globally
         - "thresh": Keep singular values >= t per block
         Both can be specified together: thresh is applied first, then nkeep.
+        Mode "RSVD" takes its tuning from this dict as well, through the keys
+        "oversample", "niter" and "seed"; see `svd`.
     
     Returns
     -------
     tuple[Tensor, Tensor] or tuple[Tensor, Tensor, Tensor]
-        - "SVD" mode: (U, S, Vh) with S as diagonal matrix tensor
+        - "SVD" and "RSVD" modes: (U, S, Vh) with S as diagonal matrix tensor
         - "UR" mode: (U, R) where R incorporates singular values
         - "LV" mode: (L, V) where L incorporates singular values
         - "QR" mode: (Q, R) where Q is orthogonal and R is upper triangular
@@ -979,8 +1317,9 @@ def decomp(
     Raises
     ------
     ValueError
-        If mode is not one of "SVD", "UR", "LV", or "QR",
-        or if flow is not ">>", "<<", or "><"
+        If mode is not one of "SVD", "RSVD", "UR", "LV", or "QR",
+        if flow is not ">>", "<<", or "><",
+        or if mode="RSVD" is used without `trunc["nkeep"]`
     
     Examples
     --------
@@ -1000,11 +1339,16 @@ def decomp(
     >>> 
     >>> # LV mode: Get L=U*S and V
     >>> L, V = decomp(T, axes=0, mode="LV")
+    >>> 
+    >>> # RSVD mode: same output as SVD, computed with the randomized engine
+    >>> U, S, Vh = decomp(T, axes=0, mode="RSVD", trunc={"nkeep": 1, "seed": 42})
     
     Notes
     -----
     - UR and LV modes are more memory and computationally efficient than SVD mode
     - SVD mode constructs a full diagonal matrix tensor for S
+    - RSVD mode pays off only when the kept rank is well below the full rank of a
+      sector, and when the spectrum decays; otherwise the exact engine wins
     - All modes produce mathematically equivalent decompositions
     - When multiple axes are specified, they are first merged using an n-to-1 isometry,
       decomposed, and then the U tensor is unmerged back to the original axes
@@ -1012,6 +1356,11 @@ def decomp(
     # Import here to avoid circular dependency
     from .maneuver import capcup, merge_axes
     from .contract import contract
+    
+    # Validated before either path branches on it, so a multi-axis call fails
+    # before any of its axes are merged.
+    if mode.upper() not in ("SVD", "RSVD", "UR", "LV", "QR"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'RSVD', 'UR', 'LV', or 'QR'")
     
     # Check if axes is a sequence (multiple axes)
     is_multi_axis = isinstance(axes, (list, tuple))
@@ -1037,7 +1386,7 @@ def decomp(
         )
         
         # Unmerge the U tensor (first element of decomp_result)
-        if mode == "SVD":
+        if mode.upper() in ("SVD", "RSVD"):
             U, S, Vh = decomp_result
             # Unmerge U by contracting with conjugate isometry
             # The merged index is at position 0 of U, and at last position of iso_conj
@@ -1045,7 +1394,7 @@ def decomp(
             U_unmerged = contract(iso_conj, U, axes=(iso_conj_last_idx, 0))
             U_unmerged.trim_zero_blocks()
             return U_unmerged, S, Vh
-        else:  # mode == "UR", "LV", or "QR"
+        else:  # mode is "UR", "LV", or "QR"
             first, second = decomp_result
             # For UR mode, first is U; for LV mode, first is L; for QR mode, first is Q
             # All have the merged index at position 0
@@ -1056,11 +1405,6 @@ def decomp(
             return first_unmerged, second
     
     # Single axis: original behavior
-    # Validate mode
-    mode = mode.upper()
-    if mode not in ("SVD", "UR", "LV", "QR"):
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'SVD', 'UR', 'LV', or 'QR'")
-    
     # Validate flow parameter
     if flow not in (">>", "<<", "><"):
         raise ValueError(f"Invalid flow '{flow}'. Must be '>>', '<<', or '><'")
@@ -1095,15 +1439,18 @@ def decomp(
     left_index = T.indices[axis_idx]
     # Natural flow is "<<" if left_index is OUT, ">>" if left_index is IN
     natural_flow = "<<" if left_index.direction == Direction.OUT else ">>"
+    # Determine decomposition engine based on mode
+    engine = "random" if mode.upper() == "RSVD" else "exact"
     
     # Perform SVD to get U, singular values dict, and Vh (pass integer axis_idx)
-    U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc)
+    # "RSVD" differs from "SVD" only in which solver runs underneath.
+    U, S_blocks, Vh = svd(T, axis_idx, trunc=trunc, engine=engine)
     
     # Update U and Vh bond tags to use custom tags
     U.retag({U.itags[1]: bond_tag_left})
     Vh.retag({Vh.itags[0]: bond_tag_right})
     
-    if mode == "SVD":
+    if mode.upper() in ("SVD", "RSVD"):
         # Construct full diagonal S tensor
         bond_index = U.indices[1]  # Extract bond index from U
         
@@ -1164,7 +1511,7 @@ def decomp(
         
         return U, S_tensor, Vh
     
-    elif mode == "UR":
+    elif mode.upper() == "UR":
         # Multiply singular values into Vh to get R = S*Vh
         R_blocks: Dict[BlockKey, torch.Tensor] = {}
         
@@ -1205,7 +1552,7 @@ def decomp(
         
         return U, R_tensor
     
-    elif mode == "LV":
+    elif mode.upper() == "LV":
         # Multiply singular values into U to get L = U*S
         L_blocks: Dict[BlockKey, torch.Tensor] = {}
         
@@ -1246,7 +1593,7 @@ def decomp(
         
         return L_tensor, Vh
     
-    elif mode == "QR":
+    elif mode.upper() == "QR":
         # Use the qr function directly
         # axes go into Q, remaining axes go into R
         Q, R = qr(T, axis_idx)

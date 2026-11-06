@@ -181,13 +181,15 @@ class BlockSchema:
             raise ValueError("Cannot compute charge totals for empty indices")
         
         group = indices[0].group
-        total = group.neutral
         
-        # Traverse each index, fusing charges with appropriate direction adjustments.
-        for idx, charge in zip(indices, key):
-            contribution = charge if idx.direction == Direction.OUT else group.dual(charge)
-            total = group.fuse_unique(total, contribution)
-        return total
+        # Traverse each index, adjusting for direction, then fuse in one n-ary
+        # call. Folding pairwise costs a call per index, and the call is more
+        # expensive than the fusion.
+        contributions = [
+            charge if idx.direction == Direction.OUT else group.dual(charge)
+            for idx, charge in zip(indices, key)
+        ]
+        return group.fuse_unique(*contributions)
 
     @staticmethod
     def charge_avail(indices: Sequence[Index], key: BlockKey) -> Tuple[Charge, ...]:

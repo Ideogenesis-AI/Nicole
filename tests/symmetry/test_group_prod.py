@@ -18,9 +18,14 @@
 
 """Tests for ProductGroup: multiple independent symmetries."""
 
+import copy
+import pickle
+from dataclasses import dataclass
+
 import pytest
 
 from nicole.symmetry.abelian import U1Group, Z2Group
+from nicole.symmetry.base import AbelianGroup
 from nicole.symmetry.product import ProductGroup
 from nicole.symmetry.unitary import SU2Group
 
@@ -441,3 +446,122 @@ def test_product_group_name_three_components():
     """Test name property for U1×U1×Z2."""
     group = ProductGroup([U1Group(), U1Group(), Z2Group()])
     assert group.name == "U1×U1×Z2"
+
+
+# Fast path parity tests
+#
+# ProductGroup installs specialized fuse_unique/fuse_channels/dual into the
+# instance dict for two-component products. These tests pin every tier to the
+# generic class methods, which are reached by calling them unbound.
+
+
+@dataclass(frozen=True)
+class _Z3Group(AbelianGroup):
+    """Z3 group, used only to exercise the tier-2 fallback for unlisted types."""
+
+    @property
+    def name(self) -> str:
+        return "Z3"
+
+    @property
+    def neutral(self) -> int:
+        return 0
+
+    def dual(self, q: int) -> int:
+        return (-q) % 3
+
+    def fuse_unique(self, *qs: int) -> int:
+        return sum(qs) % 3
+
+    def equal(self, a: int, b: int) -> bool:
+        return a % 3 == b % 3
+
+    def validate_charge(self, q) -> None:
+        if q not in (0, 1, 2):
+            raise ValueError("Z3 charge must be 0, 1 or 2")
+
+
+# Representative charges per component type, used to build product charges.
+_SAMPLE_CHARGES = {
+    U1Group: (-2, 0, 1, 3),
+    Z2Group: (0, 1),
+    _Z3Group: (0, 1, 2),
+    SU2Group: (0, 1, 2, 3, 4),
+}
+
+
+def _product_charges(group):
+    """Return a few charge tuples spanning each component's sample charges."""
+    per_component = [_SAMPLE_CHARGES[type(c)] for c in group.components]
+    return [
+        tuple(samples[i % len(samples)] for samples in per_component)
+        for i in range(max(len(s) for s in per_component))
+    ]
+
+
+# One group per tier: the six tier-1 signatures, two tier-2 signatures using the
+# unlisted Z3, and a three-component group that keeps the generic methods.
+_PARITY_GROUPS = [
+    ProductGroup([U1Group(), U1Group()]),
+    ProductGroup([U1Group(), Z2Group()]),
+    ProductGroup([Z2Group(), U1Group()]),
+    ProductGroup([Z2Group(), Z2Group()]),
+    ProductGroup([U1Group(), SU2Group()]),
+    ProductGroup([Z2Group(), SU2Group()]),
+    ProductGroup([_Z3Group(), U1Group()]),
+    ProductGroup([_Z3Group(), SU2Group()]),
+    ProductGroup([U1Group(), Z2Group(), SU2Group()]),
+]
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_dual_matches_generic(group):
+    """Installed dual agrees with the generic implementation."""
+    for q in _product_charges(group):
+        assert group.dual(q) == ProductGroup.dual(group, q)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+@pytest.mark.parametrize("n_charges", [0, 1, 2, 3])
+def test_fast_path_fuse_channels_matches_generic(group, n_charges):
+    """Installed fuse_channels agrees with the generic implementation."""
+    charges = _product_charges(group)
+    for i in range(len(charges)):
+        # Rotate the sample charges so every argument slot sees every value.
+        qs = tuple(charges[(i + k) % len(charges)] for k in range(n_charges))
+        assert group.fuse_channels(*qs) == ProductGroup.fuse_channels(group, *qs)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+@pytest.mark.parametrize("n_charges", [0, 1, 2, 3])
+def test_fast_path_fuse_unique_matches_generic(group, n_charges):
+    """Installed fuse_unique agrees with the generic implementation."""
+    if not group.is_abelian:
+        # Non-Abelian products keep the generic fuse_unique, which must raise.
+        with pytest.raises(TypeError, match="non-Abelian component"):
+            group.fuse_unique((0,) * group.num_components)
+        return
+
+    charges = _product_charges(group)
+    for i in range(len(charges)):
+        qs = tuple(charges[(i + k) % len(charges)] for k in range(n_charges))
+        assert group.fuse_unique(*qs) == ProductGroup.fuse_unique(group, *qs)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_preserves_dataclass_protocol(group):
+    """Installed functions leave equality, hashing, and repr untouched."""
+    twin = ProductGroup(list(group.components))
+    assert group == twin
+    assert hash(group) == hash(twin)
+    assert repr(group) == repr(twin)
+
+
+@pytest.mark.parametrize("group", _PARITY_GROUPS, ids=lambda g: g.name)
+def test_fast_path_survives_round_trip(group):
+    """Pickling and deep-copying rebuild a group with working fast paths."""
+    for clone in (pickle.loads(pickle.dumps(group)), copy.deepcopy(group)):
+        assert clone == group
+        for q in _product_charges(group):
+            assert clone.dual(q) == group.dual(q)
+            assert clone.fuse_channels(q, q) == group.fuse_channels(q, q)
