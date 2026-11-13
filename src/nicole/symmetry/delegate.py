@@ -127,7 +127,7 @@ class Bridge:
         if not isinstance(self.weights, torch.Tensor):
             raise TypeError(f"weights must be a torch.Tensor, got {type(self.weights)}")
         
-        # Read the shape once rather than reaching for `ndim` and `shape`
+        # Read the shape once so no need to reach for `ndim` and `shape`
         # separately: Bridges are built per block in inner loops, and every
         # tensor attribute access passes through torch's default-device mode.
         shape = self.weights.shape
@@ -597,10 +597,10 @@ def canonical_bridge(
 ) -> Bridge:
     """Return a shared Bridge whose every weight equals `value`.
 
-    Canonical weights are fixed by the coupling tree rather than by the block
-    data, so one Bridge serves every block and every tensor with the same key.
-    Repeated calls return the identical object, which is sound because `Bridge`
-    is frozen, but it does mean the weights must never be written to in place.
+    Canonical weights are fixed by the coupling tree, so one Bridge serves every
+    block and every tensor with the same key. Repeated calls return the
+    identical object, which is sound because `Bridge` is frozen, but it does
+    mean the weights must never be written to in place.
     Use `Bridge.clone` where private storage is needed.
 
     Parameters

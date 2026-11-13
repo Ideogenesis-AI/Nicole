@@ -794,7 +794,7 @@ def svd(
     # Special pass: return U, S, and Vh tensors with info
     if requires_info:
         # An identically-zero tensor has no spectrum to lose, so report 0
-        # rather than dividing by zero.
+        # to avoid dividing by zero.
         dw = _discarded_sq / _total_sq if _total_sq > 0.0 else 0.0
         info: Dict[str, Any] = {
             "discarded_weight": dw,
