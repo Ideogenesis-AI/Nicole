@@ -1440,7 +1440,7 @@ def test_intertwiner_weights_stay_real_through_operations():
     or Frobenius-Schur phase, none of which yuzuha computes in complex
     arithmetic, and every operation combining weights is real-linear. Bridge.conj
     and the unconjugated weight overlap in contract both rely on this, so the
-    imaginary part must be exactly zero rather than merely small.
+    imaginary part must be exactly zero.
     """
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))

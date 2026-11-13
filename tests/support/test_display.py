@@ -493,7 +493,7 @@ def test_tensor_summary_su2_sign_suffix_positive_large_block():
     """Test that {+} is appended on the byte_repr path for a non-scalar block.
     
     Sector(2, 2) (spin-1, 2 multiplets) yields a 2x2 state block so the
-    byte_repr branch is taken rather than the value_repr branch.
+    byte_repr branch is taken in place of the value_repr branch.
     """
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(2, 2),))

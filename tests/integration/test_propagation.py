@@ -26,7 +26,7 @@ fixture, while every test call explicitly passes `device=accel_device`
 
 Any code path that silently falls through to `torch.get_default_device()`
 instead of honouring the forwarded `device` argument will produce a tensor
-on CPU rather than the accelerator, causing an immediate assertion failure.
+on CPU instead of the accelerator, causing an immediate assertion failure.
 
 This approach avoids MPS float64 incompatibility: intermediate CPU-side
 computations (e.g. building data blocks in `load_space`) legitimately use
@@ -73,7 +73,7 @@ def with_cpu_default(accel_device: torch.device):
 
     Every test explicitly passes `device=accel_device`; any call that
     silently uses `torch.get_default_device()` will therefore produce a
-    tensor on CPU rather than the accelerator, failing the assertion.
+    tensor on CPU instead of the accelerator, failing the assertion.
 
     The fixture always restores the original default device on teardown so
     that this module cannot affect other test modules.
