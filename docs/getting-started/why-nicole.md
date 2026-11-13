@@ -10,7 +10,7 @@ Several mature tensor libraries exist for quantum many-body physics. Nicole occu
 - **Full Python and ML/AI ecosystem access**: Nicole integrates naturally with NumPy, SciPy, Matplotlib, Hugging Face, and the full ML/AI tech stack. Your tensor network code lives alongside data pipelines, neural network models, and visualization tools — no language boundary, no FFI overhead.
 - **GPU acceleration**: Nicole's PyTorch backend runs dense block operations on CUDA and Apple MPS out of the box, making large-scale tensor network computations significantly faster without any code changes.
 - **Autograd throughout**: PyTorch's autograd is available end-to-end, enabling gradient-based optimization over tensor network parameters — something not possible in TensorKit.
-- **Accessible abstraction**: Nicole's SU(2) support is grounded in the concrete Wigner–Eckart theorem and R-W-C decomposition rather than abstract category theory, making it easier to reason about for physicists.
+- **Accessible abstraction**: Nicole's SU(2) support is grounded in the concrete Wigner–Eckart theorem and R-W-C decomposition, making it easier to reason about for physicists.
 
 ## vs. ITensor (Julia / C++)
 

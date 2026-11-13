@@ -72,8 +72,8 @@ be combined with a complex one directly. This covers `+` and `-` as well as
 [contract](../contraction/contract.md), [einsum](../contraction/einsum.md) and
 [oplus](../arithmetic/oplus.md). Two things to watch:
 
-- Scalar operations preserve precision rather than widening, so a `float32`
-  tensor times `1j` gives `complex64`, not `complex128`.
+- Scalar operations preserve precision, so a `float32` tensor times `1j` gives
+  `complex64`, not `complex128`.
 - `==` compares dtype as well as values, so the same values at two dtypes are
   not equal. Use [allclose](../arithmetic/allclose.md) when only the values
   matter.

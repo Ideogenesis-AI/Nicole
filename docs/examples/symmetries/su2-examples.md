@@ -84,7 +84,7 @@ T = Tensor.random([spin_half, spin_half.flip()], itags=["i", "j"], seed=42)
 print(T)
 ```
 
-The summary shows `'SU2'` as the symmetry signature (rather than `'A'` for Abelian tensors). When a block's reduced weight matrix is a single scalar, a sign indicator `{+}` or `{-}` is appended to flag its sign at a glance, without printing the full matrix.
+The summary shows `'SU2'` as the symmetry signature (by contrast, `'A'` for Abelian tensors). When a block's reduced weight matrix is a single scalar, a sign indicator `{+}` or `{-}` is appended to flag its sign at a glance, without printing the full matrix.
 
 ## Tensor Contraction
 
