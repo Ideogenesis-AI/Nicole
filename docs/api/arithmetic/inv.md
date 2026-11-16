@@ -1,6 +1,6 @@
 # inv
 
-Invert a diagonal matrix tensor.
+Invert a diagonal matrix tensor by taking the reciprocal of each diagonal element. The result comes back transposed, with its two indices swapped and flipped, which lets it contract against the tensor it came from and yield an identity. The usual subject is a singular-value or eigenvalue tensor from [diag](diag.md), where the inverse usually restores the environment weights.
 
 ::: nicole.inv
     options:
@@ -9,9 +9,9 @@ Invert a diagonal matrix tensor.
 
 ## Description
 
-Takes a diagonal matrix tensor and returns its inverse by inverting each diagonal element. The function handles diagonal tensors created by `diag()` or manually constructed diagonal matrices.
+The input must be 2nd-order and its blocks square, with zeros off the diagonal. Both a tensor from [diag](diag.md) and a hand-built one qualify, but the check differs: a tensor labeled `Diagonal` is trusted and the off-diagonal scan is skipped, while any other label is verified block by block and raises `ValueError` if an off-diagonal entry exceeds machine epsilon.
 
-For charge conservation, the output tensor has transposed index structure (swapped and flipped indices) compared to the input.
+Inversion is elementwise on the diagonal, so a vanishing element has no inverse. An entry below machine epsilon for `float64` raises `ZeroDivisionError` to avoid returning an infinity. For a generic symmetry group the diagonal is read out of the block's leading multiplicity slice and written back with the trailing dimension intact; the intertwiner weights encode the `√(irrep_dim)` normalization and are unaffected by inversion, so they carry over with the transposed directions.
 
 ## Usage
 
@@ -59,8 +59,6 @@ D_inv = inv(D)
 
 ## Notes
 
-- Input tensor must have exactly 2 indices
-- Each block must be a square diagonal matrix
-- Diagonal elements must be non-zero (raises ZeroDivisionError otherwise)
-- If tensor label is "Diagonal", diagonal structure check is skipped for efficiency
-- Output tensor has transposed index structure for charge conservation
+- The output indices are `(indices[1].flip(), indices[0].flip())` and the itags are swapped to match, so `contract(S, inv(S))` pairs the bond correctly without further preparation.
+- The `Diagonal` label is the only way to skip the off-diagonal scan. Hand-built tensors that are known to be diagonal are worth labeling as such when they are inverted in a loop.
+- A singular spectrum needs truncation before inversion, since `inv` refuses a zero without regularizing it.
