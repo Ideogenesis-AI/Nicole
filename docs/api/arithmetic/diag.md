@@ -1,6 +1,6 @@
 # diag
 
-Convert diagonal blocks into a diagonal matrix tensor.
+Turn a dictionary of per-sector 1D arrays into a diagonal matrix tensor. It is the way back from a spectrum into the tensor algebra: [svd](../decomposition/svd.md) and [eig](../decomposition/eig.md) hand their singular values and eigenvalues back as a dict keyed by charge, and `diag` makes that a 2nd-order tensor that contractions can use.
 
 ::: nicole.diag
     options:
@@ -9,9 +9,9 @@ Convert diagonal blocks into a diagonal matrix tensor.
 
 ## Description
 
-Takes a dictionary of 1D arrays (such as singular values from SVD or eigenvalues from eigendecomposition) and creates a diagonal matrix tensor where each 1D array becomes a diagonal matrix block.
+Each 1D array in `S_blocks` becomes the diagonal of one matrix block, under the charge key that it arrived with. The two output indices are built from `bond_index`, one flipped and one as given, so the tensor is ready to sit on the bond the decomposition opened. Every input array must be 1-dimensional; anything else raises `ValueError`.
 
-This is useful for converting the singular values dict from `svd()` or eigenvalues dict from `eig()` into full diagonal matrix form for explicit matrix operations like contraction.
+The output is tagged `("_bond_L", "_bond_R")` unless `itags` says otherwise, and labeled `Diagonal`. That label is load-bearing: [inv](inv.md) uses it to skip the check that a tensor really is diagonal. For a generic symmetry group the blocks gain the trailing multiplicity dimension and an intertwiner whose weights are set to `√(irrep_dim(q))`, matching the convention [identity](../creation/identity.md) uses.
 
 ## Usage
 
@@ -32,14 +32,11 @@ result = contract(U, S_diag)  # Equivalent to U @ S
 
 - [decomp](../decomposition/decomp.md): Tensor decomposition returning S as dict
 - [inv](inv.md): Matrix inversion for diagonal tensors
+- [identity](../creation/identity.md): The same block structure with unit entries
 - [oplus](oplus.md): Direct sum operation
 
 ## Notes
 
-The output tensor will have:
-- Two indices: (bond_index.flip(), bond_index)
-- Block keys (q, q) for each charge q in input dict
-- Diagonal matrices as data blocks
-- Label "Diagonal"
-
-All input arrays must be 1-dimensional (one value per charge sector).
+- The result carries the indices `(bond_index.flip(), bond_index)` and one block per charge `q` in the input, keyed `(q, q)`. No off-diagonal key can conserve charge.
+- `dtype` and `device` are inferred from the input arrays when not given, so a spectrum computed on the GPU stays there.
+- The input dict is primarily the `S` output of `decomp` or `svd` and the `D` output of `eig`, all of which key their arrays by charge in exactly this form.
