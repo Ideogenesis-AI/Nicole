@@ -3080,6 +3080,16 @@ def test_merge_axes_preserves_dtype():
     assert iso_conj.dtype == torch.complex128
 
 
+def test_merge_axes_rejects_non_axis_type():
+    """Test that merge_axes rejects an axis that is neither an int nor a str."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="Axis must be int or str"):
+        merge_axes(T, [0, 1.5])
+
+
 # SU(2) merge_axes tests
 
 def test_merge_axes_su2_basic():
