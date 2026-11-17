@@ -1,6 +1,6 @@
 # ProductGroup
 
-Combine multiple symmetry groups into a single product group, enforcing all constituent conservation laws simultaneously. Charges are tuples of component charges.
+Combine multiple symmetry groups into a single product group, enforcing all constituent conservation laws simultaneously. Charges are tuples of component charges, and every group operation acts component-wise, so a block is admissible only when each factor balances on its own. The product is Abelian when all its components are, and non-Abelian as soon as an `SU2Group` is involved.
 
 ::: nicole.ProductGroup
     options:
@@ -20,7 +20,9 @@ Combine multiple symmetry groups into a single product group, enforcing all cons
 
 ## Description
 
-Combines multiple independent symmetry groups. Charges are tuples with one component per group.
+Combines multiple independent symmetry groups into one. Charges are tuples with one component per group, ordered as the components were given, and `validate_charge` checks both the length of the tuple and each component against its own group, naming the offending position when it fails. The product carries the composite name — `"U1×Z2"`, `"U1×SU2"` — and its neutral charge is the tuple of component neutral charges.
+
+The construction stays flat: a product needs at least one component, and nesting a `ProductGroup` inside another is rejected, so a three-way symmetry is spelled as one product of three groups instead of a product of a product.
 
 ### Abelian and Non-Abelian Components
 
