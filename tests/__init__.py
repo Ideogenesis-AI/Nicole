@@ -44,6 +44,7 @@ operations/
     - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
     - test_capcup.py: Bond direction inversion (capcup)
+    - test_randsvd.py: Randomized SVD engine and fallback ladder
 
 symmetry/
     Symmetry group operations:
