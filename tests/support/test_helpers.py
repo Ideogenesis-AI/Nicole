@@ -772,6 +772,22 @@ def test_regularize_higher_order_complex():
     assert math.isclose(tensor.norm(), norm_before, rel_tol=1e-12)
 
 
+@pytest.mark.parametrize("order", [2, 4])
+def test_regularize_skips_blocks_without_an_intertwiner(order):
+    """Test that regularize passes over a block whose intertwiner is missing."""
+    group = SU2Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    indices = [idx, idx.flip()] * (order // 2)
+    tensor = Tensor.random(indices, seed=8)
+    orphaned = next(iter(tensor.intw))
+    del tensor.intw[orphaned]
+    before = tensor.data[orphaned].clone()
+
+    tensor.regularize()
+
+    assert torch.equal(tensor.data[orphaned], before)
+
+
 # Compression-aspect tests for regularize
 
 def test_regularize_compresses_dependent_components():
