@@ -3798,3 +3798,33 @@ def test_trim_zero_blocks_threshold_relative_to_norm():
     )
     assert (0, 0) in t_large_norm.data, "Non-zero block must be preserved"
 
+
+def test_trim_zero_blocks_removes_every_block_of_a_zero_tensor():
+    """Test that trimming an identically zero tensor leaves it with no blocks."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+
+    tensor.trim_zero_blocks()
+
+    assert tensor.data == {}
+    assert tensor.norm() == 0.0
+
+
+def test_trim_zero_blocks_keeps_an_index_with_no_surviving_sector():
+    """Test that trimming keeps an index intact when no remaining key matches it.
+
+    The surviving blocks normally reference every index sector. An index whose
+    sectors have all gone out of sync with the data exercises the fallback that
+    leaves such an index untouched.
+    """
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=6)
+    tensor.data[(0, 0)] = torch.zeros_like(tensor.data[(0, 0)])
+    unrelated = Index(Direction.OUT, group, sectors=(Sector(5, 2),))
+    tensor.indices = (unrelated, tensor.indices[1])
+
+    tensor.trim_zero_blocks()
+
+    assert tensor.indices[0] is unrelated
