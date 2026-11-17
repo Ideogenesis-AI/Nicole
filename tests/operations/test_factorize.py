@@ -2529,6 +2529,28 @@ def test_eig_truncation_combined_thresh_nkeep():
         assert torch.all(torch.real(eigvals) >= 0.8).item()
 
 
+def test_eig_truncation_non_dict():
+    """Test that eig raises error for a truncation specification that is not a dict."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="trunc must be a dict"):
+        eig(T, trunc=5)
+
+
+def test_eig_truncation_invalid_mode():
+    """Test that eig raises error for truncation keys outside 'nkeep' and 'thresh'."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="Invalid truncation mode"):
+        eig(T, trunc={"cutoff": 1e-8})
+
+
 def test_eig_non_square_error():
     """Test that eig raises error for non-square matrices."""
     group = U1Group()
