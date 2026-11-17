@@ -1,6 +1,6 @@
 # Bridge
 
-Storage container for the SU(2) Clebsch–Gordan intertwiner data attached to each block of a non-Abelian tensor.
+Storage container for the SU(2) Clebsch–Gordan intertwiner info attached to each block of a non-Abelian tensor. A block of such a tensor keeps only reduced tensor elements, and the `Bridge` holds what is needed to recover the full elements from them: which fusion trees the block's external spins admit, and the coefficients of the block in that basis. Nicole builds and propagates these objects for you; this page documents their structure for anyone inspecting blocks or writing SU(2)-aware routines.
 
 ::: nicole.symmetry.delegate.Bridge
     options:
