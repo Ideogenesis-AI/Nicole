@@ -382,6 +382,32 @@ def test_tensor_summary_formatting_consistent():
     assert summary1 == summary2
 
 
+def test_tensor_summary_signature_product_group():
+    """Test that a ProductGroup tensor reports its joined component name."""
+    group = ProductGroup([U1Group(), Z2Group()])
+    idx = Index(Direction.IN, group, sectors=(Sector((0, 0), 2), Sector((1, 1), 2)))
+    summary = str(Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1))
+
+    assert "U1" in summary
+    assert "Z2" in summary
+
+
+def test_tensor_summary_signature_non_u1_abelian_group():
+    """Test that a Z2 tensor reports 'Z2' rather than the U(1) shorthand 'A'."""
+    idx = Index(Direction.IN, Z2Group(), sectors=(Sector(0, 2), Sector(1, 2)))
+    summary = str(Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1))
+
+    assert "having 'Z2'" in summary
+
+
+def test_tensor_summary_signature_su2_group():
+    """Test that an SU(2) tensor reports its group name once per charge component."""
+    idx = Index(Direction.IN, SU2Group(), sectors=(Sector(0, 1), Sector(2, 1)))
+    summary = str(Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1))
+
+    assert "having 'SU2'" in summary
+
+
 # SU2 tensor_summary tests
 
 def test_tensor_summary_su2_identity():
