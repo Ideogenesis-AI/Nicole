@@ -67,6 +67,7 @@ integration/
     - test_integration.py: End-to-end workflow tests
     - test_spectrum.py: Physically correct spectra for known models
     - test_propagation.py: Device argument propagation (accelerator required)
+    - test_property.py: Hypothesis-driven invariants across groups and dtypes
 
 Root level:
     - utils.py: Shared test utilities and helpers

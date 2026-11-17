@@ -62,6 +62,14 @@ test_propagation.py
     - CPU default vs. accelerator (MPS/CUDA) disambiguation strategy
     - Skipped when no accelerator device is available
 
+test_property.py
+    Hypothesis-driven invariants over generated tensors:
+    - Strategies producing indices and tensors for U1, Z2, SU2, and U1xSU2
+    - Charge neutrality and dtype coherence of generated tensors
+    - Round trips: permute, transpose, conj, clone, serialize
+    - Norm preservation under permutation and zero-block trimming
+    - Direct sum sector doubling, identity contraction, SVD reconstruction
+
 Key Properties Tested
 ---------------------
 - Gauge invariance in SU(2) tensor contractions
