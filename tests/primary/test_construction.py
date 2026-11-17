@@ -175,6 +175,19 @@ def test_tensor_random_different_seeds():
     assert not torch.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
+@pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
+def test_tensor_random_without_a_seed(dtype):
+    """Test Tensor.random without a seed, which samples from the global generator."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    tensor = Tensor.random([idx, idx.flip()], dtype=dtype, itags=["a", "b"])
+
+    assert tensor.dtype == dtype
+    assert tensor.norm() > 0
+    assert_charge_neutral(tensor)
+
+
 def test_tensor_random_complex():
     """Test Tensor.random with complex dtype."""
     group = U1Group()
@@ -1064,6 +1077,18 @@ def test_rand_fill_different_seeds():
     # Should be different
     for key in tensor1.data:
         assert not torch.allclose(tensor1.data[key], tensor2.data[key])
+
+
+@pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
+def test_rand_fill_without_a_seed(dtype):
+    """Test rand_fill without a seed, which samples from the global generator."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=dtype, itags=["a", "b"])
+
+    tensor.rand_fill()
+
+    assert tensor.norm() > 0
 
 
 def test_rand_fill_complex_dtype():
