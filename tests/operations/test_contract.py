@@ -1937,7 +1937,6 @@ def test_trace_product_group():
     assert math.isclose(result.item(), manual_scalar.item())
 
 
-
 def test_trace_produces_scalar():
     """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
     group = U1Group()
@@ -2084,6 +2083,48 @@ def test_trace_skips_blocks_whose_paired_axes_have_unequal_dims():
 
     assert traced.is_scalar()
     assert traced.data == {}
+
+
+def test_trace_rejects_automatic_pairing_without_pairs():
+    """Test that automatic tracing fails when no two indices pair up."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+
+    with pytest.raises(ValueError, match="No valid trace pairs found\\."):
+        trace(T)
+
+
+def test_trace_rejects_exclusion_removing_every_pair():
+    """Test that automatic tracing fails when the only pair is excluded."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    with pytest.raises(ValueError, match="after applying exclusions"):
+        trace(T, excl=0)
+
+
+def test_trace_rejects_unknown_exclusion_itag():
+    """Test that tracing rejects an exclusion itag absent from the tensor."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="Exclusion itag 'z' not found"):
+        trace(T, excl="z")
+
+
+def test_trace_rejects_out_of_range_exclusion_axis():
+    """Test that tracing rejects an exclusion axis outside the index range."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(IndexError, match="Exclusion axis 7 out of range"):
+        trace(T, excl=7)
+
+
 # Contract/trace consistency tests
 
 def test_contract_trace_consistency_high_order():
@@ -2290,4 +2331,3 @@ def test_trace_su2_consistency_with_contract():
 
     assert set(direct.data.keys()) == set(traced.data.keys())
     assert_physical_tensors_equal(direct, traced)
-
