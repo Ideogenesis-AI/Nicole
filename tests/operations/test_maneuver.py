@@ -2658,6 +2658,16 @@ def test_squeeze_invalidates_sorted_keys():
     assert tensor._sorted_keys is None
 
 
+def test_squeeze_rejects_non_trivial_index():
+    """Test that squeeze rejects an index that is not a single neutral 1D sector."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip(), idx], itags=["a", "b", "c"], seed=1)
+
+    with pytest.raises(ValueError, match="is not trivial"):
+        T.squeeze(0)
+
+
 # SU(2) squeeze tests
 
 def test_squeeze_su2_intw_keys_match_data_keys():
