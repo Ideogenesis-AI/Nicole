@@ -49,6 +49,16 @@ def test_eq_same_content():
     assert A == B
 
 
+def test_eq_different_block_keys():
+    """Tensors sharing indices but not block keys are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = A.clone()
+    del B.data[(0, 0)]
+    assert A != B
+
+
 def test_eq_different_values():
     """Tensors with different block values are not equal."""
     group = U1Group()
