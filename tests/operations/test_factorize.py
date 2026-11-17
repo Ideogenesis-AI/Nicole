@@ -624,6 +624,22 @@ def test_svd_truncation_multiblock():
     assert total_kept <= 3, f"Expected at most 3 singular values globally, got {total_kept}"
 
 
+
+
+def test_svd_truncation_discards_every_block():
+    """Test that svd discards a block whose singular values all fall below thresh."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=9)
+
+    U, S_blocks, Vh = svd(T, 0, trunc={"thresh": 1e3})
+
+    assert S_blocks == {}
+    assert U.data == {}
+    assert Vh.data == {}
+
+
 def test_svd_truncation_invalid_mode():
     """Test that invalid truncation mode raises error."""
     group = U1Group()
