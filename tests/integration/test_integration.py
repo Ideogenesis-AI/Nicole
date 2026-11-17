@@ -367,4 +367,3 @@ def test_workflow_mixed_dtypes():
     # Multiply by complex (should promote to complex)
     D = C * (1 + 1j)
     assert D.dtype.is_complex
-
