@@ -425,6 +425,13 @@ def test_charge_avail_with_directions():
     assert avail == (1, 3)
 
 
+@pytest.mark.parametrize("method", [BlockSchema.charge_totals, BlockSchema.charge_avail])
+def test_charge_aggregation_rejects_empty_indices(method):
+    """Test that the charge aggregation helpers reject an empty index sequence."""
+    with pytest.raises(ValueError, match="empty indices"):
+        method((), ())
+
+
 # charges_conserved tests (uses is_abelian to switch logic)
 
 def test_charges_conserved_abelian_still_works():
