@@ -268,4 +268,3 @@ def test_normalize_dtype_for_device_accepts_device_object():
     """Test that a torch.device is accepted alongside a string."""
     assert normalize_dtype_for_device(torch.float64, torch.device('mps')) is torch.float32
     assert normalize_dtype_for_device(torch.float64, torch.device('cpu')) is torch.float64
-
