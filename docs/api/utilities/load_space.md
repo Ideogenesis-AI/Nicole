@@ -1,6 +1,6 @@
 # load_space
 
-Load preset physical space and operators for quantum many-body systems.
+Load preset physical space and operators for quantum many-body systems. One call returns the index describing a local Hilbert space together with the operators that act on it, already carrying the charge structure of the symmetry asked for. This saves the fiddly part of setting a model up, deciding how the local states are labeled under the chosen group and giving every operator index directions consistent with that choice.
 
 ::: nicole.load_space
     options:
