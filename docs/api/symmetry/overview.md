@@ -1,6 +1,6 @@
 # Symmetry Groups Overview
 
-Nicole's symmetry system enables efficient block-sparse tensor operations by exploiting conserved quantum numbers.
+Nicole's symmetry system enables efficient block-sparse tensor operations by exploiting conserved quantum numbers. A symmetry group supplies the labels that an index hangs on its sectors and the fusion rule that decides which combinations of those labels are allowed. So only the blocks that a symmetric tensor can legally hold are ever stored or touched. The pages below cover the groups that ship with Nicole and the operations every group provides.
 
 ## Available Groups
 
@@ -107,4 +107,4 @@ SU(2) tensors use the Wigner–Eckart decomposition internally; see the [Yuzuha 
 
 ## Notes
 
-Symmetry groups are immutable and lightweight. Groups are typically shared across many indices and tensors.
+Symmetry groups are immutable and lightweight: they hold the mathematical properties, so one instance is normally shared across indices and tensors in a program. Being frozen dataclasses, they are hashable and compare by value, so two separately constructed instances are indistinguishable. Every compatibility check in Nicole — combining indices, contracting a pair of axes, adding two tensors — tests the groups for equality, and indices built in different parts of a program are therefore interoperable.
