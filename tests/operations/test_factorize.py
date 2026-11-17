@@ -255,6 +255,20 @@ def test_svd_bond_index_structure():
         f"Bond charges {set(bond_charges)} should equal negatives of left data charges {expected_bond_charges}"
 
 
+def test_svd_axis_by_itag_matches_integer_axis():
+    """Test that svd resolves a string axis to the matching index position."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=8)
+
+    U_by_tag, S_by_tag, _ = svd(T, axis="a")
+    U_by_pos, S_by_pos, _ = svd(T, axis=0)
+
+    assert U_by_tag.itags == U_by_pos.itags
+    assert set(S_by_tag.keys()) == set(S_by_pos.keys())
+
+
 # Singular value tests
 
 def test_svd_singular_values_positive():
