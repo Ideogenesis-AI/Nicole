@@ -576,6 +576,35 @@ def test_oplus_product_group():
     assert dim_map[(0, 1)] == 2  # 0 + 2
 
 
+@pytest.mark.parametrize("group_name", ["U1", "Z2", "SU2", "U1xSU2"])
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_oplus_preserves_complex_dtype_across_groups(group_name, dtype):
+    """Test that a complex direct sum keeps the dtype and sums sector dimensions."""
+    layouts = {
+        "U1": (U1Group(), (Sector(0, 2), Sector(1, 2))),
+        "Z2": (Z2Group(), (Sector(0, 2), Sector(1, 2))),
+        "SU2": (SU2Group(), (Sector(0, 2), Sector(1, 2))),
+        "U1xSU2": (
+            ProductGroup([U1Group(), SU2Group()]),
+            (Sector((0, 0), 2), Sector((1, 1), 2)),
+        ),
+    }
+    group, sectors = layouts[group_name]
+    idx = Index(Direction.OUT, group, sectors=sectors)
+    A = Tensor.random([idx, idx.flip()], itags=['i', 'j'], dtype=dtype, seed=51)
+    B = Tensor.random([idx, idx.flip()], itags=['i', 'j'], dtype=dtype, seed=52)
+
+    C = oplus(A, B, axes=0)
+
+    assert C.dtype == dtype
+    merged_dims = C.indices[0].sector_dim_map()
+    for charge, dim in idx.sector_dim_map().items():
+        assert merged_dims[charge] == 2 * dim
+    assert_charge_neutral(C)
+    for block in C.data.values():
+        assert block.dtype == dtype
+
+
 # ============================================================================
 # Property tests
 # ============================================================================
@@ -1223,6 +1252,26 @@ def test_oplus_su2_mixed_sectors():
     # Check data blocks exist
     assert (0, 0) in C.data
     assert (1, 1) in C.data
+
+
+def test_oplus_su2_charge_present_only_in_first_operand():
+    """Test direct sum when a charge sector appears in A but not in B (SU(2))."""
+    group = SU2Group()
+    idx_A = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_B = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+
+    A = Tensor.random([idx_A, idx_A.flip()], itags=['i', 'j'], seed=1)
+    B = Tensor.random([idx_B, idx_B.flip()], itags=['i', 'j'], seed=2)
+
+    # Charge 2 lives only in A, so its padded block has no counterpart from B.
+    C = oplus(A, B, axes=0)
+
+    assert (2, 2) in C.data
+    assert (0, 0) in C.data
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    # The A-only sector passes through unchanged apart from the padding.
+    assert torch.allclose(C.data[(2, 2)][:1], A.data[(2, 2)])
 
 
 def test_oplus_su2_incompatible_weights():

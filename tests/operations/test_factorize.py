@@ -255,6 +255,20 @@ def test_svd_bond_index_structure():
         f"Bond charges {set(bond_charges)} should equal negatives of left data charges {expected_bond_charges}"
 
 
+def test_svd_axis_by_itag_matches_integer_axis():
+    """Test that svd resolves a string axis to the matching index position."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=8)
+
+    U_by_tag, S_by_tag, _ = svd(T, axis="a")
+    U_by_pos, S_by_pos, _ = svd(T, axis=0)
+
+    assert U_by_tag.itags == U_by_pos.itags
+    assert set(S_by_tag.keys()) == set(S_by_pos.keys())
+
+
 # Singular value tests
 
 def test_svd_singular_values_positive():
@@ -608,6 +622,52 @@ def test_svd_truncation_multiblock():
     # Total should be at most 3 singular values across all blocks
     total_kept = sum(len(s_array) for s_array in S_blocks.values())
     assert total_kept <= 3, f"Expected at most 3 singular values globally, got {total_kept}"
+
+
+@pytest.mark.parametrize("nkeep", [1, 3, 5])
+def test_svd_truncation_nkeep_keeps_the_globally_largest_values(nkeep):
+    """Test that nkeep keeps the largest singular values across all charge blocks.
+
+    The other nkeep tests count what survives but never check which values those
+    are, so a per-block budget would satisfy them. Comparing against the
+    untruncated spectrum pins the selection down to a global one.
+    """
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
+
+    _, S_full, _ = svd(T, axis=0)
+    full_spectrum = sorted(
+        (value.item() for s_array in S_full.values() for value in s_array), reverse=True
+    )
+
+    _, S_kept, _ = svd(T, axis=0, trunc={"nkeep": nkeep})
+    kept = sorted(
+        (value.item() for s_array in S_kept.values() for value in s_array), reverse=True
+    )
+
+    assert len(kept) == nkeep
+    for got, expected in zip(kept, full_spectrum[:nkeep]):
+        assert math.isclose(got, expected, rel_tol=1e-9)
+
+    # The surviving values must out-rank every discarded one.
+    assert min(kept) >= max(full_spectrum[nkeep:], default=0.0)
+
+
+def test_svd_truncation_discards_every_block():
+    """Test that svd discards a block whose singular values all fall below thresh."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=9)
+
+    U, S_blocks, Vh = svd(T, 0, trunc={"thresh": 1e3})
+
+    assert S_blocks == {}
+    assert U.data == {}
+    assert Vh.data == {}
 
 
 def test_svd_truncation_invalid_mode():
@@ -2467,6 +2527,28 @@ def test_eig_truncation_combined_thresh_nkeep():
     # All eigenvalues should satisfy >= 0.8 (thresh limit with descending order)
     for eigvals in D.values():
         assert torch.all(torch.real(eigvals) >= 0.8).item()
+
+
+def test_eig_truncation_non_dict():
+    """Test that eig raises error for a truncation specification that is not a dict."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="trunc must be a dict"):
+        eig(T, trunc=5)
+
+
+def test_eig_truncation_invalid_mode():
+    """Test that eig raises error for truncation keys outside 'nkeep' and 'thresh'."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="Invalid truncation mode"):
+        eig(T, trunc={"cutoff": 1e-8})
 
 
 def test_eig_non_square_error():

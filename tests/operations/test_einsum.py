@@ -408,6 +408,12 @@ def test_einsum_contraction_itag_mismatch_raises():
         einsum('ij,jk->ik', A, B)
 
 
+def test_einsum_empty_operand_list_raises():
+    """einsum with an equation but no operands should raise ValueError."""
+    with pytest.raises(ValueError, match="at least one input tensor"):
+        einsum("ij->ij")
+
+
 # ===========================================================================
 #  Higher-order permutations
 # ===========================================================================

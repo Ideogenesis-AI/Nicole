@@ -175,6 +175,31 @@ def test_tensor_random_different_seeds():
     assert not torch.allclose(t1.data[(0, 0)], t2.data[(0, 0)])
 
 
+@pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
+def test_tensor_random_without_a_seed(dtype):
+    """Test Tensor.random without a seed, which samples from the global generator."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    tensor = Tensor.random([idx, idx.flip()], dtype=dtype, itags=["a", "b"])
+
+    assert tensor.dtype == dtype
+    assert tensor.norm() > 0
+    assert_charge_neutral(tensor)
+
+
+def test_tensor_random_complex_with_gradient_tracking():
+    """Test that a complex Tensor.random enables autograd when asked."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128,
+                           seed=5, requires_grad=True)
+
+    assert tensor.requires_grad
+    assert all(block.requires_grad for block in tensor.data.values())
+
+
 def test_tensor_random_complex():
     """Test Tensor.random with complex dtype."""
     group = U1Group()
@@ -569,6 +594,24 @@ def test_tensor_scalar_display():
     assert "3.14" in str_repr
     assert "0x { 1 x 0 }" in str_repr
     assert repr(s) == str(s)
+
+
+def test_tensor_item_raises_without_a_block():
+    """Test that item() raises on a 0th order tensor carrying no block."""
+    scalar = Tensor.from_scalar(1.0)
+    scalar.data.clear()
+
+    with pytest.raises(ValueError, match="exactly one block with empty key"):
+        scalar.item()
+
+
+def test_tensor_item_raises_on_a_shaped_scalar_block():
+    """Test that item() raises on a 0th order tensor whose block is not 0D."""
+    scalar = Tensor.from_scalar(1.0)
+    scalar.data[()] = torch.zeros(2)
+
+    with pytest.raises(ValueError, match="block must be 0D"):
+        scalar.item()
 
 
 def test_tensor_item_raises_on_non_scalar():
@@ -1066,6 +1109,18 @@ def test_rand_fill_different_seeds():
         assert not torch.allclose(tensor1.data[key], tensor2.data[key])
 
 
+@pytest.mark.parametrize("dtype", [torch.float64, torch.complex128])
+def test_rand_fill_without_a_seed(dtype):
+    """Test rand_fill without a seed, which samples from the global generator."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.zeros([idx, idx.flip()], dtype=dtype, itags=["a", "b"])
+
+    tensor.rand_fill()
+
+    assert tensor.norm() > 0
+
+
 def test_rand_fill_complex_dtype():
     """Test rand_fill with complex dtype fills with complex values."""
     group = U1Group()
@@ -1344,4 +1399,3 @@ def test_group_property_scalar_raises():
     
     with pytest.raises(ValueError, match="Scalar tensor has no symmetry group"):
         _ = tensor.group
-

@@ -1461,7 +1461,9 @@ def decomp(
         
         if T.group.is_abelian:
             for key, s_array in S_blocks.items():
-                S_diag_blocks[key] = torch.diag(s_array)
+                # Singular values are real even when T is complex, so the cast
+                # keeps the blocks in step with the declared dtype.
+                S_diag_blocks[key] = torch.diag(s_array).to(dtype=target_dtype)
         else:
             # Non-Abelian: diagonal matrix with trailing component dimension of 1.
             # Intertwiner is identity-like: weights[0, 0] = sqrt(irrep_dim(q)).
@@ -1469,7 +1471,7 @@ def decomp(
             bond_flip_index = bond_index.flip()
             for key, s_array in S_blocks.items():
                 # Create diagonal matrix with trailing component dimension of 1
-                S_diag_blocks[key] = torch.diag(s_array).unsqueeze(-1)
+                S_diag_blocks[key] = torch.diag(s_array).unsqueeze(-1).to(dtype=target_dtype)
                 # Create intertwiner with correct directions and dtype
                 directions = [bond_flip_index.direction, bond_index.direction]
                 S_intw[key] = dg.Bridge.from_block(

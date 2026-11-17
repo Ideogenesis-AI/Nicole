@@ -73,6 +73,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["src/nicole"]
+branch = true
 
 [tool.ruff]
 line-length = 100

@@ -44,6 +44,7 @@ operations/
     - test_maneuver.py: Permutation, transposition, conjugation, merging
     - test_oplus.py: Direct sum operations
     - test_capcup.py: Bond direction inversion (capcup)
+    - test_randsvd.py: Randomized SVD engine and fallback ladder
 
 symmetry/
     Symmetry group operations:
@@ -67,9 +68,10 @@ integration/
     - test_integration.py: End-to-end workflow tests
     - test_spectrum.py: Physically correct spectra for known models
     - test_propagation.py: Device argument propagation (accelerator required)
+    - test_property.py: Hypothesis-driven invariants across groups and dtypes
 
 Root level:
-    - utils.py: Shared test utilities and helpers
+    - utils.py: Shared test utilities, assertions, and group stubs
 
 Running Tests
 -------------
