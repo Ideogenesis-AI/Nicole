@@ -596,6 +596,24 @@ def test_tensor_scalar_display():
     assert repr(s) == str(s)
 
 
+def test_tensor_item_raises_without_a_block():
+    """Test that item() raises on a 0th order tensor carrying no block."""
+    scalar = Tensor.from_scalar(1.0)
+    scalar.data.clear()
+
+    with pytest.raises(ValueError, match="exactly one block with empty key"):
+        scalar.item()
+
+
+def test_tensor_item_raises_on_a_shaped_scalar_block():
+    """Test that item() raises on a 0th order tensor whose block is not 0D."""
+    scalar = Tensor.from_scalar(1.0)
+    scalar.data[()] = torch.zeros(2)
+
+    with pytest.raises(ValueError, match="block must be 0D"):
+        scalar.item()
+
+
 def test_tensor_item_raises_on_non_scalar():
     """Test that item() raises error on non-scalar tensors."""
     group = U1Group()
@@ -1381,4 +1399,3 @@ def test_group_property_scalar_raises():
     
     with pytest.raises(ValueError, match="Scalar tensor has no symmetry group"):
         _ = tensor.group
-
