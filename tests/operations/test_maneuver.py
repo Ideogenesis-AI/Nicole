@@ -1894,6 +1894,16 @@ def test_invert_double_application():
         assert torch.allclose(tensor.data[key], original_data[key])
 
 
+def test_invert_on_a_scalar_is_a_no_op():
+    """Test that inverting no positions on a 0th order tensor changes nothing."""
+    scalar = Tensor.from_scalar(2.0)
+
+    scalar.invert([])
+
+    assert scalar.item() == 2.0
+    assert scalar.indices == ()
+
+
 # SU(2) invert tests
 
 def test_invert_su2_updates_intw_directions_single():
