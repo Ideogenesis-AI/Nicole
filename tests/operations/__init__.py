@@ -87,7 +87,7 @@ test_einsum.py
 test_maneuver.py
     Tests for structural tensor maneuvers:
     - allclose(), conj(), permute(), transpose()
-    - retag(), invert(), insert_index()
+    - retag(), invert(), insert_index(), squeeze()
     - merge_axes(), trim_zero_blocks()
 
 test_oplus.py
