@@ -2038,6 +2038,52 @@ def test_trace_manual_pair_syntax():
     assert len(scalar.indices) == 0
 
 
+def test_trace_with_no_pairs_returns_the_input():
+    """Test that tracing an empty list of pairs hands back the same tensor."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    assert trace(T, axes=[]) is T
+
+
+def test_detect_trace_pairs_defaults_to_no_exclusions():
+    """Test that the pair detector works when called without an exclusion set."""
+    from nicole.contract import _detect_trace_pairs
+
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    assert _detect_trace_pairs(T) == [(0, 1)]
+
+
+@pytest.mark.parametrize("pairs", [[(0, 1), (2, 3)], [(2, 3), (0, 1)]])
+def test_trace_multiple_pairs_adjusts_remaining_axes(pairs):
+    """Test that multi-pair tracing renumbers the remaining pairs in either order."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip(), idx, idx.flip()],
+                      itags=["a", "a", "b", "b"], seed=2)
+
+    traced = trace(T, axes=pairs)
+    sequential = trace(trace(T, axes=pairs[0]), axes=(0, 1))
+
+    assert traced.is_scalar()
+    assert math.isclose(traced.item(), sequential.item(), rel_tol=1e-12)
+
+
+def test_trace_skips_blocks_whose_paired_axes_have_unequal_dims():
+    """Test that tracing skips a block whose paired axes share a charge but not a dim."""
+    group = U1Group()
+    left = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    right = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    T = Tensor.zeros([left, right], itags=["a", "a"])
+
+    traced = trace(T, axes=(0, 1))
+
+    assert traced.is_scalar()
+    assert traced.data == {}
 # Contract/trace consistency tests
 
 def test_contract_trace_consistency_high_order():
