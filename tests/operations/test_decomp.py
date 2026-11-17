@@ -1505,7 +1505,6 @@ def _make_u1_6th_order_decomp(seed: int = 1):
     ], itags=["a", "b", "c", "d", "e", "f"], seed=seed)
 
 
-
 def test_decomp_6th_order_svd_ur_lv_modes():
     """Stress test: SVD, UR, and LV modes on a 6th-order tensor with complex charge structure."""
     T = _make_u1_6th_order_decomp(seed=8000)
@@ -2039,3 +2038,28 @@ def test_decomp_two_factor_modes_reconstruct_across_groups(group_name, mode):
 
     _assert_reconstructed(T, reconstructed, 1e-9, f"{group_name} {mode} reconstruction")
 
+
+@pytest.mark.parametrize("group_name", _GROUP_NAMES)
+@pytest.mark.parametrize("mode", ["UR", "LV", "QR"])
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_decomp_two_factor_modes_stay_dtype_coherent_when_complex(group_name, mode, dtype):
+    """Test that the two-factor modes keep complex factors coherent and reconstructing.
+
+    SVD mode once returned an `S` that declared a complex dtype while holding
+    real singular values, which made the reconstruction contraction fail. UR,
+    LV, and QR build their factors from the same singular values, so they are
+    checked against both halves of that failure.
+    """
+    T = _matrix_for(group_name, dtype, seed=34)
+    first, second = decomp(T, axes=0, mode=mode)
+
+    for factor in (first, second):
+        assert_dtype_coherent(factor)
+
+    reconstructed = contract(first, second)
+    tag_to_position = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    reconstructed.permute([tag_to_position[tag] for tag in T.itags], in_place=True)
+
+    tol = _reconstruction_tolerance(dtype)
+    _assert_reconstructed(T, reconstructed, tol,
+                          f"{group_name} {mode} reconstruction in {dtype}")
