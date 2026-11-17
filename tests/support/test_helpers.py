@@ -28,7 +28,8 @@ from nicole import Tensor, U1Group, Z2Group, SU2Group, ProductGroup
 from nicole import Direction, Index, Sector
 from nicole import filter_blocks
 from nicole.serialize import serialize, deserialize
-from ..utils import assert_dtype_coherent, populate_random_weights
+from nicole.serialize import _serialize_group, _deserialize_group
+from ..utils import assert_dtype_coherent, populate_random_weights, OpaqueGroup
 
 
 # Clone tests
@@ -1326,3 +1327,25 @@ def test_deserialize_unknown_version_raises():
     with pytest.raises(ValueError, match="Unsupported serialization version"):
         deserialize(payload)
 
+
+def test_serialize_rejects_unknown_group():
+    """Group serialization rejects a group outside the supported registry."""
+    with pytest.raises(TypeError, match="Cannot serialize symmetry group"):
+        _serialize_group(OpaqueGroup())
+
+
+def test_deserialize_rejects_unknown_group_tag():
+    """Group deserialization rejects an unrecognized type tag."""
+    with pytest.raises(ValueError, match="Unknown group type"):
+        _deserialize_group({"type": "O3"})
+
+
+def test_serialize_round_trip_preserves_product_group():
+    """A ProductGroup tensor survives a serialize/deserialize round trip."""
+    group = ProductGroup([U1Group(), SU2Group()])
+    idx = Index(Direction.IN, group, (Sector((0, 0), 1), Sector((1, 1), 1)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=3)
+
+    restored = deserialize(serialize(T))
+
+    assert restored == T
