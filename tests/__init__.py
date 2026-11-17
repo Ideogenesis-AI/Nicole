@@ -71,7 +71,7 @@ integration/
     - test_property.py: Hypothesis-driven invariants across groups and dtypes
 
 Root level:
-    - utils.py: Shared test utilities and helpers
+    - utils.py: Shared test utilities, assertions, and group stubs
 
 Running Tests
 -------------
