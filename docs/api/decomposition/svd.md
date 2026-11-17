@@ -1,6 +1,6 @@
 # svd
 
-Low-level SVD returning singular values as dictionary.
+Low-level SVD returning singular values as dictionary. It is the layer [decomp](decomp.md) is built on, and it hands back the spectrum of each charge sector separately without folding the singular values into a diagonal tensor, so truncation decisions and error estimates can be made per sector. The solver run on each sector is selectable, exact or randomized, and auxiliary data about the truncation is available on request.
 
 ::: nicole.decomp.svd
     options:

@@ -1,6 +1,6 @@
 # merge_axes
 
-Merge multiple tensor axes into a single axis using isometry fusion.
+Fuse several axes of a tensor into one, and receive alongside the result the isometry conjugate that undoes it. The merge loses nothing: the fused axis carries every charge combination the originals admitted, so a contraction against the returned conjugate restores the tensor as it was. It is the standard way to reshape a tensor for an operation that expects fewer axes, such as a matrix decomposition across a chosen partition.
 
 ::: nicole.merge_axes
     options:
@@ -9,9 +9,9 @@ Merge multiple tensor axes into a single axis using isometry fusion.
 
 ## Description
 
-Creates an n-to-1 isometry that fuses the specified axes, contracts it with the input tensor to perform the merging, and returns both the merged tensor and the conjugate of the isometry (which can be used to unfuse the axis later).
+The work is done by [isometry_n](../creation/isometry_n.md): an n-to-1 isometry is built over the selected indices and contracted with the tensor, which performs the merge and leaves the fused axis in place of the originals. The merged axis comes first in the output, followed by the axes left alone in their original order, so the resultant's itags are not those of the input in a shorter tuple.
 
-This is useful for reducing tensor order while preserving all information, with the ability to reverse the operation.
+The selection accepts integer positions and itags interchangeably, and at least two axes are required. The merged axis takes `merged_tag` as its tag, defaulting to `"_merged_"`, and `direction` as its orientation, defaulting to `Direction.OUT`. Fewer than two axes, an axis absent from the tensor, or a specification that is neither `int` nor `str` raises an error.
 
 ## Usage
 
@@ -54,9 +54,6 @@ unmerged = contract(merged, iso_conj)
 
 ## Notes
 
-- Must specify at least 2 axes to merge
-- Axes can be specified as integer positions (0-indexed) or string tags
-- The merged axis appears first in the output tensor
-- The returned isometry conjugate can contract with the merged tensor to reverse the operation
-- Axes are merged in the order they appear in the tensor, not the order specified
-- The merged axis direction can be controlled via the `direction` parameter
+- Axes fuse in the order they occupy in the tensor, not the order given in `axes`. Listing them differently reorders nothing, so the fused index is the same whichever way the selection is written.
+- The isometry conjugate is the only route back. Discarding it leaves the merged axis fused for good, since the charge combinations behind it cannot be recovered from the merged tensor alone.
+- Integer positions are 0-based, matching [retag](retag.md) and [permute](permute.md).

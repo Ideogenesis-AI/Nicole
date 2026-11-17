@@ -1,6 +1,6 @@
 # decomp
 
-High-level tensor decomposition with multiple output modes.
+High-level tensor decomposition with multiple output modes. This is the front door to factorization: name the axes that go to the left factor and a mode, and the tensor is factorized along a fresh bond with every charge sector decomposed on its own. The modes differ in how the singular values are distributed over the factors returned, so an algorithm can ask for the grouping it will actually require without ever bothering to absorb one back in afterwards.
 
 ::: nicole.decomp.decomp
     options:
@@ -9,51 +9,23 @@ High-level tensor decomposition with multiple output modes.
 
 ## Description
 
-Performs symmetry-preserving decomposition with five output modes:
+Each charge sector is decomposed on its own, so the bond carries one sector per charge that survives and both factors inherit the symmetry of the input with no further work.
 
-### Modes
+### Bond Arrows
 
-- **"SVD"**: Returns (U, S, Vh) with S as diagonal tensor
-- **"RSVD"**: As "SVD", but each sector is computed with the randomized engine
-- **"UR"**: Returns (U, R) where R = S @ Vh (most efficient for reconstruction)
-- **"LV"**: Returns (L, V) where L = U @ S
-- **"QR"**: Returns (Q, R) where Q is orthogonal and R is upper triangular (no truncation)
+`flow` fixes the directions of the two bond indices, whichever way the separated axis points. In the SVD-based modes the choice is visible on the index pair of `S`:
 
-Each symmetry sector is decomposed independently.
+| `flow` | `S` directions | Reading |
+|:------:|:--------------:|:--------|
+| `"><"` (default) | `(IN, IN)` | arrows converge from `U` and `Vh` into `S` |
+| `">>"` | `(IN, OUT)` | an arrow chain flowing left to right |
+| `"<<"` | `(OUT, IN)` | an arrow chain flowing right to left |
 
-## Parameters
+`"UR"` keeps one bond and so has nothing to converge on: it reads `"><"` as `">>"`, and `"LV"` reads it as `"<<"`.
 
-### axes
-Index or indices to separate from all others. Can be:
-- Single integer position or string tag
-- Sequence of integer positions or string tags (merges multiple axes first)
+### Choosing a Mode
 
-### mode
-Decomposition mode: "SVD", "RSVD", "UR", "LV", or "QR" (default: "SVD")
-
-- **"SVD"**, **"UR"**, **"LV"**: SVD-based decomposition with optional truncation
-- **"RSVD"**: identical output to "SVD", computed with a randomized SVD instead of the exact one. Requires `trunc={"nkeep": ...}`, which sets the target rank, and is worth using only when the kept rank is well below the full rank of a sector — see [svd](svd.md) for the measured crossover
-- **"QR"**: QR decomposition (orthogonal factorization, no truncation)
-
-### flow
-Arrow direction control for bond indices (default: "><"):
-- **"><"**: Both bond arrows incoming — arrows converge from U and Vh into S; S has `(IN, IN)` (default)
-- **">>"**: Arrow chain flows left to right — S has `(IN, OUT)`
-- **"<<"**: Arrow chain flows right to left — S has `(OUT, IN)`
-
-### itag
-Index tag(s) for the bond dimension(s):
-- `None`: Use default tags "_bond_L" and "_bond_R"
-- `str`: Use same tag for both left and right bonds
-- `tuple[str, str]`: Use (left_tag, right_tag) for left and right bonds
-
-### trunc
-Optional truncation with `trunc` parameter (dict) - only for SVD-based modes:
-- **"nkeep"**: Keep n largest singular values globally
-- **"thresh"**: Keep singular values ≥ t per block
-- Both can be specified together (thresh applied first, then nkeep)
-- Not applicable for "QR" mode (QR decomposition doesn't support truncation)
-- Mode "RSVD" takes its tuning from the same dict, through the keys `oversample`, `niter` and `seed`; see [svd](svd.md). The other modes ignore them
+`"UR"` and `"LV"` cost less than `"SVD"` whenever the singular values are going to be absorbed into a neighbor anyway, since the diagonal tensor is never built. `"RSVD"` pays off only when the rank kept is well below the full rank of a sector and the spectrum decays — [svd](svd.md) carries the measured crossover. `"QR"` truncates nothing, and a `trunc` dict handed to it is ignored.
 
 ## Usage Examples
 

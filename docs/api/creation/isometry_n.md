@@ -1,6 +1,6 @@
 # isometry_n
 
-Create an n-to-1 fusion isometry tensor.
+Build the tensor that fuses n indices into one, generalizing [isometry](isometry.md) beyond a single pair. The first n indices mirror the inputs with reversed directions and the last carries the fully fused sectors, so one contraction collapses n axes of a tensor into one and a contraction against the conjugate restores them. Fusion proceeds pairwise under the hood, ordered to keep the intermediates small.
 
 ::: nicole.isometry_n
     options:
@@ -9,11 +9,9 @@ Create an n-to-1 fusion isometry tensor.
 
 ## Description
 
-Constructs an (n+1)th-order tensor that fuses n indices into a single fused index. This generalizes the 2-to-1 `isometry` function to arbitrary n≥2.
+The output is an (n+1)th-order tensor, defined for any n ≥ 2. Its first n indices take the directions opposite to the inputs, which lets the isometry contract against them directly, and the final fused index takes the direction given by the `direction` parameter.
 
-The function works by sequentially applying 2-to-1 isometries, fusing indices in order of increasing dimension to minimize intermediate tensor sizes and computational complexity.
-
-The resulting isometry has n indices with directions opposite to the input indices (to enable natural contraction), plus one fused index whose direction is specified by the `direction` parameter.
+Fusion is carried out by applying 2-to-1 isometries in sequence. The indices are consumed in order of increasing dimension, so the smallest pair fuses first and each intermediate tensor stays as small as the fusion tree allows, holding down both memory and the work of the subsequent contractions.
 
 ## Usage
 

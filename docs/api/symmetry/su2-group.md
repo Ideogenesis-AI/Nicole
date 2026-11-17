@@ -1,6 +1,6 @@
 # SU2Group
 
-SU(2) non-Abelian symmetry group with spin-based quantum numbers.
+SU(2) non-Abelian symmetry group with spin-based quantum numbers. Charges are non-negative integers in the \(2j\) convention, each labeling a spin multiplet whose irrep dimension is \(2j + 1\), and a pair of them fuses into a whole range of total spins. That multi-channel fusion sets SU(2) apart from the Abelian groups: blocks store reduced tensor elements and carry Clebsch–Gordan intertwiners alongside.
 
 ::: nicole.SU2Group
     options:
@@ -123,6 +123,6 @@ print(idx.num_states)  # 8  (total states: 1×1 + 2×2 + 1×3)
 
 ## Notes
 
-- SU(2) tensors carry **intertwiners** (yuzuha `Bridge` objects) attached to each data block; these encode the Clebsch–Gordan structure in the R-W-C decomposition and are managed automatically by Nicole. See the [Yuzuha Protocol](../../getting-started/yuzuha-protocol.md) for a full explanation.
+- SU(2) tensors carry **intertwiners** (connected through yuzuha `Bridge` objects) attached to each data block; these encode the Clebsch–Gordan structure in the R-W-C decomposition and are managed automatically by Nicole. See the [Yuzuha Protocol](../../getting-started/yuzuha-protocol.md) for a full explanation.
 - All standard operations (`contract`, `trace`, `decomp`, `permute`, `conj`, etc.) handle SU(2) transparently.
 - `is_abelian` returns `False` for `SU2Group` and for any `ProductGroup` containing it.
