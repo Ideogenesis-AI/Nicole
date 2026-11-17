@@ -86,7 +86,7 @@ accordingly.
 ## Unsupported: Hadamard (batch) indices
 
 A letter that appears in two or more input subscripts **and** in the output
-subscript is a Hadamard (batch) index.  In NumPy/PyTorch einsum this means
+subscript is a Hadamard (batch) index. In NumPy/PyTorch einsum this means
 element-wise multiplication along that axis with no summation.
 [`contract`](contract.md) has no such mode, so equations of this kind are not
 supported (e.g. `'ij,ij->ij'`).
