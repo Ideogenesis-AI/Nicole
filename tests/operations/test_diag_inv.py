@@ -1072,6 +1072,25 @@ def test_inv_non_diagonal_skipped_with_label():
     assert T_inv.label == "Diagonal"
 
 
+def test_inv_checks_diagonal_structure_when_label_is_not_diagonal():
+    """Test that inv verifies diagonal structure on a tensor not labeled 'Diagonal'."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, (Sector(0, 2), Sector(1, 2)))
+    D = Tensor(
+        indices=(idx.flip(), idx), itags=("i", "j"),
+        data={
+            (0, 0): torch.diag(torch.tensor([2.0, 4.0])),
+            (1, 1): torch.diag(torch.tensor([1.0, 5.0])),
+        },
+    )
+
+    assert D.label != "Diagonal"
+    D_inv = inv(D)
+
+    assert torch.allclose(D_inv.data[(0, 0)], torch.diag(torch.tensor([0.5, 0.25])))
+    assert torch.allclose(D_inv.data[(1, 1)], torch.diag(torch.tensor([1.0, 0.2])))
+
+
 def test_inv_error_not_2nd_order():
     """Test inv raises error if tensor doesn't have exactly 2 indices."""
     group = U1Group()
