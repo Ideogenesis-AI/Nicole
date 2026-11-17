@@ -524,6 +524,21 @@ def test_diag_su2_custom_dtype():
     assert S_diag.intw[(1, 1)].weights.dtype == torch.float32
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.complex128])
+def test_diag_su2_casts_blocks_to_requested_dtype(dtype):
+    """Test that a requested dtype reaches the blocks for a generic group."""
+    group = SU2Group()
+    bond_index = Index(Direction.IN, group, (Sector(1, 2),))
+
+    S_blocks = {(1, 1): torch.tensor([3.0, 1.0], dtype=torch.float64)}
+
+    S_diag = diag(S_blocks, bond_index, dtype=dtype)
+
+    assert S_diag.dtype == dtype
+    assert S_diag.data[(1, 1)].dtype == dtype
+    assert_dtype_coherent(S_diag)
+
+
 def test_diag_su2_single_element():
     """Test diag with single-element blocks for SU2."""
     group = SU2Group()
