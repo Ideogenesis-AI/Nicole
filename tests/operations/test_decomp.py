@@ -25,6 +25,7 @@ from nicole import Direction, Index, Sector, Tensor, contract, decomp
 from nicole import U1Group, SU2Group, ProductGroup
 from ..utils import assert_charge_neutral, populate_random_weights
 from ..utils import assert_blocks_equal, assert_physical_tensors_equal
+from ..utils import assert_dtype_coherent
 
 
 # Decomp function tests
@@ -1953,3 +1954,88 @@ def test_decomp_u1su2_multi_axis():
 
         assert_physical_tensors_equal(T, reconstructed, atol=1e-10,
                                       msg=f"U(1)×SU(2) multi-axis SVD reconstruction axes={axes}")
+
+
+# ===== Cross-group and dtype matrix tests =====
+#
+# Decomposition is otherwise exercised almost entirely with U(1) indices and
+# real dtypes. These cases sweep the supported groups against every dtype so
+# that a dtype surviving construction but breaking reconstruction cannot pass
+# unnoticed.
+
+_GROUP_NAMES = ["U1", "Z2", "SU2", "U1xSU2"]
+_DECOMP_DTYPES = [torch.float32, torch.float64, torch.complex64, torch.complex128]
+
+
+def _matrix_for(group_name, dtype, seed):
+    """Build a 2nd order tensor of the requested group and dtype."""
+    from nicole import Z2Group
+
+    layouts = {
+        "U1": (U1Group(), (Sector(0, 2), Sector(1, 2))),
+        "Z2": (Z2Group(), (Sector(0, 2), Sector(1, 2))),
+        "SU2": (SU2Group(), (Sector(0, 2), Sector(1, 2))),
+        "U1xSU2": (
+            ProductGroup([U1Group(), SU2Group()]),
+            (Sector((0, 0), 2), Sector((1, 1), 2)),
+        ),
+    }
+    group, sectors = layouts[group_name]
+    idx = Index(Direction.OUT, group, sectors=sectors)
+    return Tensor.random([idx, idx.flip()], itags=["a", "b"], dtype=dtype, seed=seed)
+
+
+def _reconstruction_tolerance(dtype):
+    """Return a tolerance matching the working precision of a dtype."""
+    return 1e-3 if dtype in (torch.float32, torch.complex64) else 1e-9
+
+
+def _assert_reconstructed(original, reconstructed, tol, msg):
+    """Compare a reconstruction, by physical tensor when intertwiners exist."""
+    if original.intw is None:
+        assert_blocks_equal(original, reconstructed, rtol=tol, atol=tol)
+    else:
+        assert_physical_tensors_equal(original, reconstructed,
+                                      rtol=tol, atol=tol, msg=msg)
+
+
+@pytest.mark.parametrize("group_name", _GROUP_NAMES)
+@pytest.mark.parametrize("dtype", _DECOMP_DTYPES)
+def test_decomp_svd_reconstruction_across_groups_and_dtypes(group_name, dtype):
+    """Test that SVD mode reconstructs the input for every group and dtype."""
+    T = _matrix_for(group_name, dtype, seed=31)
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
+    reconstructed = contract(U, contract(S, Vh))
+
+    tag_to_position = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    reconstructed.permute([tag_to_position[tag] for tag in T.itags], in_place=True)
+
+    tol = _reconstruction_tolerance(dtype)
+    _assert_reconstructed(T, reconstructed, tol,
+                          f"{group_name} SVD reconstruction in {dtype}")
+
+
+@pytest.mark.parametrize("group_name", _GROUP_NAMES)
+@pytest.mark.parametrize("dtype", _DECOMP_DTYPES)
+def test_decomp_svd_keeps_every_factor_dtype_coherent(group_name, dtype):
+    """Test that each SVD factor declares the dtype its blocks actually hold."""
+    T = _matrix_for(group_name, dtype, seed=32)
+    U, S, Vh = decomp(T, axes=0, mode="SVD")
+
+    for factor in (U, S, Vh):
+        assert_dtype_coherent(factor)
+
+
+@pytest.mark.parametrize("group_name", _GROUP_NAMES)
+@pytest.mark.parametrize("mode", ["UR", "LV", "QR"])
+def test_decomp_two_factor_modes_reconstruct_across_groups(group_name, mode):
+    """Test that the two-factor modes reconstruct the input for every group."""
+    T = _matrix_for(group_name, torch.float64, seed=33)
+    first, second = decomp(T, axes=0, mode=mode)
+    reconstructed = contract(first, second)
+
+    tag_to_position = {tag: i for i, tag in enumerate(reconstructed.itags)}
+    reconstructed.permute([tag_to_position[tag] for tag in T.itags], in_place=True)
+
+    _assert_reconstructed(T, reconstructed, 1e-9, f"{group_name} {mode} reconstruction")
+
