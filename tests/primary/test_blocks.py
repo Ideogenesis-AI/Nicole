@@ -608,6 +608,49 @@ def test_bridge_collinear_zero_weights():
     assert compatible is False
 
 
+def _single_component_bridges():
+    """Return two single-component bridges whose weight matrices differ in shape."""
+    from nicole import Tensor
+
+    group = SU2Group()
+    idx_pair = Index(Direction.IN, group, sectors=(Sector(1, 2),))
+    pair = Tensor.random([idx_pair, idx_pair.flip()], seed=1)
+    bridge_narrow = next(iter(pair.intw.values()))
+
+    idx_quad = Index(Direction.IN, group, sectors=(Sector(1, 1), Sector(2, 1)))
+    quad = Tensor.random([idx_quad, idx_quad, idx_quad.flip(), idx_quad.flip()], seed=1)
+    bridge_wide = next(
+        bridge for bridge in quad.intw.values() if bridge.weights.shape[1] > 1
+    )
+
+    assert bridge_narrow.num_components == bridge_wide.num_components == 1
+    return bridge_narrow, bridge_wide
+
+
+def test_bridge_collinear_two_vanishing_weight_matrices():
+    """Test that two zero weight matrices of different shapes count as collinear."""
+    narrow, wide = _single_component_bridges()
+    zero_narrow = dg.Bridge(cgspec=narrow.cgspec, weights=torch.zeros_like(narrow.weights))
+    zero_wide = dg.Bridge(cgspec=wide.cgspec, weights=torch.zeros_like(wide.weights))
+
+    compatible, scale = BlockSchema.bridge_collinear(zero_narrow, zero_wide)
+
+    assert compatible
+    assert scale == 1.0
+
+
+def test_bridge_collinear_one_vanishing_weight_matrix():
+    """Test that a zero weight matrix is not collinear with a non-zero one."""
+    narrow, wide = _single_component_bridges()
+    zero_narrow = dg.Bridge(cgspec=narrow.cgspec, weights=torch.zeros_like(narrow.weights))
+    ones_wide = dg.Bridge(cgspec=wide.cgspec, weights=torch.ones_like(wide.weights))
+
+    compatible, scale = BlockSchema.bridge_collinear(zero_narrow, ones_wide)
+
+    assert not compatible
+    assert scale == 1.0
+
+
 def _multi_component_cgspec():
     """Build a CGSpec with om_dimension > 1, so a phase test is not trivial."""
     edges = [yuzuha.Edge.outgoing(yuzuha.Spin(1)) for _ in range(4)]
@@ -1009,4 +1052,3 @@ def test_block_compress_does_not_mutate_inputs():
 
     assert torch.allclose(data, data_copy)
     assert torch.allclose(bridge_red.weights, weights_copy)
-
