@@ -30,6 +30,7 @@ from nicole.display import (
     _format_single_value,
     _group_signature,
     index_summary,
+    tensor_summary,
 )
 
 
@@ -235,6 +236,17 @@ def test_tensor_summary_multiple_blocks():
     lines = summary.split("\n")
     block_lines = [l for l in lines if l.strip().startswith(("1.", "2.", "3."))]
     assert len(block_lines) > 0
+
+
+def test_tensor_summary_sorts_keys_when_not_supplied():
+    """Test that tensor_summary sorts block keys itself when none are supplied."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=2)
+    summary = tensor_summary(tensor.indices, tensor.itags, tensor.data)
+
+    assert "[ 0 ; 0 ]" in summary
+    assert "[ 1 ; 1 ]" in summary
 
 
 def test_tensor_summary_truncates_many_blocks():
