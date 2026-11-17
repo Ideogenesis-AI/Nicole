@@ -624,6 +624,36 @@ def test_svd_truncation_multiblock():
     assert total_kept <= 3, f"Expected at most 3 singular values globally, got {total_kept}"
 
 
+@pytest.mark.parametrize("nkeep", [1, 3, 5])
+def test_svd_truncation_nkeep_keeps_the_globally_largest_values(nkeep):
+    """Test that nkeep keeps the largest singular values across all charge blocks.
+
+    The other nkeep tests count what survives but never check which values those
+    are, so a per-block budget would satisfy them. Comparing against the
+    untruncated spectrum pins the selection down to a global one.
+    """
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(-1, 3), Sector(0, 4), Sector(1, 3)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=600)
+
+    _, S_full, _ = svd(T, axis=0)
+    full_spectrum = sorted(
+        (value.item() for s_array in S_full.values() for value in s_array), reverse=True
+    )
+
+    _, S_kept, _ = svd(T, axis=0, trunc={"nkeep": nkeep})
+    kept = sorted(
+        (value.item() for s_array in S_kept.values() for value in s_array), reverse=True
+    )
+
+    assert len(kept) == nkeep
+    for got, expected in zip(kept, full_spectrum[:nkeep]):
+        assert math.isclose(got, expected, rel_tol=1e-9)
+
+    # The surviving values must out-rank every discarded one.
+    assert min(kept) >= max(full_spectrum[nkeep:], default=0.0)
 
 
 def test_svd_truncation_discards_every_block():
