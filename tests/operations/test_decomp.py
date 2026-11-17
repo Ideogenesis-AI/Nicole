@@ -163,6 +163,20 @@ def test_decomp_qr_mode():
     assert_blocks_equal(T, reconstructed, rtol=1e-10, atol=1e-12)
 
 
+def test_decomp_qr_mode_single_axis():
+    """Test decomp in QR mode with a single axis reconstructs the input."""
+    group = U1Group()
+    idx1 = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
+    idx2 = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 3)))
+
+    T = Tensor.random([idx1, idx2], itags=["a", "b"], seed=7)
+    Q, R = decomp(T, axes=0, mode="QR")
+
+    assert Q.itags[0] == "a"
+    assert R.itags[1] == "b"
+    assert_blocks_equal(contract(Q, R), T, atol=1e-12)
+
+
 def test_decomp_ur_multiindex():
     """Test UR mode with multi-index tensor."""
     group = U1Group()
