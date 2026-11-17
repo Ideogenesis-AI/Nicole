@@ -579,8 +579,47 @@ def test_tensor_summary_su2_sign_suffix_absent_for_abelian():
     assert "{-}" not in summary
 
 
-# index_summary tests
+# Tensor.show tests
 
+def test_tensor_show_single_block_id(capsys):
+    """Test that Tensor.show accepts a bare integer and prints that one block."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=3)
+    tensor.show(1)
+    block_lines = [line for line in capsys.readouterr().out.split("\n") if "[ " in line]
+
+    assert len(block_lines) == 1
+    assert block_lines[0].strip().startswith("1.")
+
+
+def test_tensor_show_several_block_ids(capsys):
+    """Test that Tensor.show prints every requested block with its original id."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=3)
+    tensor.show([1, 2])
+    block_lines = [line for line in capsys.readouterr().out.split("\n") if "[ " in line]
+
+    assert [line.strip().split(".")[0] for line in block_lines] == ["1", "2"]
+
+
+def test_tensor_show_ignores_the_default_line_limit(capsys):
+    """Test that Tensor.show prints more blocks than the default nine-line cap."""
+    group = U1Group()
+    sectors = tuple(Sector(charge, 1) for charge in range(12))
+    idx = Index(Direction.IN, group, sectors=sectors)
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=4)
+    block_ids = list(range(1, len(tensor.data) + 1))
+    tensor.show(block_ids)
+    printed = capsys.readouterr().out
+    block_lines = [line for line in printed.split("\n") if "[ " in line]
+
+    assert "more)" not in printed
+    assert len(block_lines) == len(block_ids) > 9
+
+
+# index_summary tests
 
 def test_index_summary_u1_out():
     """Test index_summary for a U1/OUT index: group name and direction character."""
@@ -724,4 +763,3 @@ def test_index_summary_str_calls_index_summary():
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 3)))
 
     assert str(idx) == index_summary(idx)
-
