@@ -1254,6 +1254,26 @@ def test_oplus_su2_mixed_sectors():
     assert (1, 1) in C.data
 
 
+def test_oplus_su2_charge_present_only_in_first_operand():
+    """Test direct sum when a charge sector appears in A but not in B (SU(2))."""
+    group = SU2Group()
+    idx_A = Index(Direction.IN, group, sectors=(Sector(0, 1), Sector(2, 1)))
+    idx_B = Index(Direction.IN, group, sectors=(Sector(0, 1),))
+
+    A = Tensor.random([idx_A, idx_A.flip()], itags=['i', 'j'], seed=1)
+    B = Tensor.random([idx_B, idx_B.flip()], itags=['i', 'j'], seed=2)
+
+    # Charge 2 lives only in A, so its padded block has no counterpart from B.
+    C = oplus(A, B, axes=0)
+
+    assert (2, 2) in C.data
+    assert (0, 0) in C.data
+    assert C.intw is not None
+    assert_charge_neutral(C)
+    # The A-only sector passes through unchanged apart from the padding.
+    assert torch.allclose(C.data[(2, 2)][:1], A.data[(2, 2)])
+
+
 def test_oplus_su2_incompatible_weights():
     """Test SU(2) oplus with different number of components."""
 
