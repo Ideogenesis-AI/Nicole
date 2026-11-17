@@ -1021,6 +1021,26 @@ def test_decomp_itag_invalid():
         decomp(T, axes=0, mode="SVD", itag=123)
 
 
+def test_decomp_rejects_unknown_itag():
+    """Test that decomp rejects an itag that no index carries."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="itag 'z' not found"):
+        decomp(T, "z")
+
+
+def test_decomp_rejects_ambiguous_itag():
+    """Test that decomp rejects an itag shared by several indices."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    with pytest.raises(ValueError, match="Ambiguous axis specification"):
+        decomp(T, "a")
+
+
 # Multi-axis decomposition tests
 
 def test_decomp_multi_axis_svd():
