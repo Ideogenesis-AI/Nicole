@@ -423,6 +423,102 @@ def test_contract_large_block_shapes():
     assert_charge_neutral(result)
 
 
+def test_contract_rejects_axes_of_wrong_length():
+    """Test that contract rejects an axes tuple that is not a pair."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="axes must be a tuple of length 2"):
+        contract(T, T, axes=(0,))
+
+
+def test_contract_rejects_unequal_axes_sequences():
+    """Test that contract rejects axes sequences of differing length."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="axes sequences must have same length"):
+        contract(T, T, axes=([0, 1], [0]))
+
+
+@pytest.mark.parametrize("axes, side", [((5, 0), "A"), ((0, 5), "B")])
+def test_contract_rejects_out_of_range_axis(axes, side):
+    """Test that contract rejects an axis outside the index range of either operand."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match=f"out of range for tensor {side}"):
+        contract(T, T, axes=axes)
+
+
+def test_contract_rejects_mismatched_itags():
+    """Test that contract rejects a manual pair whose itags differ."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([idx, idx.flip()], itags=["c", "d"], seed=2)
+
+    with pytest.raises(ValueError, match="mismatched itags"):
+        contract(A, B, axes=(1, 0))
+
+
+def test_contract_rejects_same_direction_pair():
+    """Test that contract rejects a manual pair whose indices point the same way."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=2)
+
+    with pytest.raises(ValueError, match="has same direction"):
+        contract(A, B, axes=(0, 0))
+
+
+def test_contract_rejects_mismatched_groups():
+    """Test that contract rejects a pair of indices carrying different symmetry groups."""
+    u1_idx = Index(Direction.IN, U1Group(), sectors=(Sector(0, 2),))
+    z2_idx = Index(Direction.OUT, Z2Group(), sectors=(Sector(0, 2),))
+    A = Tensor.random([u1_idx, u1_idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([z2_idx, z2_idx.flip()], itags=["a", "b"], seed=2)
+
+    with pytest.raises(ValueError, match="matching groups on paired indices"):
+        contract(A, B, axes=(0, 0))
+
+
+def test_contract_rejects_ambiguous_pairing_from_a():
+    """Test that automatic contraction fails when one A index matches two B indices."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx], itags=["x", "y"], seed=1)
+    B = Tensor.random([idx.flip(), idx.flip()], itags=["x", "x"], seed=2)
+
+    with pytest.raises(ValueError, match="index 0 \\(itag 'x'\\) in tensor A"):
+        contract(A, B)
+
+
+def test_contract_rejects_ambiguous_pairing_from_b():
+    """Test that automatic contraction fails when one B index matches two A indices."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx], itags=["x", "x"], seed=1)
+    B = Tensor.random([idx.flip(), idx.flip()], itags=["x", "y"], seed=2)
+
+    with pytest.raises(ValueError, match="index 0 \\(itag 'x'\\) in tensor B"):
+        contract(A, B)
+
+
+def test_contract_rejects_excl_of_wrong_length():
+    """Test that contract rejects an excl argument that is not a pair of sequences."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="excl must be a tuple of two sequences"):
+        contract(T, T, excl=((0,),))
+
+
 # Tests for excl parameter
 
 def test_contract_excl_exclude_from_A():
