@@ -1576,6 +1576,36 @@ def test_retag_preserves_tensor_data():
     assert set(tensor.data.keys()) == original_keys
 
 
+def test_retag_rejects_non_integer_first_argument():
+    """Test that retag rejects a non-sequence first argument when new_tags is given."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="must be an integer or sequence of integers"):
+        T.retag(1.5, "x")
+
+
+def test_retag_rejects_non_integer_axes():
+    """Test that retag rejects a sequence of non-integers as axes."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="must be integers"):
+        T.retag(["a"], ["x"])
+
+
+def test_retag_rejects_non_sequence_full_replacement():
+    """Test that retag rejects a non-sequence when used for full replacement."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="Expected a sequence of strings"):
+        T.retag(42)
+
+
 # Invert tests
 
 def test_invert_single_index():
