@@ -1587,6 +1587,66 @@ def test_contract_many_sectors_sparse_no_match():
     assert result.data == {}
 
 
+# Complex dtype tests across symmetry groups
+#
+# Contraction is covered for every group but otherwise only with real dtypes.
+# These cases repeat the core invariants in single and double complex precision.
+
+_CONTRACT_LAYOUTS = {
+    "U1": (U1Group, (Sector(0, 2), Sector(1, 2))),
+    "Z2": (Z2Group, (Sector(0, 2), Sector(1, 2))),
+    "SU2": (SU2Group, (Sector(0, 2), Sector(1, 2))),
+    "U1xSU2": (
+        lambda: ProductGroup([U1Group(), SU2Group()]),
+        (Sector((0, 0), 2), Sector((1, 1), 2)),
+    ),
+}
+
+
+def _complex_pair(group_name, dtype, seed):
+    """Build two contractible 2nd order tensors of the requested group and dtype."""
+    factory, sectors = _CONTRACT_LAYOUTS[group_name]
+    group = factory()
+    idx = Index(Direction.OUT, group, sectors=sectors)
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], dtype=dtype, seed=seed)
+    B = Tensor.random([idx, idx.flip()], itags=["b", "c"], dtype=dtype, seed=seed + 1)
+    return A, B
+
+
+@pytest.mark.parametrize("group_name", sorted(_CONTRACT_LAYOUTS))
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_contract_preserves_complex_dtype_across_groups(group_name, dtype):
+    """Test that contracting complex tensors keeps the dtype and charge neutrality."""
+    A, B = _complex_pair(group_name, dtype, seed=41)
+    contracted = contract(A, B)
+
+    assert contracted.dtype == dtype
+    assert contracted.itags == ("a", "c")
+    assert_charge_neutral(contracted)
+    for block in contracted.data.values():
+        assert block.dtype == dtype
+
+
+@pytest.mark.parametrize("group_name", sorted(_CONTRACT_LAYOUTS))
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_complex_contraction_is_associative_across_groups(group_name, dtype):
+    """Test that complex contraction gives the same tensor whichever pair goes first."""
+    A, B = _complex_pair(group_name, dtype, seed=43)
+    factory, sectors = _CONTRACT_LAYOUTS[group_name]
+    idx = Index(Direction.OUT, factory(), sectors=sectors)
+    C = Tensor.random([idx, idx.flip()], itags=["c", "d"], dtype=dtype, seed=45)
+
+    left_first = contract(contract(A, B), C)
+    right_first = contract(A, contract(B, C))
+
+    tol = 1e-4 if dtype == torch.complex64 else 1e-10
+    if A.intw is None:
+        assert_blocks_equal(left_first, right_first, rtol=tol, atol=tol)
+    else:
+        assert_physical_tensors_equal(left_first, right_first, rtol=tol, atol=tol,
+                                      msg=f"{group_name} complex associativity")
+
+
 # Trace tests
 
 def test_trace_automatic():
