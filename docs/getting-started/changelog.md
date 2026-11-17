@@ -2,6 +2,141 @@
 
 All notable changes to Nicole will be documented in this file.
 
+## [0.5.1] - 2026-11-18
+
+**API Reference and Test Coverage**
+
+A quality release covering the API reference and the test suite. Every page
+under `docs/api` is brought to a comparable depth, and verifying each claim
+against a running interpreter turned up seven statements the library does not
+make. Coverage goes from 97 percent line and 96 percent branch to 99 and 99,
+with branch measurement now enabled permanently. The 181 tests added along the
+way found one real defect: `decomp` in SVD mode was unusable on any complex
+tensor. That fix is the only behavioral change in the release.
+
+### Fixed
+
+`decomp(mode="SVD")` built its diagonal `S` blocks with `torch.diag` on the
+raw singular values, which are real whatever the input, so for a complex
+tensor, `S` declared a complex dtype while holding real blocks, and contracting
+the factors back together failed. Both the Abelian and the generic-symmetry
+arm now cast each diagonal block to the target dtype. Found by a Hypothesis
+round-trip property, on code every line of which was already covered.
+
+### API Reference
+
+Each page now opens with a lede of two or three sentences and carries prose
+where it previously carried fragments. Twenty-six of the forty pages sit
+between 264 and 466 words, against a previous spread of 84 to 1298; the eight
+above the band are the deep reference pages whose length is earned.
+
+Factual corrections:
+
+- `core/direction.md`: the published enum values were reversed; `IN` is `+1`
+  and `OUT` is `-1`
+- `manipulation/retag.md`: documented a keyword form, `retag(old_tag=...)`,
+  that the method does not accept, and listed two calling modes where there
+  are three
+- `arithmetic/addition.md`: an example adding a bare scalar to a tensor, which
+  raises, and overstated operand requirements
+- `symmetry/product-group.md`: a product admits at most one `SU2Group`, not
+  merely one in last position
+- `utilities/blocks.md`: `iter_admissible_keys` yields the full cartesian
+  product, conservation being a separate test
+- `utilities/display.md`: the print block limit is nine, not ten
+- `core/sector.md`: validation attributed to the wrong class
+
+Newly documented behavior:
+
+- `contraction/contract.md`: the `excl` and `perm` parameters, and the output
+  ordering a caller needs to predict what `perm` reorders
+- `contraction/trace.md`: pairs are traced sequentially, and a trace leaving
+  exactly one free axis raises `ValueError`
+- `decomposition/decomp.md`: the arrow directions each flow setting produces
+- `decomposition/eig.md`: `eig` regularizes its argument, and a sector emptied
+  by truncation leaves both the bond index and the returned mapping
+- `decomposition/qr.md`: the bond index carries the charges of the separated
+  axis with reversed direction, each sector holding its rank
+- `symmetry/z2-group.md`: the charge arithmetic reads only the low bit
+- `symmetry/overview.md`: groups compare by value, so indices built apart
+  interoperate
+- The creation pages: the admissibility rule, sector pruning, and the
+  intertwiner weights a generic group carries
+
+Hand-written Parameters, Returns and Raises sections are dropped from `qr.md`,
+`decomp.md`, `eig.md`, `serialize.md` and `deserialize.md`, all of which
+restated what mkdocstrings renders; none remain under `docs/api`.
+
+### Coverage
+
+- `branch = true` under `[tool.coverage.run]`, so both arms of a conditional
+  are measured
+- 89 statements and 78 branch arms were never reached; 17 and 12 remain, all
+  of them needing hardware a CPU run does not have
+- Nothing is marked `# pragma: no cover` and nothing is forced through a mock
+- Error paths and guards covered for `contract`, `trace`, `retag`,
+  `merge_axes`, `squeeze`, `einsum`, `decomp`, `eig`, `Index`,
+  `Bridge.remove_edge`, `ProductGroup`, `Tensor.item` and `trim_zero_blocks`
+- `tests/utils.py` gains an `OpaqueGroup` stub, a `SymmetryGroup` outside both
+  the Abelian and the unitary branch, needed to reach the serialization
+  registry boundaries
+- `nkeep` is pinned to a global selection by comparing the kept spectrum
+  against the untruncated one; the existing tests counted survivors only
+
+### Other Changes
+
+- The README coverage badge reads `>99%`, and the PyTorch badge takes the
+  Python badge's minimum-version form
+- The Arithmetic nav entries in `mkdocs.yml` read by what they do in place of
+  bracketed function names
+- Comments and docstrings across the source tree, the test suite, the
+  documentation and the benchmark harness are rephrased for convention
+
+### Test Suite (2021 tests)
+
+- **2009 tests pass**, 12 skipped: 6 requiring CUDA, and 6 where MPS has no
+  `torch.linalg.qr` or `torch.linalg.eig`
+- **181 new tests**, 1840 to 2021, across one new and eighteen existing files;
+  each extends the module that already owns the behavior it exercises
+  - `tests/operations/test_decomp.py` (71): decomposition across every group
+    and dtype, the two-factor modes for complex dtype coherence, QR mode on a
+    single axis, and the itag resolution guards
+  - `tests/operations/test_contract.py` (35): complex dtypes across groups,
+    and the validation and pair bookkeeping of `contract` and `trace`
+  - `tests/integration/test_property.py` (12, new): twelve Hypothesis
+    properties over generated indices and tensors, covering permutation round
+    trips, conjugation, norm and scalar invariants, and SVD reconstruction
+  - `tests/support/test_display.py` (10), `tests/operations/test_oplus.py`
+    (9), `tests/operations/test_maneuver.py` (8),
+    `tests/operations/test_factorize.py` (7),
+    `tests/primary/test_construction.py` (7),
+    `tests/support/test_helpers.py` (5), `tests/primary/test_blocks.py` (4),
+    and 10 more across seven further files
+
+### Statistics
+
+- **105 commits** since v0.5.0
+- **79 files changed**: 1735 insertions, 432 deletions
+- Source modules touched: `src/nicole/decomp.py` (the dtype cast),
+  `src/nicole/symmetry/delegate.py` and `src/nicole/symmetry/product.py`
+  (comments only)
+- Test modules touched: 29 files, among them
+  `tests/integration/test_property.py` (new) and `tests/utils.py`
+- Documentation touched: 43 files, covering every page under `docs/api`
+- Metadata touched: `pyproject.toml`, `mkdocs.yml`, `README.md`
+
+### Compatibility
+
+**Breaking Changes:** None. No signature, return structure or default changes.
+One behavioral change, and it only turns a failure into a success:
+`decomp(mode="SVD")` on a complex tensor now returns an `S` factor whose
+blocks carry the declared complex dtype, so the three factors contract back
+together. Real input is unaffected and bit-for-bit identical to v0.5.0.
+
+**Requirements:** Python ≥ 3.11, PyTorch ≥ 2.5, Yuzuha ≥ 0.1.5
+
+---
+
 ## [0.5.0] - 2026-11-07
 
 **Randomized SVD and Optimizations**
@@ -1523,6 +1658,7 @@ Researchers and students in quantum many-body physics, condensed matter theory, 
 
 ---
 
+[0.5.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Ideogenesis-AI/Nicole/releases/tag/v0.4.1
