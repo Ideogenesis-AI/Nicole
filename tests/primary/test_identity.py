@@ -66,6 +66,17 @@ def test_identity_dtype():
     assert ident_c128.dtype == torch.complex128
 
 
+def test_identity_accepts_an_explicit_device():
+    """Test that identity honours an explicitly supplied device."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+
+    ident = identity(idx, device="cpu")
+
+    assert ident.device == torch.device("cpu")
+    assert all(block.device.type == "cpu" for block in ident.data.values())
+
+
 def test_identity_directions():
     """Test that identity has flipped directions."""
     group = U1Group()
