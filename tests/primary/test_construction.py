@@ -188,6 +188,18 @@ def test_tensor_random_without_a_seed(dtype):
     assert_charge_neutral(tensor)
 
 
+def test_tensor_random_complex_with_gradient_tracking():
+    """Test that a complex Tensor.random enables autograd when asked."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2),))
+
+    tensor = Tensor.random([idx, idx.flip()], dtype=torch.complex128,
+                           seed=5, requires_grad=True)
+
+    assert tensor.requires_grad
+    assert all(block.requires_grad for block in tensor.data.values())
+
+
 def test_tensor_random_complex():
     """Test Tensor.random with complex dtype."""
     group = U1Group()
