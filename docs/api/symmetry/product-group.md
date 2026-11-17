@@ -26,7 +26,7 @@ The construction stays flat: a product needs at least one component, and nesting
 
 ### Abelian and Non-Abelian Components
 
-`ProductGroup` supports both Abelian and non-Abelian component groups. When an `SU2Group` is included, it must be the **last** component:
+`ProductGroup` supports both Abelian and non-Abelian component groups. Any number of Abelian factors may appear in any order, but **at most one** non-Abelian factor is allowed and it must be the **last** component:
 
 ```python
 from nicole import ProductGroup, U1Group, Z2Group, SU2Group
@@ -102,6 +102,6 @@ On the built-in pairs, `dual` and two-charge Abelian fusion are about 5× cheape
 
 ## Notes
 
-- `SU2Group`, if present, must be the **last** component of `ProductGroup`.
+- A `ProductGroup` admits at most one `SU2Group`, and it must be the **last** component. Two of them, or one in any earlier position, raises `ValueError` at construction.
 - When `SU2Group` is a component, `is_abelian` returns `False` and tensors carry intertwiner (`Bridge`) data.
 - Charges are tuples matching the number of component groups.
