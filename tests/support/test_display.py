@@ -291,6 +291,31 @@ def test_tensor_summary_empty_tensor():
     assert "no sectors" in summary or "0 x" in summary
 
 
+def test_tensor_summary_complex_scalar():
+    """Test that a complex scalar prints as 'real+imagi'."""
+    summary = str(Tensor.from_scalar(1.5 + 2.5j, dtype=torch.complex128))
+
+    assert "1.5+2.5i" in summary
+    assert "complex128" in summary
+
+
+def test_tensor_summary_complex_scalar_negative_imaginary():
+    """Test that a complex scalar with negative imaginary part prints a minus sign."""
+    summary = str(Tensor.from_scalar(1.5 - 2.5j, dtype=torch.complex128))
+
+    assert "1.5-2.5i" in summary
+
+
+def test_tensor_summary_empty_scalar():
+    """Test that a 0th order tensor with no block prints as empty."""
+    scalar = Tensor.from_scalar(3.0)
+    scalar.data.clear()
+    summary = str(scalar)
+
+    assert "[ empty ]" in summary
+    assert "0 B" in summary
+
+
 def test_tensor_summary_complex_dtype():
     """Test tensor_summary with complex dtype."""
     group = U1Group()
