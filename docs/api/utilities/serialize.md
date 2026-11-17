@@ -1,6 +1,6 @@
 # serialize
 
-Convert a `Tensor` to a plain dict of Python primitives and `torch.Tensor`.
+Convert a `Tensor` to a plain dict of Python primitives and `torch.Tensor`. The symmetry structure a tensor depends on — index directions, the group, the charge sectors, and for a generic group the intertwiner weights — cannot survive being pickled as objects, so it is written out as data that a saver/loader can recognize without importing Nicole's classes. What comes back holds primitives and tensors, which is exactly the subset `torch.save` and `torch.load(..., weights_only=True)` can accept.
 
 ::: nicole.serialize.serialize
     options:
@@ -19,15 +19,9 @@ a plain Python `dict` that contains only:
 The returned dict is therefore directly compatible with `torch.save` and
 `torch.load(..., weights_only=True)`.
 
-## Parameters
+## Serialized Format
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `tensor` | `Tensor` | The tensor to serialize. |
-
-## Returns
-
-`dict` — Serialized representation with the following top-level keys:
+The top-level keys of the returned dict:
 
 | Key | Type | Description |
 |-----|------|-------------|
