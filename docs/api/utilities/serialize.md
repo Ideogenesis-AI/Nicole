@@ -71,14 +71,6 @@ and consumed by `nicole.symmetry.delegate.deserialize` — the format is fully
 owned by the `delegate` module and is independent of which backend package
 provides the CG coefficients.
 
-## Notes
-
-- `torch.save` preserves Python `tuple` values natively, so charges and block
-  keys remain tuples after a save/load round-trip — no additional conversion is
-  needed.
-- The `"version"` key allows future format evolution while keeping
-  backward-compatible deserialization in `deserialize`.
-
 ## Examples
 
 ### Save a tensor to disk
@@ -114,3 +106,11 @@ print(payload["intw"])      # None for Abelian tensors
 - [deserialize](deserialize.md): Reconstruct a `Tensor` from a serialized dict
 - [Examples: Serialization](../../examples/advanced/serialization-examples.md)
 - [Tensor](../core/tensor.md): Main tensor class
+
+## Notes
+
+- `torch.save` preserves Python `tuple` values natively, so charges and block
+  keys remain tuples after a save/load round-trip — no additional conversion is
+  needed.
+- The `"version"` key allows future format evolution while keeping
+  backward-compatible deserialization in `deserialize`.

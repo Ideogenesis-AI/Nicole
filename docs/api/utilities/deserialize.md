@@ -17,17 +17,6 @@ weights.
 
 All `torch.Tensor` values in the result are placed on `device`.
 
-## Notes
-
-- `data["version"]` is checked before anything is rebuilt, and an unsupported
-  version raises `ValueError`.
-- `device` applies to both block data tensors (`"data"`) and intertwiner
-  weight tensors (`"intw"`), if present.
-- For non-Abelian tensors, reconstruction of the CG data is delegated to
-  `nicole.symmetry.delegate.deserialize`.
-- The `dtype` is stored in the serialized dict and applied to all tensors on
-  reconstruction; no explicit `dtype` argument is needed.
-
 ## Examples
 
 ### Basic load from disk
@@ -61,3 +50,14 @@ t2 = deserialize(payload)
 - [serialize](serialize.md): Convert a `Tensor` to a serializable dict
 - [Examples: Serialization](../../examples/advanced/serialization-examples.md)
 - [Tensor](../core/tensor.md): Main tensor class
+
+## Notes
+
+- `data["version"]` is checked before anything is rebuilt, and an unsupported
+  version raises `ValueError`.
+- `device` applies to both block data tensors (`"data"`) and intertwiner
+  weight tensors (`"intw"`), if present.
+- For non-Abelian tensors, reconstruction of the CG data is delegated to
+  `nicole.symmetry.delegate.deserialize`.
+- The `dtype` is stored in the serialized dict and applied to all tensors on
+  reconstruction; no explicit `dtype` argument is needed.
