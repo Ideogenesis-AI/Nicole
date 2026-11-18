@@ -1,6 +1,6 @@
 # eig
 
-Eigenvalue decomposition of square matrix tensors.
+Eigenvalue decomposition of square matrices. The input must be a 2nd-order tensor whose two indices have opposite directions and matching charge structure, and each charge block is diagonalized on its own, so the spectrum comes back labeled by sector. Eigenvalues are returned as plain arrays keyed by block, and they can be sorted from either end and truncated, making this the routine useful for e.g. spectrum analysis and dominant-mode searches.
 
 ::: nicole.decomp.eig
     options:
@@ -9,58 +9,10 @@ Eigenvalue decomposition of square matrix tensors.
 
 ## Description
 
-Performs block-wise eigenvalue decomposition of a square matrix tensor, returning:
-- **U**: Tensor containing eigenvectors as columns
-- **D**: Dictionary mapping block keys to 1D eigenvalue arrays
-
-The decomposition satisfies: T @ U = U @ diag(D) for each block.
-
-Eigenvalues can be sorted in ascending or descending order, and truncation can be applied to keep only the most important eigenvalues (useful for finding ground states or dominant modes).
-
-## Parameters
-
-### T
-Square matrix tensor to be decomposed. Must have exactly 2 indices with matching charge structure (opposite directions).
-
-### itag
-Index tag for the bond dimension. If `None`, uses default tag `"_bond_eig"`.
-
-### order
-Sorting order for eigenvalues:
-- `"ascend"`: Ascending order (smallest to largest) - default
-  - For real eigenvalues: e.g., -5 < -3 < 1 < 2
-  - For complex eigenvalues: sorts by real part
-  - Use for finding ground states (most negative eigenvalues)
-- `"descend"`: Descending order (largest to smallest)
-  - Use for finding dominant modes (most positive eigenvalues)
-
-### is_hermitian
-If `True`, asserts that `T` is Hermitian (real symmetric or complex Hermitian) and uses `torch.linalg.eigh` for each block instead of the general `torch.linalg.eig`. This guarantees:
-
-- **Real eigenvalues** even for complex Hermitian inputs
-- **Orthonormal eigenvectors** (U is exactly unitary), including in the presence of degeneracies
-- Better numerical stability and performance
-
-Default is `False`, which uses the general eigensolver and may return complex eigenvalues.
+Charge conservation on a square tensor allows only diagonal blocks, so the two indices pair each charge with itself and every block is diagonalized in isolation. The bond index therefore carries the charges of the row index, each sector as wide as the number of eigenvalues kept in that charge, and `U` comes out with `(row_index, bond_index)`. Because the eigenvalues arrive sector by sector, a `"thresh"` criterion filters within a block while `"nkeep"` has to compare across blocks, thereby the two are applied in that order when both are given.
 
 !!! tip
-    Always set `is_hermitian=True` when diagonalising Hamiltonians or density matrices — it is both faster and numerically more reliable.
-
-### trunc
-Optional truncation specification as a dictionary:
-- `"nkeep"`: Keep at most n eigenvalues globally
-  - With `order="descend"`: keeps the n largest (most positive)
-  - With `order="ascend"`: keeps the n smallest (most negative)
-- `"thresh"`: Keep eigenvalues relative to threshold per block
-  - With `order="descend"`: keeps eigenvalues ≥ threshold
-  - With `order="ascend"`: keeps eigenvalues ≤ threshold
-- Both can be specified: thresh applied first, then nkeep
-
-## Returns
-
-`tuple[Tensor, MutableMapping[BlockKey, torch.Tensor]]`: Pair `(U, D)` where:
-- U has indices `(row_index, bond_index)` containing eigenvectors as columns
-- D is a dictionary mapping block keys to 1D arrays of eigenvalues
+    Always set `is_hermitian=True` when diagonalising Hamiltonians or density matrices — it is both faster and numerically more reliable. The general eigensolver may return complex eigenvalues even for a real input, and its eigenvectors are only normalized column by column, so `U` is unitary just to the extent the decomposition happens to deliver. The Hermitian path guarantees real eigenvalues and exactly orthonormal eigenvectors, degeneracies included.
 
 ## Import
 
@@ -111,11 +63,6 @@ U, D_blocks = eig(T, is_hermitian=True, order="ascend", trunc={"nkeep": 5})
 
 ## Notes
 
-- Eigenvalues are returned as 1D arrays for memory efficiency
-- Eigenvalues can be complex even for real matrices
-- Use `order="ascend"` to find ground states (smallest/most negative eigenvalues)
-- Use `order="descend"` to find dominant modes (largest/most positive eigenvalues)
-- For complex eigenvalues, sorting is by real part only
-- When both thresh and nkeep specified: thresh is applied per-block first, then nkeep globally
-- Use `is_hermitian=True` for Hamiltonians and density matrices: eigenvalues are guaranteed real and eigenvectors are exactly orthonormal
-- Without `is_hermitian=True`, eigenvalues may be complex and eigenvectors are only column-normalised
+- An eigendecomposition needs the canonical intertwiner weights in place, so `eig` calls `T.regularize()` on its argument before it starts. The tensor this represents does not change — the call only shifts a factor between the reduced data and the intertwiner weights — but for a non-Abelian input the stored blocks are rewritten in passing. Abelian tensors are untouched.
+- Truncation can empty a charge sector, and an emptied sector leaves the bond index altogether. Its key disappears from `D` as well, so a block missing from the returned mapping is one that kept nothing.
+- `order` decides which end of the spectrum both truncation criteria work from, so `order="ascend"` with `trunc` is the ground-state request and `order="descend"` the dominant-mode one.

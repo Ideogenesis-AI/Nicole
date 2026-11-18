@@ -245,7 +245,7 @@ torch.set_grad_enabled(False)
 **Key Observations:**
 
 - The overhead is **multiplicative**, not additive: longer chains show proportionally larger slowdowns
-- For typical tensor network algorithms (DMRG, TEBD, etc.), this overhead is often **not worth it** since they use specialized update schemes rather than gradient descent
+- For typical tensor network algorithms (DMRG, TEBD, etc.), this overhead is often **not worth it** since they use specialized update schemes without involving gradient
 - For variational optimization of small networks, the overhead may be acceptable if gradients provide faster convergence
 
 **When to worry about overhead:**

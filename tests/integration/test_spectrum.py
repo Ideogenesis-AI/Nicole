@@ -849,7 +849,7 @@ def _build_ss_band_from_fierz(preserv: str):
     # doubly-occupied sites); after cancellation those blocks are numerically tiny
     # relative to the non-zero blocks. The residuals are a few ULPs of the
     # physical scale (~3×eps after the subtract), so we pass a slightly relaxed
-    # eps to trim_zero_blocks rather than relying on the bare float64 default.
+    # eps to trim_zero_blocks without relying on the bare float64 default.
     SS_fierz.trim_zero_blocks(eps=10 * torch.finfo(torch.float64).eps)
 
     return SS_fierz

@@ -24,6 +24,8 @@ from dataclasses import dataclass
 
 import pytest
 
+from ..utils import OpaqueGroup
+
 from nicole.symmetry.abelian import U1Group, Z2Group
 from nicole.symmetry.base import AbelianGroup
 from nicole.symmetry.product import ProductGroup
@@ -140,6 +142,24 @@ def test_product_group_creation_nested_fails():
     # Should also fail even if inner is first
     with pytest.raises(TypeError, match="Nested ProductGroups are not allowed"):
         ProductGroup([inner_group, U1Group()])
+
+
+def test_product_group_rejects_non_group_component():
+    """ProductGroup rejects a component that is not a SymmetryGroup."""
+    with pytest.raises(TypeError, match="is not a SymmetryGroup instance"):
+        ProductGroup([U1Group(), "Z2"])
+
+
+def test_product_group_rejects_several_unitary_components():
+    """ProductGroup rejects more than one unitary component."""
+    with pytest.raises(ValueError, match="at most one UnitaryGroup component"):
+        ProductGroup([SU2Group(), SU2Group()])
+
+
+def test_product_group_rejects_unclassified_group():
+    """ProductGroup rejects a group that is neither Abelian nor unitary."""
+    with pytest.raises(TypeError, match="must be AbelianGroup or UnitaryGroup"):
+        ProductGroup([U1Group(), OpaqueGroup()])
 
 
 # is_abelian property tests

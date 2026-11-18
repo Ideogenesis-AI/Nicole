@@ -1,6 +1,6 @@
 # einsum
 
-Evaluate an Einstein summation equation on symmetry-aware tensors.
+Evaluate an Einstein summation equation on symmetry-aware tensors, naming the whole operation in one subscript string. Permutation, trace, and contraction are all expressible, and they combine freely, so a pattern that would take several calls to [contract](contract.md), [trace](trace.md), and [permute](../manipulation/permute.md) can be stated once and dispatched internally. Reach for it when the pattern is easier to read as an equation than as a sequence of axis pairs.
 
 ::: nicole.einsum.einsum
     options:
@@ -9,11 +9,11 @@ Evaluate an Einstein summation equation on symmetry-aware tensors.
 
 ## Description
 
-`einsum` parses a subscript equation string and dispatches to
-[`contract`](contract.md), [`trace`](trace.md), and
-[`permute`](../manipulation/permute.md) to carry out the requested operation.
-Three core equation types are supported — permutation, trace, and contraction
-— and they can be freely combined. Some representative patterns:
+The equation is parsed into elementary steps, each handed to the operation that
+implements it. Index letters carry the meaning: a letter repeated within one
+input subscript marks a trace, a letter shared between two inputs and absent
+from the output marks a contraction, and the output subscript fixes the order of
+whatever survives. Some representative patterns:
 
 1. **Permutation** — a single input tensor whose output subscript is a
    reordering of the input subscript:
@@ -86,7 +86,7 @@ accordingly.
 ## Unsupported: Hadamard (batch) indices
 
 A letter that appears in two or more input subscripts **and** in the output
-subscript is a Hadamard (batch) index.  In NumPy/PyTorch einsum this means
+subscript is a Hadamard (batch) index. In NumPy/PyTorch einsum this means
 element-wise multiplication along that axis with no summation.
 [`contract`](contract.md) has no such mode, so equations of this kind are not
 supported (e.g. `'ij,ij->ij'`).

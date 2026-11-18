@@ -1576,6 +1576,36 @@ def test_retag_preserves_tensor_data():
     assert set(tensor.data.keys()) == original_keys
 
 
+def test_retag_rejects_non_integer_first_argument():
+    """Test that retag rejects a non-sequence first argument when new_tags is given."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="must be an integer or sequence of integers"):
+        T.retag(1.5, "x")
+
+
+def test_retag_rejects_non_integer_axes():
+    """Test that retag rejects a sequence of non-integers as axes."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="must be integers"):
+        T.retag(["a"], ["x"])
+
+
+def test_retag_rejects_non_sequence_full_replacement():
+    """Test that retag rejects a non-sequence when used for full replacement."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="Expected a sequence of strings"):
+        T.retag(42)
+
+
 # Invert tests
 
 def test_invert_single_index():
@@ -1862,6 +1892,16 @@ def test_invert_double_application():
     # Verify data values unchanged
     for key in original_data:
         assert torch.allclose(tensor.data[key], original_data[key])
+
+
+def test_invert_on_a_scalar_is_a_no_op():
+    """Test that inverting no positions on a 0th order tensor changes nothing."""
+    scalar = Tensor.from_scalar(2.0)
+
+    scalar.invert([])
+
+    assert scalar.item() == 2.0
+    assert scalar.indices == ()
 
 
 # SU(2) invert tests
@@ -2618,6 +2658,16 @@ def test_squeeze_invalidates_sorted_keys():
     assert tensor._sorted_keys is None
 
 
+def test_squeeze_rejects_non_trivial_index():
+    """Test that squeeze rejects an index that is not a single neutral 1D sector."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip(), idx], itags=["a", "b", "c"], seed=1)
+
+    with pytest.raises(ValueError, match="is not trivial"):
+        T.squeeze(0)
+
+
 # SU(2) squeeze tests
 
 def test_squeeze_su2_intw_keys_match_data_keys():
@@ -3028,6 +3078,16 @@ def test_merge_axes_preserves_dtype():
     assert merged.dtype == torch.complex128
     # Isometry uses the tensor's dtype
     assert iso_conj.dtype == torch.complex128
+
+
+def test_merge_axes_rejects_non_axis_type():
+    """Test that merge_axes rejects an axis that is neither an int nor a str."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(TypeError, match="Axis must be int or str"):
+        merge_axes(T, [0, 1.5])
 
 
 # SU(2) merge_axes tests
@@ -3738,3 +3798,33 @@ def test_trim_zero_blocks_threshold_relative_to_norm():
     )
     assert (0, 0) in t_large_norm.data, "Non-zero block must be preserved"
 
+
+def test_trim_zero_blocks_removes_every_block_of_a_zero_tensor():
+    """Test that trimming an identically zero tensor leaves it with no blocks."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.zeros([idx, idx.flip()], itags=["a", "b"])
+
+    tensor.trim_zero_blocks()
+
+    assert tensor.data == {}
+    assert tensor.norm() == 0.0
+
+
+def test_trim_zero_blocks_keeps_an_index_with_no_surviving_sector():
+    """Test that trimming keeps an index intact when no remaining key matches it.
+
+    The surviving blocks normally reference every index sector. An index whose
+    sectors have all gone out of sync with the data exercises the fallback that
+    leaves such an index untouched.
+    """
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    tensor = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=6)
+    tensor.data[(0, 0)] = torch.zeros_like(tensor.data[(0, 0)])
+    unrelated = Index(Direction.OUT, group, sectors=(Sector(5, 2),))
+    tensor.indices = (unrelated, tensor.indices[1])
+
+    tensor.trim_zero_blocks()
+
+    assert tensor.indices[0] is unrelated

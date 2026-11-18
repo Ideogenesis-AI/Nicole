@@ -89,6 +89,14 @@ def test_requires_grad_property():
         assert not block.requires_grad
 
 
+def test_requires_grad_is_false_without_blocks():
+    """Test that a tensor carrying no block reports no gradient tracking."""
+    scalar = Tensor.from_scalar(1.0, requires_grad=True)
+    scalar.data.clear()
+
+    assert scalar.requires_grad is False
+
+
 def test_requires_grad_property_setter():
     """Test Tensor.requires_grad property setter for fine-grained control."""
     group = U1Group()

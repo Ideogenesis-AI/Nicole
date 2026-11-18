@@ -110,6 +110,16 @@ class TestLoadSpaceBasic:
         assert len(Spc_int.sectors) == len(Spc_float.sectors)
         assert len(Op_int["Sz"].data) == len(Op_float["Sz"].data)
 
+    def test_explicit_device(self):
+        """Test that an explicit device option reaches the operator blocks."""
+        Spc, Op = load_space("Spin", "U1", {"J": 0.5, "device": "cpu"})
+
+        assert Spc.dim == 2
+        tensors = [value for value in Op.values() if isinstance(value, Tensor)]
+        assert tensors
+        for operator in tensors:
+            assert operator.device == torch.device("cpu")
+
 
 class TestOperatorStructure:
     """Test operator tensor structure."""

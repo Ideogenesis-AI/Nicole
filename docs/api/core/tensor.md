@@ -1,6 +1,6 @@
 # Tensor
 
-Block-sparse tensor with symmetry-aware indices.
+The central object of the library: a block-sparse tensor whose structure is dictated by symmetry-aware indices. Only the blocks allowed by charge conservation are stored, each a dense PyTorch tensor, so the selection rules are enforced by the layout itself, avoiding arithmetic on zeros. Everything else in Nicole either builds one of these, transforms one, or combines two.
 
 ::: nicole.Tensor
     options:
@@ -41,7 +41,9 @@ Block-sparse tensor with symmetry-aware indices.
 
 ## Description
 
-The `Tensor` class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense PyTorch tensor blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.
+A tensor is held together by four pieces. Its [indices](index-class.md) fix the symmetry structure and are immutable once set. Its `itags` name the axes, which automatic contraction and trace match upon. Its `data` maps each admissible charge key to a dense block, keyed so that the charges appear in axis order. For a generic symmetry group, an `intw` mapping runs alongside, carrying the [Bridge](../symmetry/bridge.md) connecting the intertwiner for every block.
+
+Which keys are admissible is not a choice. A key survives when its charges, taken with the direction of each index, fuse to the group's neutral charge; the rest are absent from storage, inferring exact zeros.
 
 ### Key Features
 
@@ -72,8 +74,8 @@ be combined with a complex one directly. This covers `+` and `-` as well as
 [contract](../contraction/contract.md), [einsum](../contraction/einsum.md) and
 [oplus](../arithmetic/oplus.md). Two things to watch:
 
-- Scalar operations preserve precision rather than widening, so a `float32`
-  tensor times `1j` gives `complex64`, not `complex128`.
+- Scalar operations preserve precision, so a `float32` tensor times `1j` gives
+  `complex64`, not `complex128`.
 - `==` compares dtype as well as values, so the same values at two dtypes are
   not equal. Use [allclose](../arithmetic/allclose.md) when only the values
   matter.

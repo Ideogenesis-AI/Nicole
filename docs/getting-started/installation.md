@@ -74,7 +74,7 @@ The last line prints a block-sparse tensor summary that looks like this:
      1.  2x2     |  1x1     [ 0 ; 0 ]    32 B
 ```
 
-If you see a tensor summary rather than a traceback, the installation is complete. The [Quick Examples](quick-examples.md) page explains how to read this output in detail.
+If you see a tensor summary instead of a traceback, the installation is complete. The [Quick Examples](quick-examples.md) page explains how to read this output in detail.
 
 ## Installing from Source
 

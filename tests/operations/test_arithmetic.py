@@ -49,6 +49,16 @@ def test_eq_same_content():
     assert A == B
 
 
+def test_eq_different_block_keys():
+    """Tensors sharing indices but not block keys are not equal."""
+    group = U1Group()
+    idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 1)))
+    A = Tensor.random([idx, idx.flip()], seed=1, itags=["A", "B"])
+    B = A.clone()
+    del B.data[(0, 0)]
+    assert A != B
+
+
 def test_eq_different_values():
     """Tensors with different block values are not equal."""
     group = U1Group()
@@ -1440,7 +1450,7 @@ def test_intertwiner_weights_stay_real_through_operations():
     or Frobenius-Schur phase, none of which yuzuha computes in complex
     arithmetic, and every operation combining weights is real-linear. Bridge.conj
     and the unconjugated weight overlap in contract both rely on this, so the
-    imaginary part must be exactly zero rather than merely small.
+    imaginary part must be exactly zero.
     """
     group = SU2Group()
     idx = Index(Direction.OUT, group, sectors=(Sector(0, 2), Sector(1, 2)))

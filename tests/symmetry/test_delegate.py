@@ -22,7 +22,8 @@ import pytest
 import torch
 import yuzuha
 
-from nicole import Direction, ProductGroup, SU2Group, U1Group, Z2Group
+from nicole import Direction, Sector, Index, Tensor
+from nicole import ProductGroup, SU2Group, U1Group, Z2Group
 from nicole.symmetry.delegate import Bridge, compute_xsymbol, compute_rsymbol, fs_phase
 from nicole.symmetry import delegate as dg
 
@@ -1005,6 +1006,18 @@ def test_delegate_deserialize_dtype():
     d = dg.serialize(bridge)
     rt = dg.deserialize(d, dtype=torch.float32)
     assert rt.weights.dtype == torch.float32
+
+
+# Bridge.remove_edge() tests
+
+def test_bridge_remove_edge_rejects_non_neutral_edge():
+    """remove_edge rejects an edge that does not carry the neutral charge."""
+    idx = Index(Direction.IN, SU2Group(), (Sector(1, 2),))
+    T = Tensor.random([idx, idx.flip()], seed=1)
+    bridge = next(iter(T.intw.values()))
+
+    with pytest.raises(ValueError, match="is not spin-0"):
+        bridge.remove_edge(0)
 
 
 # Bridge.__eq__ tests

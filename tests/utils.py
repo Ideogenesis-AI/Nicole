@@ -34,6 +34,12 @@ assert_physical_tensors_equal:
 assert_dtype_coherent:
     Assert that every block and intertwiner weight matches a tensor's `dtype`.
 
+Classes
+-------
+OpaqueGroup:
+    A symmetry group outside the Abelian and unitary hierarchies, for tests
+    that drive the rejection paths keyed on a group's base class.
+
 Comparison Guidelines
 ---------------------
 For tensor comparisons in tests, use PyTorch's native comparison functions:
@@ -61,7 +67,41 @@ import torch
 
 from nicole import Tensor
 from nicole.blocks import BlockSchema
+from nicole.symmetry.base import SymmetryGroup
 from nicole.symmetry.delegate import Bridge
+
+
+class OpaqueGroup(SymmetryGroup):
+    """A symmetry group outside the Abelian and unitary hierarchies.
+
+    `ProductGroup` and the serialization registry both classify a group by its
+    concrete base class, so rejecting an unclassified group needs a type that
+    implements the interface without inheriting from either branch.
+    """
+
+    @property
+    def name(self) -> str:
+        return "Opaque"
+
+    @property
+    def neutral(self):
+        return 0
+
+    @property
+    def is_abelian(self) -> bool:
+        return True
+
+    def dual(self, q):
+        return q
+
+    def equal(self, a, b) -> bool:
+        return a == b
+
+    def validate_charge(self, q) -> None:
+        return None
+
+    def irrep_dim(self, q) -> int:
+        return 1
 
 
 def assert_charge_neutral(tensor: Tensor) -> None:
@@ -223,5 +263,3 @@ def populate_random_weights(tensor: Tensor, seed: int, min_components: int = 3, 
         weights = torch.randn(num_comp, bridge.om_dimension, dtype=tensor.dtype,
             generator=gen).to(device)
         tensor.intw[key] = Bridge(bridge.cgspec, weights)
-
-

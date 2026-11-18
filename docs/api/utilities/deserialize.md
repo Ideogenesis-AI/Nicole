@@ -1,6 +1,6 @@
 # deserialize
 
-Reconstruct a `Tensor` from a dict previously produced by `serialize`.
+Reconstruct a `Tensor` from a dict previously produced by `serialize`. Indices, charge sectors, block data and, for a generic group, the intertwiners are rebuilt from the recorded description, so the tensor that comes back is equal to the one that went in. The dtype travels in the dict and is reapplied here, leaving the device as the only thing worth choosing at load time.
 
 ::: nicole.deserialize
     options:
@@ -16,30 +16,6 @@ including all indices, block data, and — for non-Abelian tensors — intertwin
 weights.
 
 All `torch.Tensor` values in the result are placed on `device`.
-
-## Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data` | `dict` | — | Dict previously produced by `serialize`. |
-| `device` | `str` or `torch.device` | `"cpu"` | Device to place all block data and intertwiner weights on. |
-
-## Returns
-
-`Tensor` — Fully reconstructed tensor with all blocks on `device`.
-
-## Raises
-
-`ValueError` — If version from `data["version"]` is not supported.
-
-## Notes
-
-- `device` applies to both block data tensors (`"data"`) and intertwiner
-  weight tensors (`"intw"`), if present.
-- For non-Abelian tensors, reconstruction of the CG data is delegated to
-  `nicole.symmetry.delegate.deserialize`.
-- The `dtype` is stored in the serialized dict and applied to all tensors on
-  reconstruction; no explicit `dtype` argument is needed.
 
 ## Examples
 
@@ -74,3 +50,14 @@ t2 = deserialize(payload)
 - [serialize](serialize.md): Convert a `Tensor` to a serializable dict
 - [Examples: Serialization](../../examples/advanced/serialization-examples.md)
 - [Tensor](../core/tensor.md): Main tensor class
+
+## Notes
+
+- `data["version"]` is checked before anything is rebuilt, and an unsupported
+  version raises `ValueError`.
+- `device` applies to both block data tensors (`"data"`) and intertwiner
+  weight tensors (`"intw"`), if present.
+- For non-Abelian tensors, reconstruction of the CG data is delegated to
+  `nicole.symmetry.delegate.deserialize`.
+- The `dtype` is stored in the serialized dict and applied to all tensors on
+  reconstruction; no explicit `dtype` argument is needed.

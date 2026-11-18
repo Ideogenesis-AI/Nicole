@@ -562,7 +562,7 @@ def _fuse_channels_u1_su2(*qs):
         charge += q[0]
         j = q[1]
         j_sum += j
-        # An inline comparison rather than max(), which would cost a call per
+        # An inline comparison avoiding max(), which would cost a call per
         # charge on a path that runs once per block key.
         if j > j_largest:
             j_largest = j
@@ -630,7 +630,7 @@ def _dual_z2_su2(q):
 
 
 # Keyed on the tuple of component *types*, so selection is an identity-hashed
-# dict lookup rather than a comparison of group name strings.
+# dict lookup instead of a comparing group name strings.
 _REGISTRY: dict = {
     (U1Group, U1Group): (_fuse_unique_u1_u1, _fuse_channels_u1_u1, _dual_u1_u1),
     (U1Group, Z2Group): (_fuse_unique_u1_z2, _fuse_channels_u1_z2, _dual_u1_z2),

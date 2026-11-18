@@ -1,10 +1,10 @@
 # Display Utilities
 
-Pretty-printing for symmetry-aware tensors.
+Pretty-printing for symmetry-aware tensors. Printing the dense contents of a symmetric tensor says little, since the information lives in which charge sectors are occupied and the shapes, so the display summarizes a tensor as a header plus one line per block. Reading those lines is the fastest way to tell whether a tensor has the charge structure expected of it, and for a generic group it is where the split between multiplets and physical states becomes visible.
 
 ## Description
 
-Nicole tensors have built-in display functionality accessed via `print(tensor)` or `tensor.show(block_ids)`.
+Nicole tensors carry their own display, built so that a tensor of any size reports in a few lines. A header describes the order, symmetry group, index tags and memory, and each block that follows gives its charges, shape and either its value or footprint. Individual elements appear only where a block holds a single number; anything larger is reported by its size, so the output stays the same length whether the blocks are tiny or enormous.
 
 ### Display Format
 
@@ -95,11 +95,11 @@ The second number in `{ N x K }` increases to `K=2` (or more) when charges are t
 
 ### print(tensor)
 
-Standard print with line limit (default 10 blocks).
+The default display of the `Tensor` class, serving as both `__str__` and `__repr__`, so an interactive session shows this for a bare tensor as well. Lists the first nine blocks in sorted order and closes with a count of those left out, as `... (4 more)`.
 
 ### tensor.show(block_ids)
 
-Show specific blocks or all blocks without limit.
+Lists exactly the blocks asked for, with no limit. `block_ids` is a single integer or a sequence of integers, and the original ids are kept in the output, so `show([1, 13])` labels its two lines 1 and 13. This is the way to reach a block the summary truncated away, or to watch a few sectors while the rest stays out of view.
 
 ## See Also
 

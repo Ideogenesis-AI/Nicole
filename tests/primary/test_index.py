@@ -136,6 +136,19 @@ def test_index_rejects_negative_dimension():
         Index(Direction.OUT, group, sectors=(Sector(1, -3),))
 
 
+def test_index_rejects_non_positive_sector_dim():
+    """Test that Index construction rejects a sector of non-positive dimension.
+
+    `Sector` guards its own dimension, so reaching the guard inside `Index`
+    requires a sector whose dimension was invalidated after construction.
+    """
+    sector = Sector(0, 1)
+    object.__setattr__(sector, "dim", 0)
+
+    with pytest.raises(ValueError, match="Sector dim must be positive"):
+        Index(Direction.IN, U1Group(), (sector,))
+
+
 def test_index_flip():
     """Test Index.flip() method."""
     group = U1Group()
@@ -1106,4 +1119,3 @@ def test_split_index_su2_more_than_two_raises():
     
     with pytest.raises(ValueError, match="only supports pairwise fusion"):
         split_index(parent, [idx1, idx2, idx3])
-

@@ -298,7 +298,7 @@ def build_freefermion(
         G    = oplus(F, C, axes=2)      (op=OUT, dim-2 within charge-1 sector)
         Gdag = oplus(Fd, Cd, axes=2)*(-t)  (op=IN,  the scaled Hermitian conjugate)
 
-    Using `oplus` on the op axis (rather than plain `+`) keeps the
+    Using `oplus` on the op axis instead of plain `+` keeps the
     annihilation channel (F, position 0) and creation channel (C, position 1)
     in separate op-index slots.  This prevents the MPO bond from generating
     spurious c†c† / cc cross-terms, which would otherwise appear under Z2

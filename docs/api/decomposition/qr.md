@@ -1,6 +1,6 @@
 # qr
 
-QR decomposition returning orthogonal and upper triangular tensors.
+QR decomposition returning orthogonal and upper triangular tensors. One axis is separated from all the others and the tensor is factored as `T = Q @ R`, with the isometric factor `Q` carrying the designated axis and `R` carrying the rest. No truncation is involved, so the factorization is exact and the bond it opens is as small as the tensor allows: this is the cheap way to put a tensor into canonical form when no compression is required.
 
 ::: nicole.decomp.qr
     options:
@@ -9,31 +9,9 @@ QR decomposition returning orthogonal and upper triangular tensors.
 
 ## Description
 
-Performs block-wise QR decomposition, factorizing a tensor into:
-- **Q**: Orthogonal tensor (Q†Q = I)
-- **R**: Upper triangular tensor
+The bond index between the two factors carries exactly the charges of the separated axis, with its direction reversed, so `Q` comes out with `(left_index, bond_index)` and `R` with the flipped bond followed by the remaining indices. Each bond sector holds the rank of its charge block, meaning the smaller of the separated dimension and the combined dimension of everything else — a sector wide on the left but narrow on the right shrinks accordingly, and the bond never grows beyond what the factorization supports.
 
-Such that T = Q @ R. Unlike SVD, no truncation is applied.
-
-The decomposition is performed block-wise, preserving symmetry structure. For each charge sector, blocks with the same left charge are concatenated horizontally, QR decomposed together, and then R is split back into individual blocks.
-
-## Parameters
-
-### T
-Tensor to be decomposed.
-
-### axis
-Axis to separate from all others. Can be:
-- Integer position (e.g., `0`)
-- String itag (e.g., `"physical"`)
-
-This axis forms the left partition (Q), all others form the right partition (R).
-
-## Returns
-
-`tuple[Tensor, Tensor]`: Pair `(Q, R)` where:
-- Q has indices `(left_index, bond_index)` and is orthogonal
-- R has indices `(bond_index.flip(), *right_indices)` and is upper triangular
+Both bond indices are tagged `"_bond"`, and the other itags are carried over from `T`. `qr` takes one axis, as an integer position or an itag, and raises `ValueError` if the itag is missing, if it occurs on more than one axis, or if an integer position is out of range. To separate several axes at once, or to choose the bond itag, go through [decomp](decomp.md) with `mode="QR"`, which merges the axes first before calling this function.
 
 ## Import
 
@@ -72,3 +50,4 @@ QdagQ = contract(Q.conj(), Q)
 - Use `qr()` directly when you need simple, low-level QR decomposition
 - No truncation is applied in QR decomposition
 - QR is useful for obtaining canonical forms without compression
+- Contracting `Q` with its conjugate over the separated axis gives the identity on the bond, one identity block per bond charge

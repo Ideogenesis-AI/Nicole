@@ -423,6 +423,102 @@ def test_contract_large_block_shapes():
     assert_charge_neutral(result)
 
 
+def test_contract_rejects_axes_of_wrong_length():
+    """Test that contract rejects an axes tuple that is not a pair."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="axes must be a tuple of length 2"):
+        contract(T, T, axes=(0,))
+
+
+def test_contract_rejects_unequal_axes_sequences():
+    """Test that contract rejects axes sequences of differing length."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="axes sequences must have same length"):
+        contract(T, T, axes=([0, 1], [0]))
+
+
+@pytest.mark.parametrize("axes, side", [((5, 0), "A"), ((0, 5), "B")])
+def test_contract_rejects_out_of_range_axis(axes, side):
+    """Test that contract rejects an axis outside the index range of either operand."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match=f"out of range for tensor {side}"):
+        contract(T, T, axes=axes)
+
+
+def test_contract_rejects_mismatched_itags():
+    """Test that contract rejects a manual pair whose itags differ."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([idx, idx.flip()], itags=["c", "d"], seed=2)
+
+    with pytest.raises(ValueError, match="mismatched itags"):
+        contract(A, B, axes=(1, 0))
+
+
+def test_contract_rejects_same_direction_pair():
+    """Test that contract rejects a manual pair whose indices point the same way."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=2)
+
+    with pytest.raises(ValueError, match="has same direction"):
+        contract(A, B, axes=(0, 0))
+
+
+def test_contract_rejects_mismatched_groups():
+    """Test that contract rejects a pair of indices carrying different symmetry groups."""
+    u1_idx = Index(Direction.IN, U1Group(), sectors=(Sector(0, 2),))
+    z2_idx = Index(Direction.OUT, Z2Group(), sectors=(Sector(0, 2),))
+    A = Tensor.random([u1_idx, u1_idx.flip()], itags=["a", "b"], seed=1)
+    B = Tensor.random([z2_idx, z2_idx.flip()], itags=["a", "b"], seed=2)
+
+    with pytest.raises(ValueError, match="matching groups on paired indices"):
+        contract(A, B, axes=(0, 0))
+
+
+def test_contract_rejects_ambiguous_pairing_from_a():
+    """Test that automatic contraction fails when one A index matches two B indices."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx], itags=["x", "y"], seed=1)
+    B = Tensor.random([idx.flip(), idx.flip()], itags=["x", "x"], seed=2)
+
+    with pytest.raises(ValueError, match="index 0 \\(itag 'x'\\) in tensor A"):
+        contract(A, B)
+
+
+def test_contract_rejects_ambiguous_pairing_from_b():
+    """Test that automatic contraction fails when one B index matches two A indices."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    A = Tensor.random([idx, idx], itags=["x", "x"], seed=1)
+    B = Tensor.random([idx.flip(), idx.flip()], itags=["x", "y"], seed=2)
+
+    with pytest.raises(ValueError, match="index 0 \\(itag 'x'\\) in tensor B"):
+        contract(A, B)
+
+
+def test_contract_rejects_excl_of_wrong_length():
+    """Test that contract rejects an excl argument that is not a pair of sequences."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="excl must be a tuple of two sequences"):
+        contract(T, T, excl=((0,),))
+
+
 # Tests for excl parameter
 
 def test_contract_excl_exclude_from_A():
@@ -1491,6 +1587,66 @@ def test_contract_many_sectors_sparse_no_match():
     assert result.data == {}
 
 
+# Complex dtype tests across symmetry groups
+#
+# Contraction is covered for every group but otherwise only with real dtypes.
+# These cases repeat the core invariants in single and double complex precision.
+
+_CONTRACT_LAYOUTS = {
+    "U1": (U1Group, (Sector(0, 2), Sector(1, 2))),
+    "Z2": (Z2Group, (Sector(0, 2), Sector(1, 2))),
+    "SU2": (SU2Group, (Sector(0, 2), Sector(1, 2))),
+    "U1xSU2": (
+        lambda: ProductGroup([U1Group(), SU2Group()]),
+        (Sector((0, 0), 2), Sector((1, 1), 2)),
+    ),
+}
+
+
+def _complex_pair(group_name, dtype, seed):
+    """Build two contractible 2nd order tensors of the requested group and dtype."""
+    factory, sectors = _CONTRACT_LAYOUTS[group_name]
+    group = factory()
+    idx = Index(Direction.OUT, group, sectors=sectors)
+    A = Tensor.random([idx, idx.flip()], itags=["a", "b"], dtype=dtype, seed=seed)
+    B = Tensor.random([idx, idx.flip()], itags=["b", "c"], dtype=dtype, seed=seed + 1)
+    return A, B
+
+
+@pytest.mark.parametrize("group_name", sorted(_CONTRACT_LAYOUTS))
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_contract_preserves_complex_dtype_across_groups(group_name, dtype):
+    """Test that contracting complex tensors keeps the dtype and charge neutrality."""
+    A, B = _complex_pair(group_name, dtype, seed=41)
+    contracted = contract(A, B)
+
+    assert contracted.dtype == dtype
+    assert contracted.itags == ("a", "c")
+    assert_charge_neutral(contracted)
+    for block in contracted.data.values():
+        assert block.dtype == dtype
+
+
+@pytest.mark.parametrize("group_name", sorted(_CONTRACT_LAYOUTS))
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+def test_complex_contraction_is_associative_across_groups(group_name, dtype):
+    """Test that complex contraction gives the same tensor whichever pair goes first."""
+    A, B = _complex_pair(group_name, dtype, seed=43)
+    factory, sectors = _CONTRACT_LAYOUTS[group_name]
+    idx = Index(Direction.OUT, factory(), sectors=sectors)
+    C = Tensor.random([idx, idx.flip()], itags=["c", "d"], dtype=dtype, seed=45)
+
+    left_first = contract(contract(A, B), C)
+    right_first = contract(A, contract(B, C))
+
+    tol = 1e-4 if dtype == torch.complex64 else 1e-10
+    if A.intw is None:
+        assert_blocks_equal(left_first, right_first, rtol=tol, atol=tol)
+    else:
+        assert_physical_tensors_equal(left_first, right_first, rtol=tol, atol=tol,
+                                      msg=f"{group_name} complex associativity")
+
+
 # Trace tests
 
 def test_trace_automatic():
@@ -1781,7 +1937,6 @@ def test_trace_product_group():
     assert math.isclose(result.item(), manual_scalar.item())
 
 
-
 def test_trace_produces_scalar():
     """Test that tracing all indices produces a scalar (0D tensor) with numeric verification."""
     group = U1Group()
@@ -1880,6 +2035,94 @@ def test_trace_manual_pair_syntax():
     
     assert scalar.is_scalar()
     assert len(scalar.indices) == 0
+
+
+def test_trace_with_no_pairs_returns_the_input():
+    """Test that tracing an empty list of pairs hands back the same tensor."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    assert trace(T, axes=[]) is T
+
+
+def test_detect_trace_pairs_defaults_to_no_exclusions():
+    """Test that the pair detector works when called without an exclusion set."""
+    from nicole.contract import _detect_trace_pairs
+
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    assert _detect_trace_pairs(T) == [(0, 1)]
+
+
+@pytest.mark.parametrize("pairs", [[(0, 1), (2, 3)], [(2, 3), (0, 1)]])
+def test_trace_multiple_pairs_adjusts_remaining_axes(pairs):
+    """Test that multi-pair tracing renumbers the remaining pairs in either order."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip(), idx, idx.flip()],
+                      itags=["a", "a", "b", "b"], seed=2)
+
+    traced = trace(T, axes=pairs)
+    sequential = trace(trace(T, axes=pairs[0]), axes=(0, 1))
+
+    assert traced.is_scalar()
+    assert math.isclose(traced.item(), sequential.item(), rel_tol=1e-12)
+
+
+def test_trace_skips_blocks_whose_paired_axes_have_unequal_dims():
+    """Test that tracing skips a block whose paired axes share a charge but not a dim."""
+    group = U1Group()
+    left = Index(Direction.IN, group, sectors=(Sector(0, 2),))
+    right = Index(Direction.OUT, group, sectors=(Sector(0, 3),))
+    T = Tensor.zeros([left, right], itags=["a", "a"])
+
+    traced = trace(T, axes=(0, 1))
+
+    assert traced.is_scalar()
+    assert traced.data == {}
+
+
+def test_trace_rejects_automatic_pairing_without_pairs():
+    """Test that automatic tracing fails when no two indices pair up."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=1)
+
+    with pytest.raises(ValueError, match="No valid trace pairs found\\."):
+        trace(T)
+
+
+def test_trace_rejects_exclusion_removing_every_pair():
+    """Test that automatic tracing fails when the only pair is excluded."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "a"], seed=1)
+
+    with pytest.raises(ValueError, match="after applying exclusions"):
+        trace(T, excl=0)
+
+
+def test_trace_rejects_unknown_exclusion_itag():
+    """Test that tracing rejects an exclusion itag absent from the tensor."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(ValueError, match="Exclusion itag 'z' not found"):
+        trace(T, excl="z")
+
+
+def test_trace_rejects_out_of_range_exclusion_axis():
+    """Test that tracing rejects an exclusion axis outside the index range."""
+    group = U1Group()
+    idx = Index(Direction.IN, group, sectors=(Sector(0, 2), Sector(1, 2)))
+    T = Tensor.random([idx, idx.flip()], itags=["a", "b"], seed=11)
+
+    with pytest.raises(IndexError, match="Exclusion axis 7 out of range"):
+        trace(T, excl=7)
 
 
 # Contract/trace consistency tests
@@ -2088,4 +2331,3 @@ def test_trace_su2_consistency_with_contract():
 
     assert set(direct.data.keys()) == set(traced.data.keys())
     assert_physical_tensors_equal(direct, traced)
-

@@ -64,6 +64,13 @@ test_factorize.py
     - eig(): eigenvalue decomposition, sorting, and Hermitian variant
     - SU(2) and ProductGroup compatibility
 
+test_randsvd.py
+    Tests for the randomized SVD engine:
+    - Agreement with exact SVD on singular values and bond structure
+    - Per-sector budget allocation, oversampling, and discarded weight
+    - Seed reproducibility and global RNG isolation
+    - The non-convergence fallback ladder
+
 test_diag_inv.py
     Tests for diagonal tensor operations:
     - diag(): creating diagonal tensors from reduced blocks
@@ -80,7 +87,7 @@ test_einsum.py
 test_maneuver.py
     Tests for structural tensor maneuvers:
     - allclose(), conj(), permute(), transpose()
-    - retag(), invert(), insert_index()
+    - retag(), invert(), insert_index(), squeeze()
     - merge_axes(), trim_zero_blocks()
 
 test_oplus.py
