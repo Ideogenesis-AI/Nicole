@@ -1522,6 +1522,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#copies-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copies and Views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1839,7 +1850,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1867,7 +1878,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1895,7 +1906,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1923,7 +1934,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3599,6 +3610,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#copies-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copies and Views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3654,7 +3676,7 @@
 
 
 <h1 id="conj">conj<a class="headerlink" href="#conj" title="Permanent link">&para;</a></h1>
-<p>Return conjugated tensor with flipped index directions.</p>
+<p>Return the conjugate of a tensor, with complex-conjugated blocks and every index direction flipped. The two effects together let the conjugate contract against the original, making <code>conj</code> the building block of norms, overlaps, and adjoints. This is the functional form; <code>Tensor.conj()</code> is the cheaper method form.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3753,20 +3775,22 @@ tensor.conj(in_place=False).</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Returns a fully independent tensor with:
-<ul>
-<li>Conjugated block data (for complex dtypes)</li>
-<li>All index directions flipped (OUT ↔ IN)</li>
-</ul></p>
-<p>All data blocks are deep-copied, so the result is completely isolated from the original. For a memory-efficient version that shares storage with the original, use <code>Tensor.conj()</code> (default <code>in_place=False</code>). To modify the tensor in place, use <code>Tensor.conj(in_place=True)</code>.</p>
+<p>Under a complex dtype every dense block is conjugated elementwise. Under a real dtype the data passes through untouched and only the directions change, so a real tensor and its conjugate hold the same numbers with opposite orientation. Flipping reverses direction while leaving charges alone, so the charge keys are the same on both tensors. The operation that conjugates the charges as well is <a href="../../core/tensor/">Tensor.invert()</a>, which is a different operation and needs more care.</p>
+<p>For a non-Abelian tensor, each block's <code>Bridge</code> is conjugated in step: its Clebsch–Gordan edge directions flip, and the cumulated Frobenius–Schur phase of ±1 is multiplied into the weights. The weight values themselves are not conjugated, as they are real at any dtype — each descends from real arithmetic in <code>yuzuha</code>, so a complex tensor's weights carry a complex dtype with a zero imaginary part.</p>
+<h2 id="copies-and-views">Copies and Views<a class="headerlink" href="#copies-and-views" title="Permanent link">&para;</a></h2>
+<p>The functional form clones every data block, so the tensor it returns is isolated from the input and survives any later mutation of it. The method form <code>Tensor.conj()</code> instead hands back a new tensor that shares storage with the original, as <code>torch.conj</code> returns a view for a complex dtype and a real dtype shares its blocks outright. Pass <code>Tensor.conj(in_place=True)</code> to conjugate the tensor itself and receive it back for chaining.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../core/tensor/">Tensor.conj</a>: Method form (shared-storage default, or in-place)</li>
-<li><a href="../transpose/">transpose</a>: Transpose axes</li>
+<li><a href="../../core/tensor/">Tensor.conj</a>: Method form, sharing storage by default or acting in place</li>
+<li><a href="../transpose/">transpose</a>: Reverse axis order, the other half of an adjoint</li>
+<li><a href="../capcup/">capcup</a>: Invert a bond between two tensors, with the SU(2) phase correction</li>
 <li><a href="../../../examples/operations/manipulation-examples/">Examples: Manipulation</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>For real dtypes, only directions are flipped. For complex dtypes, data is conjugated and directions flipped.</p>
+<ul>
+<li>The itags, dtype, and label all carry over unchanged, so a conjugate pairs tag for tag with its original under automatic contraction.</li>
+<li>To invert the direction of a bond shared by two tensors, use <a href="../capcup/">capcup</a>. It applies the Frobenius–Schur phase to both sides consistently, which <code>conj</code> on one tensor cannot do.</li>
+</ul>
 
 
 
@@ -3789,7 +3813,7 @@ tensor.conj(in_place=False).</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 22:16:41 UTC"><span class="timeago" datetime="2026-03-30T22:16:41+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 22:16:41 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 15:40:03 UTC"><span class="timeago" datetime="2026-11-16T15:40:03+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 15:40:03 UTC">2026-11-16</span>
   </span>
 
     
@@ -3817,9 +3841,9 @@ tensor.conj(in_place=False).</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

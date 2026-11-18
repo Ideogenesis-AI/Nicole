@@ -1839,7 +1839,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1867,7 +1867,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1895,7 +1895,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1923,7 +1923,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3654,7 +3654,7 @@
 
 
 <h1 id="tensorrandom">Tensor.random<a class="headerlink" href="#tensorrandom" title="Permanent link">&para;</a></h1>
-<p>Create a tensor with all admissible blocks filled with random values.</p>
+<p>Allocate a symmetry-aware tensor whose every admissible block is filled with random values. The structure is determined exactly as in <a href="../zeros/">zeros</a> — the indices decide which charge combinations are allowed and what shape each block takes — and only the contents differ. A random tensor is the usual starting point for an iterative algorithm and the standard fixture for checking that an operation handles symmetry correctly.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3814,18 +3814,21 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Creates a new tensor with random values in all charge-conserving blocks. Random values are drawn from a standard normal distribution. Use the <code>seed</code> parameter for reproducibility.</p>
+<p>Admissibility, block shapes, sector pruning, and intertwiner handling all follow <a href="../zeros/">zeros</a>. Each block is drawn from <code>torch.randn</code>, so its entries are independent samples from a standard normal distribution with mean 0 and standard deviation 1. For a complex <code>dtype</code>, the real and imaginary parts are drawn separately and combined, giving each part unit variance.</p>
+<p>Pass <code>seed</code> when reproducibility matters. The seed initializes a <code>torch.Generator</code> on the target device that then supplies every block, so a seeded call reproduces exactly without disturbing the global random stream. Left unseeded, the blocks are drawn from the global generator and differ between runs.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../zeros/">zeros</a>: Create zero tensor</li>
-<li><a href="../../core/tensor/">Tensor</a>: Main tensor class</li>
+<li><a href="../zeros/">zeros</a>: Same structure, filled with zeros</li>
+<li><a href="../../core/tensor/">Tensor</a>: Main tensor class, including <code>rand_fill</code> for refilling in place</li>
+<li><a href="../../core/index-class/">Index</a>: Index structure that determines the blocks</li>
 <li><a href="../../../examples/basic/first-tensor/">Examples: First Tensor</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Random values from standard normal: mean=0, std=1</li>
-<li>Use <code>seed</code> parameter for reproducible results</li>
-<li>Only admissible blocks are created and filled</li>
+<li>The default <code>dtype</code> is <code>torch.float64</code>, and it covers every block as well as the intertwiner weights of a generic group. On MPS, <code>float64</code> and <code>complex128</code> are downgraded automatically to <code>float32</code> and <code>complex64</code>.</li>
+<li>The result is not normalized. Its <code>norm()</code> grows with the number and size of the admissible blocks, so divide by <code>norm()</code> when a unit-norm tensor is wanted.</li>
+<li>Gradient tracking is off by default. Pass <code>requires_grad=True</code> to enable it, as described in <a href="../../../examples/advanced/autograd/">Autograd</a>.</li>
+<li>Seeding is per-call. Two calls sharing one seed produce the same values only when their indices and dtype agree, since the generator is consumed block by block.</li>
 </ul>
 
 
@@ -3849,7 +3852,7 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 09:26:47 UTC"><span class="timeago" datetime="2026-11-16T09:26:47+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 09:26:47 UTC">2026-11-16</span>
   </span>
 
     
@@ -3877,9 +3880,9 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

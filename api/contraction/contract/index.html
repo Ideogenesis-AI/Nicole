@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -2008,10 +2008,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#automatic-vs-manual-contraction" class="md-nav__link">
+  <a href="#selecting-the-pairs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Automatic vs Manual Contraction
+        Selecting the Pairs
       
     </span>
   </a>
@@ -3610,10 +3610,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#automatic-vs-manual-contraction" class="md-nav__link">
+  <a href="#selecting-the-pairs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Automatic vs Manual Contraction
+        Selecting the Pairs
       
     </span>
   </a>
@@ -3676,7 +3676,7 @@
 
 
 <h1 id="contract">contract<a class="headerlink" href="#contract" title="Permanent link">&para;</a></h1>
-<p>Contract two tensors along specified index pairs.</p>
+<p>Contract two tensors over one or more index pairs, computing only the blocks that charge conservation admits. It generalizes matrix multiplication to tensors of any order, and in the default mode, it works out the pairs itself by matching itags with opposing directions. The output carries the free axes of <code>A</code> followed by those of <code>B</code>.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3941,27 +3941,26 @@ reorder if needed.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Performs tensor contraction while preserving charge conservation. Can automatically contract indices with matching tags and opposite directions, or manually specify pairs.</p>
-<h2 id="automatic-vs-manual-contraction">Automatic vs Manual Contraction<a class="headerlink" href="#automatic-vs-manual-contraction" title="Permanent link">&para;</a></h2>
-<p><strong>Automatic</strong> (axes=None):
-<ul>
-<li>Finds all indices where tags match</li>
-<li>Requires opposite directions (OUT ↔ IN)</li>
-<li>Contracts all matching pairs</li>
-</ul></p>
-<p><strong>Manual</strong> (axes specified):
-<ul>
-<li>Contract only specified index pairs</li>
-<li>Still requires opposite directions</li>
-<li>Validates tag matching</li>
-</ul></p>
+<p>A pair is contractible when its two indices share an itag and carry opposite directions. On a contracted axis the charges must agree for a block pair to contribute, and the block that comes out must still conserve the total charge. Only those blocks are computed, which is where the saving over a dense contraction comes from: the forbidden combinations are never visited.</p>
+<p>The output index order is fixed. The axes of <code>A</code> that were not contracted come first, in their original order, followed by those of <code>B</code>. Pass <code>perm</code> to reorder them within the same call, which saves a separate <a href="../../manipulation/permute/">permute</a> afterwards.</p>
+<h2 id="selecting-the-pairs">Selecting the Pairs<a class="headerlink" href="#selecting-the-pairs" title="Permanent link">&para;</a></h2>
+<p>Three modes are available, and <code>axes</code> and <code>excl</code> are mutually exclusive: supplying both raises <code>ValueError</code>.</p>
+<p><strong>Automatic</strong>, with neither argument given. Every pair of indices sharing an itag with opposing directions is contracted. This is the usual mode, and the reason itags are worth setting deliberately.</p>
+<p><strong>Explicit</strong>, through <code>axes</code>. One pair reads <code>(axis_in_A, axis_in_B)</code> and several read <code>([axes_in_A], [axes_in_B])</code>, following the <code>np.tensordot</code> convention. The itags and directions are still validated, so a pair that is not contractible raises before proceeding.</p>
+<p><strong>Exclusion</strong>, through <code>excl</code>. Pairing proceeds automatically but skips the axes listed as <code>([excl_in_A], [excl_in_B])</code>. This is the mode for two tensors that share a tag on an axis which has to stay free.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
+<li><a href="../einsum/">einsum</a>: Contraction patterns named by subscript</li>
 <li><a href="../trace/">trace</a>: Trace over index pairs within a tensor</li>
+<li><a href="../../manipulation/capcup/">capcup</a>: Reverse a bond's direction before contracting</li>
 <li><a href="../../../examples/operations/contraction-examples/">Examples: Contraction</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>Only blocks satisfying charge conservation are computed. For contracted indices, charges must match. Output blocks must conserve total charge.</p>
+<ul>
+<li>Automatic pairing raises when it cannot resolve a tag unambiguously, so a tag repeated across several contractible axes needs <code>axes</code> or <code>excl</code> to disambiguate.</li>
+<li>A contraction yielding no free axes gives a scalar tensor, whose value comes out through <code>Tensor.item()</code>.</li>
+<li>For a pattern that is awkward to express as pairs, such as one that also permutes or traces, <a href="../einsum/">einsum</a> takes the whole thing as a subscript string.</li>
+</ul>
 
 
 
@@ -3984,7 +3983,7 @@ reorder if needed.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 22:12:21 UTC"><span class="timeago" datetime="2026-02-07T22:12:21+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 22:12:21 UTC">2026-02-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 17:57:11 UTC"><span class="timeago" datetime="2026-11-16T17:57:11+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 17:57:11 UTC">2026-11-16</span>
   </span>
 
     

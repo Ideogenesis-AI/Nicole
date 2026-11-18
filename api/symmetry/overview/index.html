@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3932,7 +3932,7 @@
 
 
 <h1 id="symmetry-groups-overview">Symmetry Groups Overview<a class="headerlink" href="#symmetry-groups-overview" title="Permanent link">&para;</a></h1>
-<p>Nicole's symmetry system enables efficient block-sparse tensor operations by exploiting conserved quantum numbers.</p>
+<p>Nicole's symmetry system enables efficient block-sparse tensor operations by exploiting conserved quantum numbers. A symmetry group supplies the labels that an index hangs on its sectors and the fusion rule that decides which combinations of those labels are allowed. So only the blocks that a symmetric tensor can legally hold are ever stored or touched. The pages below cover the groups that ship with Nicole and the operations every group provides.</p>
 <h2 id="available-groups">Available Groups<a class="headerlink" href="#available-groups" title="Permanent link">&para;</a></h2>
 <h3 id="abelian-groups">Abelian Groups<a class="headerlink" href="#abelian-groups" title="Permanent link">&para;</a></h3>
 <ul>
@@ -4023,7 +4023,8 @@
 <li><a href="../../../examples/symmetries/su2-examples/">Examples: SU(2)</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>Symmetry groups are immutable and lightweight. Groups are typically shared across many indices and tensors.</p>
+<p>Symmetry groups are immutable and lightweight: they hold the mathematical properties, so one instance is normally shared across indices and tensors in a program. Being frozen dataclasses, they are hashable and compare by value, so two separately constructed instances are indistinguishable. Every compatibility check in Nicole — combining indices, contracting a pair of axes, adding two tensors — tests the groups for equality, and indices built in different parts of a program are therefore interoperable.</p>
+<p>Charge arithmetic runs in the innermost loop of block enumeration, so a two-component <code>ProductGroup</code> installs specialized <code>fuse_unique</code>, <code>fuse_channels</code> and <code>dual</code> routines on the instance when it is constructed. The common pairs built from <code>U1Group</code>, <code>Z2Group</code> and <code>SU2Group</code> get hand-written bodies worth several times the generic component loop; every other pair falls back on a closure over the component methods. Nothing has to be enabled and the values are unchanged either way — see <a href="../product-group/#specialized-charge-arithmetic">Specialized Charge Arithmetic</a> for the measured figures.</p>
 
 
 
@@ -4046,7 +4047,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 31, 2026 08:02:32 UTC"><span class="timeago" datetime="2026-03-31T08:02:32+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 31, 2026 08:02:32 UTC">2026-03-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 02:49:32 UTC"><span class="timeago" datetime="2026-11-17T02:49:32+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 02:49:32 UTC">2026-11-17</span>
   </span>
 
     
@@ -4074,9 +4075,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

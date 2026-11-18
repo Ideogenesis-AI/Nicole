@@ -1189,6 +1189,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1867,7 +1878,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1895,7 +1906,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1923,7 +1934,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1951,7 +1962,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3676,6 +3687,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3710,7 +3732,7 @@
 
 
 <h1 id="sector">Sector<a class="headerlink" href="#sector" title="Permanent link">&para;</a></h1>
-<p>Charge sector descriptor pairing a charge with a dimension.</p>
+<p>The atom of an index's structure: one conserved charge paired with the dimension of the space carrying it. An <a href="../index-class/">Index</a> is a tuple of sectors, and the sectors make a block's extent known, since a block's shape is read off from the sector dimensions that its charge key selects. Sectors are frozen, so they can be shared freely between indices.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -3853,12 +3875,8 @@
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>A <code>Sector</code> represents a symmetry sector within an index, containing:</p>
-<ul>
-<li><strong>charge</strong>: The conserved quantum number (type depends on symmetry group)</li>
-<li><strong>dim</strong>: Number of states in this sector (positive integer)</li>
-</ul>
-<p>Sectors are immutable frozen dataclasses.</p>
+<p>The <code>charge</code> is the conserved quantum number, and its type follows the symmetry group, as tabulated below. The <code>dim</code> counts multiplets instead of physical states: under SU(2) a sector of charge 1 and dimension 2 holds two spin-&frac12; multiplets, which is four states. Under an Abelian group the distinction collapses, every irrep being 1-dimensional.</p>
+<p>A sector says nothing about direction. The same <code>Sector</code> can sit on an incoming and an outgoing index alike, and it is the index that decides how the charge enters conservation.</p>
 <h2 id="charge-types-by-group">Charge Types by Group<a class="headerlink" href="#charge-types-by-group" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3892,12 +3910,8 @@
 </tbody>
 </table>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
-<p>Sectors validate at construction:
-<ul>
-<li>Dimension must be positive</li>
-<li>Charge must be valid for the group</li>
-<li>No duplicate charges allowed within an index</li>
-</ul></p>
+<p>Validation is split between the sector and the index that holds it. A <code>Sector</code> checks only what it can judge alone: the dimension must be a positive integer, and a non-positive one raises <code>ValueError</code> at construction.</p>
+<p>The remaining checks need the group, so they happen when the sector is placed on an <a href="../index-class/">Index</a>: the charge must be valid for that group, and no charge may appear twice among the index's sectors. A sector built in isolation with a charge that its intended group would reject is therefore accepted on its own and refused later.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../index-class/">Index</a>: Uses sectors to define structure</li>
@@ -3906,6 +3920,12 @@
 <li><a href="../../symmetry/z2-group/">Z2Group</a>: Binary charges</li>
 <li><a href="../../symmetry/su2-group/">SU2Group</a>: Spin charges (2j convention)</li>
 <li><a href="../../../examples/basic/first-tensor/">Examples: First Tensor</a></li>
+</ul>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>SU(2) charges use the 2j convention, so they stay integers: 0 for spin 0, 1 for spin &frac12;, 2 for spin 1.</li>
+<li>A <code>ProductGroup</code> charge is a tuple with one entry per component group, in the order the groups were given.</li>
+<li>Sector order is preserved as supplied, but block numbering and iteration go through <code>Tensor.sorted_keys</code>, so two indices holding the same sectors in different orders present their blocks identically.</li>
 </ul>
 
 
@@ -3929,7 +3949,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 18:42:28 UTC"><span class="timeago" datetime="2026-03-30T18:42:28+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 18:42:28 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 16:28:04 UTC"><span class="timeago" datetime="2026-11-16T16:28:04+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 16:28:04 UTC">2026-11-16</span>
   </span>
 
     
@@ -3957,9 +3977,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

@@ -1895,7 +1895,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1923,7 +1923,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1951,7 +1951,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1979,7 +1979,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3766,7 +3766,7 @@
 
 
 <h1 id="tensor">Tensor<a class="headerlink" href="#tensor" title="Permanent link">&para;</a></h1>
-<p>Block-sparse tensor with symmetry-aware indices.</p>
+<p>The central object of the library: a block-sparse tensor whose structure is dictated by symmetry-aware indices. Only the blocks allowed by charge conservation are stored, each a dense PyTorch tensor, so the selection rules are enforced by the layout itself, avoiding arithmetic on zeros. Everything else in Nicole either builds one of these, transforms one, or combines two.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -6061,7 +6061,8 @@ for all tensors in the computational graph that have requires_grad=True.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>The <code>Tensor</code> class is the core data structure in Nicole, representing block-sparse tensors backed by symmetry-aware indices. Each tensor stores a collection of dense PyTorch tensor blocks, where each block corresponds to a specific combination of charges that satisfies charge conservation rules.</p>
+<p>A tensor is held together by four pieces. Its <a href="../index-class/">indices</a> fix the symmetry structure and are immutable once set. Its <code>itags</code> name the axes, which automatic contraction and trace match upon. Its <code>data</code> maps each admissible charge key to a dense block, keyed so that the charges appear in axis order. For a generic symmetry group, an <code>intw</code> mapping runs alongside, carrying the <a href="../../symmetry/bridge/">Bridge</a> connecting the intertwiner for every block.</p>
+<p>Which keys are admissible is not a choice. A key survives when its charges, taken with the direction of each index, fuse to the group's neutral charge; the rest are absent from storage, inferring exact zeros.</p>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Block-sparse storage</strong>: Only admissible blocks are stored</li>
@@ -6088,8 +6089,8 @@ be combined with a complex one directly. This covers <code>+</code> and <code>-<
 <a href="../../contraction/contract/">contract</a>, <a href="../../contraction/einsum/">einsum</a> and
 <a href="../../arithmetic/oplus/">oplus</a>. Two things to watch:</p>
 <ul>
-<li>Scalar operations preserve precision rather than widening, so a <code>float32</code>
-  tensor times <code>1j</code> gives <code>complex64</code>, not <code>complex128</code>.</li>
+<li>Scalar operations preserve precision, so a <code>float32</code> tensor times <code>1j</code> gives
+  <code>complex64</code>, not <code>complex128</code>.</li>
 <li><code>==</code> compares dtype as well as values, so the same values at two dtypes are
   not equal. Use <a href="../../arithmetic/allclose/">allclose</a> when only the values
   matter.</li>
@@ -6129,7 +6130,7 @@ be combined with a complex one directly. This covers <code>+</code> and <code>-<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 15, 2026 18:16:13 UTC"><span class="timeago" datetime="2026-10-15T18:16:13+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 15, 2026 18:16:13 UTC">2026-10-15</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 16:28:22 UTC"><span class="timeago" datetime="2026-11-16T16:28:22+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 16:28:22 UTC">2026-11-16</span>
   </span>
 
     

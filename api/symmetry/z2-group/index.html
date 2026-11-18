@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3766,7 +3766,7 @@
 
 
 <h1 id="z2group">Z2Group<a class="headerlink" href="#z2group" title="Permanent link">&para;</a></h1>
-<p>Z(2) symmetry group with binary charges.</p>
+<p>Z(2) symmetry group with binary charges. It has exactly two irreducible representations, labeled 0 and 1, which fuse by <em>exclusive or</em>, so the group tracks a parity instead of a count. Like U(1), it is Abelian and one-dimensional, so a Z(2) tensor carries no accompanying intertwiners, but its finite charge set keeps the number of blocks small.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -3939,13 +3939,19 @@
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Represents discrete Z(2) symmetry. Charges are 0 or 1, representing binary quantum numbers.</p>
+<p><code>Z2Group</code> represents the discrete group of a single involution — an operation that returns the identity when applied twice, such as flipping a sign or reflecting an arrow. It has an even representation, on which the involution acts as <span class="arithmatex">\(+1\)</span>, and an odd representation, on which it acts as <span class="arithmatex">\(-1\)</span>. Charge 0 labels the even sector and charge 1 the odd sector, and fusing two charges amounts to multiplying those signs, which in charge labels is addition modulo two.</p>
+<p>Z(2) is self-dual: the odd representation is its own mirror, so <code>dual</code> is the identity. Charge conservation therefore has no signs to keep track of and reduces to a single statement — the charges on a block must contain an even number of odd indices. Representations are one-dimensional, so <code>irrep_dim</code> returns 1 and <code>fuse_unique</code> is the only fusion method, <code>fuse_channels</code> being reserved for non-Abelian groups.</p>
 <h3 id="charge-operations">Charge Operations<a class="headerlink" href="#charge-operations" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong>Fusion</strong>: XOR (<code>q1 ⊕ q2</code>)</li>
-<li><strong>Dual</strong>: Self-dual (0→0, 1→1)</li>
-<li><strong>Identity</strong>: 0</li>
-</ul>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">Z2Group</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">group</span> <span class="o">=</span> <span class="n">Z2Group</span><span class="p">()</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">group</span><span class="o">.</span><span class="n">neutral</span>                 <span class="c1"># 0</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">group</span><span class="o">.</span><span class="n">fuse_unique</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>       <span class="c1"># 0   — two odd sectors make an even one</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">group</span><span class="o">.</span><span class="n">fuse_unique</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>    <span class="c1"># 1   — three stay odd</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">group</span><span class="o">.</span><span class="n">dual</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>                 <span class="c1"># 1   — self-dual</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">group</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>             <span class="c1"># False</span>
+</span></code></pre></div>
 <h2 id="physical-applications">Physical Applications<a class="headerlink" href="#physical-applications" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Fermion parity</strong> (even/odd number)</li>
@@ -3960,7 +3966,11 @@
 <li><a href="../../../examples/symmetries/z2-examples/">Examples: Z2</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>Only charges 0 and 1 are valid. Other values raise <code>ValueError</code>.</p>
+<ul>
+<li>Only charges 0 and 1 are valid. <code>validate_charge</code> raises <code>ValueError</code> for any other integer and <code>TypeError</code> for a non-integer, and <code>Index</code> applies it to every sector charge at construction.</li>
+<li>The charge arithmetic itself reads only the low bit, so <code>dual</code>, <code>fuse_unique</code> and <code>equal</code> behave modulo two on any integer handed to them. Validation at the <code>Index</code> boundary keeps stray values out in the first place.</li>
+<li><code>Z2Group</code> is a frozen dataclass, hence hashable, and two separately constructed instances compare equal, so indices built in different parts of a program interoperate without sharing a group object.</li>
+</ul>
 
 
 
@@ -3983,7 +3993,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 13:21:17 UTC"><span class="timeago" datetime="2026-03-30T13:21:17+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 13:21:17 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 02:48:12 UTC"><span class="timeago" datetime="2026-11-17T02:48:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 02:48:12 UTC">2026-11-17</span>
   </span>
 
     
@@ -4011,9 +4021,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

@@ -1917,7 +1917,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1945,7 +1945,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1973,7 +1973,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -2001,7 +2001,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3810,7 +3810,7 @@
 
 
 <h1 id="index">Index<a class="headerlink" href="#index" title="Permanent link">&para;</a></h1>
-<p>Symmetry-aware tensor index defining direction, group, and charge sectors.</p>
+<p>The symmetry-aware tensor index: a direction, a symmetry group, and the charge sectors available alongside. An <code>Index</code> carries symmetry into a tensor, since its sectors decide which blocks may exist and how large each one can be, while its direction decides how their charges enter conservation. Indices are frozen, so the structure of a tensor cannot drift after it is built.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -4083,36 +4083,34 @@ manipulations.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>An <code>Index</code> represents a single index of a tensor, specifying:</p>
-<ul>
-<li><strong>Direction</strong>: <code>Direction.OUT</code> or <code>Direction.IN</code></li>
-<li><strong>Symmetry Group</strong>: The group governing charge conservation</li>
-<li><strong>Sectors</strong>: Available charge sectors with their dimensions</li>
-</ul>
-<p>Indices are immutable (frozen dataclasses) to ensure consistency across tensor operations.</p>
+<p>Construction validates the sectors it is given. Each charge is checked against the group, each dimension must be positive, and a charge may not appear twice on one index, so an index cannot be made to describe an inconsistent space. Being a frozen dataclass, it also cannot be edited afterwards: <code>flip</code> and <code>dual</code> return new indices to avoid mutation.</p>
+<p>Two notions of size are worth keeping apart. <code>dim</code> sums the sector dimensions and counts multiplets, which is the space the reduced blocks are stored in. <code>num_states</code> weights each sector by <code>irrep_dim(charge)</code> and counts physical states. Under an Abelian group every irrep is 1-dimensional and the two agree. Under SU(2) they diverge: an index with sectors <code>(0, 1)</code>, <code>(1, 2)</code>, <code>(2, 1)</code> in the 2j convention has <code>dim</code> 4 and <code>num_states</code> 8, since the two spin-&frac12; multiplets stand for four states.</p>
 <h2 id="direction-rules">Direction Rules<a class="headerlink" href="#direction-rules" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>Direction.OUT</code></strong>: Charge contributes with positive sign (+)</li>
-<li><strong><code>Direction.IN</code></strong>: Charge contributes with negative sign (-)</li>
+<li><strong><code>Direction.OUT</code></strong>: the charge contributes as it stands.</li>
+<li><strong><code>Direction.IN</code></strong>: the charge contributes through its dual.</li>
 </ul>
-<p>For charge conservation: <code>∑(OUT) - ∑(IN) = neutral</code></p>
+<p>A block key is admissible when those contributions fuse to the group's neutral charge.</p>
 <h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
 <h3 id="flip">flip()<a class="headerlink" href="#flip" title="Permanent link">&para;</a></h3>
-<p>Returns a copy with direction reversed but charges unchanged.</p>
+<p>Returns a new instance with the direction reversed and the charges untouched. This is the partner an index contracts against, and the form <a href="../../creation/identity/">identity</a> uses for its second index.</p>
 <h3 id="dual">dual()<a class="headerlink" href="#dual" title="Permanent link">&para;</a></h3>
-<p>Returns a copy with direction reversed AND charges conjugated.</p>
+<p>Returns a new instance with the direction reversed and every charge replaced by <code>group.dual(charge)</code>, a negation under U(1) and the identity under the self-dual Z(2).</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../sector/">Sector</a>: Charge-dimension pairs</li>
 <li><a href="../direction/">Direction</a>: Index direction enum</li>
 <li><a href="../tensor/">Tensor</a>: Main tensor class</li>
-<li><a href="../../../examples/basic/first-tensor/">Examples: First Tensor</a></li>
+<li><a href="../../../examples/basic/indexing/">Examples: Indexing</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>For contraction, indices must have:
-1. Opposite directions (OUT ↔ IN)
-2. Same symmetry group
-3. Compatible charge sectors</p>
+<p>For contraction, indices must have:</p>
+<ol>
+<li>Opposite directions (OUT ↔ IN)</li>
+<li>Same symmetry group</li>
+<li>Compatible charge sectors</li>
+</ol>
+<p><code>charges()</code> returns the charges in sector order and <code>sector_dim_map()</code> returns the charge-to-dimension mapping, both convenient when inspecting a block key against the index.</p>
 
 
 
@@ -4135,7 +4133,7 @@ manipulations.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 18:42:07 UTC"><span class="timeago" datetime="2026-03-30T18:42:07+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 18:42:07 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 16:28:13 UTC"><span class="timeago" datetime="2026-11-16T16:28:13+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 16:28:13 UTC">2026-11-16</span>
   </span>
 
     
@@ -4163,9 +4161,9 @@ manipulations.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

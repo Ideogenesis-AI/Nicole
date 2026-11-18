@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3732,9 +3732,9 @@
 
 
 <h1 id="block-utilities">Block Utilities<a class="headerlink" href="#block-utilities" title="Permanent link">&para;</a></h1>
-<p>Low-level utilities for managing tensor block structure.</p>
+<p>Low-level utilities for managing tensor block structure. A symmetric tensor is a dictionary from charge keys to dense arrays, and this module holds the routines that decide which keys are legal, the shape of the array behind each one, and how two arrays sharing a key combine. <code>Tensor</code> leans on them throughout, so this page is less a set of calls to make than a look at what the tensor class is doing on your behalf.</p>
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>The <code>blocks</code> module provides internal utilities for reasoning about tensor block dictionaries. Most users won't need these directly.</p>
+<p>The <code>blocks</code> module provides internal utilities for reasoning about tensor block dictionaries. Most users won't need these directly. The module is the layer where symmetry stops being a property of the indices and starts being a property of the stored data: an <code>Index</code> knows its charges and directions, a <code>Tensor</code> knows which blocks it holds, and <code>BlockSchema</code> translates between the two. Every routine here takes the indices as an argument, so the same helpers serve tensor construction, validation, arithmetic and compression alike.</p>
 <h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <h3 id="blockkey">BlockKey<a class="headerlink" href="#blockkey" title="Permanent link">&para;</a></h3>
 <p>A <code>BlockKey</code> is a tuple of charges, one per tensor index:</p>
@@ -3744,6 +3744,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">key1</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>      <span class="c1"># Both indices have charge 0</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">key2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>      <span class="c1"># Both indices have charge 1</span>
 </span></code></pre></div>
+<p>It is a type alias for <code>Tuple[Charge, ...]</code>, not a class, so any tuple of the right length serves as a key and the charge type follows the group — an integer for U(1) and Z(2), a tuple for a <code>ProductGroup</code>. Position in the key matches position of the index, so a key reads as the coordinates of a block.</p>
 <h3 id="blockschema">BlockSchema<a class="headerlink" href="#blockschema" title="Permanent link">&para;</a></h3>
 <p>Static utility class for block operations:</p>
 <ul>
@@ -3754,6 +3755,12 @@
 <li><code>block_add()</code>: Merging or concatenating weights from a pair of blocks</li>
 <li><code>block_compress()</code>: Remove linearly dependent components from a block</li>
 </ul>
+<p>Every method is a <code>staticmethod</code>, so the class is a namespace and never an object to construct: the indices are passed in on each call and nothing about a tensor is cached between them. Two details are worth knowing before calling any of them:</p>
+<ol>
+<li><code>iter_admissible_keys</code> yields the full cartesian product of the charges available on each index, candidates instead of survivors, so charge conservation has to be imposed afterwards with <code>charges_conserved</code>.</li>
+<li>Both <code>charges_conserved</code> and the charge totals behind it are direction-aware: an OUT index contributes its charge as it stands and an IN index contributes the dual, and admissibility is the test that those contributions fuse to the neutral charge.</li>
+</ol>
+<p>For a generic symmetry the dense array behind a key carries one extra trailing axis for the outer multiplicity components, and <code>shape_for_key</code> appends it when given <code>num_components</code>. This is also where <code>block_add</code> earns its complexity: when two blocks share a key, their intertwiner weights are collinear often enough to simply scale and add, and when they are not, the data and the weights are concatenated along that trailing axis instead. <code>block_compress</code> is the inverse pressure, dropping components that an SVD of the weight matrix finds linearly dependent.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole.blocks</span><span class="w"> </span><span class="kn">import</span> <span class="n">BlockSchema</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -3766,7 +3773,10 @@
 <li><a href="../../core/index-class/">Index</a>: Index structure</li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>These are internal utilities. Most functionality is accessed through the <code>Tensor</code> class interface.</p>
+<ul>
+<li>These are internal utilities. Most functionality is accessed through the <code>Tensor</code> class interface.</li>
+<li><code>shape_for_key</code> raises <code>ValueError</code> when the key length disagrees with the number of indices and <code>KeyError</code> when a charge is absent from the index at that position, so a mistyped key fails at the schema without producing an erroneously shaped block.</li>
+</ul>
 
 
 
@@ -3789,7 +3799,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 7, 2026 01:22:38 UTC"><span class="timeago" datetime="2026-04-07T01:22:38+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 7, 2026 01:22:38 UTC">2026-04-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 07:49:41 UTC"><span class="timeago" datetime="2026-11-17T07:49:41+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 07:49:41 UTC">2026-11-17</span>
   </span>
 
     
@@ -3817,9 +3827,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

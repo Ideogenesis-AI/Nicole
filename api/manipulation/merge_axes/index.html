@@ -1889,7 +1889,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1917,7 +1917,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1945,7 +1945,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1973,7 +1973,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3754,7 +3754,7 @@
 
 
 <h1 id="merge_axes">merge_axes<a class="headerlink" href="#merge_axes" title="Permanent link">&para;</a></h1>
-<p>Merge multiple tensor axes into a single axis using isometry fusion.</p>
+<p>Fuse several axes of a tensor into one, and receive alongside the result the isometry conjugate that undoes it. The merge loses nothing: the fused axis carries every charge combination the originals admitted, so a contraction against the returned conjugate restores the tensor as it was. It is the standard way to reshape a tensor for an operation that expects fewer axes, such as a matrix decomposition across a chosen partition.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3985,8 +3985,8 @@ or if axes don't exist in the tensor.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Creates an n-to-1 isometry that fuses the specified axes, contracts it with the input tensor to perform the merging, and returns both the merged tensor and the conjugate of the isometry (which can be used to unfuse the axis later).</p>
-<p>This is useful for reducing tensor order while preserving all information, with the ability to reverse the operation.</p>
+<p>The work is done by <a href="../../creation/isometry_n/">isometry_n</a>: an n-to-1 isometry is built over the selected indices and contracted with the tensor, which performs the merge and leaves the fused axis in place of the originals. The merged axis comes first in the output, followed by the axes left alone in their original order, so the resultant's itags are not those of the input in a shorter tuple.</p>
+<p>The selection accepts integer positions and itags interchangeably, and at least two axes are required. The merged axis takes <code>merged_tag</code> as its tag, defaulting to <code>"_merged_"</code>, and <code>direction</code> as its orientation, defaulting to <code>Direction.OUT</code>. Fewer than two axes, an axis absent from the tensor, or a specification that is neither <code>int</code> nor <code>str</code> raises an error.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <h3 id="merge-by-tags">Merge by tags<a class="headerlink" href="#merge-by-tags" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">merge_axes</span>
@@ -4018,12 +4018,9 @@ or if axes don't exist in the tensor.</p>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Must specify at least 2 axes to merge</li>
-<li>Axes can be specified as integer positions (0-indexed) or string tags</li>
-<li>The merged axis appears first in the output tensor</li>
-<li>The returned isometry conjugate can contract with the merged tensor to reverse the operation</li>
-<li>Axes are merged in the order they appear in the tensor, not the order specified</li>
-<li>The merged axis direction can be controlled via the <code>direction</code> parameter</li>
+<li>Axes fuse in the order they occupy in the tensor, not the order given in <code>axes</code>. Listing them differently reorders nothing, so the fused index is the same whichever way the selection is written.</li>
+<li>The isometry conjugate is the only route back. Discarding it leaves the merged axis fused for good, since the charge combinations behind it cannot be recovered from the merged tensor alone.</li>
+<li>Integer positions are 0-based, matching <a href="../retag/">retag</a> and <a href="../permute/">permute</a>.</li>
 </ul>
 
 
@@ -4047,7 +4044,7 @@ or if axes don't exist in the tensor.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 15:40:23 UTC"><span class="timeago" datetime="2026-11-16T15:40:23+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 15:40:23 UTC">2026-11-16</span>
   </span>
 
     
@@ -4075,9 +4072,9 @@ or if axes don't exist in the tensor.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

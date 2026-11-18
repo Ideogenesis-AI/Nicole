@@ -1839,7 +1839,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1867,7 +1867,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1895,7 +1895,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1923,7 +1923,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3654,7 +3654,7 @@
 
 
 <h1 id="capcup">capcup<a class="headerlink" href="#capcup" title="Permanent link">&para;</a></h1>
-<p>Invert a bond direction between two tensors with phase corrections.</p>
+<p>Invert the directions of a to-be-contracted bond between two tensors, leaving every subsequent contraction numerically unchanged. The operation is the insertion of a cap-cup metric on the bond: both ends reverse direction so the pair still contracts, and for an SU(2) tensor the Frobenius–Schur phase that the reversal would otherwise leave behind is absorbed into <code>B</code>. Reach for it whenever a bond has to flip orientation, never for double <code>Tensor.invert()</code>.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3810,8 +3810,8 @@ non-trivial correction.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p><code>capcup</code> inverts the directions of a contraction pair (bond) between two tensors — equivalent to inserting a cap-cup metric on the bond. For SU(2) tensors, it also applies the <strong>Frobenius–Schur (FS) phase</strong> <span class="arithmatex">\((-1)^{2j}\)</span> to each block of <code>B</code> at the relevant bond position, keeping all subsequent contractions numerically correct after the direction reversal. For Abelian groups, only the directions are flipped and no phase is applied.</p>
-<p>The FS phase is absorbed into the intertwiner weights of <code>B</code> (shape <code>(num_components, om_dimension)</code>), which is much smaller than the full data blocks.</p>
+<p>A to-be-contracted pair is a bond where the two tensors carry the same itag with opposite directions. <code>capcup</code> inverts both ends of that pair. For an Abelian group the directions alone change. For SU(2) the Frobenius–Schur phase <span class="arithmatex">\((-1)^{2j}\)</span> is additionally multiplied into each block of <code>B</code> at the bond position, so that any follow-up contractions involving the bond still yields the same number after the reversal.</p>
+<p>The phase lands in the intertwiner weights of <code>B</code> (shape <code>(num_components, om_dimension)</code>), which is much smaller than the full data blocks. It is applied only when both bond axes sit at the same type in their respective CG fusion trees — both leading or both terminal — because only then does the combined X-symbol transformation require a non-trivial correction.</p>
 <div class="admonition warning">
 <p class="admonition-title">Use <code>capcup</code> for bond inversion, not <code>Tensor.invert()</code></p>
 <p>Whenever you need to invert a bond — a pair of compatible indices eligible for contraction — always use <code>capcup</code>. <code>Tensor.invert()</code> acts on a single tensor in isolation and is unaware of the paired index on the other tensor; it cannot apply the necessary corrections consistently across both sides. <code>Tensor.invert()</code> should only be used alone, on a free index, and with extreme caution.</p>
@@ -3824,9 +3824,9 @@ non-trivial correction.</p>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Both <code>axis_a</code> and <code>axis_b</code> must refer to the shared bond: same itag and opposite directions.</li>
-<li>The FS phase <span class="arithmatex">\((-1)^{2j}\)</span> is applied only when both bond axes are of the same type (both leading or both terminal) in their respective CG fusion trees.</li>
+<li>Both <code>axis_a</code> and <code>axis_b</code> must refer to the shared bond: same itag and opposite directions. A mismatch raises <code>ValueError</code>.</li>
 <li><code>capcup</code> modifies both <code>A</code> and <code>B</code> in place and returns <code>None</code>.</li>
+<li><code>axis_a</code> and <code>axis_b</code> are integer positions. Tags identify the bond; positions select which occurrence of that tag each tensor contributes.</li>
 </ul>
 
 
@@ -3850,7 +3850,7 @@ non-trivial correction.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 14:05:12 UTC"><span class="timeago" datetime="2026-03-30T14:05:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 14:05:12 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 15:40:13 UTC"><span class="timeago" datetime="2026-11-16T15:40:13+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 15:40:13 UTC">2026-11-16</span>
   </span>
 
     
@@ -3878,9 +3878,9 @@ non-trivial correction.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

@@ -29,7 +29,7 @@
     
     
       
-        <title>Equality (allclose) - Nicole Documentation</title>
+        <title>Equality - Nicole Documentation</title>
       
     
     
@@ -139,7 +139,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Equality (allclose)
+              Equality
             
           </span>
         </div>
@@ -1757,7 +1757,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1775,7 +1775,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1812,10 +1812,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
+  <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Notes
+        Description
       
     </span>
   </a>
@@ -1827,6 +1827,17 @@
     <span class="md-ellipsis">
       
         See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -1856,7 +1867,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1884,7 +1895,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1912,7 +1923,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3577,10 +3588,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
+  <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Notes
+        Description
       
     </span>
   </a>
@@ -3592,6 +3603,17 @@
     <span class="md-ellipsis">
       
         See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -3632,6 +3654,7 @@
 
 
 <h1 id="allclose">allclose<a class="headerlink" href="#allclose" title="Permanent link">&para;</a></h1>
+<p>Compare two tensors numerically within tolerances and return a <code>bool</code>. Where <code>==</code> demands exact agreement of values and dtype, <code>allclose</code> asks only that the numbers match to <code>rtol</code> and <code>atol</code>, which makes it the check to use after any computation that accumulates rounding error. For a generic symmetry group it compares physical content, so it is blind to the gauge freedom of the reduced representation.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3804,21 +3827,20 @@ and the two tensors share the same index structure and block keys.
 
     </div>
 
-</div><h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<ul>
-<li>For Abelian tensors, each dense block is compared directly with <code>torch.allclose</code>.</li>
-<li>For non-Abelian (SU(2)) tensors, the physical tensor <code>R @ W</code> is compared
-  block-by-block, making the check invariant to the gauge freedom in the reduced
-  representation. Two tensors that represent the same physical content but differ
-  in their internal <code>(R, W)</code> factorization will still compare as equal.</li>
-<li>Structural mismatches (different tensor order, incompatible groups or directions)
-  raise <code>ValueError</code>. Differing block keys return <code>False</code> without raising.</li>
-</ul>
+</div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
+<p>Both arguments must be tensors, or <code>TypeError</code> follows, and they must share an order and compatible indices, or <code>ValueError</code> does. Differing block keys are not an error: they simply make the two tensors unequal, and the call returns <code>False</code>. The same holds when one tensor carries intertwiners and the other does not.</p>
+<p>For an Abelian tensor each dense block is handed to <code>torch.allclose</code>. For a generic tensor the comparison is made on the physical tensor <code>R @ W</code> instead of the stored reduced block only. That makes the outcome gauge-invariant: two tensors holding the same physical content in different <code>(R, W)</code> factorizations still compare as equal, where a naive block-by-block check on <code>R</code> alone would call them different.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../addition/">Basic Operations</a>: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code></li>
 <li><a href="../../core/tensor/">Tensor</a>: <code>Tensor.__eq__</code> for exact equality</li>
 <li><a href="../../symmetry/bridge/">Bridge</a>: SU(2) intertwiner container</li>
+</ul>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The defaults are <code>rtol=1e-5</code> and <code>atol=1e-8</code>, passed through to <code>torch.allclose</code> unchanged. Tighten them when comparing quantities that should agree to machine precision.</li>
+<li>Structural mismatches raise instead of returning <code>False</code>, so a failed comparison between tensors of different order is a bug report, not an answer.</li>
+<li><code>==</code> compares dtype as well as values, so the same numbers at two dtypes are unequal under <code>==</code> and equal under <code>allclose</code>.</li>
 </ul>
 
 
@@ -3842,7 +3864,7 @@ and the two tensors share the same index structure and block keys.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 24, 2026 23:04:55 UTC"><span class="timeago" datetime="2026-04-24T23:04:55+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 24, 2026 23:04:55 UTC">2026-04-24</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 17:22:48 UTC"><span class="timeago" datetime="2026-11-16T17:22:48+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 17:22:48 UTC">2026-11-16</span>
   </span>
 
     

@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -2029,6 +2029,17 @@
     <span class="md-ellipsis">
       
         Description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-the-pairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting the Pairs
       
     </span>
   </a>
@@ -3599,6 +3610,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#selecting-the-pairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting the Pairs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3654,7 +3676,7 @@
 
 
 <h1 id="trace">trace<a class="headerlink" href="#trace" title="Permanent link">&para;</a></h1>
-<p>Compute trace over index pairs within a tensor.</p>
+<p>Sum a tensor over one or more of its own index pairs, dropping two axes for each pair traced. A pair qualifies on the same terms as a contraction pair, sharing an itag and carrying opposite directions, which makes <code>trace</code> the self-contraction counterpart of <a href="../contract/">contract</a>. Trace over every pair and a scalar comes back.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3852,26 +3874,26 @@ final result for commuting traces.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Computes the trace by summing over matching indices. Index pairs must have:
-<ul>
-<li>Opposite directions (OUT ↔ IN)</li>
-<li>Matching symmetry groups and itags (for automatic mode)</li>
-<li>Compatible charge sectors</li>
-</ul></p>
-<p>The function supports three modes:</p>
-<ol>
-<li><strong>Automatic mode</strong> (no parameters): Automatically finds and traces all pairs with matching itags and opposite directions</li>
-<li><strong>Manual mode</strong> (<code>axes</code> parameter): Explicitly specify which index pairs to trace</li>
-<li><strong>Exclusion mode</strong> (<code>excl</code> parameter): Automatically trace all matching pairs except specified exclusions</li>
-</ol>
-<p>Result has reduced dimensionality (2 indices removed per pair).</p>
+<p>Each traced pair must share an itag, carry opposite directions, and agree in charge and dimension within every symmetry block. The sum then runs over the matching diagonal entries, block by block, so <span class="arithmatex">\(\mathrm{Tr}(A) = \sum_i A_{ii}\)</span> holds within each charge sector. The axes that remain keep their original relative order.</p>
+<p>Several pairs are traced one after another instead of all at once, so <code>trace(T, [(a, b), (c, d)])</code> is exactly <code>trace(trace(T, (a, b)), (c, d))</code>. The outcome therefore does not depend on how the pairs are grouped, nor on the order they are listed in.</p>
+<h2 id="selecting-the-pairs">Selecting the Pairs<a class="headerlink" href="#selecting-the-pairs" title="Permanent link">&para;</a></h2>
+<p>The three modes mirror those of <a href="../contract/">contract</a>, and <code>axes</code> and <code>excl</code> are mutually exclusive.</p>
+<p><strong>Automatic</strong>, with no argument. Every pair of indices sharing an itag with opposing directions is traced.</p>
+<p><strong>Explicit</strong>, through <code>axes</code>. One pair reads <code>(axis_a, axis_b)</code> and several read <code>[(a1, b1), (a2, b2)]</code>. Integer positions only here, not itags.</p>
+<p><strong>Exclusion</strong>, through <code>excl</code>. Tracing proceeds automatically but skips what is listed, given as a single position or itag, or a sequence of either. Unlike <code>axes</code>, this argument does accept itags.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../contract/">contract</a>: General contraction between two tensors</li>
+<li><a href="../einsum/">einsum</a>: Trace and contract together in one subscript string</li>
 <li><a href="../../../examples/operations/contraction-examples/">Examples: Contraction</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>For a scalar result, trace over all index pairs. The automatic mode provides the most convenient API for tensors with clear itag structure.</p>
+<ul>
+<li>Automatic mode raises when the pairing is ambiguous, so a tag carried by more than two axes needs <code>axes</code> or <code>excl</code>.</li>
+<li>Tracing a 2<sup>nd</sup>-order tensor over its single pair gives a scalar tensor; read the number out with <code>Tensor.item()</code>.</li>
+<li>A trace that would leave exactly one free axis raises <code>ValueError</code>, since a 1<sup>st</sup>-order tensor cannot enforce charge conservation. Tracing a 3<sup>rd</sup>-order tensor down to one axis is therefore refused, while 0 or 2 or more remaining axes are fine.</li>
+<li>A pair whose dimensions disagree within a block raises <code>ValueError</code>, as the diagonal it would sum over is not square.</li>
+</ul>
 
 
 
@@ -3894,7 +3916,7 @@ final result for commuting traces.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 22:12:21 UTC"><span class="timeago" datetime="2026-02-07T22:12:21+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 22:12:21 UTC">2026-02-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 17:57:20 UTC"><span class="timeago" datetime="2026-11-16T17:57:20+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 17:57:20 UTC">2026-11-16</span>
   </span>
 
     

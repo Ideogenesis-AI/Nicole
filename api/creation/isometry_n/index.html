@@ -1889,7 +1889,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1917,7 +1917,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1945,7 +1945,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1973,7 +1973,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3754,7 +3754,7 @@
 
 
 <h1 id="isometry_n">isometry_n<a class="headerlink" href="#isometry_n" title="Permanent link">&para;</a></h1>
-<p>Create an n-to-1 fusion isometry tensor.</p>
+<p>Build the tensor that fuses n indices into one, generalizing <a href="../isometry/">isometry</a> beyond a single pair. The first n indices mirror the inputs with reversed directions and the last carries the fully fused sectors, so one contraction collapses n axes of a tensor into one and a contraction against the conjugate restores them. Fusion proceeds pairwise under the hood, ordered to keep the intermediates small.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3951,9 +3951,8 @@ symmetry group, or if <code>itags</code> length doesn't match <code>len(indices)
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Constructs an (n+1)th-order tensor that fuses n indices into a single fused index. This generalizes the 2-to-1 <code>isometry</code> function to arbitrary n≥2.</p>
-<p>The function works by sequentially applying 2-to-1 isometries, fusing indices in order of increasing dimension to minimize intermediate tensor sizes and computational complexity.</p>
-<p>The resulting isometry has n indices with directions opposite to the input indices (to enable natural contraction), plus one fused index whose direction is specified by the <code>direction</code> parameter.</p>
+<p>The output is an (n+1)th-order tensor, defined for any n ≥ 2. Its first n indices take the directions opposite to the inputs, which lets the isometry contract against them directly, and the final fused index takes the direction given by the <code>direction</code> parameter.</p>
+<p>Fusion is carried out by applying 2-to-1 isometries in sequence. The indices are consumed in order of increasing dimension, so the smallest pair fuses first and each intermediate tensor stays as small as the fusion tree allows, holding down both memory and the work of the subsequent contractions.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <h3 id="basic-fusion">Basic fusion<a class="headerlink" href="#basic-fusion" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">Index</span><span class="p">,</span> <span class="n">Sector</span><span class="p">,</span> <span class="n">Direction</span><span class="p">,</span> <span class="n">U1Group</span><span class="p">,</span> <span class="n">isometry_n</span>
@@ -4025,7 +4024,7 @@ symmetry group, or if <code>itags</code> length doesn't match <code>len(indices)
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 18:43:04 UTC"><span class="timeago" datetime="2026-03-30T18:43:04+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 18:43:04 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 09:27:11 UTC"><span class="timeago" datetime="2026-11-16T09:27:11+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 09:27:11 UTC">2026-11-16</span>
   </span>
 
     
@@ -4053,9 +4052,9 @@ symmetry group, or if <code>itags</code> length doesn't match <code>len(indices)
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

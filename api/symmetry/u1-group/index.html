@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3766,7 +3766,7 @@
 
 
 <h1 id="u1group">U1Group<a class="headerlink" href="#u1group" title="Permanent link">&para;</a></h1>
-<p>U(1) symmetry group with integer charges.</p>
+<p>U(1) symmetry group with integer charges. Its irreducible representations are labeled by a single integer, over the conserved quantum number carried by each sector, and they fuse by plain addition. This is the lightest group Nicole ships: every irrep is one-dimensional, so a U(1) tensor needs no accompanying intertwiners and the blocks hold tensor elements directly.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -3939,17 +3939,24 @@
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Represents continuous U(1) symmetry. Charges are integers representing conserved quantum numbers.</p>
+<p><code>U1Group</code> represents the continuous group of phase rotations. A charge <span class="arithmatex">\(q\)</span> labels the representation on which a rotation by angle <span class="arithmatex">\(\theta\)</span> acts as the phase <span class="arithmatex">\(\exp\{\mathrm{i} q \theta\}\)</span>, so the charges live on the integer lattice and composing two of them adds their exponents. Physically the charge counts something conserved — particles, spin along an axis, electric charge — and a tensor block survives only when those counts balance.</p>
+<p>Being Abelian, U(1) fuses two charges into exactly one outcome, so <code>fuse_unique</code> is the only fusion method; <code>fuse_channels</code> exists on non-Abelian groups alone. All representations are one-dimensional, so <code>irrep_dim</code> returns 1 for every charge and <code>Index.dim</code> and <code>Index.num_states</code> agree.</p>
 <h3 id="charge-operations">Charge Operations<a class="headerlink" href="#charge-operations" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong>Fusion</strong>: Addition (<code>q1 + q2</code>)</li>
-<li><strong>Dual</strong>: Negation (<code>-q</code>)</li>
-<li><strong>Identity</strong>: 0</li>
-</ul>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">U1Group</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">group</span> <span class="o">=</span> <span class="n">U1Group</span><span class="p">()</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">group</span><span class="o">.</span><span class="n">neutral</span>               <span class="c1"># 0</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">group</span><span class="o">.</span><span class="n">fuse_unique</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>     <span class="c1"># 5   — charges add</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">group</span><span class="o">.</span><span class="n">fuse_unique</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>    <span class="c1"># 0   — back to the neutral charge</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">group</span><span class="o">.</span><span class="n">dual</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>               <span class="c1"># -3  — the dual negates</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">group</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>           <span class="c1"># True</span>
+</span></code></pre></div>
+<p>The dual makes an incoming index the mirror of an outgoing index. A block is admissible when the outgoing charges, together with the duals of the incoming charges, fuse to 0 — for U(1) that is the familiar statement that the charge flowing out equals the charge flowing in.</p>
 <h2 id="physical-applications">Physical Applications<a class="headerlink" href="#physical-applications" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Particle number</strong> conservation</li>
-<li><strong>Magnetization</strong> (Sz) conservation</li>
+<li><strong>Magnetization</strong> (<span class="arithmatex">\(S^z\)</span>) conservation</li>
 <li><strong>Electric charge</strong> conservation</li>
 </ul>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
@@ -3960,7 +3967,10 @@
 <li><a href="../../../examples/symmetries/u1-examples/">Examples: U1</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>All integers are valid charges. No bounds or restrictions on charge values.</p>
+<ul>
+<li>All integers are valid charges, positive or negative, with no bound on their magnitude. <code>validate_charge</code> only rejects non-integers, raising <code>TypeError</code>; <code>Index</code> applies it to every sector charge at construction.</li>
+<li><code>U1Group</code> is a frozen dataclass, hence hashable, and two separately constructed instances compare equal. Indices built in different parts of a program therefore interoperate without sharing a group object.</li>
+</ul>
 
 
 
@@ -3983,7 +3993,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 13:21:17 UTC"><span class="timeago" datetime="2026-03-30T13:21:17+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 13:21:17 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 02:48:12 UTC"><span class="timeago" datetime="2026-11-17T02:48:12+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 02:48:12 UTC">2026-11-17</span>
   </span>
 
     
@@ -4011,9 +4021,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

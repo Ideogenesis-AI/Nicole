@@ -1945,7 +1945,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1973,7 +1973,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -2001,7 +2001,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -2029,7 +2029,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3866,7 +3866,7 @@
 
 
 <h1 id="direction">Direction<a class="headerlink" href="#direction" title="Permanent link">&para;</a></h1>
-<p>Enum specifying tensor index orientation.</p>
+<p>The enum that orients a tensor index. A direction records whether an index is incoming or outgoing, and that distinction enables charge conservation: an outgoing index contributes its charge as it stands, an incoming one contributes the dual. Contraction pairs an outgoing against an incoming, so direction also decides which indices are allowed to connect.</p>
 
 
 <div class="doc doc-object doc-class">
@@ -3982,14 +3982,14 @@
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>The <code>Direction</code> enum specifies whether an index is incoming or outgoing, which determines how charges contribute to conservation laws.</p>
+<p>Every <a href="../index-class/">Index</a> carries one direction, and every operation that reasons about charges consults it. When a block key is tested for admissibility, each charge is taken with its index's direction applied: an outgoing index contributes the charge itself, an incoming index contributes the dual. The block exists when the combination reaches the group's neutral charge.</p>
 <h2 id="values">Values<a class="headerlink" href="#values" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>Direction.IN = -1</code></strong>: Incoming index</li>
-<li><strong><code>Direction.OUT = 1</code></strong>: Outgoing index</li>
+<li><strong><code>Direction.IN</code></strong>: an incoming index. Integer value <code>+1</code>.</li>
+<li><strong><code>Direction.OUT</code></strong>: an outgoing index. Integer value <code>-1</code>.</li>
 </ul>
+<p><code>Direction</code> is an <code>IntEnum</code>, so the values can be used in arithmetic directly. The particular signs are an internal convention with no physical content; what matters is that the two differ, and that an incoming charge enters conservation through its dual.</p>
 <h2 id="charge-conservation">Charge Conservation<a class="headerlink" href="#charge-conservation" title="Permanent link">&para;</a></h2>
-<p>Direction affects charge conservation:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>∑(OUT charges) - ∑(IN charges) = neutral element
 </span></code></pre></div>
 <h3 id="example-with-u1">Example with U(1)<a class="headerlink" href="#example-with-u1" title="Permanent link">&para;</a></h3>
@@ -3998,6 +3998,7 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Index 3: OUT, charge = -1</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Total: 2 - 1 + (-1) = 0 ✓ (conserved)</span>
 </span></code></pre></div>
+<p>For a group whose dual is not a negation the subtraction above is the group's own conjugation. Z(2) is self-dual, so direction makes no difference to its conservation sum, while SU(2) conservation asks whether the neutral charge is among the channels the key can couple to.</p>
 <h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
 <h3 id="reverse">reverse()<a class="headerlink" href="#reverse" title="Permanent link">&para;</a></h3>
 <p>Returns the opposite direction:
@@ -4029,10 +4030,14 @@
 <ul>
 <li><a href="../index-class/">Index</a>: Uses direction</li>
 <li><a href="../sector/">Sector</a>: Charge-dimension pairs</li>
+<li><a href="../../contraction/contract/">contract</a>: Requires opposite directions on the axes it pairs</li>
 <li><a href="../../../examples/basic/first-tensor/">Examples: First Tensor</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>For contraction, paired indices must have opposite directions. Use <code>Index.flip()</code> to reverse direction without conjugating charges.</p>
+<ul>
+<li>Contraction requires paired indices to carry opposite directions. <code>Index.flip()</code> reverses direction and leaves the charges alone; <code>Index.dual()</code> reverses direction and conjugates the charges as well. Use <code>flip</code> to prepare a contraction partner and <code>dual</code> when the conjugate space is intended.</li>
+<li>To reverse a bond already shared by two tensors, use <a href="../../manipulation/capcup/">capcup</a>, which applies the appropriate phase for the bond.</li>
+</ul>
 
 
 
@@ -4055,7 +4060,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 16:27:54 UTC"><span class="timeago" datetime="2026-11-16T16:27:54+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 16:27:54 UTC">2026-11-16</span>
   </span>
 
     
@@ -4083,9 +4088,9 @@
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

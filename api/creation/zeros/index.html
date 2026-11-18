@@ -1839,7 +1839,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1867,7 +1867,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1895,7 +1895,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1923,7 +1923,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3654,7 +3654,7 @@
 
 
 <h1 id="tensorzeros">Tensor.zeros<a class="headerlink" href="#tensorzeros" title="Permanent link">&para;</a></h1>
-<p>Create a tensor with all admissible blocks filled with zeros.</p>
+<p>Allocate a symmetry-aware tensor whose every admissible block is filled with zeros. The indices you pass fix the entire structure: <code>zeros</code> enumerates the charge combinations they allow, keeps the ones that conserve charge, and allocates a dense block of the implied shape for each. Reach for it when a tensor's symmetry structure is known ahead of its contents, such as an accumulator to be filled block by block.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3797,15 +3797,23 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Creates a new tensor with zero-filled blocks for all charge combinations that satisfy conservation rules. The tensor structure is defined by the provided indices.</p>
+<p>A block is admissible when the charges drawn from its indices satisfy the group's conservation rule. For an Abelian group this means the signed sum <code>∑(OUT) − ∑(IN)</code> equals the neutral charge. Blocks that fail the test are never created, so the block count follows from the index sectors and the symmetry group. Each block's shape comes from the sector dimensions its charge key selects.</p>
+<p>Sectors that end up in no admissible block are pruned from the returned indices, so the tensor handed back can carry narrower indices than the ones supplied. For a generic symmetry group every block also receives a <code>Bridge</code> intertwiner holding the default Clebsch–Gordan specification, and the stored block gains a trailing multiplicity dimension.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../random/">random</a>: Create random tensor</li>
+<li><a href="../random/">random</a>: Same structure, filled with random values</li>
+<li><a href="../identity/">identity</a>: 2-index identity tensor</li>
 <li><a href="../../core/tensor/">Tensor</a>: Main tensor class</li>
+<li><a href="../../core/index-class/">Index</a>: Index structure that determines the blocks</li>
 <li><a href="../../../examples/basic/first-tensor/">Examples: First Tensor</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>Only admissible blocks (satisfying charge conservation) are created. The number of blocks depends on the index sectors and symmetry group.</p>
+<ul>
+<li>The default <code>dtype</code> is <code>torch.float64</code>, and it covers every block as well as the intertwiner weights of a generic group. On MPS, <code>float64</code> and <code>complex128</code> are downgraded automatically to <code>float32</code> and <code>complex64</code>.</li>
+<li><code>device</code> defaults to <code>torch.get_default_device()</code>, so a tensor follows whatever default the surrounding code has set.</li>
+<li>Gradient tracking is off by default. Pass <code>requires_grad=True</code> to enable it, as described in <a href="../../../examples/advanced/autograd/">Autograd</a>.</li>
+<li>Every itag defaults to <code>"_init_"</code>. Set <code>itags</code> at creation when the tensor will take part in automatic contraction, which pairs indices by matching tag.</li>
+</ul>
 
 
 
@@ -3828,7 +3836,7 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="January 31, 2026 22:56:46 UTC"><span class="timeago" datetime="2026-01-31T22:56:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="January 31, 2026 22:56:46 UTC">2026-01-31</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 09:26:39 UTC"><span class="timeago" datetime="2026-11-16T09:26:39+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 09:26:39 UTC">2026-11-16</span>
   </span>
 
     
@@ -3856,9 +3864,9 @@ populated with Bridge objects containing default Clebsch-Gordan specifications.<
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

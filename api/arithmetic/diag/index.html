@@ -29,7 +29,7 @@
     
     
       
-        <title>Diagonal (diag) - Nicole Documentation</title>
+        <title>Diagonal - Nicole Documentation</title>
       
     
     
@@ -139,7 +139,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Diagonal (diag)
+              Diagonal
             
           </span>
         </div>
@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1813,7 +1813,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1831,7 +1831,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1934,7 +1934,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3676,7 +3676,7 @@
 
 
 <h1 id="diag">diag<a class="headerlink" href="#diag" title="Permanent link">&para;</a></h1>
-<p>Convert diagonal blocks into a diagonal matrix tensor.</p>
+<p>Turn a dictionary of per-sector 1D arrays into a diagonal matrix tensor. It is the way back from a spectrum into the tensor algebra: <a href="../../decomposition/svd/">svd</a> and <a href="../../decomposition/eig/">eig</a> hand their singular values and eigenvalues back as a dict keyed by charge, and <code>diag</code> makes that a 2<sup>nd</sup>-order tensor that contractions can use.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3895,8 +3895,8 @@ operations like contraction.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Takes a dictionary of 1D arrays (such as singular values from SVD or eigenvalues from eigendecomposition) and creates a diagonal matrix tensor where each 1D array becomes a diagonal matrix block.</p>
-<p>This is useful for converting the singular values dict from <code>svd()</code> or eigenvalues dict from <code>eig()</code> into full diagonal matrix form for explicit matrix operations like contraction.</p>
+<p>Each 1D array in <code>S_blocks</code> becomes the diagonal of one matrix block, under the charge key that it arrived with. The two output indices are built from <code>bond_index</code>, one flipped and one as given, so the tensor is ready to sit on the bond the decomposition opened. Every input array must be 1-dimensional; anything else raises <code>ValueError</code>.</p>
+<p>The output is tagged <code>("_bond_L", "_bond_R")</code> unless <code>itags</code> says otherwise, and labeled <code>Diagonal</code>. That label is load-bearing: <a href="../inv/">inv</a> uses it to skip the check that a tensor really is diagonal. For a generic symmetry group the blocks gain the trailing multiplicity dimension and an intertwiner whose weights are set to <code>√(irrep_dim(q))</code>, matching the convention <a href="../../creation/identity/">identity</a> uses.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole</span><span class="w"> </span><span class="kn">import</span> <span class="n">decomp</span><span class="p">,</span> <span class="n">diag</span><span class="p">,</span> <span class="n">contract</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -3913,17 +3913,15 @@ operations like contraction.</p>
 <ul>
 <li><a href="../../decomposition/decomp/">decomp</a>: Tensor decomposition returning S as dict</li>
 <li><a href="../inv/">inv</a>: Matrix inversion for diagonal tensors</li>
+<li><a href="../../creation/identity/">identity</a>: The same block structure with unit entries</li>
 <li><a href="../oplus/">oplus</a>: Direct sum operation</li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>The output tensor will have:
 <ul>
-<li>Two indices: (bond_index.flip(), bond_index)</li>
-<li>Block keys (q, q) for each charge q in input dict</li>
-<li>Diagonal matrices as data blocks</li>
-<li>Label "Diagonal"</li>
-</ul></p>
-<p>All input arrays must be 1-dimensional (one value per charge sector).</p>
+<li>The result carries the indices <code>(bond_index.flip(), bond_index)</code> and one block per charge <code>q</code> in the input, keyed <code>(q, q)</code>. No off-diagonal key can conserve charge.</li>
+<li><code>dtype</code> and <code>device</code> are inferred from the input arrays when not given, so a spectrum computed on the GPU stays there.</li>
+<li>The input dict is primarily the <code>S</code> output of <code>decomp</code> or <code>svd</code> and the <code>D</code> output of <code>eig</code>, all of which key their arrays by charge in exactly this form.</li>
+</ul>
 
 
 
@@ -3946,7 +3944,7 @@ operations like contraction.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 18:42:47 UTC"><span class="timeago" datetime="2026-03-30T18:42:47+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 18:42:47 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 17:22:57 UTC"><span class="timeago" datetime="2026-11-16T17:22:57+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 17:22:57 UTC">2026-11-16</span>
   </span>
 
     

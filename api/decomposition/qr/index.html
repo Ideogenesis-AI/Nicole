@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -2216,56 +2216,6 @@
     <span class="md-ellipsis">
       
         Description
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Parameters">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#t" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        T
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#axis" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        axis
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
       
     </span>
   </a>
@@ -3671,56 +3621,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Parameters">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#t" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        T
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#axis" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        axis
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3798,7 +3698,7 @@
 
 
 <h1 id="qr">qr<a class="headerlink" href="#qr" title="Permanent link">&para;</a></h1>
-<p>QR decomposition returning orthogonal and upper triangular tensors.</p>
+<p>QR decomposition returning orthogonal and upper triangular tensors. One axis is separated from all the others and the tensor is factored as <code>T = Q @ R</code>, with the isometric factor <code>Q</code> carrying the designated axis and <code>R</code> carrying the rest. No truncation is involved, so the factorization is exact and the bond it opens is as small as the tensor allows: this is the cheap way to put a tensor into canonical form when no compression is required.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3951,29 +3851,8 @@ QR decomposed together, and then R is split back into individual blocks.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Performs block-wise QR decomposition, factorizing a tensor into:
-<ul>
-<li><strong>Q</strong>: Orthogonal tensor (Q†Q = I)</li>
-<li><strong>R</strong>: Upper triangular tensor</li>
-</ul></p>
-<p>Such that T = Q @ R. Unlike SVD, no truncation is applied.</p>
-<p>The decomposition is performed block-wise, preserving symmetry structure. For each charge sector, blocks with the same left charge are concatenated horizontally, QR decomposed together, and then R is split back into individual blocks.</p>
-<h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
-<h3 id="t">T<a class="headerlink" href="#t" title="Permanent link">&para;</a></h3>
-<p>Tensor to be decomposed.</p>
-<h3 id="axis">axis<a class="headerlink" href="#axis" title="Permanent link">&para;</a></h3>
-<p>Axis to separate from all others. Can be:
-<ul>
-<li>Integer position (e.g., <code>0</code>)</li>
-<li>String itag (e.g., <code>"physical"</code>)</li>
-</ul></p>
-<p>This axis forms the left partition (Q), all others form the right partition (R).</p>
-<h2 id="returns">Returns<a class="headerlink" href="#returns" title="Permanent link">&para;</a></h2>
-<p><code>tuple[Tensor, Tensor]</code>: Pair <code>(Q, R)</code> where:
-<ul>
-<li>Q has indices <code>(left_index, bond_index)</code> and is orthogonal</li>
-<li>R has indices <code>(bond_index.flip(), *right_indices)</code> and is upper triangular</li>
-</ul></p>
+<p>The bond index between the two factors carries exactly the charges of the separated axis, with its direction reversed, so <code>Q</code> comes out with <code>(left_index, bond_index)</code> and <code>R</code> with the flipped bond followed by the remaining indices. Each bond sector holds the rank of its charge block, meaning the smaller of the separated dimension and the combined dimension of everything else — a sector wide on the left but narrow on the right shrinks accordingly, and the bond never grows beyond what the factorization supports.</p>
+<p>Both bond indices are tagged <code>"_bond"</code>, and the other itags are carried over from <code>T</code>. <code>qr</code> takes one axis, as an integer position or an itag, and raises <code>ValueError</code> if the itag is missing, if it occurs on more than one axis, or if an integer position is out of range. To separate several axes at once, or to choose the bond itag, go through <a href="../decomp/">decomp</a> with <code>mode="QR"</code>, which merges the axes first before calling this function.</p>
 <h2 id="import">Import<a class="headerlink" href="#import" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole.decomp</span><span class="w"> </span><span class="kn">import</span> <span class="n">qr</span>
 </span></code></pre></div>
@@ -4004,6 +3883,7 @@ QR decomposed together, and then R is split back into individual blocks.</p>
 <li>Use <code>qr()</code> directly when you need simple, low-level QR decomposition</li>
 <li>No truncation is applied in QR decomposition</li>
 <li>QR is useful for obtaining canonical forms without compression</li>
+<li>Contracting <code>Q</code> with its conjugate over the separated axis gives the identity on the bond, one identity block per bond charge</li>
 </ul>
 
 
@@ -4027,7 +3907,7 @@ QR decomposed together, and then R is split back into individual blocks.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="February 7, 2026 22:13:26 UTC"><span class="timeago" datetime="2026-02-07T22:13:26+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="February 7, 2026 22:13:26 UTC">2026-02-07</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 06:33:38 UTC"><span class="timeago" datetime="2026-11-17T06:33:38+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 06:33:38 UTC">2026-11-17</span>
   </span>
 
     
@@ -4055,9 +3935,9 @@ QR decomposed together, and then R is split back into individual blocks.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

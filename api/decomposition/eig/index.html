@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -2244,89 +2244,6 @@
     <span class="md-ellipsis">
       
         Description
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Parameters">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#t" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        T
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#itag" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        itag
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#order" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        order
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#is_hermitian" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_hermitian
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#trunc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        trunc
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
       
     </span>
   </a>
@@ -3704,89 +3621,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Parameters">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#t" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        T
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#itag" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        itag
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#order" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        order
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#is_hermitian" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        is_hermitian
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#trunc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        trunc
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3864,7 +3698,7 @@
 
 
 <h1 id="eig">eig<a class="headerlink" href="#eig" title="Permanent link">&para;</a></h1>
-<p>Eigenvalue decomposition of square matrix tensors.</p>
+<p>Eigenvalue decomposition of square matrices. The input must be a 2<sup>nd</sup>-order tensor whose two indices have opposite directions and matching charge structure, and each charge block is diagonalized on its own, so the spectrum comes back labeled by sector. Eigenvalues are returned as plain arrays keyed by block, and they can be sorted from either end and truncated, making this the routine useful for e.g. spectrum analysis and dominant-mode searches.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -4108,57 +3942,11 @@ then "nkeep" is applied globally to the remaining eigenvalues.</p>
     </div>
 
 </div><h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Performs block-wise eigenvalue decomposition of a square matrix tensor, returning:
-<ul>
-<li><strong>U</strong>: Tensor containing eigenvectors as columns</li>
-<li><strong>D</strong>: Dictionary mapping block keys to 1D eigenvalue arrays</li>
-</ul></p>
-<p>The decomposition satisfies: T @ U = U @ diag(D) for each block.</p>
-<p>Eigenvalues can be sorted in ascending or descending order, and truncation can be applied to keep only the most important eigenvalues (useful for finding ground states or dominant modes).</p>
-<h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
-<h3 id="t">T<a class="headerlink" href="#t" title="Permanent link">&para;</a></h3>
-<p>Square matrix tensor to be decomposed. Must have exactly 2 indices with matching charge structure (opposite directions).</p>
-<h3 id="itag">itag<a class="headerlink" href="#itag" title="Permanent link">&para;</a></h3>
-<p>Index tag for the bond dimension. If <code>None</code>, uses default tag <code>"_bond_eig"</code>.</p>
-<h3 id="order">order<a class="headerlink" href="#order" title="Permanent link">&para;</a></h3>
-<p>Sorting order for eigenvalues:
-<ul>
-<li><code>"ascend"</code>: Ascending order (smallest to largest) - default</li>
-<li>For real eigenvalues: e.g., -5 &lt; -3 &lt; 1 &lt; 2</li>
-<li>For complex eigenvalues: sorts by real part</li>
-<li>Use for finding ground states (most negative eigenvalues)</li>
-<li><code>"descend"</code>: Descending order (largest to smallest)</li>
-<li>Use for finding dominant modes (most positive eigenvalues)</li>
-</ul></p>
-<h3 id="is_hermitian">is_hermitian<a class="headerlink" href="#is_hermitian" title="Permanent link">&para;</a></h3>
-<p>If <code>True</code>, asserts that <code>T</code> is Hermitian (real symmetric or complex Hermitian) and uses <code>torch.linalg.eigh</code> for each block instead of the general <code>torch.linalg.eig</code>. This guarantees:</p>
-<ul>
-<li><strong>Real eigenvalues</strong> even for complex Hermitian inputs</li>
-<li><strong>Orthonormal eigenvectors</strong> (U is exactly unitary), including in the presence of degeneracies</li>
-<li>Better numerical stability and performance</li>
-</ul>
-<p>Default is <code>False</code>, which uses the general eigensolver and may return complex eigenvalues.</p>
+<p>Charge conservation on a square tensor allows only diagonal blocks, so the two indices pair each charge with itself and every block is diagonalized in isolation. The bond index therefore carries the charges of the row index, each sector as wide as the number of eigenvalues kept in that charge, and <code>U</code> comes out with <code>(row_index, bond_index)</code>. Because the eigenvalues arrive sector by sector, a <code>"thresh"</code> criterion filters within a block while <code>"nkeep"</code> has to compare across blocks, thereby the two are applied in that order when both are given.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-<p>Always set <code>is_hermitian=True</code> when diagonalising Hamiltonians or density matrices — it is both faster and numerically more reliable.</p>
+<p>Always set <code>is_hermitian=True</code> when diagonalising Hamiltonians or density matrices — it is both faster and numerically more reliable. The general eigensolver may return complex eigenvalues even for a real input, and its eigenvectors are only normalized column by column, so <code>U</code> is unitary just to the extent the decomposition happens to deliver. The Hermitian path guarantees real eigenvalues and exactly orthonormal eigenvectors, degeneracies included.</p>
 </div>
-<h3 id="trunc">trunc<a class="headerlink" href="#trunc" title="Permanent link">&para;</a></h3>
-<p>Optional truncation specification as a dictionary:
-<ul>
-<li><code>"nkeep"</code>: Keep at most n eigenvalues globally</li>
-<li>With <code>order="descend"</code>: keeps the n largest (most positive)</li>
-<li>With <code>order="ascend"</code>: keeps the n smallest (most negative)</li>
-<li><code>"thresh"</code>: Keep eigenvalues relative to threshold per block</li>
-<li>With <code>order="descend"</code>: keeps eigenvalues ≥ threshold</li>
-<li>With <code>order="ascend"</code>: keeps eigenvalues ≤ threshold</li>
-<li>Both can be specified: thresh applied first, then nkeep</li>
-</ul></p>
-<h2 id="returns">Returns<a class="headerlink" href="#returns" title="Permanent link">&para;</a></h2>
-<p><code>tuple[Tensor, MutableMapping[BlockKey, torch.Tensor]]</code>: Pair <code>(U, D)</code> where:
-<ul>
-<li>U has indices <code>(row_index, bond_index)</code> containing eigenvectors as columns</li>
-<li>D is a dictionary mapping block keys to 1D arrays of eigenvalues</li>
-</ul></p>
 <h2 id="import">Import<a class="headerlink" href="#import" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nicole.decomp</span><span class="w"> </span><span class="kn">import</span> <span class="n">eig</span>
 </span></code></pre></div>
@@ -4201,14 +3989,9 @@ then "nkeep" is applied globally to the remaining eigenvalues.</p>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Eigenvalues are returned as 1D arrays for memory efficiency</li>
-<li>Eigenvalues can be complex even for real matrices</li>
-<li>Use <code>order="ascend"</code> to find ground states (smallest/most negative eigenvalues)</li>
-<li>Use <code>order="descend"</code> to find dominant modes (largest/most positive eigenvalues)</li>
-<li>For complex eigenvalues, sorting is by real part only</li>
-<li>When both thresh and nkeep specified: thresh is applied per-block first, then nkeep globally</li>
-<li>Use <code>is_hermitian=True</code> for Hamiltonians and density matrices: eigenvalues are guaranteed real and eigenvectors are exactly orthonormal</li>
-<li>Without <code>is_hermitian=True</code>, eigenvalues may be complex and eigenvectors are only column-normalised</li>
+<li>An eigendecomposition needs the canonical intertwiner weights in place, so <code>eig</code> calls <code>T.regularize()</code> on its argument before it starts. The tensor this represents does not change — the call only shifts a factor between the reduced data and the intertwiner weights — but for a non-Abelian input the stored blocks are rewritten in passing. Abelian tensors are untouched.</li>
+<li>Truncation can empty a charge sector, and an emptied sector leaves the bond index altogether. Its key disappears from <code>D</code> as well, so a block missing from the returned mapping is one that kept nothing.</li>
+<li><code>order</code> decides which end of the spectrum both truncation criteria work from, so <code>order="ascend"</code> with <code>trunc</code> is the ground-state request and <code>order="descend"</code> the dominant-mode one.</li>
 </ul>
 
 
@@ -4232,7 +4015,7 @@ then "nkeep" is applied globally to the remaining eigenvalues.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="March 30, 2026 22:15:56 UTC"><span class="timeago" datetime="2026-03-30T22:15:56+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="March 30, 2026 22:15:56 UTC">2026-03-30</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 06:33:58 UTC"><span class="timeago" datetime="2026-11-17T06:33:58+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 06:33:58 UTC">2026-11-17</span>
   </span>
 
     
@@ -4260,9 +4043,9 @@ then "nkeep" is applied globally to the remaining eigenvalues.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

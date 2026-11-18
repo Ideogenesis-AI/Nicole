@@ -1748,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1776,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1804,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1832,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -2685,50 +2685,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#raises" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Raises
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2783,6 +2739,17 @@
     <span class="md-ellipsis">
       
         See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
       
     </span>
   </a>
@@ -3682,50 +3649,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parameters
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#returns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Returns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#raises" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Raises
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3786,6 +3709,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3820,7 +3754,7 @@
 
 
 <h1 id="deserialize">deserialize<a class="headerlink" href="#deserialize" title="Permanent link">&para;</a></h1>
-<p>Reconstruct a <code>Tensor</code> from a dict previously produced by <code>serialize</code>.</p>
+<p>Reconstruct a <code>Tensor</code> from a dict previously produced by <code>serialize</code>. Indices, charge sectors, block data and, for a generic group, the intertwiners are rebuilt from the recorded description, so the tensor that comes back is equal to the one that went in. The dtype travels in the dict and is reapplied here, leaving the device as the only thing worth choosing at load time.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -3930,44 +3864,6 @@ plain dict produced by <code>serialize</code> (or loaded from disk via
 including all indices, block data, and — for non-Abelian tensors — intertwiner
 weights.</p>
 <p>All <code>torch.Tensor</code> values in the result are placed on <code>device</code>.</p>
-<h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Type</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>data</code></td>
-<td><code>dict</code></td>
-<td>—</td>
-<td>Dict previously produced by <code>serialize</code>.</td>
-</tr>
-<tr>
-<td><code>device</code></td>
-<td><code>str</code> or <code>torch.device</code></td>
-<td><code>"cpu"</code></td>
-<td>Device to place all block data and intertwiner weights on.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="returns">Returns<a class="headerlink" href="#returns" title="Permanent link">&para;</a></h2>
-<p><code>Tensor</code> — Fully reconstructed tensor with all blocks on <code>device</code>.</p>
-<h2 id="raises">Raises<a class="headerlink" href="#raises" title="Permanent link">&para;</a></h2>
-<p><code>ValueError</code> — If version from <code>data["version"]</code> is not supported.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>device</code> applies to both block data tensors (<code>"data"</code>) and intertwiner
-  weight tensors (<code>"intw"</code>), if present.</li>
-<li>For non-Abelian tensors, reconstruction of the CG data is delegated to
-  <code>nicole.symmetry.delegate.deserialize</code>.</li>
-<li>The <code>dtype</code> is stored in the serialized dict and applied to all tensors on
-  reconstruction; no explicit <code>dtype</code> argument is needed.</li>
-</ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <h3 id="basic-load-from-disk">Basic load from disk<a class="headerlink" href="#basic-load-from-disk" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
@@ -3992,6 +3888,17 @@ weights.</p>
 <li><a href="../../../examples/advanced/serialization-examples/">Examples: Serialization</a></li>
 <li><a href="../../core/tensor/">Tensor</a>: Main tensor class</li>
 </ul>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>data["version"]</code> is checked before anything is rebuilt, and an unsupported
+  version raises <code>ValueError</code>.</li>
+<li><code>device</code> applies to both block data tensors (<code>"data"</code>) and intertwiner
+  weight tensors (<code>"intw"</code>), if present.</li>
+<li>For non-Abelian tensors, reconstruction of the CG data is delegated to
+  <code>nicole.symmetry.delegate.deserialize</code>.</li>
+<li>The <code>dtype</code> is stored in the serialized dict and applied to all tensors on
+  reconstruction; no explicit <code>dtype</code> argument is needed.</li>
+</ul>
 
 
 
@@ -4014,7 +3921,7 @@ weights.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 4, 2026 15:09:50 UTC"><span class="timeago" datetime="2026-04-04T15:09:50+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 4, 2026 15:09:50 UTC">2026-04-04</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 17, 2026 07:51:00 UTC"><span class="timeago" datetime="2026-11-17T07:51:00+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 17, 2026 07:51:00 UTC">2026-11-17</span>
   </span>
 
     
@@ -4042,9 +3949,9 @@ weights.</p>
     
     <nav>
       
-        <a href="https://github.com/Phy-David-Zhang" class="md-author" title="@Phy-David-Zhang">
+        <a href="https://github.com/changkai-zhang" class="md-author" title="@changkai-zhang">
           
-          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="Phy-David-Zhang">
+          <img src="https://avatars.githubusercontent.com/u/20659726?v=4&size=72" alt="changkai-zhang">
         </a>
       
       

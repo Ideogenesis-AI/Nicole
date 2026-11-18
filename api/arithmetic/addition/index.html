@@ -1773,6 +1773,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#supported-operations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1823,17 +1834,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#description" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Description
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1878,7 +1878,7 @@
   <span class="md-ellipsis">
     
   
-    Equality (allclose)
+    Equality
   
 
     
@@ -1906,7 +1906,7 @@
   <span class="md-ellipsis">
     
   
-    Direct Sum (oplus)
+    Direct Sum
   
 
     
@@ -1934,7 +1934,7 @@
   <span class="md-ellipsis">
     
   
-    Diagonal (diag)
+    Diagonal
   
 
     
@@ -1962,7 +1962,7 @@
   <span class="md-ellipsis">
     
   
-    Inverse (inv)
+    Inverse
   
 
     
@@ -3616,6 +3616,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#supported-operations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3662,17 +3673,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#description" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Description
-      
-    </span>
-  </a>
   
 </li>
       
@@ -3732,15 +3732,17 @@
 
 
 <h1 id="arithmetic-operations">Arithmetic Operations<a class="headerlink" href="#arithmetic-operations" title="Permanent link">&para;</a></h1>
-<p>Basic arithmetic operations on tensors.</p>
+<p>The operators <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, and unary minus, defined block by block on symmetry-aware tensors. Each acts on the blocks that a tensor actually stores, so symmetry is carried through with no bookkeeping on the caller's part. A binary operation asks the two tensors to agree on their frame; a scalar operation asks nothing.</p>
+<h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
+<p>Addition and subtraction work over the union of the two tensors' block keys. A key held by both sides is combined entry by entry, and a key held by one side only passes into the output as it stands. The indices are unioned too, so the operands need not carry the same sectors: each output index offers every charge either side had.</p>
+<p>What must agree is the frame. Both tensors need the same order, every axis must match in symmetry group and direction, and a charge present on both sides of an axis must carry the same dimension there. A violation raises <code>ValueError</code>. The itags are not part of this check: the left operand's tags are the ones that survive, so adding tensors whose axes are tagged differently succeeds quietly.</p>
+<p>Scalar multiplication and division scale every stored block and leave the structure untouched.</p>
 <h2 id="supported-operations">Supported Operations<a class="headerlink" href="#supported-operations" title="Permanent link">&para;</a></h2>
 <p>Nicole tensors support standard arithmetic operations:</p>
 <h3 id="addition-and-subtraction">Addition and Subtraction<a class="headerlink" href="#addition-and-subtraction" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">C</span> <span class="o">=</span> <span class="n">A</span> <span class="o">+</span> <span class="n">B</span>  <span class="c1"># Element-wise addition</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">D</span> <span class="o">=</span> <span class="n">A</span> <span class="o">-</span> <span class="n">B</span>  <span class="c1"># Element-wise subtraction</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">E</span> <span class="o">=</span> <span class="n">A</span> <span class="o">+</span> <span class="n">scalar</span>  <span class="c1"># Add scalar to all blocks</span>
 </span></code></pre></div>
-<p><strong>Requirements</strong>: Tensors must have identical index structure (same indices, same tags).</p>
 <h3 id="scalar-multiplication">Scalar Multiplication<a class="headerlink" href="#scalar-multiplication" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">F</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">A</span>  <span class="c1"># Multiply by scalar</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">G</span> <span class="o">=</span> <span class="n">A</span> <span class="o">*</span> <span class="mf">3.0</span>  <span class="c1"># Multiply by scalar</span>
@@ -3749,21 +3751,19 @@
 <h3 id="negation">Negation<a class="headerlink" href="#negation" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">I</span> <span class="o">=</span> <span class="o">-</span><span class="n">A</span>  <span class="c1"># Negate all elements</span>
 </span></code></pre></div>
-<h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">&para;</a></h2>
-<p>Arithmetic operations are performed block-wise. Each operation processes only the blocks that exist in both tensors (for binary operations) or in the single tensor (for unary operations).</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../allclose/">allclose</a>: Numerical equality within tolerance</li>
 <li><a href="../oplus/">oplus</a>: Direct sum operation</li>
-<li><a href="../../core/tensor/">Tensor</a>: Main tensor class</li>
+<li><a href="../../core/tensor/">Tensor</a>: Main tensor class, including its dtype rules</li>
 <li><a href="../../../examples/basic/arithmetic/">Examples: Arithmetic</a></li>
 </ul>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Operations preserve block structure</li>
-<li>Results have same dtype unless promotion occurs</li>
-<li>Blocks must have matching shapes for addition/subtraction</li>
-<li>For non-Abelian groups, linearly dependent components introduced by the operation are automatically compressed away</li>
+<li>Operands are promoted to a common dtype first, so a real tensor combines with a complex one directly. See <a href="../../core/tensor/">Tensor</a> for the full dtype surface.</li>
+<li>Scalar operations preserve precision, so a <code>float32</code> tensor times <code>1j</code> gives <code>complex64</code>.</li>
+<li>For a generic symmetry group, intertwiner weights are merged when they are collinear and concatenated when they are not, after which linearly dependent components are compressed away.</li>
+<li>Two scalar tensors are a special case: they combine directly, preserving the autograd graph.</li>
 </ul>
 
 
@@ -3787,7 +3787,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 24, 2026 23:05:54 UTC"><span class="timeago" datetime="2026-04-24T23:05:54+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 24, 2026 23:05:54 UTC">2026-04-24</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="November 16, 2026 17:22:38 UTC"><span class="timeago" datetime="2026-11-16T17:22:38+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="November 16, 2026 17:22:38 UTC">2026-11-16</span>
   </span>
 
     
